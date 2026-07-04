@@ -1,27 +1,25 @@
 // js/studio-visuals.js
-// Stage 4: marker positioning engine. Maps calcGuideLayout output (rows.cum)
-// to positions along the inline SVG rod path (#rodPath) and creates animated
-// LED markers inside #ledLayer.
+// Stage 5: refined marker animation and smoothing (mid-flight retargeting, reduced-motion support)
 
 (function () {
   window.StudioVisuals = window.StudioVisuals || {};
 
-  // Configuration
   const CONFIG = {
-    maxMarkers: 40, // safe upper limit; actual visible count controlled by guideCount
+    maxMarkers: 40,
     appearDuration: 240,
     disappearDuration: 180,
-    moveDuration: 360
+    moveDuration: 360, // base duration in ms for typical moves
+    minMoveDuration: 120,
+    maxMoveDuration: 600
   };
 
-  // Internal state
   let svgRoot = null;
   let rodPath = null;
   let ledLayer = null;
   let pathLength = 0;
-  let markers = []; // pooled marker objects {el, currentLen, targetLen, visible}
+  let markers = [];
   let animating = false;
-  let lastLayoutKey = null; // to detect changes
+  let reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function ensureElements() {
     if (svgRoot && rodPath && ledLayer) return true;
@@ -32,7 +30,6 @@
     rodPath = svgRoot.querySelector('#rodPath');
     ledLayer = svgRoot.querySelector('#ledLayer');
     if (!rodPath || !ledLayer) return false;
-    // ensure pathLength is read fresh
     pathLength = rodPath.getTotalLength();
     return true;
   }
@@ -41,10 +38,9 @@
     const ns = 'http://www.w3.org/2000/svg';
     const g = document.createElementNS(ns, 'g');
     g.classList.add('led', 'led--hidden');
-    // create a use referencing the ledMarker symbol if present, otherwise construct circles
     const markerSym = svgRoot.querySelector('#ledMarker');
     if (markerSym) {
-      // clone children of symbol into group
+      // clone children to avoid moving the symbol
       markerSym.childNodes.forEach(n => {
         g.appendChild(n.cloneNode(true));
       });
@@ -56,10 +52,13 @@
       c.setAttribute('fill', '#ff3b3b');
       g.appendChild(c);
     }
-    // set initial transform off-canvas
+
+    // ensure transform origin / box for consistent transforms in modern browsers
+    g.style.transformBox = 'fill-box';
+    g.style.transformOrigin = 'center center';
     g.setAttribute('transform', 'translate(-9999,-9999)');
     ledLayer.appendChild(g);
-    return { el: g, currentLen: 0, targetLen: 0, visible: false };
+    return { el: g, currentLen: 0, targetLen: 0, visible: false, anim: null };
   }
 
   function ensurePool(n) {
@@ -68,116 +67,159 @@
     }
   }
 
-  // linear easing helper (time ratio)
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
   function easeInOut(t) {
     return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
   }
 
-  // animation loop handles moving markers toward targetLen and updating transforms
-  function animate() {
+  function nowMs() { return performance.now(); }
+
+  function animateFrame() {
     if (!animating) return;
-    let anyActive = false;
-    const now = performance.now();
-    markers.forEach(m => {
-      if (!m.el) return;
-      // if not visible and target is hidden, skip
-      if (!m.visible && m.targetVisible === false) return;
-      // compute interpolation
-      if (m.animStart != null && m.animFrom != null && m.animTo != null) {
-        const elapsed = now - m.animStart;
-        const dur = m.animDur || CONFIG.moveDuration;
-        const t = Math.min(1, elapsed / dur);
+    let any = false;
+    const tNow = nowMs();
+
+    // Update pathLength in case of viewport/resolution changes
+    // Only update if rodPath exists
+    if (rodPath) {
+      pathLength = rodPath.getTotalLength();
+    }
+
+    for (let i = 0; i < markers.length; i++) {
+      const m = markers[i];
+      if (!m.el) continue;
+
+      // If reduced motion, we shouldn't be in animation loop, but guard anyway
+      if (reducedMotion) continue;
+
+      if (m.anim) {
+        const a = m.anim;
+        const elapsed = tNow - a.start;
+        const t = clamp(elapsed / a.dur, 0, 1);
         const eased = easeInOut(t);
-        const len = m.animFrom + (m.animTo - m.animFrom) * eased;
+        const len = a.from + (a.to - a.from) * eased;
         m.currentLen = len;
+        // map to point
         const pt = rodPath.getPointAtLength(len);
+        // write transform
         m.el.setAttribute('transform', `translate(${pt.x},${pt.y})`);
-        anyActive = anyActive || t < 1;
+        any = any || t < 1;
         if (t >= 1) {
-          // finish
-          m.animStart = null; m.animFrom = null; m.animTo = null; m.animDur = null;
+          m.anim = null; // finished
         }
       }
-      // opacity/visibility handled via classes and CSS transitions
-    });
+    }
 
-    if (anyActive) {
-      requestAnimationFrame(animate);
+    if (any) {
+      requestAnimationFrame(animateFrame);
     } else {
       animating = false;
     }
   }
 
   function startAnimationIfNeeded() {
-    if (!animating) {
-      animating = true; requestAnimationFrame(animate);
+    if (!animating && !reducedMotion) {
+      animating = true; requestAnimationFrame(animateFrame);
     }
   }
 
-  // Update markers from calc result r and state
-  window.StudioVisuals.update = function (r, state) {
-    // do not run until DOM ready and svg elements are available
-    if (!ensureElements()) return;
+  // immediate positioning used for reduced-motion or instant updates
+  function setMarkerPositionInstant(m, len) {
+    m.currentLen = len;
+    const pt = rodPath.getPointAtLength(len);
+    m.el.setAttribute('transform', `translate(${pt.x},${pt.y})`);
+  }
 
-    // quick guard: rows must exist
+  // compute duration proportional to distance but clamped
+  function computeDuration(delta) {
+    const pct = Math.min(1, Math.abs(delta) / pathLength);
+    const dur = Math.round(CONFIG.moveDuration * (0.2 + pct * 0.8));
+    return clamp(dur, CONFIG.minMoveDuration, CONFIG.maxMoveDuration);
+  }
+
+  // Public update method: called by ui.render after calcGuideLayout
+  window.StudioVisuals.update = function (r, state) {
+    if (!ensureElements()) return;
     if (!r || !r.rows) return;
 
-    // create enough markers
-    const count = Math.max(0, Math.min(r.rows.length, state.guideCount || r.rows.length));
+    const guideCount = Number(state.guideCount) || r.rows.length;
+    const count = Math.max(0, Math.min(guideCount, r.rows.length));
     ensurePool(count);
 
-    // compute mapping factor: mm -> length along path
-    // Use targetStripper from state (must match calc inputs)
     const targetStripper = Number(state.targetStripper) || r.actual || 1;
     pathLength = rodPath.getTotalLength();
 
-    // mark previously visible counts and new counts
-    const layoutKey = `${state.firstGuide}|${state.guideCount}|${state.targetStripper}|${r.rows.length}`;
-    const prevKey = lastLayoutKey;
-    lastLayoutKey = layoutKey;
-
-    // update each marker's target length
+    // handle markers
     for (let i = 0; i < markers.length; i++) {
       const m = markers[i];
       if (i < count) {
-        const cumMm = r.rows[i].cum; // cumulative mm from calc
-        const targetLen = Math.max(0, Math.min(pathLength, (cumMm / targetStripper) * pathLength));
+        const cumMm = r.rows[i].cum;
+        const targetLen = clamp((cumMm / targetStripper) * pathLength, 0, pathLength);
         m.targetLen = targetLen;
-        m.targetVisible = true;
-        // if currently not visible, set start pos to current or to target for nicer entry
+
         if (!m.visible) {
-          // position the marker at the target but hidden — we'll animate opacity via class
-          const pt = rodPath.getPointAtLength(targetLen);
-          m.el.setAttribute('transform', `translate(${pt.x},${pt.y})`);
-          m.currentLen = targetLen;
-          // trigger appear: add visible class on next tick
+          // First-time show: place instantly at target, then trigger CSS appear
+          setMarkerPositionInstant(m, targetLen);
+          // Force reflow then flip classes to trigger CSS transition
           requestAnimationFrame(() => {
             m.el.classList.remove('led--hidden');
             m.el.classList.add('led--visible');
           });
           m.visible = true;
+          // ensure currentLen is synced
+          m.currentLen = targetLen;
         } else {
-          // visible: animate from currentLen to targetLen
-          m.animStart = performance.now();
-          m.animFrom = m.currentLen;
-          m.animTo = targetLen;
-          m.animDur = CONFIG.moveDuration;
+          // Already visible: retarget smoothly
+          if (reducedMotion) {
+            // instant if reduced motion
+            setMarkerPositionInstant(m, targetLen);
+            m.currentLen = targetLen;
+          } else {
+            // start a new anim from current position to new target
+            const from = (m.anim && m.anim.from !== undefined) ? m.anim.from + ((m.anim.to - m.anim.from) * easeInOut(clamp((nowMs() - m.anim.start) / m.anim.dur,0,1))) : m.currentLen;
+            const delta = Math.abs(targetLen - from);
+            const dur = computeDuration(delta);
+            m.anim = { start: nowMs(), from: from, to: targetLen, dur: dur };
+            // launch animation loop
+            startAnimationIfNeeded();
+          }
         }
       } else {
-        // marker should be hidden
+        // hide marker
         if (m.visible) {
-          // start hide transition using class
           m.el.classList.remove('led--visible');
           m.el.classList.add('led--hidden');
-          m.targetVisible = false;
           m.visible = false;
-          // optionally move offscreen after disappear duration (no animation required here)
+          // do not remove element - keep in pool
         }
+        m.targetLen = 0;
+        m.anim = null;
       }
     }
 
-    // start animation loop
-    startAnimationIfNeeded();
+    // If reduced motion, immediately apply final positions without rAF
+    if (reducedMotion) {
+      for (let i = 0; i < Math.min(count, markers.length); i++) {
+        setMarkerPositionInstant(markers[i], markers[i].targetLen);
+      }
+    }
   };
+
+  // handle resize: recompute pathLength and re-position markers instantly based on currentLen
+  let resizeTimeout = null;
+  function onResize() {
+    if (!ensureElements()) return;
+    pathLength = rodPath.getTotalLength();
+    // reposition all markers to currentLen
+    markers.forEach(m => {
+      if (m.currentLen != null) {
+        const len = clamp(m.currentLen, 0, pathLength);
+        const pt = rodPath.getPointAtLength(len);
+        m.el.setAttribute('transform', `translate(${pt.x},${pt.y})`);
+      }
+    });
+  }
+  window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(onResize, 120); }, { passive: true });
 
 })();
