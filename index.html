@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050606" />
+  <title>K-Labs Studio</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+  <div class="carbon-field"></div>
+  <main class="app-shell" id="app">
+    <header class="topbar">
+      <button class="icon-button" aria-label="Menu"><span></span><span></span></button>
+      <div class="brand-lockup">
+        <img src="assets/logo.svg" alt="K-Labs" class="brand-mark" />
+        <div><strong>K-Labs Studio</strong><small>Custom Rod Building Suite</small></div>
+      </div>
+      <span class="build-pill">Build 007</span>
+    </header>
+
+    <section class="screen active" id="homeScreen">
+      <div class="hero-card">
+        <p class="eyebrow">Precision Workshop Instrument</p>
+        <h1>K-Labs Studio</h1>
+        <p class="lead">A premium guide layout and workshop tool for custom rod builds.</p>
+        <div class="hero-actions">
+          <button class="primary-action" data-nav="layoutScreen">New Build</button>
+          <button class="ghost-action" data-nav="workshopScreen">Workshop</button>
+        </div>
+      </div>
+      <button class="module-card featured" data-nav="layoutScreen"><span>Build 007</span><strong>Guide Layout</strong><em>Clear unlock control, frozen locked wheels and reliable value feedback.</em><b>›</b></button>
+      <button class="module-card" data-nav="workshopScreen"><span>Centrepiece</span><strong>Workshop Mode</strong><em>One measurement at a time for the rod bench.</em><b>›</b></button>
+      <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
+    </section>
+
+    <section class="screen" id="layoutScreen">
+      <div class="screen-head"><p class="eyebrow">Guide Layout</p><h1>Set the build</h1><p class="subtle">Flick the titanium dials. Lock values when ready for the bench.</p></div>
+      <div class="wheel-panel" id="wheelPanel">
+        <div class="precision-wheel" data-key="firstGuide"><p>First Guide</p><div class="wheel-window"><div class="wheel-pointer"></div><div class="wheel-track" id="firstGuideTrack"></div></div><small>mm</small></div>
+        <div class="precision-wheel" data-key="guideCount"><p>Running Guides</p><div class="wheel-window"><div class="wheel-pointer"></div><div class="wheel-track" id="guideCountTrack"></div></div><small>count</small></div>
+        <div class="precision-wheel" data-key="targetStripper"><p>Target Stripper</p><div class="wheel-window"><div class="wheel-pointer"></div><div class="wheel-track" id="targetStripperTrack"></div></div><small>mm</small></div>
+      </div>
+
+      <section class="layout-summary-card" aria-label="Layout summary">
+        <div class="summary-title"><span>Build Summary</span><strong id="summaryStatus">Live</strong></div>
+        <div class="summary-list">
+          <div><span>First Guide</span><strong id="summaryFirstGuide">—</strong><small>mm</small></div>
+          <div><span>Stripper</span><strong id="summaryStripper">—</strong><small id="summaryDiff">—</small></div>
+          <div><span>Running Guides</span><strong id="summaryGuides">—</strong><small>count</small></div>
+        </div>
+      </section>
+
+      <div class="build-actions"><button class="primary-action full" id="lockBtn">Lock Build</button><button class="ghost-action full hidden" id="unlockBtn">Unlock / Edit Values</button></div>
+      <details class="layout-details" id="layoutDetails"><summary>Layout details</summary><table><thead><tr><th>Guide</th><th>Spacing</th><th>Cumulative</th></tr></thead><tbody id="layoutRows"></tbody></table></details>
+    </section>
+
+    <section class="screen" id="workshopScreen">
+      <div class="workshop-card">
+        <p class="eyebrow">Workshop Mode</p>
+        <p class="progress" id="workshopProgress">Guide 1 of 9</p>
+        <h1 id="workshopGuide">Guide 1</h1>
+        <div class="workshop-measure" id="workshopMeasure">105.0</div>
+        <p class="workshop-unit">mm from tip</p>
+        <p class="subtle" id="workshopSpacing">Spacing from previous: 105.0 mm</p>
+        <div class="workshop-actions"><button class="ghost-action" id="prevGuide">‹ Previous</button><button class="primary-action" id="nextGuide">Next ›</button></div>
+      </div>
+    </section>
+
+    <section class="screen" id="blanksScreen"><div class="screen-head"><p class="eyebrow">Blank Library</p><h1>Starter blanks</h1></div><div id="blankCards"></div></section>
+    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>Build 007</strong></div><div><span>Units</span><strong>Millimetres</strong></div><div><span>Theme</span><strong>Matte Carbon</strong></div></div></section>
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="active" data-nav="homeScreen">⌂<span>Home</span></button>
+    <button data-nav="layoutScreen">⌖<span>Layout</span></button>
+    <button data-nav="workshopScreen">▣<span>Workshop</span></button>
+    <button data-nav="blanksScreen">▤<span>Blanks</span></button>
+    <button data-nav="settingsScreen">⚙<span>More</span></button>
+  </nav>
+  <script src="js/config.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/guide-layout.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

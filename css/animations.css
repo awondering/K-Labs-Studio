@@ -1,0 +1,1 @@
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}button:active{transform:scale(.985)}.bottom-nav button:active{transform:scale(.96)}

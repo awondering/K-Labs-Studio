@@ -1,0 +1,1 @@
+if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').catch(()=>{}))}KLABS_UI.buildWheels();KLABS_UI.renderBlanks();KLABS_UI.render();

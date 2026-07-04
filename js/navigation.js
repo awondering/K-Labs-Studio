@@ -1,0 +1,1 @@
+function goScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===id));scrollTo(0,0)}document.addEventListener('click',e=>{const nav=e.target.closest('[data-nav]');if(nav)goScreen(nav.dataset.nav)});

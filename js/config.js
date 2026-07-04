@@ -1,0 +1,1 @@
+window.KLABS_CONFIG={wheel:{firstGuide:{min:50,max:300,step:1,track:'firstGuideTrack'},guideCount:{min:5,max:20,step:1,track:'guideCountTrack'},targetStripper:{min:500,max:2500,step:1,track:'targetStripperTrack'}}};
