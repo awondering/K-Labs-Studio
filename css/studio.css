@@ -1,0 +1,24 @@
+/* css/studio.css — styles for Build 008 rod and LED marker layer.
+   Stage 3: static placement and visual base. Animations and marker logic will be
+   implemented in later stages.
+*/
+
+/* Container for the studio rod — only visible on layoutScreen */
+.screen #studioRodContainer{display:none}
+#layoutScreen #studioRodContainer{display:block;position:absolute;left:50%;transform:translateX(-50%);top:6.5rem;pointer-events:none;z-index:2;width:92%;max-width:1400px;opacity:1}
+/* Subtle presence on workshop screen */
+#workshopScreen #studioRodContainer{display:block;opacity:0.16}
+
+#studioRodContainer svg{width:100%;height:auto;display:block}
+
+/* make sure led layer elements are GPU-accelerated and non-interactive */
+#studioRodContainer .led{pointer-events:none;will-change:transform,opacity}
+
+/* LED visible state (used by visuals) */
+#studioRodContainer .led--visible{opacity:1;transform:scale(1);transition:opacity 240ms cubic-bezier(.2,.9,.2,1),transform 240ms cubic-bezier(.2,.9,.2,1)}
+#studioRodContainer .led--hidden{opacity:0;transform:scale(0.7);transition:opacity 180ms ease,transform 180ms ease}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  #studioRodContainer .led{transition:none!important}
+}
