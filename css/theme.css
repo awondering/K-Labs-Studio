@@ -1,24 +1,24 @@
 :root{
-  --base:#030404;
-  --panel:#101516;
-  --panel2:#151b1d;
-  --edge:#2b3334;
-  --edge2:#422022;
-  --text:#f0eee7;
-  --muted:#918e86;
-  --titanium:#d6d2c8;
-  --red:#a8121f;
-  --red2:#c3313f;
-  --shadow:0 26px 70px rgba(0,0,0,.58);
-  --radius:34px;
+  --base:#060708;
+  --panel:#0d1012;
+  --panel2:#12161a;
+  --edge:#242a2d;
+  --edge2:#2f1b1f;
+  --text:#ddd6c9;
+  --muted:#6f736d;
+  --titanium:#ada99d;
+  --red:#6d1017;
+  --red2:#8b1720;
+  --shadow:0 16px 38px rgba(0,0,0,.34);
+  --radius:22px;
   --safe-bottom:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{background:#000}
+html{background:#020303}
 body{
   margin:0;
   min-height:100vh;
-  background:radial-gradient(circle at 50% -10%,#222a2c 0,#070808 34%,#000 100%);
+  background:radial-gradient(circle at top,#171b1d 0,#060708 45%,#020303 100%);
   color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
   overflow-x:hidden;
@@ -27,11 +27,11 @@ body{
   position:fixed;
   inset:0;
   pointer-events:none;
-  opacity:.11;
+  opacity:.07;
   background-image:
-    linear-gradient(45deg,rgba(255,255,255,.035) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.035) 75%),
-    linear-gradient(-45deg,rgba(255,255,255,.028) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.028) 75%);
-  background-size:14px 14px;
+    linear-gradient(45deg,rgba(255,255,255,.018) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.018) 75%),
+    linear-gradient(-45deg,rgba(255,255,255,.012) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.012) 75%);
+  background-size:12px 12px;
   mix-blend-mode:screen;
 }
 button{font:inherit;color:inherit;border:0;background:none}

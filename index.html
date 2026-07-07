@@ -19,14 +19,18 @@
       <button class="icon-button" aria-label="Menu"><span></span><span></span></button>
       <div class="brand-lockup">
         <img src="assets/logo.svg" alt="K-Labs" class="brand-mark" />
-        <div><strong>K-Labs Studio</strong><small>Custom Rod Building Suite</small></div>
+        <div class="brand-copy">
+          <strong>K-Labs Studio</strong>
+          <small>CUSTOM ROD BUILDING SUITE</small>
+          <span>EST. 2005 • klabs.co.nz</span>
+        </div>
       </div>
-      <span class="build-pill">Build 008</span>
+      <span class="build-pill">Build 009</span>
     </header>
 
     <section class="screen active" id="homeScreen">
-      <div class="hero-card">
-        <p class="eyebrow">Precision Workshop Instrument</p>
+      <div class="home-hero">
+        <p class="eyebrow">Precision workshop instrument</p>
         <h1>K-Labs Studio</h1>
         <p class="lead">A premium guide layout and workshop tool for custom rod builds.</p>
         <div class="hero-actions">
@@ -34,63 +38,132 @@
           <button class="ghost-action" data-nav="workshopScreen">Workshop</button>
         </div>
       </div>
-      <button class="module-card featured" data-nav="layoutScreen"><span>Build 008</span><strong>Guide Layout</strong><em>Premium layout interface with card-based inputs and guide spacing output.</em><b>›</b></button>
-      <button class="module-card" data-nav="workshopScreen"><span>Centrepiece</span><strong>Workshop Mode</strong><em>One measurement at a time for the rod bench.</em><b>›</b></button>
-      <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
+      <div class="module-stack">
+        <button class="module-card featured" data-nav="layoutScreen"><span>Build 009</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
+        <button class="module-card" data-nav="workshopScreen"><span>Centrepiece</span><strong>Workshop Mode</strong><em>One measurement at a time for the rod bench.</em><b>›</b></button>
+        <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
+      </div>
     </section>
 
     <section class="screen" id="layoutScreen">
-      <div class="screen-head layout-screen-head">
-        <div class="layout-logo-wrap">
-          <img src="assets/logo.svg" alt="K-Labs" class="layout-logo" />
-        </div>
-        <p class="eyebrow">Guide Layout</p>
-        <h1>Set the build</h1>
-        <p class="subtle">Premium guide spacing control for the next custom rod.</p>
-      </div>
-
-      <div class="premium-layout-stack">
-        <label class="premium-input-card" for="firstGuideInput">
-          <span class="premium-input-card__label">First Guide From Tip (mm)</span>
-          <input class="premium-input-card__input" id="firstGuideInput" type="number" inputmode="numeric" min="50" max="300" step="1" value="105" />
-        </label>
-
-        <label class="premium-input-card" for="guideCountInput">
-          <span class="premium-input-card__label">Number of Running Guides</span>
-          <input class="premium-input-card__input" id="guideCountInput" type="number" inputmode="numeric" min="5" max="20" step="1" value="9" />
-        </label>
-
-        <label class="premium-input-card" for="targetStripperInput">
-          <span class="premium-input-card__label">Target Stripper Position (mm)</span>
-          <input class="premium-input-card__input" id="targetStripperInput" type="number" inputmode="numeric" min="500" max="2500" step="1" value="1260" />
-        </label>
-
-        <button class="premium-calculate-button" id="calculateLayoutBtn" type="button">CALCULATE GUIDE LAYOUT</button>
-
-        <section class="premium-spacing-card" aria-live="polite">
-          <div class="premium-spacing-card__header">
-            <p class="eyebrow">Guide Spacing</p>
-            <span class="premium-status-pill" id="layoutStatusBadge">Live</span>
+      <div class="layout-screen-shell">
+        <article class="layout-control-card">
+          <div class="layout-control-card__title">Running Guides</div>
+          <div class="layout-control-card__body layout-control-card__body--compact">
+            <button class="layout-control-card__button" data-action="decrement" data-target-field="guideCount" type="button" aria-label="Decrease running guides">−</button>
+            <div class="layout-control-card__value" data-field="guideCount" contenteditable="true" spellcheck="false" role="textbox" aria-label="Running guides"></div>
+            <button class="layout-control-card__button" data-action="increment" data-target-field="guideCount" type="button" aria-label="Increase running guides">+</button>
           </div>
-          <div class="premium-spacing-list" id="guideSpacingCards"></div>
+          <div class="layout-control-card__meta">guides</div>
+        </article>
+
+        <article class="layout-control-card">
+          <div class="layout-control-card__title">First Guide From Tip (mm)</div>
+          <div class="layout-control-card__body layout-control-card__body--compact">
+            <button class="layout-control-card__button" data-action="decrement" data-target-field="firstGuide" type="button" aria-label="Decrease first guide">−</button>
+            <div class="layout-control-card__value" data-field="firstGuide" contenteditable="true" spellcheck="false" role="textbox" aria-label="First guide from tip"></div>
+            <button class="layout-control-card__button" data-action="increment" data-target-field="firstGuide" type="button" aria-label="Increase first guide">+</button>
+          </div>
+          <div class="layout-control-card__meta">mm</div>
+        </article>
+
+        <article class="layout-control-card">
+          <div class="layout-control-card__title">Target Stripper Position (mm)</div>
+          <div class="layout-control-card__body layout-control-card__body--compact">
+            <button class="layout-control-card__button" data-action="decrement" data-target-field="targetStripper" type="button" aria-label="Decrease target stripper position">−</button>
+            <div class="layout-control-card__value" data-field="targetStripper" contenteditable="true" spellcheck="false" role="textbox" aria-label="Target stripper position"></div>
+            <button class="layout-control-card__button" data-action="increment" data-target-field="targetStripper" type="button" aria-label="Increase target stripper position">+</button>
+          </div>
+          <div class="layout-control-card__meta">mm</div>
+        </article>
+
+        <section class="guide-spacing-panel" aria-live="polite">
+          <div class="guide-spacing-panel__header">
+            <p class="eyebrow">Guide Spacing</p>
+            <span class="guide-spacing-panel__badge" id="layoutStatusBadge">Live</span>
+          </div>
+          <div class="guide-spacing-list" id="guideSpacingCards"></div>
         </section>
       </div>
     </section>
 
     <section class="screen" id="workshopScreen">
-      <div class="workshop-card">
-        <p class="eyebrow">Workshop Mode</p>
-        <p class="progress" id="workshopProgress">Guide 1 of 9</p>
-        <h1 id="workshopGuide">Guide 1</h1>
-        <div class="workshop-measure" id="workshopMeasure">105.0</div>
-        <p class="workshop-unit">mm from tip</p>
-        <p class="subtle" id="workshopSpacing">Spacing from previous: 105.0 mm</p>
-        <div class="workshop-actions"><button class="ghost-action" id="prevGuide">‹ Previous</button><button class="primary-action" id="nextGuide">Next ›</button></div>
-      </div>
+      <section class="quote-builder" aria-label="Workshop Quote Builder">
+        <header class="quote-builder__head">
+          <p class="eyebrow">Workshop</p>
+          <h1>Workshop Quote Builder</h1>
+          <p class="subtle">Build quotes from blanks, grips, reel seats, guides, trims, labour and margin.</p>
+        </header>
+
+        <article class="quote-section">
+          <h2>Customer</h2>
+          <div class="quote-grid quote-grid--two">
+            <label><span>Customer Name</span><input id="quoteCustomerName" type="text" placeholder="Customer name" /></label>
+            <label><span>Phone</span><input id="quoteCustomerPhone" type="text" placeholder="Phone" /></label>
+            <label><span>Email</span><input id="quoteCustomerEmail" type="email" placeholder="Email" /></label>
+            <label><span>Build Name</span><input id="quoteBuildName" type="text" placeholder="Build name" /></label>
+            <label class="quote-grid__full"><span>Notes</span><textarea id="quoteNotes" rows="2" placeholder="Build notes"></textarea></label>
+          </div>
+        </article>
+
+        <article class="quote-section">
+          <h2>Blank</h2>
+          <div class="quote-grid quote-grid--two">
+            <label><span>Blank Name</span><input id="quoteBlankName" type="text" placeholder="Blank name" /></label>
+            <label><span>Length</span><input id="quoteBlankLength" type="text" placeholder="Length" /></label>
+            <label><span>Power</span><input id="quoteBlankPower" type="text" placeholder="Power" /></label>
+            <label><span>Action</span><input id="quoteBlankAction" type="text" placeholder="Action" /></label>
+            <label><span>Blank Cost</span><input id="quoteBlankCost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+          </div>
+        </article>
+
+        <article class="quote-section">
+          <h2>Components</h2>
+          <div id="quoteComponentsList" class="quote-components"></div>
+          <div class="quote-actions-row">
+            <button id="addComponentBtn" class="ghost-action" type="button">Add Component</button>
+            <button id="removeComponentBtn" class="ghost-action" type="button">Remove Component</button>
+          </div>
+        </article>
+
+        <article class="quote-section">
+          <h2>Labour</h2>
+          <div class="quote-grid quote-grid--three">
+            <label><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
+            <label><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
+          </div>
+        </article>
+
+        <article class="quote-section">
+          <h2>Quote Summary</h2>
+          <div class="quote-grid quote-grid--three">
+            <label><span>Material Cost</span><input id="quoteMaterialCost" type="text" readonly /></label>
+            <label><span>Labour Cost</span><input id="quoteSummaryLabourCost" type="text" readonly /></label>
+            <label><span>Subtotal</span><input id="quoteSubtotal" type="text" readonly /></label>
+            <label><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
+            <label><span>GST (15%)</span><input id="quoteGst" type="text" readonly /></label>
+            <label><span>Total Quote Price</span><input id="quoteTotal" type="text" readonly /></label>
+            <label><span>Profit</span><input id="quoteProfit" type="text" readonly /></label>
+          </div>
+        </article>
+
+        <article class="quote-section">
+          <h2>Actions</h2>
+          <div class="quote-actions-grid">
+            <button id="saveQuoteBtn" class="primary-action" type="button">Save Quote</button>
+            <button id="duplicateQuoteBtn" class="ghost-action" type="button">Duplicate Quote</button>
+            <button id="printQuoteBtn" class="ghost-action" type="button">Print Quote</button>
+            <button id="exportPdfBtn" class="ghost-action" type="button">Export PDF</button>
+            <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
+            <button id="convertToBuildBtn" class="primary-action" type="button">Convert To Build</button>
+          </div>
+        </article>
+      </section>
     </section>
 
     <section class="screen" id="blanksScreen"><div class="screen-head"><p class="eyebrow">Blank Library</p><h1>Starter blanks</h1></div><div id="blankCards"></div></section>
-    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>Build 008</strong></div></div></section>
+    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>Build 009</strong></div></div></section>
   </main>
 
   <nav class="bottom-nav">
