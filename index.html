@@ -25,7 +25,7 @@
           <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
-      <span class="build-pill">BUILD 024</span>
+      <span class="build-pill">BUILD 025</span>
     </header>
 
     <section class="screen active" id="homeScreen">
@@ -39,8 +39,8 @@
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 024</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
-        <button class="module-card" data-nav="workshopScreen"><span>Centrepiece</span><strong>Workshop Mode</strong><em>One measurement at a time for the rod bench.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 025</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
+        <button class="module-card" data-nav="workshopScreen"><span>Workshop</span><strong>Rod Builder Quote</strong><em>Create customer quotes for custom rod builds.</em><b>›</b></button>
         <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
       </div>
     </section>
@@ -88,11 +88,11 @@
     </section>
 
     <section class="screen" id="workshopScreen">
-      <section class="quote-builder" aria-label="Workshop Quote Builder">
+      <section class="quote-builder" aria-label="Rod Builder Quote">
         <header class="quote-builder__head">
           <p class="eyebrow">Workshop</p>
-          <h1>Workshop Quote Builder</h1>
-          <p class="subtle">Build quotes from blanks, grips, reel seats, guides, trims, labour and margin.</p>
+          <h1>Rod Builder Quote</h1>
+          <p class="subtle">Customer • Blank • Components • Labour • Margin • Quote Summary</p>
         </header>
 
         <article class="quote-section">
@@ -119,6 +119,7 @@
 
         <article class="quote-section">
           <h2>Components</h2>
+          <datalist id="quoteComponentNameOptions"></datalist>
           <div id="quoteComponentsList" class="quote-components"></div>
           <div class="quote-actions-row">
             <button id="addComponentBtn" class="ghost-action" type="button">Add Component</button>
@@ -140,11 +141,14 @@
           <div class="quote-grid quote-grid--three">
             <label><span>Material Cost</span><input id="quoteMaterialCost" type="text" readonly /></label>
             <label><span>Labour Cost</span><input id="quoteSummaryLabourCost" type="text" readonly /></label>
+            <label><span>Cost Before Margin</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
             <label><span>Subtotal</span><input id="quoteSubtotal" type="text" readonly /></label>
             <label><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
-            <label><span>GST (15%)</span><input id="quoteGst" type="text" readonly /></label>
+            <label class="quote-gst-toggle quote-grid__full"><span>Include GST (15%)</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+            <label id="quoteGstField"><span>GST (15%)</span><input id="quoteGst" type="text" readonly /></label>
             <label><span>Total Quote Price</span><input id="quoteTotal" type="text" readonly /></label>
             <label><span>Profit</span><input id="quoteProfit" type="text" readonly /></label>
+            <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
           </div>
         </article>
 
@@ -163,9 +167,9 @@
     </section>
 
     <section class="screen" id="blanksScreen"><div class="screen-head"><p class="eyebrow">Blank Library</p><h1>Starter blanks</h1></div><div id="blankCards"></div></section>
-    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>BUILD 024</strong></div></div></section>
+    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>BUILD 025</strong></div></div></section>
 
-    <p class="live-build-status" aria-label="Live build status">Live build: 024</p>
+    <p class="live-build-status" aria-label="Live build status">Live build: 025</p>
   </main>
 
   <nav class="bottom-nav">

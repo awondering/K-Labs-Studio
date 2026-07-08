@@ -38,3 +38,50 @@
   pointer-events:none;
   z-index:19;
 }
+
+.quote-component-name__controls{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:6px;
+}
+
+.quote-component-name__controls input{
+  min-width:0;
+}
+
+.quote-mini-btn{
+  min-height:34px;
+  min-width:34px;
+  padding:0;
+  border-radius:9px;
+  border:1px solid rgba(214,210,200,.12);
+  background:linear-gradient(180deg,#14181a,#0b0d0f);
+  color:#bfb9ac;
+  font-size:14px;
+  font-weight:700;
+}
+
+.quote-gst-toggle{
+  grid-template-columns:1fr auto;
+  align-items:center;
+  gap:10px;
+}
+
+.quote-gst-toggle input[type="checkbox"]{
+  width:18px;
+  height:18px;
+  accent-color:#8b1720;
+}
+
+.quote-gst-status{
+  margin:0;
+  font-size:10px;
+  letter-spacing:.08em;
+  color:#7f837c;
+  text-transform:uppercase;
+}
+
+.quote-field--muted input{
+  color:#6e736d!important;
+  background:linear-gradient(180deg,#0a0c0d,#080a0b)!important;
+}

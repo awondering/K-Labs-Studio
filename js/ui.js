@@ -1,6 +1,8 @@
 const $=id=>document.getElementById(id);
 let state=Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0});
-let quote=Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate();
+const DEFAULT_COMPONENT_NAMES=['Blank','Reel Seat','Rear Grip','Fore Grip','Butt Cap','Guides','Tip Top','Hook Keeper','Thread','Trim Rings','Winding Checks','Decals','Epoxy','Cork','EVA Grip','Carbon Grip','Miscellaneous'];
+const CUSTOM_COMPONENT_STORAGE_KEY='klabs-workshop-custom-components';
+let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 const blanks=[{maker:'K-Labs',model:"7'2 Softbait",fg:105,gc:9,ts:1260},{maker:'CD',model:'Haku PE3–6',fg:110,gc:10,ts:1350},{maker:'K-Labs',model:"7'0 Softbait",fg:100,gc:9,ts:1240}];
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
@@ -15,21 +17,75 @@ function newQuoteTemplate(){
     customerName:'',phone:'',email:'',buildName:'',notes:'',
     blankName:'',blankLength:'',blankPower:'',blankAction:'',blankCost:0,
     components:[{name:'',supplier:'',cost:0,qty:1}],
-    labourRate:0,labourHours:0,marginPercent:0
+    labourRate:0,labourHours:0,marginPercent:0,includeGst:true
   };
+}
+function normalizeComponent(component){
+  const parsedQty=Number(component&&component.qty);
+  return{
+    name:(component&&typeof component.name==='string')?component.name:'',
+    supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
+    cost:numberOrZero(component&&component.cost),
+    qty:Number.isFinite(parsedQty)&&parsedQty>=0?parsedQty:1
+  };
+}
+function normalizeQuote(inputQuote){
+  const base=newQuoteTemplate();
+  const merged={...base,...(inputQuote||{})};
+  const components=Array.isArray(inputQuote&&inputQuote.components)&&inputQuote.components.length?inputQuote.components:[{name:'',supplier:'',cost:0,qty:1}];
+  merged.components=components.map(normalizeComponent);
+  merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:true;
+  return merged;
 }
 function quoteMaths(){
   const blankCost=numberOrZero(quote.blankCost);
   const componentCost=quote.components.reduce((sum,item)=>sum+(numberOrZero(item.cost)*numberOrZero(item.qty)),0);
   const materialCost=blankCost+componentCost;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
-  const subtotal=materialCost+labourCost;
-  const marginAmount=subtotal*(numberOrZero(quote.marginPercent)/100);
-  const sellBeforeGst=subtotal+marginAmount;
-  const gst=sellBeforeGst*0.15;
-  const total=sellBeforeGst+gst;
+  const costBeforeMargin=materialCost+labourCost;
+  const marginAmount=costBeforeMargin*(numberOrZero(quote.marginPercent)/100);
+  const subtotal=costBeforeMargin+marginAmount;
+  const gst=(quote.includeGst!==false)?(subtotal*0.15):0;
+  const total=subtotal+gst;
   const profit=marginAmount;
-  return{materialCost,labourCost,subtotal,gst,total,profit};
+  return{materialCost,labourCost,costBeforeMargin,marginAmount,subtotal,gst,total,profit};
+}
+function escapeHtml(value){
+  return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function getCustomComponentNames(){
+  const stored=Store.get(CUSTOM_COMPONENT_STORAGE_KEY,[]);
+  if(!Array.isArray(stored))return[];
+  return Array.from(new Set(stored.map((name)=>String(name||'').trim()).filter(Boolean)));
+}
+function saveCustomComponentNames(names){
+  Store.set(CUSTOM_COMPONENT_STORAGE_KEY,Array.from(new Set(names.map((name)=>String(name||'').trim()).filter(Boolean))));
+}
+function normalizeNameKey(name){
+  return String(name||'').trim().toLowerCase();
+}
+function allComponentNameOptions(){
+  const defaults=DEFAULT_COMPONENT_NAMES.slice();
+  const defaultKeys=new Set(defaults.map(normalizeNameKey));
+  const customs=getCustomComponentNames().filter((name)=>!defaultKeys.has(normalizeNameKey(name)));
+  return defaults.concat(customs);
+}
+function renderComponentNameOptions(){
+  const options=$('quoteComponentNameOptions');
+  if(!options)return;
+  options.innerHTML=allComponentNameOptions().map((name)=>`<option value="${escapeHtml(name)}"></option>`).join('');
+}
+function renderQuoteComponents(){
+  const componentsList=$('quoteComponentsList');
+  if(!componentsList)return;
+  componentsList.innerHTML=quote.components.map((item,i)=>`
+      <div class="quote-component-row">
+        <label class="quote-component-name"><span>Component Name</span><div class="quote-component-name__controls"><input data-component-index="${i}" data-component-key="name" type="text" list="quoteComponentNameOptions" value="${escapeHtml(item.name||'')}" placeholder="Type or select component" /><button class="quote-mini-btn" data-component-action="save-name" data-component-index="${i}" type="button" aria-label="Save component name">+</button><button class="quote-mini-btn" data-component-action="delete-name" data-component-index="${i}" type="button" aria-label="Delete custom component name">-</button></div></label>
+        <label><span>Supplier</span><input data-component-index="${i}" data-component-key="supplier" type="text" value="${escapeHtml(item.supplier||'')}" placeholder="Supplier" /></label>
+        <label><span>Cost</span><input data-component-index="${i}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label>
+        <label><span>Quantity</span><input data-component-index="${i}" data-component-key="qty" type="number" min="0" step="1" value="${numberOrZero(item.qty)}" /></label>
+      </div>
+    `).join('');
 }
 function persistQuoteRecord(currentQuote){
   const savedAt=new Date().toISOString();
@@ -105,12 +161,22 @@ function bindWorkshopQuoteBuilder(){
     const el=$(id);
     if(!el)return;
     const isNumeric=['blankCost','labourRate','labourHours','marginPercent'].includes(key);
-    el.addEventListener('input',()=>{
+    const onFieldUpdate=()=>{
       quote[key]=isNumeric?numberOrZero(el.value):el.value;
       saveQuoteCurrent();
-      renderWorkshopQuote();
-    });
+      updateQuoteSummary();
+    };
+    el.addEventListener('input',onFieldUpdate);
+    el.addEventListener('change',onFieldUpdate);
   });
+  const includeGstInput=$('quoteIncludeGst');
+  if(includeGstInput){
+    includeGstInput.addEventListener('change',()=>{
+      quote.includeGst=includeGstInput.checked;
+      saveQuoteCurrent();
+      updateQuoteSummary();
+    });
+  }
   const componentsList=$('quoteComponentsList');
   if(componentsList){
     componentsList.addEventListener('input',(event)=>{
@@ -121,7 +187,32 @@ function bindWorkshopQuoteBuilder(){
       if(!quote.components[i] || !key)return;
       quote.components[i][key]=['cost','qty'].includes(key)?numberOrZero(input.value):input.value;
       saveQuoteCurrent();
-      renderWorkshopQuote();
+      updateQuoteSummary();
+    });
+    componentsList.addEventListener('click',(event)=>{
+      const actionButton=event.target.closest('[data-component-action]');
+      if(!actionButton)return;
+      const i=Number(actionButton.getAttribute('data-component-index'));
+      const component=quote.components[i];
+      if(!component)return;
+      const name=(component.name||'').trim();
+      if(!name)return;
+      const action=actionButton.getAttribute('data-component-action');
+      const customNames=getCustomComponentNames();
+      const customKeys=new Set(customNames.map(normalizeNameKey));
+      const defaultKeys=new Set(DEFAULT_COMPONENT_NAMES.map(normalizeNameKey));
+      if(action==='save-name'){
+        if(!defaultKeys.has(normalizeNameKey(name)) && !customKeys.has(normalizeNameKey(name))){
+          customNames.push(name);
+          saveCustomComponentNames(customNames);
+          renderComponentNameOptions();
+        }
+      }
+      if(action==='delete-name'){
+        const nextNames=customNames.filter((value)=>normalizeNameKey(value)!==normalizeNameKey(name));
+        saveCustomComponentNames(nextNames);
+        renderComponentNameOptions();
+      }
     });
   }
   const addComponentBtn=$('addComponentBtn');
@@ -129,7 +220,8 @@ function bindWorkshopQuoteBuilder(){
     addComponentBtn.addEventListener('click',()=>{
       quote.components.push({name:'',supplier:'',cost:0,qty:1});
       saveQuoteCurrent();
-      renderWorkshopQuote();
+      renderQuoteComponents();
+      updateQuoteSummary();
     });
   }
   const removeComponentBtn=$('removeComponentBtn');
@@ -138,7 +230,8 @@ function bindWorkshopQuoteBuilder(){
       if(quote.components.length>1){quote.components.pop();}
       else{quote.components[0]={name:'',supplier:'',cost:0,qty:1};}
       saveQuoteCurrent();
-      renderWorkshopQuote();
+      renderQuoteComponents();
+      updateQuoteSummary();
     });
   }
   const saveQuoteBtn=$('saveQuoteBtn');
@@ -173,25 +266,28 @@ function renderWorkshopQuote(){
     const isNumeric=['blankCost','labourRate','labourHours','marginPercent'].includes(key);
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
-  const componentsList=$('quoteComponentsList');
-  if(componentsList){
-    componentsList.innerHTML=quote.components.map((item,i)=>`
-      <div class="quote-component-row">
-        <label><span>Component Name</span><input data-component-index="${i}" data-component-key="name" type="text" value="${(item.name||'').replace(/"/g,'&quot;')}" placeholder="Component" /></label>
-        <label><span>Supplier</span><input data-component-index="${i}" data-component-key="supplier" type="text" value="${(item.supplier||'').replace(/"/g,'&quot;')}" placeholder="Supplier" /></label>
-        <label><span>Cost</span><input data-component-index="${i}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label>
-        <label><span>Quantity</span><input data-component-index="${i}" data-component-key="qty" type="number" min="0" step="1" value="${numberOrZero(item.qty)}" /></label>
-      </div>
-    `).join('');
-  }
+  const includeGstInput=$('quoteIncludeGst');
+  if(includeGstInput && document.activeElement!==includeGstInput){includeGstInput.checked=quote.includeGst!==false;}
+  renderComponentNameOptions();
+  const activeElement=document.activeElement;
+  const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
+  if(!isEditingComponent){renderQuoteComponents();}
+  updateQuoteSummary();
+}
+function updateQuoteSummary(){
   const math=quoteMaths();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteMaterialCost'))$('quoteMaterialCost').value=currency(math.materialCost);
+  if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.costBeforeMargin);
   if($('quoteSummaryLabourCost'))$('quoteSummaryLabourCost').value=currency(math.labourCost);
   if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal'))$('quoteTotal').value=currency(math.total);
   if($('quoteProfit'))$('quoteProfit').value=currency(math.profit);
+  const gstField=$('quoteGstField');
+  const gstStatus=$('quoteGstStatus');
+  if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
+  if(gstStatus){gstStatus.textContent=quote.includeGst===false?'GST excluded from total.':'GST included in total.';}
 }
 function render(){
   const r=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
