@@ -16,7 +16,7 @@
   <div class="carbon-field"></div>
   <main class="app-shell" id="app">
     <header class="topbar">
-      <button class="icon-button" aria-label="Menu"><span></span><span></span></button>
+      <button class="icon-button" aria-label="Menu" aria-expanded="false" data-menu-action="open-menu" type="button"><span></span><span></span></button>
       <div class="brand-lockup">
         <img src="assets/logo.svg" alt="K-Labs" class="brand-mark" />
         <div class="brand-copy">
@@ -25,7 +25,7 @@
           <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
-      <span class="build-pill">BUILD 026</span>
+      <span class="build-pill">BUILD 030C</span>
     </header>
 
     <section class="screen active" id="homeScreen">
@@ -39,7 +39,7 @@
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 026</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 030C</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
         <button class="module-card" data-nav="workshopScreen"><span>Workshop</span><strong>Rod Builder Quote</strong><em>Create customer quotes for custom rod builds.</em><b>›</b></button>
         <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
       </div>
@@ -77,6 +77,34 @@
           <div class="layout-control-card__meta">mm</div>
         </article>
 
+        <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">
+          <div class="rod-blank-visual__head">
+            <p class="eyebrow">Rod Blank</p>
+            <span class="rod-blank-visual__badge">BUILD 030C</span>
+          </div>
+          <svg viewBox="0 0 1000 180" preserveAspectRatio="none" role="img" aria-label="Rod blank with guide markers">
+            <defs>
+              <linearGradient id="rodBlankBase" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1a1d20" />
+                <stop offset="52%" stop-color="#0a0c0d" />
+                <stop offset="100%" stop-color="#14171a" />
+              </linearGradient>
+              <linearGradient id="rodBlankSheen" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="rgba(255,255,255,0)" />
+                <stop offset="16%" stop-color="rgba(255,255,255,0.12)" />
+                <stop offset="50%" stop-color="rgba(255,255,255,0.02)" />
+                <stop offset="84%" stop-color="rgba(255,255,255,0.1)" />
+                <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+              </linearGradient>
+            </defs>
+            <rect x="24" y="72" width="952" height="36" rx="18" fill="url(#rodBlankBase)" class="rod-blank-visual__blank" />
+            <rect x="24" y="76" width="952" height="14" rx="7" fill="url(#rodBlankSheen)" opacity="0.7" />
+            <ellipse cx="38" cy="90" rx="18" ry="14" fill="#050607" opacity="0.96" />
+            <ellipse cx="962" cy="90" rx="18" ry="14" fill="#050607" opacity="0.92" />
+            <g id="rodBlankMarkerLayer"></g>
+          </svg>
+        </section>
+
         <section class="guide-spacing-panel" aria-live="polite">
           <div class="guide-spacing-panel__header">
             <p class="eyebrow">Guide Spacing</p>
@@ -92,11 +120,11 @@
         <header class="quote-builder__head">
           <p class="eyebrow">Workshop</p>
           <h1 id="quoteBuilderTitle">Rod Builder Quote</h1>
-          <p id="quoteBuilderSubhead" class="subtle">Customer • Blank • Components • Labour • Margin • Quote Summary</p>
+          <p id="quoteBuilderSubhead" class="subtle">Customer • Blank • Build Components • Labour • Margin • Quote Summary</p>
           <div class="quote-mode-switch" role="tablist" aria-label="Quote mode">
             <button class="ghost-action active" data-quote-mode="internal" type="button">Internal Quote</button>
             <button class="ghost-action" data-quote-mode="customer" type="button">Customer Quote</button>
-            <span id="quoteModeLabel" class="quote-mode-switch__label">Internal Quote</span>
+            <span id="quoteModeLabel" class="quote-mode-switch__label">Internal mode</span>
           </div>
         </header>
 
@@ -114,19 +142,23 @@
         <article class="quote-section" data-internal-only>
           <h2>Blank</h2>
           <div class="quote-grid quote-grid--two">
+            <label class="quote-grid__full quote-component-name"><span>Blank Library</span><button id="quoteBlankPickerTrigger" class="quote-component-picker__trigger" type="button" aria-haspopup="dialog"><span id="quoteBlankPickerTriggerValue" class="quote-component-picker__value">Select blank from library</span><b>▾</b></button></label>
             <label><span>Blank Name</span><input id="quoteBlankName" type="text" placeholder="Blank name" /></label>
+            <label><span>Manufacturer</span><input id="quoteBlankMaker" type="text" placeholder="Manufacturer" /></label>
+            <label><span>Series</span><input id="quoteBlankSeries" type="text" placeholder="Series" /></label>
             <label><span>Length</span><input id="quoteBlankLength" type="text" placeholder="Length" /></label>
             <label><span>Power</span><input id="quoteBlankPower" type="text" placeholder="Power" /></label>
             <label><span>Action</span><input id="quoteBlankAction" type="text" placeholder="Action" /></label>
+            <label><span>Pieces</span><input id="quoteBlankPieces" type="text" placeholder="Pieces" /></label>
             <label><span>Blank Cost</span><input id="quoteBlankCost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
           </div>
         </article>
 
-        <article class="quote-section">
-          <h2>Components</h2>
+        <article class="quote-section" data-internal-only>
+          <h2>Build Components</h2>
           <div id="quoteComponentsList" class="quote-components"></div>
           <div class="quote-actions-row">
-            <button id="addComponentBtn" class="ghost-action" type="button">Add Component</button>
+            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Component</button>
           </div>
         </article>
 
@@ -142,14 +174,11 @@
         <article class="quote-section">
           <h2>Quote Summary</h2>
           <div class="quote-grid quote-grid--three">
-            <label id="quoteMaterialCostField"><span>Material Cost</span><input id="quoteMaterialCost" type="text" readonly /></label>
-            <label id="quoteSummaryLabourCostField"><span>Labour Cost</span><input id="quoteSummaryLabourCost" type="text" readonly /></label>
-            <label id="quoteCostBeforeMarginField"><span>Cost Before Margin</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
-            <label id="quoteSubtotalField"><span>Subtotal</span><input id="quoteSubtotal" type="text" readonly /></label>
+            <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
             <label id="quoteMarginPercentField"><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
-            <label class="quote-gst-toggle quote-grid__full"><span>Include GST (15%)</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
-            <label id="quoteGstField"><span>GST (15%)</span><input id="quoteGst" type="text" readonly /></label>
-            <label><span>Total Quote Price</span><input id="quoteTotal" type="text" readonly /></label>
+            <label class="quote-gst-toggle quote-grid__full"><span>Include Tax (15%)</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+            <label id="quoteGstField"><span>Tax (15%)</span><input id="quoteGst" type="text" readonly /></label>
+            <label><span>Final Customer Price</span><input id="quoteTotal" type="text" readonly /></label>
             <label id="quoteProfitField"><span>Profit</span><input id="quoteProfit" type="text" readonly /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
           </div>
@@ -169,10 +198,17 @@
       </section>
     </section>
 
-    <section class="screen" id="blanksScreen"><div class="screen-head"><p class="eyebrow">Blank Library</p><h1>Starter blanks</h1></div><div id="blankCards"></div></section>
-    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>BUILD 026</strong></div></div></section>
+    <section class="screen" id="blanksScreen">
+      <div class="screen-head"><p class="eyebrow">Blank Library</p><h1>Editable blank library</h1></div>
+      <div class="blank-library-controls">
+        <input id="blankSearchInput" class="component-sheet__search" type="search" placeholder="Search blank library" autocomplete="off" />
+        <button id="blankAddBtn" class="primary-action" type="button">Add Blank</button>
+      </div>
+      <div id="blankCards"></div>
+    </section>
+    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>BUILD 030C</strong></div></div></section>
 
-    <p class="live-build-status" aria-label="Live build status">Live build: 026</p>
+    <p class="live-build-status" aria-label="Live build status">Live build: 030C</p>
   </main>
 
   <nav class="bottom-nav">
@@ -185,6 +221,7 @@
   <script src="js/config.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/guide-layout.js"></script>
+  <script src="js/studio-visuals.js"></script>
   <script src="js/navigation.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>

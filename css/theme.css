@@ -7,8 +7,8 @@
   --text:#ddd6c9;
   --muted:#6f736d;
   --titanium:#ada99d;
-  --red:#6d1017;
-  --red2:#8b1720;
+  --red:#861820;
+  --red2:#ad2531;
   --shadow:0 16px 38px rgba(0,0,0,.34);
   --radius:22px;
   --safe-bottom:env(safe-area-inset-bottom,0px);
@@ -21,6 +21,9 @@ body{
   background:radial-gradient(circle at top,#171b1d 0,#060708 45%,#020303 100%);
   color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
   overflow-x:hidden;
 }
 .carbon-field{
