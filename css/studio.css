@@ -22,3 +22,19 @@
 @media (prefers-reduced-motion: reduce){
   #studioRodContainer .led{transition:none!important}
 }
+
+.live-build-status{
+  position:fixed;
+  left:50%;
+  bottom:calc(86px + var(--safe-bottom));
+  transform:translateX(-50%);
+  width:min(92vw,410px);
+  margin:0;
+  padding:0 8px;
+  text-align:right;
+  font-size:10px;
+  letter-spacing:.08em;
+  color:#6b6f69;
+  pointer-events:none;
+  z-index:19;
+}
