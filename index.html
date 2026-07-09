@@ -4,8 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050606" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="K-Labs Studio" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="format-detection" content="telephone=no" />
   <title>K-Labs Studio</title>
   <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png" />
   <link rel="stylesheet" href="css/theme.css" />
   <link rel="stylesheet" href="css/layout.css" />
   <link rel="stylesheet" href="css/components.css" />
@@ -25,7 +33,7 @@
           <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
-      <span class="build-pill">BUILD 030C</span>
+      <span class="build-pill">BUILD 031</span>
     </header>
 
     <section class="screen active" id="homeScreen">
@@ -39,7 +47,7 @@
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 030C</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 031</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
         <button class="module-card" data-nav="workshopScreen"><span>Workshop</span><strong>Rod Builder Quote</strong><em>Create customer quotes for custom rod builds.</em><b>›</b></button>
         <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
       </div>
@@ -80,7 +88,7 @@
         <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">
           <div class="rod-blank-visual__head">
             <p class="eyebrow">Rod Blank</p>
-            <span class="rod-blank-visual__badge">BUILD 030C</span>
+            <span class="rod-blank-visual__badge">BUILD 031</span>
           </div>
           <svg viewBox="0 0 1000 180" preserveAspectRatio="none" role="img" aria-label="Rod blank with guide markers">
             <defs>
@@ -206,9 +214,28 @@
       </div>
       <div id="blankCards"></div>
     </section>
-    <section class="screen" id="settingsScreen"><div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div><div class="settings-card"><div><span>Version</span><strong>BUILD 030C</strong></div></div></section>
+    <section class="screen" id="settingsScreen">
+      <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
+      <div class="settings-card">
+        <div><span>Version</span><strong>BUILD 031</strong></div>
+        <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
+        <div class="settings-card__actions">
+          <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
+        </div>
+      </div>
+      <article class="settings-card settings-guide-card" aria-label="Install guide">
+        <h2>Install Guide</h2>
+        <ol>
+          <li>Open K-Labs Studio in Safari.</li>
+          <li>Tap Share.</li>
+          <li>Select Add to Home Screen.</li>
+          <li>Launch K-Labs Studio from the Home Screen.</li>
+        </ol>
+      </article>
+    </section>
 
-    <p class="live-build-status" aria-label="Live build status">Live build: 030C</p>
+    <p class="live-build-status" aria-label="Live build status">Live build: 031</p>
+    <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
   </main>
 
   <nav class="bottom-nav">

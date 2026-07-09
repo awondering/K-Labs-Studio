@@ -134,6 +134,52 @@ body.nav-menu-open{overflow:hidden}
   z-index:19;
 }
 
+.offline-ready-status{
+  position:fixed;
+  left:50%;
+  bottom:calc(66px + var(--safe-bottom));
+  transform:translateX(-50%);
+  width:min(92vw,410px);
+  margin:0;
+  padding:0 8px;
+  text-align:right;
+  font-size:10px;
+  letter-spacing:.12em;
+  color:#b9dcb8;
+  pointer-events:none;
+  z-index:19;
+}
+
+.settings-card__actions{
+  display:block;
+  padding-top:14px;
+}
+
+.settings-card__actions .primary-action{
+  width:100%;
+  min-height:42px;
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.settings-guide-card h2{
+  margin:0 0 10px;
+  font-size:12px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:#cfc9bc;
+}
+
+.settings-guide-card ol{
+  margin:0;
+  padding-left:18px;
+  display:grid;
+  gap:6px;
+  color:#a7ac9f;
+  font-size:12px;
+}
+
 .quote-component-row{
   display:grid;
   grid-template-columns:minmax(0,1fr);

@@ -1089,6 +1089,77 @@ function loadBlank(i){
   applyBlankToQuote(b);
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
+function ensureDemoBlank(){
+  const demoKey='build 031 demo softbait';
+  const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
+  const incoming=normalizeBlank({
+    id:existing?existing.id:generateId('blank'),
+    maker:'K-Labs',
+    series:'Demo Series',
+    model:'Build 031 Demo Softbait',
+    length:"7'4",
+    power:'MH',
+    action:'Fast',
+    pieces:'2',
+    cost:438,
+    sku:'DEMO-031-SB74',
+    notes:'Offline demo blank for BUILD 031 validation.',
+    fg:108,
+    gc:10,
+    ts:1330,
+    archived:false,
+  });
+  if(existing){
+    Object.assign(existing,incoming);
+  }else{
+    blanks.unshift(incoming);
+  }
+  saveBlankLibrary();
+  return existing||incoming;
+}
+function loadDemoBuild(){
+  const demoBlank=ensureDemoBlank();
+  state.firstGuide=demoBlank.fg;
+  state.guideCount=demoBlank.gc;
+  state.targetStripper=demoBlank.ts;
+  state.locked=false;
+  state.workshopIndex=0;
+  quote=normalizeQuote({
+    ...newQuoteTemplate(),
+    customerName:'Demo Angler',
+    phone:'021 555 0131',
+    email:'demo@klabs.co.nz',
+    buildName:'Build 031 Demo Softbait',
+    notes:'Loaded via Settings > Load Demo Build for rapid testing.',
+    blankId:demoBlank.id,
+    blankName:blankDisplayName(demoBlank),
+    blankMaker:demoBlank.maker,
+    blankSeries:demoBlank.series,
+    blankLength:demoBlank.length,
+    blankPower:demoBlank.power,
+    blankAction:demoBlank.action,
+    blankPieces:demoBlank.pieces,
+    blankCost:demoBlank.cost,
+    blankSku:demoBlank.sku,
+    blankNotes:demoBlank.notes,
+    components:[
+      {category:'Guides',supplier:'Fuji',description:'Fuji K-Series guide set',cost:96},
+      {category:'Reel Seat',supplier:'Alps',description:'Alps triangle reel seat',cost:28},
+      {category:'Thread & Finish',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
+    ],
+    labourRate:50,
+    labourHours:2,
+    marginPercent:20,
+    includeGst:true,
+    quoteMode:'internal',
+    gstRate:15,
+  });
+  save();
+  saveQuoteCurrent();
+  renderBlanks();
+  render();
+  goScreen('workshopScreen');
+}
 function renderBlanks(){
   const host=$('blankCards');
   if(!host)return;
@@ -1140,6 +1211,21 @@ function bindBlankLibraryControls(){
     });
   }
 }
+function bindSettingsControls(){
+  const demoButton=$('loadDemoBuildBtn');
+  if(!demoButton)return;
+  demoButton.addEventListener('click',()=>{
+    openConfirmDialog({
+      title:'Load Demo Build',
+      message:'Replace the current quote fields with demo data for quick offline and workflow testing?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'load',label:'Load Demo Build',kind:'primary'}]
+    },(action)=>{
+      if(action==='load'){
+        loadDemoBuild();
+      }
+    });
+  });
+}
 function render(){
   const r=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
@@ -1184,4 +1270,5 @@ function render(){
 bindLayoutControls();
 bindWorkshopQuoteBuilder();
 bindBlankLibraryControls();
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks};
+bindSettingsControls();
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,loadDemoBuild};
