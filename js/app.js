@@ -10,7 +10,7 @@ function setOfflineStatusLabel(label){
 
 if('serviceWorker' in navigator){
 	window.addEventListener('load',()=>{
-		navigator.serviceWorker.register('/service-worker.js').then(()=>{
+		navigator.serviceWorker.register('./service-worker.js').then(()=>{
 			return navigator.serviceWorker.ready;
 		}).then(()=>{
 			setOfflineStatusLabel('OFFLINE READY');
