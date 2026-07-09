@@ -1,6 +1,6 @@
 const $=id=>document.getElementById(id);
 let state=Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0});
-const DEFAULT_CATEGORY_NAMES=['Guides','Reel Seat','Rear Grip','Fore Grip','Butt Cap','Thread & Finish','Decals','Miscellaneous'];
+const DEFAULT_CATEGORY_NAMES=['Blank','Guides','Tip','Reel Seat','Grip','Butt Cap','Winding Checks','Thread','Decals','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
@@ -536,25 +536,94 @@ function renderQuoteComponents(){
   if(!componentsList)return;
   const animateClass=shouldAnimateComponentRows?' quote-component-row--shift':'';
   componentsList.innerHTML=quote.components.map((item,i)=>`
-      <div class="quote-component-row${animateClass}">
+      <article class="quote-component-row${animateClass}" data-component-row-index="${i}" aria-label="Build cost row ${i+1}">
+        <div class="quote-component-row__head">
+          <p class="quote-component-row__title">Build Cost ${i+1}</p>
+          <button class="component-row-delete" data-component-action="delete-row" data-component-index="${i}" type="button" aria-label="Delete build cost row ${i+1}">×</button>
+        </div>
         <div class="quote-component-row__fields">
           <label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label>
           <label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label>
-          <label class="quote-component-field quote-component-field--description"><span>Description</span><input data-component-index="${i}" data-component-key="description" type="text" placeholder="Fuji K-Series guide set" value="${escapeHtml(item.description||'')}" /></label>
+          <label class="quote-component-field quote-component-field--description"><span>Description</span><input data-component-index="${i}" data-component-key="description" type="text" placeholder="Enter description..." value="${escapeHtml(item.description||'')}" /></label>
           <label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${i}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label>
         </div>
-        <div class="quote-component-row__actions">
-          <button class="component-row-delete" data-component-action="delete-row" data-component-index="${i}" type="button" aria-label="Delete component row">Delete</button>
-        </div>
-      </div>
+      </article>
     `).join('');
   shouldAnimateComponentRows=false;
+}
+function waitForDomRender(callback){
+  requestAnimationFrame(()=>requestAnimationFrame(callback));
+}
+function isDocumentScroller(el){
+  return el===document.scrollingElement || el===document.documentElement || el===document.body;
+}
+function bottomOverlayDepth(){
+  const selectors=['.bottom-nav','.live-build-status','.offline-ready-status'];
+  let depth=0;
+  selectors.forEach((selector)=>{
+    const el=document.querySelector(selector);
+    if(!el || el.hidden)return;
+    const style=window.getComputedStyle(el);
+    if(style.display==='none' || style.visibility==='hidden')return;
+    const rect=el.getBoundingClientRect();
+    if(rect.height<=0)return;
+    depth=Math.max(depth,Math.max(0,window.innerHeight-rect.top));
+  });
+  return depth;
+}
+function viewportVisibleBottom(extraSafeSpace){
+  const reservedBottom=bottomOverlayDepth()+Math.max(0,numberOrZero(extraSafeSpace));
+  return window.innerHeight-reservedBottom;
+}
+function nearestScrollableContainer(element){
+  let current=element&&element.parentElement;
+  while(current && current!==document.body){
+    const style=window.getComputedStyle(current);
+    const canScrollY=(style.overflowY==='auto' || style.overflowY==='scroll');
+    if(canScrollY && current.scrollHeight>current.clientHeight+1){
+      return current;
+    }
+    current=current.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+function scrollElementFullyIntoView(container,element){
+  if(!container || !element)return;
+  const safePad=12;
+  const rowBottomSafeSpace=120;
+  const elementRect=element.getBoundingClientRect();
+  const containerRect=isDocumentScroller(container)
+    ? {top:0,bottom:viewportVisibleBottom(rowBottomSafeSpace)}
+    : container.getBoundingClientRect();
+  const safeBottom=Math.min(containerRect.bottom-safePad,viewportVisibleBottom(rowBottomSafeSpace));
+
+  let delta=0;
+  if(elementRect.top<containerRect.top+safePad){
+    delta=elementRect.top-(containerRect.top+safePad);
+  }else if(elementRect.bottom>safeBottom){
+    delta=elementRect.bottom-safeBottom;
+  }
+  if(!delta)return;
+
+  if(isDocumentScroller(container)){
+    window.scrollBy({top:delta,behavior:'smooth'});
+    return;
+  }
+  container.scrollBy({top:delta,behavior:'smooth'});
+}
+function scrollNewComponentRowIntoView(index){
+  const selector=`#quoteComponentsList [data-component-row-index="${index}"]`;
+  const row=document.querySelector(selector);
+  if(!row)return false;
+  const container=nearestScrollableContainer(row);
+  scrollElementFullyIntoView(container,row);
+  return true;
 }
 function ensureComponentFieldVisible(field){
   if(!field)return;
   const rect=field.getBoundingClientRect();
   const topBound=88;
-  const bottomBound=window.innerHeight-84;
+  const bottomBound=viewportVisibleBottom(120);
   if(rect.top<topBound || rect.bottom>bottomBound){
     field.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
   }
@@ -585,7 +654,6 @@ function focusNewComponentWithRetry(index,retryCount){
     setTimeout(()=>focusNewComponentWithRetry(index,retryCount-1),40);
     return;
   }
-  openComponentSheet(index);
 }
 function persistQuoteRecord(currentQuote){
   const savedAt=new Date().toISOString();
@@ -805,7 +873,10 @@ function bindWorkshopQuoteBuilder(){
       saveQuoteCurrent();
       renderQuoteComponents();
       updateQuoteSummary();
-      setTimeout(()=>focusNewComponentWithRetry(newIndex,4),0);
+      waitForDomRender(()=>{
+        scrollNewComponentRowIntoView(newIndex);
+        setTimeout(()=>focusNewComponentWithRetry(newIndex,6),220);
+      });
     });
   }
   const saveQuoteBtn=$('saveQuoteBtn');
@@ -868,7 +939,7 @@ function renderWorkshopQuote(){
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank • Build Components • Labour • Margin • Quote Summary';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank • Build Costs • Labour • Margin • Quote Summary';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
   if($('quoteBlankPickerTriggerValue'))$('quoteBlankPickerTriggerValue').textContent=quote.blankName||'Select blank from library';
   const activeElement=document.activeElement;
@@ -1090,20 +1161,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 031 demo softbait';
+  const demoKey='build 032 demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 031 Demo Softbait',
+    model:'Build 032 Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
-    sku:'DEMO-031-SB74',
-    notes:'Offline demo blank for BUILD 031 validation.',
+    sku:'DEMO-032-SB74',
+    notes:'Offline demo blank for BUILD 032 validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -1129,7 +1200,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 031 Demo Softbait',
+    buildName:'Build 032 Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
@@ -1145,7 +1216,7 @@ function loadDemoBuild(){
     components:[
       {category:'Guides',supplier:'Fuji',description:'Fuji K-Series guide set',cost:96},
       {category:'Reel Seat',supplier:'Alps',description:'Alps triangle reel seat',cost:28},
-      {category:'Thread & Finish',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
+      {category:'Thread',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
     ],
     labourRate:50,
     labourHours:2,

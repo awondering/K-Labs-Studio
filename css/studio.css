@@ -25,6 +25,10 @@
 
 #workshopScreen #studioRodContainer{display:none}
 
+#workshopScreen .quote-builder{
+  padding-bottom:calc(190px + var(--safe-bottom));
+}
+
 /* make sure led layer elements are GPU-accelerated and non-interactive */
 #studioRodContainer .led{pointer-events:none;will-change:transform,opacity}
 
@@ -183,22 +187,34 @@ body.nav-menu-open{overflow:hidden}
 .quote-component-row{
   display:grid;
   grid-template-columns:minmax(0,1fr);
-  gap:10px;
-  padding:11px;
+  gap:11px;
+  padding:12px;
   border:1px solid rgba(214,210,200,.11);
-  border-radius:12px;
-  background:linear-gradient(180deg,rgba(13,16,18,.92),rgba(8,10,11,.95));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+  border-radius:14px;
+  background:linear-gradient(180deg,rgba(16,20,22,.95),rgba(9,12,13,.97));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 18px rgba(0,0,0,.16);
 }
 
-.quote-component-row>label{
-  min-width:0;
+.quote-component-row__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.quote-component-row__title{
+  margin:0;
+  font-size:10px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:#bcb6a9;
+  font-weight:800;
 }
 
 .quote-component-row__fields{
   display:grid;
   grid-template-columns:minmax(0,1fr);
-  gap:8px;
+  gap:9px;
 }
 
 .quote-component-field{
@@ -220,30 +236,28 @@ body.nav-menu-open{overflow:hidden}
 }
 
 .quote-component-field--description input{
-  min-height:38px;
+  min-height:40px;
 }
 
 .quote-component-field--cost input{
-  max-width:190px;
-}
-
-.quote-component-row__actions{
-  display:flex;
-  justify-content:flex-end;
+  min-height:40px;
 }
 
 .component-row-delete{
-  min-height:34px;
-  padding:0 12px;
-  border-radius:9px;
-  border:1px solid rgba(214,210,200,.12);
-  background:linear-gradient(180deg,rgba(25,29,31,.95),rgba(14,18,20,.96));
-  color:#d1cbbc;
-  font-size:10px;
+  width:34px;
+  min-width:34px;
+  height:34px;
+  border-radius:10px;
+  border:1px solid rgba(214,210,200,.16);
+  background:linear-gradient(180deg,rgba(28,33,35,.95),rgba(16,21,22,.96));
+  color:#d9d2c5;
+  font-size:18px;
   font-weight:700;
-  letter-spacing:.08em;
-  text-transform:uppercase;
+  letter-spacing:0;
+  text-transform:none;
   line-height:1;
+  display:grid;
+  place-items:center;
 }
 
 .component-row-delete:hover,
@@ -309,7 +323,7 @@ body.nav-menu-open{overflow:hidden}
 }
 
 .quote-components{
-  gap:9px;
+  gap:10px;
 }
 
 .quote-actions-row{
@@ -318,14 +332,14 @@ body.nav-menu-open{overflow:hidden}
 
 .quote-add-component-btn{
   width:100%;
-  min-height:46px;
-  font-size:13px;
+  min-height:52px;
+  font-size:14px;
   font-weight:800;
-  letter-spacing:.08em;
+  letter-spacing:.06em;
   text-transform:uppercase;
   border-color:rgba(173,37,49,.5);
   background:linear-gradient(180deg,rgba(173,37,49,.96),rgba(118,20,30,.96));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 8px 16px rgba(0,0,0,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 10px 22px rgba(0,0,0,.24);
 }
 
 .quote-add-component-btn:hover,
@@ -913,7 +927,7 @@ body.nav-menu-open{overflow:hidden}
 
 @media (max-width:420px){
   .quote-component-row{
-    padding:10px;
+    padding:11px;
   }
   .component-sheet__panel{
     width:min(96vw,392px);
@@ -948,7 +962,13 @@ body.nav-menu-open{overflow:hidden}
     grid-template-columns:minmax(0,1fr) minmax(0,1fr);
     align-items:end;
   }
+  .quote-component-field--description{
+    grid-column:1/-1;
+  }
   .quote-component-field--cost{
-    justify-self:start;
+    max-width:260px;
+  }
+  .quote-component-field--cost input{
+    max-width:220px;
   }
 }
