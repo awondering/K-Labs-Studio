@@ -26,7 +26,11 @@
 #workshopScreen #studioRodContainer{display:none}
 
 #workshopScreen .quote-builder{
-  padding-bottom:calc(190px + var(--safe-bottom));
+  padding-bottom:calc(230px + var(--safe-bottom));
+}
+
+#workshopScreen{
+  background:linear-gradient(180deg,rgba(4,6,7,.98),rgba(6,8,9,.98));
 }
 
 /* make sure led layer elements are GPU-accelerated and non-interactive */
@@ -304,6 +308,21 @@ body.nav-menu-open{overflow:hidden}
   text-align:left;
   text-transform:none!important;
   letter-spacing:0;
+  cursor:pointer;
+  transition:border-color .18s ease,background .18s ease,transform .18s ease,box-shadow .18s ease;
+}
+
+.quote-component-picker__trigger *{
+  pointer-events:none;
+}
+
+.quote-component-picker__trigger:hover,
+.quote-component-picker__trigger:focus-visible{
+  border-color:rgba(214,210,200,.2);
+  background:linear-gradient(180deg,#131719,#0c1012);
+  transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  outline:none;
 }
 
 .quote-component-picker__trigger b{
@@ -342,6 +361,132 @@ body.nav-menu-open{overflow:hidden}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 10px 22px rgba(0,0,0,.24);
 }
 
+
+.quote-section__subtle{
+  margin:0;
+  color:#70746f;
+  font-size:11px;
+  line-height:1.35;
+}
+
+#workshopScreen .quote-builder{
+  gap:12px;
+}
+
+#workshopScreen .quote-section{
+  gap:10px;
+  padding:15px;
+  border:1px solid rgba(149,154,149,.24);
+  border-radius:19px;
+  background:linear-gradient(180deg,rgba(22,26,28,.96),rgba(15,18,20,.98));
+  box-shadow:0 10px 24px rgba(0,0,0,.14);
+}
+
+#workshopScreen .quote-section__header{
+  display:grid;
+  gap:4px;
+}
+
+#workshopScreen .quote-section__body{
+  display:grid;
+  gap:8px;
+}
+
+#workshopScreen .quote-section--collapsible{
+  padding:0;
+  overflow:hidden;
+}
+
+#workshopScreen .quote-section__toggle{
+  width:100%;
+  border:none;
+  border-bottom:1px solid rgba(149,154,149,.2);
+  background:transparent;
+  min-height:60px;
+  padding:14px 15px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  text-align:left;
+  cursor:pointer;
+}
+
+#workshopScreen .quote-section__toggle *{
+  pointer-events:none;
+}
+
+#workshopScreen .quote-section__toggle-copy{
+  display:grid;
+  gap:4px;
+}
+
+#workshopScreen .quote-section__toggle-title{
+  color:#c8c2b6;
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  font-weight:700;
+}
+
+#workshopScreen .quote-section__chevron{
+  color:#a8aca3;
+  font-size:14px;
+  font-weight:700;
+  line-height:1;
+  transition:transform .18s ease;
+  pointer-events:none;
+}
+
+#workshopScreen .quote-section--collapsed .quote-section__chevron{
+  transform:rotate(-90deg);
+}
+
+#workshopScreen .quote-section--collapsed .quote-section__body{
+  display:none;
+}
+
+#workshopScreen .quote-section--collapsible .quote-section__body{
+  padding:14px 15px 15px;
+}
+
+#workshopScreen .quote-components,
+#workshopScreen .quote-component-row,
+#workshopScreen .component-sheet__row,
+#workshopScreen .component-sheet__option,
+#workshopScreen .component-sheet__edit,
+#workshopScreen .component-sheet__delete,
+#workshopScreen .component-sheet__close,
+#workshopScreen .quote-component-picker__trigger,
+#workshopScreen .quote-actions-grid button,
+#workshopScreen .quote-mode-switch button,
+#workshopScreen .blank-library-controls button,
+#workshopScreen .quote-grid input,
+#workshopScreen .quote-grid textarea{
+  cursor:pointer;
+}
+
+#workshopScreen .quote-grid input,
+#workshopScreen .quote-grid textarea{
+  cursor:text;
+}
+
+#workshopScreen .quote-grid{
+  gap:8px;
+}
+
+#workshopScreen .quote-grid input,
+#workshopScreen .quote-grid textarea{
+  border-color:rgba(214,210,200,.18);
+  background:linear-gradient(180deg,#171b1d,#0f1315);
+}
+
+#workshopScreen .quote-actions-grid button[disabled]{
+  opacity:.52;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
+}
 .quote-add-component-btn:hover,
 .quote-add-component-btn:focus-visible{
   border-color:rgba(210,70,82,.62);
@@ -365,6 +510,7 @@ body.nav-menu-open{overflow:hidden}
   inset:0;
   background:rgba(3,5,6,.7);
   backdrop-filter:blur(3px);
+  cursor:pointer;
 }
 
 .component-sheet__panel{

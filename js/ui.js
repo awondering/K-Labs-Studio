@@ -8,9 +8,19 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
+const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
+const BUILD_SPEC_FIELDS=[
+  {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
+  {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
+  {id:'quoteSpecGripBelowReelSeatLength',key:'gripBelowReelSeatLength',label:'Grip Below Reel Seat Length',visibility:'customer'},
+  {id:'quoteSpecForeGripLength',key:'foreGripLength',label:'Fore Grip Length',visibility:'customer'},
+  {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'customer'},
+  {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Builder Notes',visibility:'workshop'}
+];
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
+let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
 let activeChoicePicker={type:'category',index:-1};
@@ -18,6 +28,9 @@ let activeChoiceEditor={mode:'add',originalName:''};
 let shouldAnimateComponentRows=false;
 let activeConfirmHandler=null;
 let activeBlankEditorId='';
+let modalLockDepth=0;
+let modalSavedScrollY=0;
+let modalReturnFocusEl=null;
 
 function save(){Store.set('klabs-studio-state',state)}
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
@@ -28,9 +41,89 @@ function newQuoteTemplate(){
     buildNumber:'',
     customerName:'',phone:'',email:'',buildName:'',notes:'',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
+    buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,marginPercent:0,includeGst:true,quoteMode:'internal',gstRate:15
+    labourRate:0,labourHours:0,marginPercent:0,includeGst:true,quoteMode:'internal',gstRate:15,quoteStatus:'draft'
   };
+}
+function normalizeBuildSpecifications(inputSpecs){
+  const normalized={};
+  BUILD_SPEC_FIELDS.forEach((field)=>{
+    normalized[field.key]=String(inputSpecs&&inputSpecs[field.key]||'');
+  });
+  if(!normalized.hookKeeperPosition){
+    normalized.hookKeeperPosition=String(inputSpecs&&inputSpecs.hookKeeperNotes||inputSpecs&&inputSpecs.hookKeeperPosition||'');
+  }
+  if(!normalized.gripBelowReelSeatLength){
+    normalized.gripBelowReelSeatLength=String(inputSpecs&&inputSpecs.lowerReelSeatGripLength||'');
+  }
+  return normalized;
+}
+function specificationValue(value){
+  return String(value||'').trim();
+}
+function appendSpecRow(rows,label,value){
+  const text=specificationValue(value);
+  if(!text)return;
+  rows.push({label,value:text});
+}
+function firstComponentByCategory(categoryMatchers){
+  if(!Array.isArray(quote.components))return null;
+  const matchers=Array.isArray(categoryMatchers)?categoryMatchers:[categoryMatchers];
+  return quote.components.find((item)=>{
+    const category=normalizeNameKey(item&&item.category);
+    if(!category)return false;
+    return matchers.some((matcher)=>category.includes(normalizeNameKey(matcher)));
+  })||null;
+}
+function componentDescriptionOrCategory(component){
+  if(!component)return '';
+  return specificationValue(component.description)||specificationValue(component.category);
+}
+function blankSpecificationSummary(){
+  const details=[];
+  const blankName=specificationValue(quote.blankName);
+  const blankLength=specificationValue(quote.blankLength);
+  const blankPower=specificationValue(quote.blankPower);
+  const blankAction=specificationValue(quote.blankAction);
+  if(blankName)details.push(blankName);
+  if(blankLength)details.push(blankLength);
+  if(blankPower)details.push(blankPower);
+  if(blankAction)details.push(blankAction);
+  return details.join(' • ');
+}
+function customerSpecificationRows(){
+  const rows=[];
+  appendSpecRow(rows,'Blank',blankSpecificationSummary());
+  appendSpecRow(rows,'Guide Train',componentDescriptionOrCategory(firstComponentByCategory('guide')));
+  appendSpecRow(rows,'Reel Seat Model',componentDescriptionOrCategory(firstComponentByCategory('reel seat')));
+  appendSpecRow(rows,'Grip Configuration',componentDescriptionOrCategory(firstComponentByCategory(['grip','butt cap'])));
+  BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer').forEach((field)=>{
+    appendSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
+  });
+  appendSpecRow(rows,'Special Customer Requests',quote.notes);
+  appendSpecRow(rows,'Decorative Notes',componentDescriptionOrCategory(firstComponentByCategory(['decals','thread','winding checks'])));
+  appendSpecRow(rows,'Build Summary',quote.buildName);
+  return rows;
+}
+function workshopSpecificationRows(){
+  const rows=customerSpecificationRows();
+  BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='workshop').forEach((field)=>{
+    appendSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
+  });
+  appendSpecRow(rows,'Internal Product Codes',quote.blankSku);
+  appendSpecRow(rows,'Blank Library Notes',quote.blankNotes);
+  return rows;
+}
+function buildSpecificationViews(){
+  return{customer:customerSpecificationRows(),workshop:workshopSpecificationRows()};
+}
+function specificationRowsMarkup(rows){
+  const safeRows=Array.isArray(rows)?rows:[];
+  if(!safeRows.length){
+    return '<div><span>Build Specifications</span><strong>No customer-facing specifications entered yet.</strong></div>';
+  }
+  return safeRows.map((row)=>`<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('');
 }
 function normalizeComponent(component){
   return{
@@ -43,6 +136,13 @@ function normalizeComponent(component){
 function normalizeQuoteMode(value){
   return String(value||'').toLowerCase()==='customer'?'customer':'internal';
 }
+function normalizeQuoteStatus(value){
+  const normalized=String(value||'').trim().toLowerCase();
+  return QUOTE_STATUS_VALUES.includes(normalized)?normalized:'draft';
+}
+function isAcceptedQuoteStatus(value){
+  return normalizeQuoteStatus(value)==='accepted';
+}
 function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
   const merged={...base,...(inputQuote||{})};
@@ -50,6 +150,7 @@ function normalizeQuote(inputQuote){
   merged.components=components.map(normalizeComponent);
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:true;
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
+  merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
   merged.gstRate=numberOrZero(inputQuote&&inputQuote.gstRate)||15;
   merged.blankId=String(inputQuote&&inputQuote.blankId||'');
   merged.blankMaker=String(inputQuote&&inputQuote.blankMaker||'');
@@ -57,7 +158,86 @@ function normalizeQuote(inputQuote){
   merged.blankPieces=String(inputQuote&&inputQuote.blankPieces||'');
   merged.blankSku=String(inputQuote&&inputQuote.blankSku||'');
   merged.blankNotes=String(inputQuote&&inputQuote.blankNotes||'');
+  merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
   return merged;
+}
+function canConvertToBuild(){
+  return isAcceptedQuoteStatus(quote.quoteStatus) && !hasUnsavedQuoteChanges;
+}
+function updateQuoteActionPriority(){
+  const saveQuoteBtn=$('saveQuoteBtn');
+  const convertToBuildBtn=$('convertToBuildBtn');
+  if(!saveQuoteBtn || !convertToBuildBtn)return;
+
+  const isAccepted=isAcceptedQuoteStatus(quote.quoteStatus);
+  const saveIsPrimary=!isAccepted || hasUnsavedQuoteChanges;
+
+  saveQuoteBtn.classList.toggle('primary-action',saveIsPrimary);
+  saveQuoteBtn.classList.toggle('ghost-action',!saveIsPrimary);
+  convertToBuildBtn.classList.toggle('primary-action',!saveIsPrimary);
+  convertToBuildBtn.classList.toggle('ghost-action',saveIsPrimary);
+
+  const convertEnabled=canConvertToBuild();
+  convertToBuildBtn.disabled=!convertEnabled;
+  convertToBuildBtn.setAttribute('aria-disabled',String(!convertEnabled));
+  if(!isAccepted){
+    convertToBuildBtn.title='Convert To Build is available only for Accepted quotes.';
+    return;
+  }
+  if(hasUnsavedQuoteChanges){
+    convertToBuildBtn.title='Save the Accepted quote before converting to a build.';
+    return;
+  }
+  convertToBuildBtn.title='Convert this Accepted quote to a build.';
+}
+function markQuoteDirty(){
+  hasUnsavedQuoteChanges=true;
+  updateQuoteActionPriority();
+}
+function markQuoteSaved(){
+  hasUnsavedQuoteChanges=false;
+  updateQuoteActionPriority();
+}
+function lockModalLayer(openerEl){
+  if(modalLockDepth===0){
+    modalSavedScrollY=window.scrollY||window.pageYOffset||0;
+    document.body.style.position='fixed';
+    document.body.style.top=`-${modalSavedScrollY}px`;
+    document.body.style.left='0';
+    document.body.style.right='0';
+    document.body.style.width='100%';
+    document.body.classList.add('component-sheet-open');
+    if(openerEl && typeof openerEl.focus==='function'){
+      modalReturnFocusEl=openerEl;
+    }else if(document.activeElement && typeof document.activeElement.focus==='function'){
+      modalReturnFocusEl=document.activeElement;
+    }
+  }
+  modalLockDepth+=1;
+}
+function unlockModalLayer(options){
+  const settings={restoreFocus:true,...(options||{})};
+  if(modalLockDepth<=0)return;
+  modalLockDepth-=1;
+  if(modalLockDepth>0)return;
+  const focusTarget=modalReturnFocusEl;
+  window.requestAnimationFrame(()=>{
+    document.body.style.position='';
+    document.body.style.top='';
+    document.body.style.left='';
+    document.body.style.right='';
+    document.body.style.width='';
+    document.body.classList.remove('component-sheet-open');
+    window.scrollTo(0,modalSavedScrollY);
+    if(settings.restoreFocus && focusTarget && typeof focusTarget.focus==='function'){
+      try{
+        focusTarget.focus({preventScroll:true});
+      }catch{
+        focusTarget.focus();
+      }
+    }
+    modalReturnFocusEl=null;
+  });
 }
 function quoteMaths(){
   const blankCost=numberOrZero(quote.blankCost);
@@ -155,6 +335,7 @@ function applyBlankToQuote(blank){
   quote.blankSku=blank.sku;
   quote.blankNotes=blank.notes;
   saveQuoteCurrent();
+  markQuoteDirty();
 }
 function persistBuildRecord(currentQuote){
   const savedAt=new Date().toISOString();
@@ -357,6 +538,11 @@ function addCustomChoice(name){
     saveArchivedChoiceNames(type,archived);
   }
 }
+function isDefaultChoiceName(type,name){
+  const defaults=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES);
+  const normalized=normalizeNameKey(name);
+  return defaults.some((value)=>normalizeNameKey(value)===normalized);
+}
 function renameCustomChoice(fromName,toName,blankId){
   const type=activeChoicePicker.type;
   if(type==='blank'){
@@ -372,25 +558,40 @@ function renameCustomChoice(fromName,toName,blankId){
   const fromKey=normalizeNameKey(fromName);
   const toKey=normalizeNameKey(toName);
   if(!fromKey || !toKey)return false;
-  const defaults=defaultChoiceNameSet(type);
-  if(defaults.has(fromKey) || defaults.has(toKey))return false;
   const names=customChoiceNames(type);
   const index=names.findIndex((value)=>normalizeNameKey(value)===fromKey);
-  if(index<0)return false;
-  if(names.some((value,idx)=>idx!==index && normalizeNameKey(value)===toKey))return false;
-  names[index]=toName;
-  saveCustomChoiceNames(type,names);
-  const archived=getArchivedChoiceNames(type).map((name)=>normalizeNameKey(name)===fromKey?toName:name);
+  const archivedNames=getArchivedChoiceNames(type);
+  const defaultNames=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES).map(normalizeNameKey);
+  const visibleNames=new Set(defaultNames.concat(names.map(normalizeNameKey)));
+  if(fromKey!==toKey && visibleNames.has(toKey))return false;
+  if(index>=0){
+    names[index]=toName;
+  }else if(isDefaultChoiceName(type,fromName)){
+    const filteredNames=names.filter((value)=>normalizeNameKey(value)!==fromKey);
+    filteredNames.push(toName);
+    saveCustomChoiceNames(type,filteredNames);
+  }else{
+    return false;
+  }
+  if(index>=0){
+    saveCustomChoiceNames(type,names);
+  }
+  const archived=archivedNames.map((name)=>normalizeNameKey(name)===fromKey?toName:name);
+  if(isDefaultChoiceName(type,fromName) && !archived.some((value)=>normalizeNameKey(value)===fromKey)){
+    archived.push(fromName);
+  }
   saveArchivedChoiceNames(type,archived);
   return true;
 }
 function removeCustomChoice(optionName){
   const type=activeChoicePicker.type;
   const optionKey=normalizeNameKey(optionName);
-  if(defaultChoiceNameSet(type).has(optionKey))return;
   const nextNames=customChoiceNames(type).filter((value)=>normalizeNameKey(value)!==optionKey);
   saveCustomChoiceNames(type,nextNames);
   const archived=getArchivedChoiceNames(type).filter((value)=>normalizeNameKey(value)!==optionKey);
+  if(isDefaultChoiceName(type,optionName) && !archived.some((value)=>normalizeNameKey(value)===optionKey)){
+    archived.push(optionName);
+  }
   saveArchivedChoiceNames(type,archived);
 }
 function getChoiceValue(type,item){
@@ -404,6 +605,7 @@ function setChoiceValue(type,index,value){
     quote.components[index].category=value;
   }
   saveQuoteCurrent();
+  markQuoteDirty();
 }
 function applyChoiceSelection(selectedName,selectedId){
   if(activeChoicePicker.type==='blank'){
@@ -430,7 +632,7 @@ function renderChoicePickerOptions(query){
     return;
   }
   list.innerHTML=options.map((item)=>{
-    const canEdit=activeChoicePicker.type==='blank' || !!item.isCustom;
+    const canEdit=true;
     return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${canEdit?`<div class="component-sheet__actions"><button class="component-sheet__edit" data-choice-rename-option="${escapeHtml(item.name)}" data-choice-rename-id="${escapeHtml(item.id||'')}" type="button" aria-label="Rename ${activeChoicePicker.type}">Rename</button><button class="component-sheet__delete" data-choice-delete-option="${escapeHtml(item.name)}" data-choice-delete-id="${escapeHtml(item.id||'')}" type="button" aria-label="Delete ${activeChoicePicker.type}">Delete</button></div>`:''}</div>`;
   }).join('');
 }
@@ -495,25 +697,26 @@ function removeComponentRow(index){
   }
   shouldAnimateComponentRows=true;
   saveQuoteCurrent();
+  markQuoteDirty();
   renderQuoteComponents();
   updateQuoteSummary();
 }
 function openComponentSheet(index){
-  openChoicePicker('category',index);
+  openChoicePicker('category',index,document.activeElement);
 }
 function openSupplierSheet(index){
-  openChoicePicker('supplier',index);
+  openChoicePicker('supplier',index,document.activeElement);
 }
 function openBlankSheet(){
-  openChoicePicker('blank',-1);
+  openChoicePicker('blank',-1,document.activeElement);
 }
-function openChoicePicker(type,index){
+function openChoicePicker(type,index,openerEl){
   ensureChoicePicker();
   activeChoicePicker={type,index};
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
   sheet.hidden=false;
-  document.body.classList.add('component-sheet-open');
+  lockModalLayer(openerEl||document.activeElement);
   if($('choicePickerCustomBox'))$('choicePickerCustomBox').hidden=true;
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   if($('choicePickerSearch'))$('choicePickerSearch').value='';
@@ -529,7 +732,7 @@ function closeComponentSheet(){
   sheet.hidden=true;
   activeChoicePicker={type:'category',index:-1};
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
-  document.body.classList.remove('component-sheet-open');
+  unlockModalLayer({restoreFocus:true});
 }
 function renderQuoteComponents(){
   const componentsList=$('quoteComponentsList');
@@ -702,16 +905,14 @@ function openConfirmDialog(config,onAction){
   }
   activeConfirmHandler=typeof onAction==='function'?onAction:null;
   $('confirmSheet').hidden=false;
-  document.body.classList.add('component-sheet-open');
+  lockModalLayer(document.activeElement);
 }
 function closeConfirmDialog(action){
   const handler=activeConfirmHandler;
   activeConfirmHandler=null;
   const sheet=$('confirmSheet');
   if(sheet)sheet.hidden=true;
-  if(!$('choicePickerSheet') || $('choicePickerSheet').hidden){
-    document.body.classList.remove('component-sheet-open');
-  }
+  unlockModalLayer({restoreFocus:true});
   if(handler)handler(action||'cancel');
 }
 function requestDeleteBlank(blank){
@@ -806,7 +1007,41 @@ function workshopInputMap(){
     ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours'],['quoteMarginPercent','marginPercent'],['quoteGstRate','gstRate']
   ];
 }
+function bindBuildSpecificationInputs(){
+  BUILD_SPEC_FIELDS.forEach((field)=>{
+    const el=$(field.id);
+    if(!el)return;
+    const onSpecUpdate=()=>{
+      quote.buildSpecifications[field.key]=el.value;
+      saveQuoteCurrent();
+      markQuoteDirty();
+    };
+    el.addEventListener('input',onSpecUpdate);
+    el.addEventListener('change',onSpecUpdate);
+  });
+}
+function renderBuildSpecificationInputs(){
+  BUILD_SPEC_FIELDS.forEach((field)=>{
+    const el=$(field.id);
+    if(!el)return;
+    if(document.activeElement===el)return;
+    el.value=quote.buildSpecifications[field.key]||'';
+  });
+}
+function bindWorkshopCollapsibleSections(){
+  document.querySelectorAll('[data-collapsible-trigger]').forEach((trigger)=>{
+    if(trigger.getAttribute('data-collapsible-bound')==='true')return;
+    trigger.setAttribute('data-collapsible-bound','true');
+    trigger.addEventListener('click',()=>{
+      const section=trigger.closest('.quote-section--collapsible');
+      if(!section)return;
+      const isCollapsed=section.classList.toggle('quote-section--collapsed');
+      trigger.setAttribute('aria-expanded',String(!isCollapsed));
+    });
+  });
+}
 function bindWorkshopQuoteBuilder(){
+  bindWorkshopCollapsibleSections();
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -814,6 +1049,7 @@ function bindWorkshopQuoteBuilder(){
     const onFieldUpdate=()=>{
       quote[key]=isNumeric?numberOrZero(el.value):el.value;
       saveQuoteCurrent();
+      markQuoteDirty();
       updateQuoteSummary();
     };
     el.addEventListener('input',onFieldUpdate);
@@ -824,6 +1060,7 @@ function bindWorkshopQuoteBuilder(){
     includeGstInput.addEventListener('change',()=>{
       quote.includeGst=includeGstInput.checked;
       saveQuoteCurrent();
+      markQuoteDirty();
       updateQuoteSummary();
     });
   }
@@ -831,9 +1068,11 @@ function bindWorkshopQuoteBuilder(){
     button.addEventListener('click',()=>{
       quote.quoteMode=normalizeQuoteMode(button.getAttribute('data-quote-mode'));
       saveQuoteCurrent();
+      markQuoteDirty();
       renderWorkshopQuote();
     });
   });
+  bindBuildSpecificationInputs();
   const componentsList=$('quoteComponentsList');
   if(componentsList){
     ensureChoicePicker();
@@ -845,6 +1084,7 @@ function bindWorkshopQuoteBuilder(){
       if(!quote.components[i] || !key)return;
       quote.components[i][key]=['cost'].includes(key)?numberOrZero(input.value):input.value;
       saveQuoteCurrent();
+      markQuoteDirty();
       updateQuoteSummary();
     });
     componentsList.addEventListener('click',(event)=>{
@@ -852,11 +1092,11 @@ function bindWorkshopQuoteBuilder(){
       const action=actionButton?actionButton.getAttribute('data-component-action'):'';
       if(action==='open-component-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
-        openComponentSheet(i);
+        openChoicePicker('category',i,actionButton);
       }
       if(action==='open-supplier-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
-        openSupplierSheet(i);
+        openChoicePicker('supplier',i,actionButton);
       }
       if(action==='delete-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
@@ -871,6 +1111,7 @@ function bindWorkshopQuoteBuilder(){
       const newIndex=quote.components.length-1;
       shouldAnimateComponentRows=true;
       saveQuoteCurrent();
+      markQuoteDirty();
       renderQuoteComponents();
       updateQuoteSummary();
       waitForDomRender(()=>{
@@ -885,16 +1126,22 @@ function bindWorkshopQuoteBuilder(){
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
       persistQuoteRecord(quote);
+      markQuoteSaved();
       alert('Quote saved.');
     });
   }
   const convertToBuildBtn=$('convertToBuildBtn');
   if(convertToBuildBtn){
     convertToBuildBtn.addEventListener('click',()=>{
+      if(!canConvertToBuild()){
+        alert('Only saved Accepted quotes can be converted to a build.');
+        return;
+      }
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
       persistQuoteRecord(quote);
       persistBuildRecord(quote);
+      markQuoteSaved();
       goScreen('layoutScreen');
     });
   }
@@ -921,8 +1168,9 @@ function bindWorkshopQuoteBuilder(){
   });
   const blankPickerTrigger=$('quoteBlankPickerTrigger');
   if(blankPickerTrigger){
-    blankPickerTrigger.addEventListener('click',()=>openBlankSheet());
+    blankPickerTrigger.addEventListener('click',()=>openChoicePicker('blank',-1,blankPickerTrigger));
   }
+  updateQuoteActionPriority();
 }
 function renderWorkshopQuote(){
   workshopInputMap().forEach(([id,key])=>{
@@ -939,9 +1187,11 @@ function renderWorkshopQuote(){
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank • Build Costs • Labour • Margin • Quote Summary';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Margin • Quote Summary';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
   if($('quoteBlankPickerTriggerValue'))$('quoteBlankPickerTriggerValue').textContent=quote.blankName||'Select blank from library';
+  updateQuoteActionPriority();
+  renderBuildSpecificationInputs();
   const activeElement=document.activeElement;
   const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
   if(!isEditingComponent){renderQuoteComponents();}
@@ -985,6 +1235,7 @@ function ensureQuotePreviewSheet(){
           </div>
           <p id="quotePreviewCustomer"></p>
           <p id="quotePreviewBuildName"></p>
+          <div id="quotePreviewSpecs" class="quote-preview-summary"></div>
           <div id="quotePreviewSummary" class="quote-preview-summary"></div>
         </div>
         <div class="quote-preview-actions">
@@ -1007,10 +1258,12 @@ function ensureQuotePreviewSheet(){
 }
 function renderQuotePreviewSheet(){
   const math=quoteMaths();
+  const specificationViews=buildSpecificationViews();
   if($('quotePreviewName'))$('quotePreviewName').textContent='Customer Quote';
   if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber||'Unnumbered quote';
   if($('quotePreviewCustomer'))$('quotePreviewCustomer').textContent=[quote.customerName,quote.phone,quote.email].filter(Boolean).join(' • ')||'No customer details entered';
   if($('quotePreviewBuildName'))$('quotePreviewBuildName').textContent=quote.buildName||'No build name entered';
+  if($('quotePreviewSpecs'))$('quotePreviewSpecs').innerHTML=specificationRowsMarkup(specificationViews.customer);
   if($('quotePreviewSummary'))$('quotePreviewSummary').innerHTML=`
     <div><span>Total Customer Price</span><strong>${currency(math.total)}</strong></div>
     <div><span>Tax</span><strong>${quote.includeGst===false?'Not Included':currency(math.gst)}</strong></div>
@@ -1022,13 +1275,13 @@ function openQuotePreviewSheet(action){
   const sheet=$('quotePreviewSheet');
   if(!sheet)return;
   sheet.hidden=false;
-  document.body.classList.add('component-sheet-open');
+  lockModalLayer(document.activeElement);
 }
 function closeQuotePreviewSheet(){
   const sheet=$('quotePreviewSheet');
   if(!sheet)return;
   sheet.hidden=true;
-  document.body.classList.remove('component-sheet-open');
+  unlockModalLayer({restoreFocus:true});
 }
 function ensureBlankEditorSheet(){
   if($('blankEditorSheet'))return;
@@ -1094,16 +1347,14 @@ function openBlankEditor(blankId){
   if($('blankEditorGc'))$('blankEditorGc').value=String(blank.gc);
   if($('blankEditorTs'))$('blankEditorTs').value=String(blank.ts);
   $('blankEditorSheet').hidden=false;
-  document.body.classList.add('component-sheet-open');
+  lockModalLayer(document.activeElement);
 }
 function closeBlankEditor(){
   const sheet=$('blankEditorSheet');
   if(!sheet)return;
   sheet.hidden=true;
   activeBlankEditorId='';
-  if(!$('choicePickerSheet') || $('choicePickerSheet').hidden){
-    document.body.classList.remove('component-sheet-open');
-  }
+  unlockModalLayer({restoreFocus:true});
 }
 function saveBlankEditor(){
   const existing=findBlankById(activeBlankEditorId);

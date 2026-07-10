@@ -128,28 +128,34 @@
         <header class="quote-builder__head">
           <p class="eyebrow">Workshop</p>
           <h1 id="quoteBuilderTitle">Rod Builder Quote</h1>
-          <p id="quoteBuilderSubhead" class="subtle">Customer • Blank • Build Components • Labour • Margin • Quote Summary</p>
           <div class="quote-mode-switch" role="tablist" aria-label="Quote mode">
             <button class="ghost-action active" data-quote-mode="internal" type="button">Internal Quote</button>
             <button class="ghost-action" data-quote-mode="customer" type="button">Customer Quote</button>
-            <span id="quoteModeLabel" class="quote-mode-switch__label">Internal mode</span>
           </div>
         </header>
 
         <article class="quote-section">
-          <h2>Customer</h2>
-          <div class="quote-grid quote-grid--two">
+          <header class="quote-section__header">
+            <h2>Customer</h2>
+          </header>
+          <div class="quote-grid quote-grid--two quote-section__body">
             <label><span>Customer Name</span><input id="quoteCustomerName" type="text" placeholder="Customer name" /></label>
             <label><span>Phone</span><input id="quoteCustomerPhone" type="text" placeholder="Phone" /></label>
             <label><span>Email</span><input id="quoteCustomerEmail" type="email" placeholder="Email" /></label>
+            <label class="quote-grid__full"><span>Address</span><input id="quoteCustomerAddress" type="text" placeholder="Full address" /></label>
             <label><span>Build Name</span><input id="quoteBuildName" type="text" placeholder="Build name" /></label>
             <label class="quote-grid__full"><span>Notes</span><textarea id="quoteNotes" rows="2" placeholder="Build notes"></textarea></label>
           </div>
         </article>
 
-        <article class="quote-section" data-internal-only>
-          <h2>Blank</h2>
-          <div class="quote-grid quote-grid--two">
+        <article class="quote-section quote-section--collapsible" data-internal-only>
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBlankDetailsBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Blank Details</span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopBlankDetailsBody" class="quote-grid quote-grid--two quote-section__body">
             <label class="quote-grid__full quote-component-name"><span>Blank Library</span><button id="quoteBlankPickerTrigger" class="quote-component-picker__trigger" type="button" aria-haspopup="dialog"><span id="quoteBlankPickerTriggerValue" class="quote-component-picker__value">Select blank from library</span><b>▾</b></button></label>
             <label><span>Blank Name</span><input id="quoteBlankName" type="text" placeholder="Blank name" /></label>
             <label><span>Manufacturer</span><input id="quoteBlankMaker" type="text" placeholder="Manufacturer" /></label>
@@ -162,17 +168,46 @@
           </div>
         </article>
 
-        <article class="quote-section" data-internal-only>
-          <h2>Build Costs</h2>
-          <div id="quoteComponentsList" class="quote-components"></div>
-          <div class="quote-actions-row">
-            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Build Cost</button>
+        <article class="quote-section quote-section--collapsible" data-internal-only aria-label="Build Specifications">
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildSpecsBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Build Specifications</span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopBuildSpecsBody" class="quote-grid quote-grid--two quote-section__body">
+            <label><span>Reel Seat Position</span><input id="quoteSpecReelSeatPosition" type="text" placeholder="e.g. 350 mm from butt" /></label>
+            <label><span>Rear Grip Length</span><input id="quoteSpecRearGripLength" type="text" placeholder="e.g. 280 mm" /></label>
+            <label><span>Lower Grip Length (Grip below reel seat)</span><input id="quoteSpecGripBelowReelSeatLength" type="text" placeholder="e.g. 90 mm" /></label>
+            <label><span>Fore Grip Length</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
+            <label><span>Hook Keeper Position</span><input id="quoteSpecHookKeeperPosition" type="text" placeholder="e.g. Above reel seat" /></label>
+            <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Workshop notes..."></textarea></label>
           </div>
         </article>
 
-        <article class="quote-section" data-internal-only>
-          <h2>Labour</h2>
-          <div class="quote-grid quote-grid--three">
+        <article class="quote-section quote-section--collapsible" data-internal-only>
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildCostsBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Build Costs</span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopBuildCostsBody" class="quote-section__body">
+            <div id="quoteComponentsList" class="quote-components"></div>
+            <div class="quote-actions-row">
+            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Build Cost</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="quote-section quote-section--collapsible" data-internal-only>
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopLabourBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Labour</span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopLabourBody" class="quote-grid quote-grid--three quote-section__body">
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
             <label id="quoteLabourCostField"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
@@ -180,8 +215,10 @@
         </article>
 
         <article class="quote-section">
-          <h2>Quote Summary</h2>
-          <div class="quote-grid quote-grid--three">
+          <header class="quote-section__header">
+            <h2>Quote Summary</h2>
+          </header>
+          <div class="quote-grid quote-grid--three quote-section__body">
             <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
             <label id="quoteMarginPercentField"><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
             <label class="quote-gst-toggle quote-grid__full"><span>Include Tax (15%)</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
@@ -193,14 +230,16 @@
         </article>
 
         <article class="quote-section">
-          <h2>Actions</h2>
-          <div class="quote-actions-grid">
+          <header class="quote-section__header">
+            <h2>Actions</h2>
+          </header>
+          <div class="quote-actions-grid quote-section__body">
             <button id="saveQuoteBtn" class="primary-action" type="button">Save Quote</button>
             <button id="duplicateQuoteBtn" class="ghost-action" type="button">Duplicate Quote</button>
             <button id="printQuoteBtn" class="ghost-action" type="button">Print Quote</button>
             <button id="exportPdfBtn" class="ghost-action" type="button">Export PDF</button>
             <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
-            <button id="convertToBuildBtn" class="primary-action" type="button">Convert To Build</button>
+            <button id="convertToBuildBtn" class="ghost-action" type="button">Convert To Build</button>
           </div>
         </article>
       </section>
