@@ -47,6 +47,7 @@
 
 body.component-sheet-open{overflow:hidden}
 body.nav-menu-open{overflow:hidden}
+body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
 [hidden]{display:none!important}
 
@@ -481,6 +482,18 @@ body.nav-menu-open{overflow:hidden}
   background:linear-gradient(180deg,#171b1d,#0f1315);
 }
 
+@media (hover:none) and (pointer:coarse){
+  #workshopScreen .quote-grid input,
+  #workshopScreen .quote-grid textarea,
+  #workshopScreen .quote-component-row input,
+  #workshopScreen .component-sheet__search,
+  #workshopScreen .component-sheet__custom-input,
+  .blank-editor-grid input,
+  .blank-editor-grid textarea{
+    font-size:16px;
+  }
+}
+
 #workshopScreen .quote-actions-grid button[disabled]{
   opacity:.52;
   cursor:not-allowed;
@@ -500,9 +513,13 @@ body.nav-menu-open{overflow:hidden}
 }
 
 .component-sheet{
-  position:absolute;
+  position:fixed;
   inset:0;
   z-index:120;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + var(--safe-bottom));
 }
 
 .component-sheet__scrim{
@@ -514,14 +531,15 @@ body.nav-menu-open{overflow:hidden}
 }
 
 .component-sheet__panel{
-  position:absolute;
-  top:50%;
-  left:0;
-  right:0;
-  transform:translateY(-50%);
-  margin:0 auto;
+  position:relative;
+  top:auto;
+  left:auto;
+  right:auto;
+  transform:none;
+  margin:0;
   width:min(90vw,460px);
   max-height:min(78vh,620px);
+  max-height:min(78dvh,620px);
   overflow:hidden;
   display:flex;
   flex-direction:column;
@@ -574,6 +592,9 @@ body.nav-menu-open{overflow:hidden}
   gap:8px;
   min-height:0;
   flex:1;
+  overflow:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
 }
 
 .component-sheet__search{
@@ -1078,6 +1099,7 @@ body.nav-menu-open{overflow:hidden}
   .component-sheet__panel{
     width:min(96vw,392px);
     max-height:min(88vh,640px);
+    max-height:min(88dvh,640px);
   }
   .component-sheet__custom{
     grid-template-columns:1fr;

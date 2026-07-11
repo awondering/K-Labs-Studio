@@ -1,4 +1,4 @@
-const CACHE='klabs-studio-build032-v1';
+const CACHE='klabs-studio-build032-v2';
 const ASSETS=[
 	'/',
 	'/index.html',
@@ -45,6 +45,8 @@ self.addEventListener('fetch',(event)=>{
 	if(event.request.method!=='GET')return;
 	const requestUrl=new URL(event.request.url);
 	if(requestUrl.origin!==self.location.origin)return;
+	const pathname=requestUrl.pathname||'';
+	const isDynamicAppAsset=pathname.endsWith('.html') || pathname.startsWith('/js/') || pathname.startsWith('/css/');
 
 	if(event.request.mode==='navigate'){
 		event.respondWith(
@@ -55,6 +57,19 @@ self.addEventListener('fetch',(event)=>{
 					return response;
 				})
 				.catch(()=>caches.match('/index.html'))
+		);
+		return;
+	}
+
+	if(isDynamicAppAsset){
+		event.respondWith(
+			fetch(event.request)
+				.then((response)=>{
+					const copy=response.clone();
+					caches.open(CACHE).then((cache)=>cache.put(event.request,copy));
+					return response;
+				})
+				.catch(()=>caches.match(event.request).then((cached)=>cached||caches.match('/index.html')))
 		);
 		return;
 	}

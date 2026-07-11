@@ -29,8 +29,13 @@ let shouldAnimateComponentRows=false;
 let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let modalLockDepth=0;
-let modalSavedScrollY=0;
 let modalReturnFocusEl=null;
+let workshopKeyboardDismissGuardBound=false;
+let workshopInputFocusStabilityBound=false;
+const workshopKeyboardDismissState={
+  suppressNavUntil:0,
+  preservedScrollY:0,
+};
 
 function save(){Store.set('klabs-studio-state',state)}
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
@@ -200,12 +205,6 @@ function markQuoteSaved(){
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
-    modalSavedScrollY=window.scrollY||window.pageYOffset||0;
-    document.body.style.position='fixed';
-    document.body.style.top=`-${modalSavedScrollY}px`;
-    document.body.style.left='0';
-    document.body.style.right='0';
-    document.body.style.width='100%';
     document.body.classList.add('component-sheet-open');
     if(openerEl && typeof openerEl.focus==='function'){
       modalReturnFocusEl=openerEl;
@@ -217,19 +216,9 @@ function lockModalLayer(openerEl){
 }
 function unlockModalLayer(options){
   const settings={restoreFocus:true,...(options||{})};
-  if(modalLockDepth<=0)return;
-  modalLockDepth-=1;
-  if(modalLockDepth>0)return;
-  const focusTarget=modalReturnFocusEl;
-  window.requestAnimationFrame(()=>{
-    document.body.style.position='';
-    document.body.style.top='';
-    document.body.style.left='';
-    document.body.style.right='';
-    document.body.style.width='';
+  const applyUnlock=(focusTarget)=>{
     document.body.classList.remove('component-sheet-open');
-    window.scrollTo(0,modalSavedScrollY);
-    if(settings.restoreFocus && focusTarget && typeof focusTarget.focus==='function'){
+    if(settings.restoreFocus && focusTarget && focusTarget.isConnected!==false && typeof focusTarget.focus==='function'){
       try{
         focusTarget.focus({preventScroll:true});
       }catch{
@@ -237,7 +226,15 @@ function unlockModalLayer(options){
       }
     }
     modalReturnFocusEl=null;
-  });
+  };
+  if(modalLockDepth<=0){
+    applyUnlock(null);
+    return;
+  }
+  modalLockDepth-=1;
+  if(modalLockDepth>0)return;
+  const focusTarget=modalReturnFocusEl;
+  applyUnlock(focusTarget);
 }
 function quoteMaths(){
   const blankCost=numberOrZero(quote.blankCost);
@@ -439,8 +436,9 @@ function ensureChoicePicker(){
     if(optionButton){
       const selectedName=optionButton.getAttribute('data-choice-option')||'';
       const selectedId=optionButton.getAttribute('data-choice-id')||'';
-      applyChoiceSelection(selectedName,selectedId);
+      const pickerContext={...activeChoicePicker};
       closeComponentSheet();
+      applyChoiceSelection(selectedName,selectedId,pickerContext);
     }
     const deleteButton=event.target.closest('button[data-choice-delete-option]');
     if(deleteButton){
@@ -607,8 +605,9 @@ function setChoiceValue(type,index,value){
   saveQuoteCurrent();
   markQuoteDirty();
 }
-function applyChoiceSelection(selectedName,selectedId){
-  if(activeChoicePicker.type==='blank'){
+function applyChoiceSelection(selectedName,selectedId,pickerContext){
+  const context=pickerContext||activeChoicePicker;
+  if(context.type==='blank'){
     const selectedBlank=findBlankById(selectedId) || blanks.find((blank)=>normalizeNameKey(blankDisplayName(blank))===normalizeNameKey(selectedName));
     if(selectedBlank){
       applyBlankToQuote(selectedBlank);
@@ -616,7 +615,15 @@ function applyChoiceSelection(selectedName,selectedId){
     }
     return;
   }
-  if(activeChoicePicker.index>=0){setChoiceValue(activeChoicePicker.type,activeChoicePicker.index,selectedName);renderQuoteComponents();updateQuoteSummary();}
+  if(context.index>=0){
+    setChoiceValue(context.type,context.index,selectedName);
+    const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
+    const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
+    if(trigger){
+      trigger.textContent=selectedName|| (context.type==='supplier'?'Select supplier':'Select category');
+    }
+    updateQuoteSummary();
+  }
 }
 function recordsForChoiceType(type,query){
   if(type==='supplier')return supplierOptionRecords(query).map((record)=>({...record,id:''}));
@@ -858,6 +865,57 @@ function focusNewComponentWithRetry(index,retryCount){
     return;
   }
 }
+function isWorkshopScreenActive(){
+  const workshopScreen=$('workshopScreen');
+  return !!(workshopScreen && workshopScreen.classList.contains('active'));
+}
+function markKeyboardDismissWindow(){
+  workshopKeyboardDismissState.preservedScrollY=window.scrollY||window.pageYOffset||0;
+  workshopKeyboardDismissState.suppressNavUntil=Date.now()+550;
+}
+function isWorkshopEditableTarget(target){
+  if(!target || typeof target.closest!=='function')return false;
+  const inWorkshopScreen=!!target.closest('#workshopScreen');
+  const inComponentSheet=!!target.closest('#choicePickerSheet,#confirmSheet,#quotePreviewSheet,#blankEditorSheet');
+  if(!inWorkshopScreen && !inComponentSheet)return false;
+  if(target.matches && target.matches('input, textarea'))return true;
+  return !!(target.closest('[contenteditable="true"]'));
+}
+function bindWorkshopKeyboardDismissGuard(){
+  if(workshopKeyboardDismissGuardBound)return;
+  workshopKeyboardDismissGuardBound=true;
+  document.addEventListener('click',(event)=>{
+    if(Date.now()>workshopKeyboardDismissState.suppressNavUntil)return;
+    if(!isWorkshopScreenActive())return;
+    const navTarget=event.target.closest('[data-nav]');
+    const menuOpenTarget=event.target.closest('[data-menu-action="open-menu"]');
+    const shouldSuppressNav=!!(navTarget && !navTarget.closest('#navMenuSheet'));
+    const shouldSuppressMenuOpen=!!menuOpenTarget;
+    if(!shouldSuppressNav && !shouldSuppressMenuOpen)return;
+    event.preventDefault();
+    event.stopPropagation();
+    if(typeof event.stopImmediatePropagation==='function')event.stopImmediatePropagation();
+    window.requestAnimationFrame(()=>{
+      window.scrollTo(0,workshopKeyboardDismissState.preservedScrollY);
+    });
+  },true);
+}
+function bindWorkshopInputFocusStability(){
+  if(workshopInputFocusStabilityBound)return;
+  workshopInputFocusStabilityBound=true;
+  document.addEventListener('focusin',(event)=>{
+    if(!isWorkshopEditableTarget(event.target))return;
+    document.body.classList.add('workshop-input-focus-active');
+  });
+  document.addEventListener('focusout',(event)=>{
+    if(!isWorkshopEditableTarget(event.target))return;
+    markKeyboardDismissWindow();
+    window.setTimeout(()=>{
+      if(document.activeElement && isWorkshopEditableTarget(document.activeElement))return;
+      document.body.classList.remove('workshop-input-focus-active');
+    },0);
+  });
+}
 function persistQuoteRecord(currentQuote){
   const savedAt=new Date().toISOString();
   const records=Store.get('klabs-workshop-quotes',[]);
@@ -1042,6 +1100,8 @@ function bindWorkshopCollapsibleSections(){
 }
 function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
+  bindWorkshopKeyboardDismissGuard();
+  bindWorkshopInputFocusStability();
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
