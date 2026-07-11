@@ -717,6 +717,11 @@ function openSupplierSheet(index){
 function openBlankSheet(){
   openChoicePicker('blank',-1,document.activeElement);
 }
+function shouldAutoFocusPickerSearch(type){
+  const isCategoryOrSupplier=type==='category' || type==='supplier';
+  const isTouchCoarse=typeof window.matchMedia==='function' && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  return !(isCategoryOrSupplier && isTouchCoarse);
+}
 function openChoicePicker(type,index,openerEl){
   ensureChoicePicker();
   activeChoicePicker={type,index};
@@ -731,7 +736,7 @@ function openChoicePicker(type,index,openerEl){
   if($('choicePickerAdd'))$('choicePickerAdd').textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
   renderChoicePickerOptions('');
-  if($('choicePickerSearch'))$('choicePickerSearch').focus();
+  if(shouldAutoFocusPickerSearch(type) && $('choicePickerSearch'))$('choicePickerSearch').focus();
 }
 function closeComponentSheet(){
   const sheet=$('choicePickerSheet');
