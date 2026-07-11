@@ -633,6 +633,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   grid-template-columns:minmax(0,1fr) auto;
   gap:6px;
   align-items:center;
+  position:relative;
 }
 
 .component-sheet__option{
@@ -653,24 +654,44 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   text-overflow:unset;
 }
 
-.component-sheet__actions{
-  display:flex;
-  align-items:center;
-  gap:4px;
+.component-sheet__menu-trigger{
+  width:34px;
+  min-width:34px;
+  height:34px;
+  border-radius:9px;
+  border:1px solid transparent;
+  background:transparent;
+  color:#9ea39b;
+  font-size:18px;
+  line-height:1;
+  display:grid;
+  place-items:center;
+  appearance:none;
 }
 
-.component-sheet__edit,
-.component-sheet__delete{
-  min-height:32px;
+.component-picker-menu{
+  position:absolute;
+  z-index:4;
+  width:144px;
+  padding:6px;
+  border-radius:12px;
+  border:1px solid rgba(214,210,200,.1);
+  background:linear-gradient(180deg,rgba(20,24,26,.98),rgba(11,15,17,.98));
+  box-shadow:0 14px 24px rgba(0,0,0,.34);
+}
+
+.component-picker-menu__item{
+  width:100%;
+  min-height:34px;
   padding:0 10px;
-  border-radius:7px;
-  border:1px solid rgba(214,210,200,.12);
-  background:linear-gradient(180deg,rgba(24,28,30,.96),rgba(16,20,22,.96));
-  color:#bdb8ac;
-  font-size:10px;
+  border-radius:8px;
+  border:1px solid transparent;
+  background:transparent;
+  color:#ddd6ca;
+  font-size:11px;
   font-weight:700;
-  letter-spacing:.06em;
-  text-transform:uppercase;
+  letter-spacing:.04em;
+  text-align:left;
   appearance:none;
 }
 
@@ -682,12 +703,11 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   outline:none;
 }
 
-.component-sheet__edit:hover,
-.component-sheet__edit:focus-visible,
-.component-sheet__delete:hover,
-.component-sheet__delete:focus-visible{
-  border-color:rgba(206,44,58,.38);
-  background:rgba(155,31,42,.22);
+.component-sheet__menu-trigger:hover,
+.component-sheet__menu-trigger:focus-visible,
+.component-picker-menu__item:hover,
+.component-picker-menu__item:focus-visible{
+  background:rgba(155,31,42,.16);
   color:#f2ece0;
   outline:none;
 }
@@ -991,19 +1011,6 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   letter-spacing:.06em;
 }
 
-.blank-library-admin-actions{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:8px;
-  margin:0 4px 10px;
-}
-
-.blank-library-admin-actions .ghost-action{
-  min-height:36px;
-  font-size:11px;
-  letter-spacing:.06em;
-}
-
 .blank-card{
   display:grid;
   gap:7px;
@@ -1128,9 +1135,6 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
     grid-template-columns:1fr;
   }
   .blank-library-controls{
-    grid-template-columns:1fr;
-  }
-  .blank-library-admin-actions{
     grid-template-columns:1fr;
   }
   .blank-editor-grid{
