@@ -20,6 +20,8 @@ const BUILD_SPEC_FIELDS=[
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
+let selectedBlankEditState=null;
+let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
@@ -300,8 +302,37 @@ function findBlankById(blankId){
 function blankDisplayName(blank){
   const maker=String(blank&&blank.maker||'').trim();
   const model=String(blank&&blank.model||'').trim();
-  if(maker && model)return maker+' '+model;
+  if(maker && model){
+    const makerKey=maker.toLowerCase();
+    const modelKey=model.toLowerCase();
+    if(modelKey.startsWith(makerKey+' '))return model;
+    return maker+' '+model;
+  }
   return model||maker||'Untitled Blank';
+}
+function blankModelName(blank){
+  const maker=String(blank&&blank.maker||'').trim();
+  const model=String(blank&&blank.model||'').trim();
+  if(maker && model && model.toLowerCase().startsWith((maker+' ').toLowerCase())){
+    return model.slice(maker.length).trim();
+  }
+  return model||String(quote.blankName||'').trim()||maker||'Untitled Blank';
+}
+function blankSortName(blank){
+  return String(blankModelName(blank)||'').trim().toLowerCase();
+}
+function favoriteBlankIds(){
+  const stored=Store.get('klabs-blank-favourites',Store.get('klabs-blank-favorites',[]));
+  if(!Array.isArray(stored))return new Set();
+  return new Set(stored.map((value)=>String(value||'').trim()).filter(Boolean));
+}
+function blankIsFavourite(blank){
+  if(!blank)return false;
+  if(blank.favorite || blank.favourite || blank.isFavorite || blank.isFavourite)return true;
+  return favoriteBlankIds().has(String(blank.id||'').trim());
+}
+function compareBlankDisplayNames(left,right){
+  return blankSortName(left).localeCompare(blankSortName(right),undefined,{sensitivity:'base'});
 }
 function blankMatchesSearch(blank,query){
   const q=normalizeNameKey(query);
@@ -334,6 +365,284 @@ function applyBlankToQuote(blank){
   quote.blankNotes=blank.notes;
   saveQuoteCurrent();
   markQuoteDirty();
+}
+function selectedBlankLibraryRecord(){
+  return quote.blankId?findBlankById(quote.blankId):null;
+}
+function selectedBlankViewModel(){
+  const record=selectedBlankLibraryRecord();
+  if(!quote.blankId && !record)return null;
+  return {
+    id:String(quote.blankId||record&&record.id||''),
+    model:String(blankModelName(record)||quote.blankName||record&&record.model||'').trim(),
+    maker:String(quote.blankMaker||record&&record.maker||'').trim(),
+    series:String(quote.blankSeries||record&&record.series||'').trim(),
+    length:String(quote.blankLength||record&&record.length||'').trim(),
+    power:String(quote.blankPower||record&&record.power||'').trim(),
+    action:String(quote.blankAction||record&&record.action||'').trim(),
+    pieces:String(quote.blankPieces||record&&record.pieces||'').trim(),
+    cost:numberOrZero(typeof quote.blankCost==='number'?quote.blankCost:(record&&record.cost)),
+  };
+}
+function selectedBlankSummaryLines(blank){
+  const lines=[];
+  const maker=String(blank&&blank.maker||'').trim();
+  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
+  const pieces=String(blank&&blank.pieces||'').trim();
+  const pieceLabel=pieces?`${pieces} Piece${pieces==='1'?'':'s'}`:'';
+  const cost=numberOrZero(blank&&blank.cost);
+  if(maker)lines.push(maker);
+  if(details)lines.push(details);
+  if(pieceLabel)lines.push(pieceLabel);
+  if(cost>0)lines.push(currency(cost));
+  return lines;
+}
+function selectedBlankSummaryMarkup(blank){
+  const lines=selectedBlankSummaryLines(blank);
+  const title=escapeHtml(blankModelName(blank)||'Choose Blank');
+  const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">⋯</button>`:'';
+  const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Edit Blank</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
+  return blank
+    ?`<div class="selected-blank-card" data-selected-blank-state="summary"><div class="selected-blank-card__head"><strong class="selected-blank-card__name">${title}</strong></div><div class="selected-blank-card__summary">${lines.map((line)=>`<div>${escapeHtml(line)}</div>`).join('')}</div><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button>${menuButton}</div>${menu}</div>`
+    :`<div class="selected-blank-card selected-blank-card--empty" data-selected-blank-state="empty"><strong class="selected-blank-card__name">Choose Blank</strong><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button></div></div>`;
+}
+function selectedBlankEditMarkup(blank){
+  const value=(key)=>escapeHtml(String(blank&&blank[key]||''));
+  const numberValue=(key)=>escapeHtml(String(numberOrZero(blank&&blank[key])));
+  return `
+    <div class="selected-blank-card selected-blank-card--edit" data-selected-blank-state="edit">
+      <div class="selected-blank-card__head"><p class="eyebrow">SELECTED BLANK</p><strong>Edit Blank</strong></div>
+      <div class="blank-editor-grid selected-blank-edit-grid">
+        <label class="blank-editor-grid__full"><span>Blank Name</span><input data-selected-blank-field="model" type="text" value="${escapeHtml(String(blankModelName(blank)||''))}" /></label>
+        <label><span>Manufacturer</span><input data-selected-blank-field="maker" type="text" value="${value('maker')}" /></label>
+        <label><span>Series</span><input data-selected-blank-field="series" type="text" value="${value('series')}" /></label>
+        <label><span>Length</span><input data-selected-blank-field="length" type="text" value="${value('length')}" /></label>
+        <label><span>Power</span><input data-selected-blank-field="power" type="text" value="${value('power')}" /></label>
+        <label><span>Action</span><input data-selected-blank-field="action" type="text" value="${value('action')}" /></label>
+        <label><span>Pieces</span><input data-selected-blank-field="pieces" type="text" value="${value('pieces')}" /></label>
+        <label><span>Blank Cost</span><input data-selected-blank-field="cost" type="number" inputmode="decimal" min="0" step="0.01" value="${numberValue('cost')}" /></label>
+        <label><span>SKU</span><input data-selected-blank-field="sku" type="text" value="${value('sku')}" /></label>
+        <label class="blank-editor-grid__full"><span>Notes</span><textarea data-selected-blank-field="notes" rows="2">${value('notes')}</textarea></label>
+        <label><span>First Guide (mm)</span><input data-selected-blank-field="fg" type="number" min="50" max="300" step="1" value="${numberValue('fg')}" /></label>
+        <label><span>Guide Count</span><input data-selected-blank-field="gc" type="number" min="5" max="20" step="1" value="${numberValue('gc')}" /></label>
+        <label class="blank-editor-grid__full"><span>Target Stripper (mm)</span><input data-selected-blank-field="ts" type="number" min="500" max="2500" step="1" value="${numberValue('ts')}" /></label>
+      </div>
+      <div class="quote-preview-actions selected-blank-card__edit-actions">
+        <button type="button" class="ghost-action" data-selected-blank-action="cancel">Cancel</button>
+        <button type="button" class="primary-action" data-selected-blank-action="save">Save Blank</button>
+      </div>
+    </div>
+  `;
+}
+function hideSelectedBlankMenu(){
+  document.querySelectorAll('[data-selected-blank-menu]').forEach((menu)=>{menu.hidden=true;});
+  const trigger=$('selectedBlankMenuTrigger');
+  if(trigger)trigger.setAttribute('aria-expanded','false');
+}
+function hideSelectedBlankEditState(){
+  selectedBlankEditState=null;
+  hideSelectedBlankMenu();
+}
+function handleSelectedBlankAction(action){
+  if(action==='edit'){
+    hideSelectedBlankMenu();
+    beginSelectedBlankEdit();
+    return true;
+  }
+  if(action==='duplicate'){
+    hideSelectedBlankMenu();
+    const blank=selectedBlankLibraryRecord();
+    if(blank){
+      duplicateBlank(blank.id);
+      renderWorkshopQuote();
+    }
+    return true;
+  }
+  if(action==='delete'){
+    hideSelectedBlankMenu();
+    const blank=selectedBlankLibraryRecord();
+    if(blank){
+      requestDeleteBlank(blank);
+      renderWorkshopQuote();
+    }
+    return true;
+  }
+  if(action==='save'){
+    saveSelectedBlankEdit();
+    return true;
+  }
+  if(action==='cancel'){
+    cancelSelectedBlankEdit();
+    return true;
+  }
+  return false;
+}
+function toggleSelectedBlankMenu(triggerEl){
+  const menu=$('selectedBlankMenu');
+  if(!menu || !triggerEl)return;
+  const isOpen=!menu.hidden;
+  hideSelectedBlankMenu();
+  if(isOpen)return;
+  if(menu.parentElement!==document.body){
+    document.body.appendChild(menu);
+  }
+  menu.style.position='fixed';
+  menu.style.zIndex='80';
+  menu.style.visibility='hidden';
+  menu.hidden=false;
+  const triggerRect=triggerEl.getBoundingClientRect();
+  const menuRect=menu.getBoundingClientRect();
+  const viewportPadding=8;
+  const gap=10;
+  const menuWidth=menuRect.width||164;
+  const menuHeight=menuRect.height||120;
+  const rightSpace=window.innerWidth-triggerRect.right;
+  const leftSpace=triggerRect.left;
+  const openLeft=rightSpace < menuWidth + gap && leftSpace > menuWidth + gap;
+  const desiredLeft=openLeft ? triggerRect.left-menuWidth-gap : triggerRect.right+gap;
+  const left=Math.max(viewportPadding,Math.min(window.innerWidth-menuWidth-viewportPadding,desiredLeft));
+  const belowSpace=window.innerHeight-triggerRect.bottom;
+  const aboveSpace=triggerRect.top;
+  const openUp=belowSpace < menuHeight + gap && aboveSpace > menuHeight + gap;
+  const desiredTop=openUp ? triggerRect.top-menuHeight-gap : triggerRect.bottom+gap;
+  const top=Math.max(viewportPadding,Math.min(window.innerHeight-menuHeight-viewportPadding,desiredTop));
+  menu.style.left=`${left}px`;
+  menu.style.top=`${top}px`;
+  menu.style.visibility='visible';
+  triggerEl.setAttribute('aria-expanded','true');
+}
+function beginSelectedBlankEdit(){
+  const blank=selectedBlankViewModel();
+  if(!blank)return;
+  selectedBlankEditState={id:String(blank.id||''),draft:normalizeBlank({
+    id:String(blank.id||''),
+    maker:blank.maker,
+    series:blank.series,
+    model:blank.model,
+    length:blank.length,
+    power:blank.power,
+    action:blank.action,
+    pieces:blank.pieces,
+    cost:blank.cost,
+    sku:selectedBlankLibraryRecord()&&selectedBlankLibraryRecord().sku||'',
+    notes:selectedBlankLibraryRecord()&&selectedBlankLibraryRecord().notes||'',
+    fg:selectedBlankLibraryRecord()&&selectedBlankLibraryRecord().fg||105,
+    gc:selectedBlankLibraryRecord()&&selectedBlankLibraryRecord().gc||9,
+    ts:selectedBlankLibraryRecord()&&selectedBlankLibraryRecord().ts||1260,
+    archived:selectedBlankLibraryRecord()?selectedBlankLibraryRecord().archived:false,
+  })};
+  renderWorkshopQuote();
+  waitForDomRender(()=>{
+    const firstField=$('[data-selected-blank-field="model"]');
+    if(firstField){
+      try{firstField.focus({preventScroll:true});}catch{firstField.focus();}
+      if(typeof firstField.select==='function')firstField.select();
+    }
+  });
+}
+function cancelSelectedBlankEdit(){
+  hideSelectedBlankEditState();
+  renderWorkshopQuote();
+}
+function updateSelectedBlankDraftField(field,value){
+  if(!selectedBlankEditState || !selectedBlankEditState.draft)return;
+  if(field==='cost' || field==='fg' || field==='gc' || field==='ts'){
+    selectedBlankEditState.draft[field]=numberOrZero(value);
+    return;
+  }
+  selectedBlankEditState.draft[field]=String(value||'');
+}
+function saveSelectedBlankEdit(){
+  if(!selectedBlankEditState || !selectedBlankEditState.draft)return;
+  const currentId=String(selectedBlankEditState.id||'');
+  const existing=findBlankById(currentId);
+  const draft=normalizeBlank({
+    ...selectedBlankEditState.draft,
+    id:existing?existing.id:currentId||generateId('blank'),
+  });
+  if(!draft.model){
+    alert('Blank name is required.');
+    return;
+  }
+  if(existing){
+    const idx=blanks.findIndex((item)=>item.id===existing.id);
+    if(idx>=0)blanks[idx]=draft;
+  }else{
+    blanks.unshift(draft);
+  }
+  saveBlankLibrary();
+  applyBlankToQuote(draft);
+  hideSelectedBlankEditState();
+  renderBlanks();
+  renderWorkshopQuote();
+}
+function renderSelectedBlankPanel(){
+  const host=$('workshopBlankDetailsBody');
+  if(!host)return;
+  document.querySelectorAll('body > #selectedBlankMenu').forEach((menu)=>{menu.remove();});
+  if(selectedBlankEditState && selectedBlankEditState.draft){
+    host.innerHTML=selectedBlankEditMarkup(selectedBlankEditState.draft);
+    return;
+  }
+  host.innerHTML=selectedBlankSummaryMarkup(selectedBlankViewModel());
+}
+function bindSelectedBlankControls(){
+  if(selectedBlankControlsBound)return;
+  const host=$('workshopBlankDetailsBody');
+  if(!host)return;
+  selectedBlankControlsBound=true;
+  host.addEventListener('click',(event)=>{
+    const actionEl=event.target.closest('[data-selected-blank-action]');
+    if(actionEl){
+      const action=actionEl.getAttribute('data-selected-blank-action')||'';
+      if(handleSelectedBlankAction(action))return;
+    }
+    const menuTrigger=event.target.closest('[data-selected-blank-menu-trigger]');
+    if(menuTrigger){
+      event.preventDefault();
+      toggleSelectedBlankMenu(menuTrigger);
+      return;
+    }
+    const pickerTrigger=event.target.closest('#quoteBlankPickerTrigger');
+    if(pickerTrigger){
+      event.preventDefault();
+      hideSelectedBlankMenu();
+      openChoicePicker('blank',-1,pickerTrigger);
+      return;
+    }
+  });
+  host.addEventListener('input',(event)=>{
+    const field=event.target.closest('[data-selected-blank-field]');
+    if(!field || !selectedBlankEditState)return;
+    updateSelectedBlankDraftField(field.getAttribute('data-selected-blank-field')||'',field.value);
+  });
+  host.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape' && selectedBlankEditState){
+      event.preventDefault();
+      cancelSelectedBlankEdit();
+    }
+  });
+  document.addEventListener('click',(event)=>{
+    const menuAction=event.target.closest('#selectedBlankMenu [data-selected-blank-action]');
+    if(menuAction){
+      const action=menuAction.getAttribute('data-selected-blank-action')||'';
+      if(handleSelectedBlankAction(action)){
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if(!document.querySelector('[data-selected-blank-menu]:not([hidden])'))return;
+    if(event.target.closest('#workshopBlankDetailsBody'))return;
+    if(event.target.closest('[data-selected-blank-menu-trigger]'))return;
+    if(event.target.closest('[data-selected-blank-menu]'))return;
+    hideSelectedBlankMenu();
+  },true);
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){
+      hideSelectedBlankMenu();
+    }
+  });
 }
 function persistBuildRecord(currentQuote){
   const savedAt=new Date().toISOString();
@@ -400,7 +709,15 @@ function supplierOptionRecords(query){
 }
 function blankOptionRecords(query){
   const normalized=normalizeNameKey(query);
-  return blanks.filter((blank)=>!blank.archived).map((blank)=>({id:blank.id,name:blankDisplayName(blank),isCustom:true,blank})).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
+  return blanks
+    .filter((blank)=>!blank.archived)
+    .map((blank)=>({id:blank.id,name:blankDisplayName(blank),isCustom:true,blank}))
+    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized))
+    .sort((left,right)=>{
+      const favoriteDiff=Number(blankIsFavourite(right.blank))-Number(blankIsFavourite(left.blank));
+      if(favoriteDiff)return favoriteDiff;
+      return compareBlankDisplayNames(left.blank,right.blank);
+    });
 }
 function ensureChoicePicker(){
   if($('choicePickerSheet'))return;
@@ -420,6 +737,7 @@ function ensureChoicePicker(){
         <div id="choicePickerList" class="component-sheet__list"></div>
         <div id="choicePickerMenu" class="component-picker-menu" hidden>
           <button id="choicePickerMenuRename" class="component-picker-menu__item" type="button">Rename</button>
+          <button id="choicePickerMenuDuplicate" class="component-picker-menu__item" type="button" hidden>Duplicate</button>
           <button id="choicePickerMenuDelete" class="component-picker-menu__item" type="button">Delete</button>
         </div>
         <button id="choicePickerAdd" class="component-sheet__add" type="button">+ Add Custom Item</button>
@@ -513,9 +831,24 @@ function ensureChoicePicker(){
 
   $('choicePickerMenuRename').addEventListener('click',()=>{
     if(!activeChoiceMenu.open)return;
+    if(activeChoicePicker.type==='blank'){
+      hideChoicePickerMenu();
+      closeComponentSheet();
+      beginSelectedBlankEdit();
+      return;
+    }
     activeChoiceEditor.blankId=activeChoiceMenu.id;
     startChoiceEditor('rename',activeChoiceMenu.name);
     hideChoicePickerMenu();
+  });
+  $('choicePickerMenuDuplicate').addEventListener('click',()=>{
+    if(!activeChoiceMenu.open || activeChoicePicker.type!=='blank')return;
+    const blankId=activeChoiceMenu.id;
+    hideChoicePickerMenu();
+    duplicateBlank(blankId);
+    if($('choicePickerSheet') && !$('choicePickerSheet').hidden){
+      renderChoicePickerOptions($('choicePickerSearch').value);
+    }
   });
   $('choicePickerMenuDelete').addEventListener('click',()=>{
     if(!activeChoiceMenu.open)return;
@@ -553,12 +886,24 @@ function startChoiceEditor(mode,originalName){
   if(customTitle){customTitle.textContent=mode==='rename'?'Rename Custom Item':'Add Custom Item';}
 }
 function choicePickerSupportsContextMenu(){
-  return activeChoicePicker.type==='category' || activeChoicePicker.type==='supplier';
+  return activeChoicePicker.type==='category' || activeChoicePicker.type==='supplier' || activeChoicePicker.type==='blank';
 }
 function hideChoicePickerMenu(){
   const menu=$('choicePickerMenu');
   if(menu)menu.hidden=true;
   activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
+  hideSelectedBlankMenu();
+  hideBlankRowMenu();
+}
+function positionRowMenu(menuEl,triggerEl,containerEl,menuWidth){
+  if(!menuEl || !triggerEl || !containerEl)return;
+  const triggerRect=triggerEl.getBoundingClientRect();
+  const containerRect=containerEl.getBoundingClientRect();
+  const width=menuWidth||144;
+  const top=Math.max(8,triggerRect.bottom-containerRect.top+6);
+  const left=Math.max(8,Math.min(containerRect.width-width-8,triggerRect.right-containerRect.left-width));
+  menuEl.style.top=`${top}px`;
+  menuEl.style.left=`${left}px`;
 }
 function toggleChoicePickerMenu(triggerEl,optionName,optionId){
   const menu=$('choicePickerMenu');
@@ -578,9 +923,42 @@ function toggleChoicePickerMenu(triggerEl,optionName,optionId){
     left:Math.max(8,Math.min(panelRect.width-156,triggerRect.right-panelRect.left-144)),
     open:true,
   };
-  menu.style.top=`${activeChoiceMenu.top}px`;
-  menu.style.left=`${activeChoiceMenu.left}px`;
+  positionRowMenu(menu,triggerEl,panel,144);
   menu.hidden=false;
+}
+function hideBlankRowMenu(){
+  document.querySelectorAll('[data-blank-menu]').forEach((menu)=>{menu.hidden=true;});
+  document.querySelectorAll('[data-blank-menu-trigger]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
+}
+function syncChoicePickerMenuActions(){
+  const renameButton=$('choicePickerMenuRename');
+  const duplicateButton=$('choicePickerMenuDuplicate');
+  const deleteButton=$('choicePickerMenuDelete');
+  if(!renameButton || !duplicateButton || !deleteButton)return;
+  const isBlank=activeChoicePicker.type==='blank';
+  renameButton.textContent=isBlank?'Edit Blank':'Rename';
+  renameButton.setAttribute('aria-label',isBlank?'Edit this blank':'Rename this item');
+  duplicateButton.hidden=!isBlank;
+  deleteButton.textContent='Delete';
+  deleteButton.setAttribute('aria-label',isBlank?'Delete this blank':'Delete this item');
+}
+function toggleBlankRowMenu(triggerEl,blankId){
+  const card=triggerEl && triggerEl.closest('.blank-card');
+  const menu=card && card.querySelector('[data-blank-menu]');
+  if(!card || !menu)return;
+  const alreadyOpen=!menu.hidden && menu.getAttribute('data-blank-id')===blankId;
+  hideBlankRowMenu();
+  if(alreadyOpen)return;
+  positionRowMenu(menu,triggerEl,card,164);
+  menu.hidden=false;
+  triggerEl.setAttribute('aria-expanded','true');
+}
+function blankRowMenuMarkup(blank){
+  const blankId=escapeHtml(blank.id);
+  const actions=blank.archived
+    ?`<button class="component-picker-menu__item" data-blank-action="restore" data-blank-id="${blankId}" type="button">Restore</button><button class="component-picker-menu__item" data-blank-action="edit" data-blank-id="${blankId}" type="button">Edit Blank</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`
+    :`<button class="component-picker-menu__item" data-blank-action="edit" data-blank-id="${blankId}" type="button">Edit Blank</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
+  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
 function addCustomChoice(name){
   if(activeChoicePicker.type==='blank'){
@@ -699,6 +1077,7 @@ function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
   if(!list)return;
   const options=recordsForChoiceType(activeChoicePicker.type,query).slice(0,50);
+  syncChoicePickerMenuActions();
   hideChoicePickerMenu();
   if(!options.length){
     list.innerHTML='<div class="component-sheet__empty">No matching items</div>';
@@ -795,7 +1174,9 @@ function openChoicePicker(type,index,openerEl){
   if(!sheet)return;
   sheet.hidden=false;
   lockModalLayer(openerEl||document.activeElement);
+  hideBlankRowMenu();
   if($('choicePickerCustomBox'))$('choicePickerCustomBox').hidden=true;
+  syncChoicePickerMenuActions();
   hideChoicePickerMenu();
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   if($('choicePickerSearch'))$('choicePickerSearch').value='';
@@ -879,7 +1260,6 @@ function scrollElementFullyIntoView(container,element){
     ? {top:0,bottom:viewportVisibleBottom(rowBottomSafeSpace)}
     : container.getBoundingClientRect();
   const safeBottom=Math.min(containerRect.bottom-safePad,viewportVisibleBottom(rowBottomSafeSpace));
-
   let delta=0;
   if(elementRect.top<containerRect.top+safePad){
     delta=elementRect.top-(containerRect.top+safePad);
@@ -1175,6 +1555,7 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
+  bindSelectedBlankControls();
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -1299,10 +1680,6 @@ function bindWorkshopQuoteBuilder(){
       alert('Coming soon');
     });
   });
-  const blankPickerTrigger=$('quoteBlankPickerTrigger');
-  if(blankPickerTrigger){
-    blankPickerTrigger.addEventListener('click',()=>openChoicePicker('blank',-1,blankPickerTrigger));
-  }
   updateQuoteActionPriority();
 }
 function renderWorkshopQuote(){
@@ -1322,8 +1699,8 @@ function renderWorkshopQuote(){
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
   if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Margin • Quote Summary';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
-  if($('quoteBlankPickerTriggerValue'))$('quoteBlankPickerTriggerValue').textContent=quote.blankName||'Select blank from library';
   updateQuoteActionPriority();
+  renderSelectedBlankPanel();
   renderBuildSpecificationInputs();
   const activeElement=document.activeElement;
   const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
@@ -1545,20 +1922,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 032 demo softbait';
+  const demoKey='build 038.1 demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 032 Demo Softbait',
+    model:'Build 038.1 Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
-    sku:'DEMO-032-SB74',
-    notes:'Offline demo blank for BUILD 032 validation.',
+    sku:'DEMO-0381-SB74',
+    notes:'Offline demo blank for BUILD 038.1 validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -1584,7 +1961,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 032 Demo Softbait',
+    buildName:'Build 038.1 Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
@@ -1618,6 +1995,7 @@ function loadDemoBuild(){
 function renderBlanks(){
   const host=$('blankCards');
   if(!host)return;
+  hideBlankRowMenu();
   const filtered=blanks.filter((blank)=>blankMatchesSearch(blank,blankLibrarySearch));
   if(!filtered.length){
     host.innerHTML='<div class="empty-card">No blanks match your search.</div>';
@@ -1626,10 +2004,7 @@ function renderBlanks(){
   host.innerHTML=filtered.map((blank)=>{
     const idx=blanks.findIndex((item)=>item.id===blank.id);
     const archiveTag=blank.archived?'<small class="blank-card__archive">Archived</small>':'';
-    const actions=blank.archived
-      ?`<button class="ghost-action" data-blank-action="restore" data-blank-id="${escapeHtml(blank.id)}" type="button">Restore</button>`
-      :`<button class="ghost-action" data-blank-action="load" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button">Load</button><button class="ghost-action" data-blank-action="edit" data-blank-id="${escapeHtml(blank.id)}" type="button">Edit</button><button class="ghost-action" data-blank-action="duplicate" data-blank-id="${escapeHtml(blank.id)}" type="button">Duplicate</button><button class="ghost-action" data-blank-action="delete" data-blank-id="${escapeHtml(blank.id)}" type="button">Delete</button>`;
-    return `<article class="module-card blank-card"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.series||'Series n/a')} • ${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em><em>First ${blank.fg} mm • Guides ${blank.gc} • Target ${blank.ts} mm • Cost ${currency(blank.cost)}</em>${archiveTag}<div class="blank-card__actions">${actions}</div></article>`;
+    return `<article class="module-card blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" tabindex="0" role="button" aria-label="Load blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.series||'Series n/a')} • ${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em><em>First ${blank.fg} mm • Guides ${blank.gc} mm • Target ${blank.ts} mm • Cost ${currency(blank.cost)}</em>${archiveTag}<div class="blank-card__actions"><button class="ghost-action blank-card__load" data-blank-action="load" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button">Load</button>${blankRowMenuMarkup(blank)}</div></article>`;
   }).join('');
 }
 function bindBlankLibraryControls(){
@@ -1645,12 +2020,20 @@ function bindBlankLibraryControls(){
   const host=$('blankCards');
   if(host){
     host.addEventListener('click',(event)=>{
+      const menuTrigger=event.target.closest('[data-blank-menu-trigger]');
+      if(menuTrigger){
+        event.preventDefault();
+        event.stopPropagation();
+        toggleBlankRowMenu(menuTrigger,menuTrigger.getAttribute('data-blank-id')||'');
+        return;
+      }
       const button=event.target.closest('[data-blank-action]');
       if(!button)return;
       const action=button.getAttribute('data-blank-action');
       const blankId=button.getAttribute('data-blank-id')||'';
       const blank=findBlankById(blankId);
       if(!blank)return;
+      hideBlankRowMenu();
       if(action==='load'){
         const idx=Number(button.getAttribute('data-blank-index'));
         loadBlank(Number.isFinite(idx)?idx:blanks.findIndex((item)=>item.id===blankId));
@@ -1664,7 +2047,26 @@ function bindBlankLibraryControls(){
         renderBlanks();
       }
     });
+    host.addEventListener('keydown',(event)=>{
+      const row=event.target.closest('[data-blank-row]');
+      if(!row)return;
+      if(event.key!=='Enter' && event.key!==' ')return;
+      event.preventDefault();
+      const blankId=row.getAttribute('data-blank-id')||'';
+      const idx=Number(row.getAttribute('data-blank-index'));
+      loadBlank(Number.isFinite(idx)?idx:blanks.findIndex((item)=>item.id===blankId));
+    });
   }
+  document.addEventListener('click',(event)=>{
+    const openMenu=document.querySelector('[data-blank-menu]:not([hidden])');
+    if(!openMenu)return;
+    if(event.target.closest('[data-blank-menu]'))return;
+    if(event.target.closest('[data-blank-menu-trigger]'))return;
+    hideBlankRowMenu();
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){hideBlankRowMenu();}
+  });
 }
 function bindSettingsControls(){
   const demoButton=$('loadDemoBuildBtn');

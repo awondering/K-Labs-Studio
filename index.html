@@ -33,7 +33,7 @@
           <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
-      <span class="build-pill">BUILD 032</span>
+      <span class="build-pill">BUILD 038.1</span>
     </header>
 
     <section class="screen active" id="homeScreen">
@@ -47,7 +47,7 @@
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 032</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 038.1</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
         <button class="module-card" data-nav="workshopScreen"><span>Workshop</span><strong>Rod Builder Quote</strong><em>Create customer quotes for custom rod builds.</em><b>›</b></button>
         <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
       </div>
@@ -88,7 +88,7 @@
         <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">
           <div class="rod-blank-visual__head">
             <p class="eyebrow">Rod Blank</p>
-            <span class="rod-blank-visual__badge">BUILD 032</span>
+            <span class="rod-blank-visual__badge">BUILD 038.1</span>
           </div>
           <svg viewBox="0 0 1000 180" preserveAspectRatio="none" role="img" aria-label="Rod blank with guide markers">
             <defs>
@@ -151,20 +151,11 @@
         <article class="quote-section quote-section--collapsible" data-internal-only>
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBlankDetailsBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Blank Details</span>
+              <span class="quote-section__toggle-title">SELECTED BLANK</span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
-          <div id="workshopBlankDetailsBody" class="quote-grid quote-grid--two quote-section__body">
-            <label class="quote-grid__full quote-component-name"><span>Blank Library</span><button id="quoteBlankPickerTrigger" class="quote-component-picker__trigger" type="button" aria-haspopup="dialog"><span id="quoteBlankPickerTriggerValue" class="quote-component-picker__value">Select blank from library</span><b>▾</b></button></label>
-            <label><span>Blank Name</span><input id="quoteBlankName" type="text" placeholder="Blank name" /></label>
-            <label><span>Manufacturer</span><input id="quoteBlankMaker" type="text" placeholder="Manufacturer" /></label>
-            <label><span>Series</span><input id="quoteBlankSeries" type="text" placeholder="Series" /></label>
-            <label><span>Length</span><input id="quoteBlankLength" type="text" placeholder="Length" /></label>
-            <label><span>Power</span><input id="quoteBlankPower" type="text" placeholder="Power" /></label>
-            <label><span>Action</span><input id="quoteBlankAction" type="text" placeholder="Action" /></label>
-            <label><span>Pieces</span><input id="quoteBlankPieces" type="text" placeholder="Pieces" /></label>
-            <label><span>Blank Cost</span><input id="quoteBlankCost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+          <div id="workshopBlankDetailsBody" class="selected-blank-panel quote-section__body"></div>
           </div>
         </article>
 
@@ -256,7 +247,7 @@
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
       <div class="settings-card">
-        <div><span>Version</span><strong>BUILD 032</strong></div>
+        <div><span>Version</span><strong>BUILD 038.1</strong></div>
         <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
         <div class="settings-card__actions">
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
@@ -273,7 +264,7 @@
       </article>
     </section>
 
-    <p class="live-build-status" aria-label="Live build status">Live build: 032</p>
+    <p class="live-build-status" aria-label="Live build status">Live build: 038.1</p>
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
   </main>
 
