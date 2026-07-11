@@ -991,6 +991,19 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   letter-spacing:.06em;
 }
 
+.blank-library-admin-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin:0 4px 10px;
+}
+
+.blank-library-admin-actions .ghost-action{
+  min-height:36px;
+  font-size:11px;
+  letter-spacing:.06em;
+}
+
 .blank-card{
   display:grid;
   gap:7px;
@@ -1115,6 +1128,9 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
     grid-template-columns:1fr;
   }
   .blank-library-controls{
+    grid-template-columns:1fr;
+  }
+  .blank-library-admin-actions{
     grid-template-columns:1fr;
   }
   .blank-editor-grid{

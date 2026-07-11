@@ -23,7 +23,7 @@ let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
-let activeChoicePicker={type:'category',index:-1};
+let activeChoicePicker={type:'category',index:-1,mode:'select'};
 let activeChoiceEditor={mode:'add',originalName:''};
 let shouldAnimateComponentRows=false;
 let activeConfirmHandler=null;
@@ -434,6 +434,7 @@ function ensureChoicePicker(){
     if(actionEl && actionEl.getAttribute('data-sheet-action')==='close'){closeComponentSheet();}
     const optionButton=event.target.closest('button[data-choice-option]');
     if(optionButton){
+      if(activeChoicePicker.mode==='manage')return;
       const selectedName=optionButton.getAttribute('data-choice-option')||'';
       const selectedId=optionButton.getAttribute('data-choice-id')||'';
       const pickerContext={...activeChoicePicker};
@@ -484,6 +485,13 @@ function ensureChoicePicker(){
       return;
     }
     addCustomChoice(name);
+    if(activeChoicePicker.mode==='manage'){
+      const customBox=$('choicePickerCustomBox');
+      if(customBox){customBox.hidden=true;}
+      activeChoiceEditor={mode:'add',originalName:'',blankId:''};
+      renderChoicePickerOptions($('choicePickerSearch').value);
+      return;
+    }
     applyChoiceSelection(name);
     closeComponentSheet();
   });
@@ -639,7 +647,7 @@ function renderChoicePickerOptions(query){
     return;
   }
   list.innerHTML=options.map((item)=>{
-    const canEdit=true;
+    const canEdit=activeChoicePicker.mode==='manage';
     return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${canEdit?`<div class="component-sheet__actions"><button class="component-sheet__edit" data-choice-rename-option="${escapeHtml(item.name)}" data-choice-rename-id="${escapeHtml(item.id||'')}" type="button" aria-label="Rename ${activeChoicePicker.type}">Rename</button><button class="component-sheet__delete" data-choice-delete-option="${escapeHtml(item.name)}" data-choice-delete-id="${escapeHtml(item.id||'')}" type="button" aria-label="Delete ${activeChoicePicker.type}">Delete</button></div>`:''}</div>`;
   }).join('');
 }
@@ -717,14 +725,18 @@ function openSupplierSheet(index){
 function openBlankSheet(){
   openChoicePicker('blank',-1,document.activeElement);
 }
+function openChoiceLibraryEditor(type){
+  openChoicePicker(type,-1,document.activeElement,'manage');
+}
 function shouldAutoFocusPickerSearch(type){
   const isCategoryOrSupplier=type==='category' || type==='supplier';
   const isTouchCoarse=typeof window.matchMedia==='function' && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   return !(isCategoryOrSupplier && isTouchCoarse);
 }
-function openChoicePicker(type,index,openerEl){
+function openChoicePicker(type,index,openerEl,mode){
   ensureChoicePicker();
-  activeChoicePicker={type,index};
+  const pickerMode=mode==='manage'?'manage':'select';
+  activeChoicePicker={type,index,mode:pickerMode};
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
   sheet.hidden=false;
@@ -732,8 +744,8 @@ function openChoicePicker(type,index,openerEl){
   if($('choicePickerCustomBox'))$('choicePickerCustomBox').hidden=true;
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   if($('choicePickerSearch'))$('choicePickerSearch').value='';
-  if($('choicePickerTitle'))$('choicePickerTitle').textContent=type==='supplier'?'Select Supplier':type==='blank'?'Select Blank':'Select Category';
-  if($('choicePickerAdd'))$('choicePickerAdd').textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=pickerMode==='manage'?(type==='supplier'?'Manage Suppliers':'Manage Categories'):(type==='supplier'?'Select Supplier':type==='blank'?'Select Blank':'Select Category');
+  if($('choicePickerAdd'))$('choicePickerAdd').textContent=pickerMode==='manage'?(type==='supplier'?'+ Add Supplier':'+ Add Category'):(type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category');
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
   renderChoicePickerOptions('');
   if(shouldAutoFocusPickerSearch(type) && $('choicePickerSearch'))$('choicePickerSearch').focus();
@@ -742,7 +754,7 @@ function closeComponentSheet(){
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
   sheet.hidden=true;
-  activeChoicePicker={type:'category',index:-1};
+  activeChoicePicker={type:'category',index:-1,mode:'select'};
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   unlockModalLayer({restoreFocus:true});
 }
@@ -1573,6 +1585,14 @@ function bindBlankLibraryControls(){
   const addBtn=$('blankAddBtn');
   if(addBtn){
     addBtn.addEventListener('click',()=>openBlankEditor(''));
+  }
+  const manageCategoriesBtn=$('blankManageCategoriesBtn');
+  if(manageCategoriesBtn){
+    manageCategoriesBtn.addEventListener('click',()=>openChoiceLibraryEditor('category'));
+  }
+  const manageSuppliersBtn=$('blankManageSuppliersBtn');
+  if(manageSuppliersBtn){
+    manageSuppliersBtn.addEventListener('click',()=>openChoiceLibraryEditor('supplier'));
   }
   const host=$('blankCards');
   if(host){
