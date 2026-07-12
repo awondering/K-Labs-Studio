@@ -49,6 +49,48 @@ body.component-sheet-open{overflow:hidden}
 body.nav-menu-open{overflow:hidden}
 body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
+.bottom-nav{
+  border:1px solid rgba(214,210,200,.14);
+  background:linear-gradient(180deg,rgba(13,16,18,.92),rgba(8,10,11,.96));
+  box-shadow:0 10px 22px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.03);
+  padding:6px;
+  gap:4px;
+}
+
+.bottom-nav button{
+  display:grid;
+  grid-template-rows:auto auto;
+  align-content:center;
+  justify-items:center;
+  row-gap:3px;
+  padding:5px 4px 6px;
+  border-radius:13px;
+  font-size:15px;
+  font-weight:560;
+  line-height:1;
+  color:#8e928b;
+}
+
+.bottom-nav button span{
+  font-size:8px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  font-weight:700;
+  line-height:1.1;
+  color:#8f938c;
+}
+
+.bottom-nav button.active{
+  color:#d4cdc0;
+  border:1px solid rgba(214,210,200,.16);
+  background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 -2px 0 rgba(173,37,49,.42);
+}
+
+.bottom-nav button.active span{
+  color:#c5beb2;
+}
+
 [hidden]{display:none!important}
 
 .rod-blank-visual{
