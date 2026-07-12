@@ -33,7 +33,7 @@
           <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
-      <span class="build-pill">BUILD 038.2c</span>
+      <span class="build-pill">BUILD 040</span>
     </header>
 
     <section class="screen active" id="homeScreen">
@@ -47,7 +47,7 @@
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 038.2c</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 040</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
         <button class="module-card" data-nav="workshopScreen"><span>Workshop</span><strong>Rod Builder Quote</strong><em>Create customer quotes for custom rod builds.</em><b>›</b></button>
         <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
       </div>
@@ -88,7 +88,7 @@
         <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">
           <div class="rod-blank-visual__head">
             <p class="eyebrow">Rod Blank</p>
-            <span class="rod-blank-visual__badge">BUILD 038.2c</span>
+            <span class="rod-blank-visual__badge">BUILD 040</span>
           </div>
           <svg viewBox="0 0 1000 180" preserveAspectRatio="none" role="img" aria-label="Rod blank with guide markers">
             <defs>
@@ -134,19 +134,55 @@
           </div>
         </header>
 
-        <article class="quote-section">
-          <header class="quote-section__header">
-            <h2>Customer</h2>
-          </header>
-          <div class="quote-grid quote-grid--two quote-section__body">
+        <article class="quote-section quote-section--collapsible">
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopCustomerBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Customer</span>
+              <small id="quoteCustomerSummaryName" class="quote-section__subtle">No customer name entered</small>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopCustomerBody" class="quote-grid quote-grid--two quote-section__body">
             <label><span>Customer Name</span><input id="quoteCustomerName" type="text" placeholder="Customer name" /></label>
             <label><span>Phone</span><input id="quoteCustomerPhone" type="text" placeholder="Phone" /></label>
             <label><span>Email</span><input id="quoteCustomerEmail" type="email" placeholder="Email" /></label>
-            <label class="quote-grid__full"><span>Address</span><input id="quoteCustomerAddress" type="text" placeholder="Full address" /></label>
+            <label class="quote-grid__full"><span>Address Line 1</span><input id="quoteAddressLine1" type="text" placeholder="104 Back Miranda Road" /></label>
+            <label class="quote-grid__full"><span>Address Line 2</span><input id="quoteAddressLine2" type="text" placeholder="Unit, apartment, building or RD" /></label>
+            <label><span>Suburb / Locality</span><input id="quoteSuburbLocality" type="text" placeholder="Suburb or locality" /></label>
+            <label><span>City / Town</span><input id="quoteCityTown" type="text" placeholder="City or town" /></label>
+            <label><span>Region / State</span><input id="quoteRegionState" type="text" placeholder="Region, province, state or county" /></label>
+            <label><span>Postcode / ZIP</span><input id="quotePostcode" type="text" inputmode="text" placeholder="Postal or ZIP code" /></label>
+            <label class="quote-grid__full"><span>Country</span><input id="quoteCountry" type="text" list="quoteCountryList" placeholder="Country" /></label>
             <label><span>Build Name</span><input id="quoteBuildName" type="text" placeholder="Build name" /></label>
             <label class="quote-grid__full"><span>Notes</span><textarea id="quoteNotes" rows="2" placeholder="Build notes"></textarea></label>
           </div>
         </article>
+
+        <datalist id="quoteCountryList">
+          <option value="New Zealand"></option>
+          <option value="Australia"></option>
+          <option value="United States"></option>
+          <option value="Canada"></option>
+          <option value="United Kingdom"></option>
+          <option value="Ireland"></option>
+          <option value="South Africa"></option>
+          <option value="Singapore"></option>
+          <option value="Japan"></option>
+          <option value="Germany"></option>
+          <option value="France"></option>
+          <option value="Netherlands"></option>
+          <option value="Spain"></option>
+          <option value="Italy"></option>
+          <option value="Sweden"></option>
+          <option value="Norway"></option>
+          <option value="Denmark"></option>
+          <option value="Finland"></option>
+          <option value="Switzerland"></option>
+          <option value="United Arab Emirates"></option>
+          <option value="India"></option>
+          <option value="Brazil"></option>
+          <option value="Mexico"></option>
+        </datalist>
 
         <article class="quote-section quote-section--collapsible" data-internal-only>
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBlankDetailsBody">
@@ -247,7 +283,7 @@
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
       <div class="settings-card">
-        <div><span>Version</span><strong>BUILD 038.2c</strong></div>
+        <div><span>Version</span><strong>BUILD 040</strong></div>
         <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
         <div class="settings-card__actions">
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
@@ -264,7 +300,7 @@
       </article>
     </section>
 
-    <p class="live-build-status" aria-label="Live build status">Live build: 038.2c</p>
+    <p class="live-build-status" aria-label="Live build status">Live build: 040</p>
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
   </main>
 

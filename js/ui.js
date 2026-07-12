@@ -53,11 +53,15 @@ function newQuoteTemplate(){
   return{
     buildNumber:'',
     customerName:'',phone:'',email:'',buildName:'',notes:'',
+    addressLine1:'',addressLine2:'',suburbLocality:'',cityTown:'',regionState:'',postcode:'',country:'New Zealand',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     components:[{category:'',description:'',supplier:'',cost:0}],
     labourRate:0,labourHours:0,marginPercent:0,includeGst:true,quoteMode:'internal',gstRate:15,quoteStatus:'draft'
   };
+}
+function normalizeAddressText(value){
+  return String(value||'').trim();
 }
 function normalizeBuildSpecifications(inputSpecs){
   const normalized={};
@@ -104,6 +108,29 @@ function blankSpecificationSummary(){
   if(blankPower)details.push(blankPower);
   if(blankAction)details.push(blankAction);
   return details.join(' • ');
+}
+function customerPreviewLines(){
+  const lines=[];
+  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' • ');
+  if(identity)lines.push(identity);
+
+  const addressLine1=specificationValue(quote.addressLine1);
+  const addressLine2=specificationValue(quote.addressLine2);
+  const suburbLocality=specificationValue(quote.suburbLocality);
+  const cityTown=specificationValue(quote.cityTown);
+  const regionState=specificationValue(quote.regionState);
+  const postcode=specificationValue(quote.postcode);
+  const country=specificationValue(quote.country);
+
+  if(addressLine1)lines.push(addressLine1);
+  if(addressLine2)lines.push(addressLine2);
+  if(suburbLocality)lines.push(suburbLocality);
+
+  const localityLine=[cityTown,regionState,postcode].filter(Boolean).join(', ');
+  if(localityLine)lines.push(localityLine);
+  if(country)lines.push(country);
+
+  return lines;
 }
 function customerSpecificationRows(){
   const rows=[];
@@ -171,6 +198,23 @@ function normalizeQuote(inputQuote){
   merged.blankPieces=String(inputQuote&&inputQuote.blankPieces||'');
   merged.blankSku=String(inputQuote&&inputQuote.blankSku||'');
   merged.blankNotes=String(inputQuote&&inputQuote.blankNotes||'');
+  const hasStructuredAddress=!!(
+    normalizeAddressText(inputQuote&&inputQuote.addressLine1) ||
+    normalizeAddressText(inputQuote&&inputQuote.addressLine2) ||
+    normalizeAddressText(inputQuote&&inputQuote.suburbLocality) ||
+    normalizeAddressText(inputQuote&&inputQuote.cityTown) ||
+    normalizeAddressText(inputQuote&&inputQuote.regionState) ||
+    normalizeAddressText(inputQuote&&inputQuote.postcode) ||
+    normalizeAddressText(inputQuote&&inputQuote.country)
+  );
+  const legacyAddress=normalizeAddressText(inputQuote&&((inputQuote.addressLine1)||inputQuote.customerAddress||inputQuote.address));
+  merged.addressLine1=normalizeAddressText(inputQuote&&inputQuote.addressLine1)||(hasStructuredAddress?'':legacyAddress);
+  merged.addressLine2=normalizeAddressText(inputQuote&&inputQuote.addressLine2);
+  merged.suburbLocality=normalizeAddressText(inputQuote&&inputQuote.suburbLocality);
+  merged.cityTown=normalizeAddressText(inputQuote&&inputQuote.cityTown);
+  merged.regionState=normalizeAddressText(inputQuote&&inputQuote.regionState);
+  merged.postcode=normalizeAddressText(inputQuote&&inputQuote.postcode);
+  merged.country=normalizeAddressText(inputQuote&&inputQuote.country)||'New Zealand';
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
   return merged;
 }
@@ -1638,7 +1682,9 @@ function bindLayoutControls(){
 }
 function workshopInputMap(){
   return[
-    ['quoteCustomerName','customerName'],['quoteCustomerPhone','phone'],['quoteCustomerEmail','email'],['quoteBuildName','buildName'],['quoteNotes','notes'],
+    ['quoteCustomerName','customerName'],['quoteCustomerPhone','phone'],['quoteCustomerEmail','email'],
+    ['quoteAddressLine1','addressLine1'],['quoteAddressLine2','addressLine2'],['quoteSuburbLocality','suburbLocality'],['quoteCityTown','cityTown'],['quoteRegionState','regionState'],['quotePostcode','postcode'],['quoteCountry','country'],
+    ['quoteBuildName','buildName'],['quoteNotes','notes'],
     ['quoteBlankName','blankName'],['quoteBlankMaker','blankMaker'],['quoteBlankSeries','blankSeries'],['quoteBlankLength','blankLength'],['quoteBlankPower','blankPower'],['quoteBlankAction','blankAction'],['quoteBlankPieces','blankPieces'],
     ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours'],['quoteMarginPercent','marginPercent'],['quoteGstRate','gstRate']
   ];
@@ -1824,6 +1870,7 @@ function renderWorkshopQuote(){
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
   if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Margin • Quote Summary';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
+  if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';
   updateQuoteActionPriority();
   renderSelectedBlankPanel();
   renderBuildSpecificationInputs();
@@ -1894,9 +1941,10 @@ function ensureQuotePreviewSheet(){
 function renderQuotePreviewSheet(){
   const math=quoteMaths();
   const specificationViews=buildSpecificationViews();
+  const customerLines=customerPreviewLines();
   if($('quotePreviewName'))$('quotePreviewName').textContent='Customer Quote';
   if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber||'Unnumbered quote';
-  if($('quotePreviewCustomer'))$('quotePreviewCustomer').textContent=[quote.customerName,quote.phone,quote.email].filter(Boolean).join(' • ')||'No customer details entered';
+  if($('quotePreviewCustomer'))$('quotePreviewCustomer').innerHTML=customerLines.length?customerLines.map(escapeHtml).join('<br>'):'No customer details entered';
   if($('quotePreviewBuildName'))$('quotePreviewBuildName').textContent=quote.buildName||'No build name entered';
   if($('quotePreviewSpecs'))$('quotePreviewSpecs').innerHTML=specificationRowsMarkup(specificationViews.customer);
   if($('quotePreviewSummary'))$('quotePreviewSummary').innerHTML=`
@@ -2047,20 +2095,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 038.2c demo softbait';
+  const demoKey='build 040 demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 038.2c Demo Softbait',
+    model:'Build 040 Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
     sku:'DEMO-0381-SB74',
-    notes:'Offline demo blank for BUILD 038.2c validation.',
+    notes:'Offline demo blank for BUILD 040 validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -2086,7 +2134,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 038.2c Demo Softbait',
+    buildName:'Build 040 Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
