@@ -513,13 +513,16 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 }
 
 .component-sheet{
+  --component-sheet-top-offset:0px;
+  --component-sheet-bottom-inset:0px;
+  --component-sheet-align-items:center;
   position:fixed;
   inset:0;
   z-index:120;
   display:flex;
-  align-items:center;
+  align-items:var(--component-sheet-align-items);
   justify-content:center;
-  padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + var(--safe-bottom));
+  padding:calc(12px + env(safe-area-inset-top,0px) + var(--component-sheet-top-offset)) 12px calc(12px + var(--safe-bottom) + var(--component-sheet-bottom-inset));
 }
 
 .component-sheet__scrim{
@@ -540,6 +543,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   width:min(90vw,460px);
   max-height:min(78vh,620px);
   max-height:min(78dvh,620px);
+  max-height:var(--component-sheet-panel-max-height,min(78dvh,620px));
   overflow:hidden;
   display:flex;
   flex-direction:column;
@@ -592,7 +596,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   gap:8px;
   min-height:0;
   flex:1;
-  overflow:auto;
+  overflow:hidden;
   overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
 }

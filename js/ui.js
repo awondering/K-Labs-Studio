@@ -33,11 +33,16 @@ let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
+let choicePickerViewportBound=false;
+let choicePickerViewportRaf=0;
 let workshopKeyboardDismissGuardBound=false;
 let workshopInputFocusStabilityBound=false;
 const workshopKeyboardDismissState={
   suppressNavUntil:0,
   preservedScrollY:0,
+};
+const choicePickerViewportState={
+  keyboardActive:false,
 };
 
 function save(){Store.set('klabs-studio-state',state)}
@@ -238,6 +243,98 @@ function unlockModalLayer(options){
   if(modalLockDepth>0)return;
   const focusTarget=modalReturnFocusEl;
   applyUnlock(focusTarget);
+}
+function isChoicePickerVisible(){
+  const sheet=$('choicePickerSheet');
+  return !!(sheet && !sheet.hidden);
+}
+function clearChoicePickerViewportStyles(){
+  const sheet=$('choicePickerSheet');
+  if(!sheet)return;
+  sheet.style.removeProperty('--component-sheet-top-offset');
+  sheet.style.removeProperty('--component-sheet-bottom-inset');
+  sheet.style.removeProperty('--component-sheet-panel-max-height');
+  sheet.style.removeProperty('--component-sheet-align-items');
+}
+function scheduleChoicePickerViewportSync(delayMs){
+  if(choicePickerViewportRaf){
+    cancelAnimationFrame(choicePickerViewportRaf);
+    choicePickerViewportRaf=0;
+  }
+  const runSync=()=>{syncChoicePickerViewport();};
+  if(numberOrZero(delayMs)>0){
+    window.setTimeout(()=>{
+      choicePickerViewportRaf=requestAnimationFrame(runSync);
+    },delayMs);
+    return;
+  }
+  choicePickerViewportRaf=requestAnimationFrame(runSync);
+}
+function syncChoicePickerViewport(){
+  const sheet=$('choicePickerSheet');
+  if(!sheet || sheet.hidden){
+    clearChoicePickerViewportStyles();
+    return;
+  }
+  const searchInput=$('choicePickerSearch');
+  const vv=window.visualViewport||null;
+  const viewportHeight=Math.max(0,Math.round(vv?vv.height:window.innerHeight));
+  const viewportTop=Math.max(0,Math.round(vv?vv.offsetTop:0));
+  const hiddenBottom=Math.max(0,Math.round(window.innerHeight-(viewportHeight+viewportTop)));
+  const searchFocused=!!(searchInput && document.activeElement===searchInput);
+  const keyboardActive=searchFocused && hiddenBottom>0;
+  choicePickerViewportState.keyboardActive=keyboardActive;
+
+  const panelMaxHeight=Math.max(260,viewportHeight-24);
+  sheet.style.setProperty('--component-sheet-top-offset',`${viewportTop}px`);
+  sheet.style.setProperty('--component-sheet-bottom-inset',`${hiddenBottom}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-height',`${panelMaxHeight}px`);
+  sheet.style.setProperty('--component-sheet-align-items',keyboardActive?'flex-start':'center');
+}
+function handleChoicePickerSearchFocus(){
+  scheduleChoicePickerViewportSync();
+}
+function handleChoicePickerSearchBlur(){
+  scheduleChoicePickerViewportSync(100);
+}
+function bindChoicePickerViewportHandlers(){
+  if(choicePickerViewportBound)return;
+  choicePickerViewportBound=true;
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.addEventListener('resize',scheduleChoicePickerViewportSync);
+    vv.addEventListener('scroll',scheduleChoicePickerViewportSync);
+  }
+  window.addEventListener('resize',scheduleChoicePickerViewportSync);
+  window.addEventListener('orientationchange',scheduleChoicePickerViewportSync);
+  const searchInput=$('choicePickerSearch');
+  if(searchInput){
+    searchInput.addEventListener('focus',handleChoicePickerSearchFocus);
+    searchInput.addEventListener('blur',handleChoicePickerSearchBlur);
+  }
+  scheduleChoicePickerViewportSync();
+}
+function unbindChoicePickerViewportHandlers(){
+  if(!choicePickerViewportBound)return;
+  choicePickerViewportBound=false;
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.removeEventListener('resize',scheduleChoicePickerViewportSync);
+    vv.removeEventListener('scroll',scheduleChoicePickerViewportSync);
+  }
+  window.removeEventListener('resize',scheduleChoicePickerViewportSync);
+  window.removeEventListener('orientationchange',scheduleChoicePickerViewportSync);
+  const searchInput=$('choicePickerSearch');
+  if(searchInput){
+    searchInput.removeEventListener('focus',handleChoicePickerSearchFocus);
+    searchInput.removeEventListener('blur',handleChoicePickerSearchBlur);
+  }
+  if(choicePickerViewportRaf){
+    cancelAnimationFrame(choicePickerViewportRaf);
+    choicePickerViewportRaf=0;
+  }
+  choicePickerViewportState.keyboardActive=false;
+  clearChoicePickerViewportStyles();
 }
 function quoteMaths(){
   const blankCost=numberOrZero(quote.blankCost);
@@ -1076,7 +1173,8 @@ function recordsForChoiceType(type,query){
 function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
   if(!list)return;
-  const options=recordsForChoiceType(activeChoicePicker.type,query).slice(0,50);
+  const records=recordsForChoiceType(activeChoicePicker.type,query);
+  const options=activeChoicePicker.type==='blank'?records:records.slice(0,50);
   syncChoicePickerMenuActions();
   hideChoicePickerMenu();
   if(!options.length){
@@ -1184,13 +1282,20 @@ function openChoicePicker(type,index,openerEl){
   if($('choicePickerAdd'))$('choicePickerAdd').textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
   renderChoicePickerOptions('');
+  bindChoicePickerViewportHandlers();
   if(shouldAutoFocusPickerSearch(type) && $('choicePickerSearch'))$('choicePickerSearch').focus();
+  scheduleChoicePickerViewportSync(40);
 }
 function closeComponentSheet(){
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
+  const activeEl=document.activeElement;
+  if(activeEl && sheet.contains(activeEl) && typeof activeEl.blur==='function'){
+    activeEl.blur();
+  }
   hideChoicePickerMenu();
   sheet.hidden=true;
+  unbindChoicePickerViewportHandlers();
   activeChoicePicker={type:'category',index:-1};
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   unlockModalLayer({restoreFocus:true});
@@ -1922,20 +2027,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 038.1 demo softbait';
+  const demoKey='build 038.2 demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 038.1 Demo Softbait',
+    model:'Build 038.2 Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
     sku:'DEMO-0381-SB74',
-    notes:'Offline demo blank for BUILD 038.1 validation.',
+    notes:'Offline demo blank for BUILD 038.2 validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -1961,7 +2066,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 038.1 Demo Softbait',
+    buildName:'Build 038.2 Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
