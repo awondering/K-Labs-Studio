@@ -33,23 +33,22 @@
           <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
-      <span class="build-pill">BUILD 038.1</span>
+      <span class="build-pill">BUILD 051.2</span>
     </header>
 
     <section class="screen active" id="homeScreen">
       <div class="home-hero">
-        <p class="eyebrow">Precision workshop instrument</p>
+        <p class="eyebrow">What does the builder want to do next?</p>
         <h1>K-Labs Studio</h1>
-        <p class="lead">A premium guide layout and workshop tool for custom rod builds.</p>
+        <p class="lead">New Build, then Customer, then Select Blank, then Continue Build.</p>
         <div class="hero-actions">
-          <button class="primary-action" data-nav="layoutScreen">New Build</button>
-          <button class="ghost-action" data-nav="workshopScreen">Workshop</button>
+          <button class="primary-action" data-nav="workshopScreen">New Build</button>
+          <button class="ghost-action" data-nav="workshopScreen">Builds</button>
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="layoutScreen"><span>BUILD 038.1</span><strong>Guide Layout</strong><em>Live guide spacing control in a precision instrument layout.</em><b>›</b></button>
-        <button class="module-card" data-nav="workshopScreen"><span>Workshop</span><strong>Rod Builder Quote</strong><em>Create customer quotes for custom rod builds.</em><b>›</b></button>
-        <button class="module-card" data-nav="blanksScreen"><span>Library</span><strong>Blank Library</strong><em>Starter blanks ready to load.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="workshopScreen"><span>Continue</span><strong>Builds</strong><em>Open saved builds, begin customer details, and continue active work.</em><b>›</b></button>
+        <button class="module-card" data-nav="layoutScreen"><span>Layout</span><strong>Guide Layout</strong><em>Go to guide spacing after build details are set.</em><b>›</b></button>
       </div>
     </section>
 
@@ -88,7 +87,7 @@
         <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">
           <div class="rod-blank-visual__head">
             <p class="eyebrow">Rod Blank</p>
-            <span class="rod-blank-visual__badge">BUILD 038.1</span>
+            <span class="rod-blank-visual__badge">BUILD 051.2</span>
           </div>
           <svg viewBox="0 0 1000 180" preserveAspectRatio="none" role="img" aria-label="Rod blank with guide markers">
             <defs>
@@ -237,7 +236,23 @@
     </section>
 
     <section class="screen" id="blanksScreen">
-      <div class="screen-head"><p class="eyebrow">Blank Library</p><h1>Editable blank library</h1></div>
+      <div class="screen-head"><p class="eyebrow">Component Manager</p><h1>Blanks</h1></div>
+      <article class="settings-card" aria-label="Component manager roadmap">
+        <h2>Component Manager</h2>
+        <p>Only Blanks are active in BUILD 051.2. Other component types remain hidden behind the picker workflow.</p>
+        <ol>
+          <li>Blanks</li>
+          <li>Guides</li>
+          <li>Reel Seats</li>
+          <li>Tip Tops</li>
+          <li>EVA Grips</li>
+          <li>Cork Grips</li>
+          <li>Winding Checks</li>
+          <li>Hook Keepers</li>
+          <li>Thread</li>
+          <li>Decals</li>
+        </ol>
+      </article>
       <div class="blank-library-controls">
         <input id="blankSearchInput" class="component-sheet__search" type="search" placeholder="Search blank library" autocomplete="off" />
         <button id="blankAddBtn" class="primary-action" type="button">Add Blank</button>
@@ -247,12 +262,19 @@
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
       <div class="settings-card">
-        <div><span>Version</span><strong>BUILD 038.1</strong></div>
+        <div><span>Version</span><strong>BUILD 051.2</strong></div>
         <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
         <div class="settings-card__actions">
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
         </div>
       </div>
+      <article class="settings-card" aria-label="Component manager access">
+        <h2>Component Manager</h2>
+        <p>Reference component data is managed here and kept out of normal build workflow.</p>
+        <div class="settings-card__actions">
+          <button class="ghost-action" data-nav="blanksScreen" type="button">Open Component Manager</button>
+        </div>
+      </article>
       <article class="settings-card settings-guide-card" aria-label="Install guide">
         <h2>Install Guide</h2>
         <ol>
@@ -264,15 +286,14 @@
       </article>
     </section>
 
-    <p class="live-build-status" aria-label="Live build status">Live build: 038.1</p>
+    <p class="live-build-status" aria-label="Live build status">Live build: 051.2</p>
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
   </main>
 
   <nav class="bottom-nav">
     <button class="active" data-nav="homeScreen">⌂<span>Home</span></button>
-    <button data-nav="layoutScreen">⌖<span>Layout</span></button>
-    <button data-nav="workshopScreen">▣<span>Workshop</span></button>
-    <button data-nav="blanksScreen">▤<span>Blanks</span></button>
+    <button data-nav="workshopScreen">▣<span>Builds</span></button>
+    <button data-nav="layoutScreen">⌖<span>Guide Layout</span></button>
     <button data-nav="settingsScreen">⚙<span>More</span></button>
   </nav>
   <script src="js/config.js"></script>
