@@ -251,8 +251,11 @@ function isChoicePickerVisible(){
 function clearChoicePickerViewportStyles(){
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
+  sheet.style.removeProperty('--component-sheet-vv-left');
+  sheet.style.removeProperty('--component-sheet-vv-width');
   sheet.style.removeProperty('--component-sheet-vv-top');
   sheet.style.removeProperty('--component-sheet-vv-height');
+  sheet.style.removeProperty('--component-sheet-panel-max-width');
   sheet.style.removeProperty('--component-sheet-panel-max-height');
   sheet.style.removeProperty('--component-sheet-align-items');
 }
@@ -278,6 +281,8 @@ function syncChoicePickerViewport(){
   }
   const searchInput=$('choicePickerSearch');
   const vv=window.visualViewport||null;
+  const viewportWidth=Math.max(0,Math.round(vv?vv.width:window.innerWidth));
+  const viewportLeft=Math.max(0,Math.round(vv?vv.offsetLeft:0));
   const viewportHeight=Math.max(0,Math.round(vv?vv.height:window.innerHeight));
   const viewportTop=Math.max(0,Math.round(vv?vv.offsetTop:0));
   const searchFocused=!!(searchInput && document.activeElement===searchInput);
@@ -285,9 +290,14 @@ function syncChoicePickerViewport(){
   const keyboardActive=searchFocused && keyboardDelta>0;
   choicePickerViewportState.keyboardActive=keyboardActive;
 
-  const panelMaxHeight=Math.max(160,viewportHeight-24);
+  const sideGap=12;
+  const panelMaxWidth=Math.max(240,viewportWidth-(sideGap*2));
+  const panelMaxHeight=Math.max(160,viewportHeight-32);
+  sheet.style.setProperty('--component-sheet-vv-left',`${viewportLeft}px`);
+  sheet.style.setProperty('--component-sheet-vv-width',`${viewportWidth}px`);
   sheet.style.setProperty('--component-sheet-vv-top',`${viewportTop}px`);
   sheet.style.setProperty('--component-sheet-vv-height',`${viewportHeight}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-width',`${panelMaxWidth}px`);
   sheet.style.setProperty('--component-sheet-panel-max-height',`${panelMaxHeight}px`);
   sheet.style.setProperty('--component-sheet-align-items',keyboardActive?'flex-start':'center');
 }
@@ -2043,20 +2053,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 038.2a demo softbait';
+  const demoKey='build 038.2b demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 038.2a Demo Softbait',
+    model:'Build 038.2b Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
     sku:'DEMO-0381-SB74',
-    notes:'Offline demo blank for BUILD 038.2a validation.',
+    notes:'Offline demo blank for BUILD 038.2b validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -2082,7 +2092,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 038.2a Demo Softbait',
+    buildName:'Build 038.2b Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
