@@ -251,8 +251,8 @@ function isChoicePickerVisible(){
 function clearChoicePickerViewportStyles(){
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
-  sheet.style.removeProperty('--component-sheet-top-offset');
-  sheet.style.removeProperty('--component-sheet-bottom-inset');
+  sheet.style.removeProperty('--component-sheet-vv-top');
+  sheet.style.removeProperty('--component-sheet-vv-height');
   sheet.style.removeProperty('--component-sheet-panel-max-height');
   sheet.style.removeProperty('--component-sheet-align-items');
 }
@@ -280,16 +280,20 @@ function syncChoicePickerViewport(){
   const vv=window.visualViewport||null;
   const viewportHeight=Math.max(0,Math.round(vv?vv.height:window.innerHeight));
   const viewportTop=Math.max(0,Math.round(vv?vv.offsetTop:0));
-  const hiddenBottom=Math.max(0,Math.round(window.innerHeight-(viewportHeight+viewportTop)));
   const searchFocused=!!(searchInput && document.activeElement===searchInput);
-  const keyboardActive=searchFocused && hiddenBottom>0;
+  const keyboardDelta=Math.max(0,Math.round(window.innerHeight-viewportHeight-viewportTop));
+  const keyboardActive=searchFocused && keyboardDelta>0;
   choicePickerViewportState.keyboardActive=keyboardActive;
 
-  const panelMaxHeight=Math.max(260,viewportHeight-24);
-  sheet.style.setProperty('--component-sheet-top-offset',`${viewportTop}px`);
-  sheet.style.setProperty('--component-sheet-bottom-inset',`${hiddenBottom}px`);
+  const panelMaxHeight=Math.max(160,viewportHeight-24);
+  sheet.style.setProperty('--component-sheet-vv-top',`${viewportTop}px`);
+  sheet.style.setProperty('--component-sheet-vv-height',`${viewportHeight}px`);
   sheet.style.setProperty('--component-sheet-panel-max-height',`${panelMaxHeight}px`);
   sheet.style.setProperty('--component-sheet-align-items',keyboardActive?'flex-start':'center');
+}
+function startChoicePickerAddFlow(){
+  hideChoicePickerMenu();
+  startChoiceEditor('add','');
 }
 function handleChoicePickerSearchFocus(){
   scheduleChoicePickerViewportSync();
@@ -887,16 +891,18 @@ function ensureChoicePicker(){
       startChoiceEditor('rename',optionName);
       return;
     }
+    const inlineAddButton=event.target.closest('button[data-choice-add-inline]');
+    if(inlineAddButton){
+      startChoicePickerAddFlow();
+      return;
+    }
     if(activeChoiceMenu.open && !event.target.closest('#choicePickerMenu')){
       hideChoicePickerMenu();
     }
   });
 
   $('choicePickerSearch').addEventListener('input',()=>renderChoicePickerOptions($('choicePickerSearch').value));
-  $('choicePickerAdd').addEventListener('click',()=>{
-    hideChoicePickerMenu();
-    startChoiceEditor('add','');
-  });
+  $('choicePickerAdd').addEventListener('click',startChoicePickerAddFlow);
   $('choicePickerCustomCancel').addEventListener('click',()=>{
     const customBox=$('choicePickerCustomBox');
     if(customBox){customBox.hidden=true;}
@@ -1175,16 +1181,21 @@ function renderChoicePickerOptions(query){
   if(!list)return;
   const records=recordsForChoiceType(activeChoicePicker.type,query);
   const options=activeChoicePicker.type==='blank'?records:records.slice(0,50);
+  const includeInlineAdd=activeChoicePicker.type==='blank';
+  const addInlineMarkup=includeInlineAdd
+    ? '<div class="component-sheet__row component-sheet__row--add"><button class="component-sheet__add component-sheet__add--inline" data-choice-add-inline="true" type="button">+ Add Blank</button></div>'
+    : '';
   syncChoicePickerMenuActions();
   hideChoicePickerMenu();
   if(!options.length){
-    list.innerHTML='<div class="component-sheet__empty">No matching items</div>';
+    list.innerHTML=`<div class="component-sheet__empty">No matching items</div>${addInlineMarkup}`;
     return;
   }
-  list.innerHTML=options.map((item)=>{
+  const rowsMarkup=options.map((item)=>{
     const hasMenu=choicePickerSupportsContextMenu();
     return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
   }).join('');
+  list.innerHTML=rowsMarkup+addInlineMarkup;
 }
 function choiceReferences(type,name){
   const normalized=normalizeNameKey(name);
@@ -1279,7 +1290,11 @@ function openChoicePicker(type,index,openerEl){
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   if($('choicePickerSearch'))$('choicePickerSearch').value='';
   if($('choicePickerTitle'))$('choicePickerTitle').textContent=type==='supplier'?'Select Supplier':type==='blank'?'Select Blank':'Select Category';
-  if($('choicePickerAdd'))$('choicePickerAdd').textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
+  const addButton=$('choicePickerAdd');
+  if(addButton){
+    addButton.textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
+    addButton.hidden=type==='blank';
+  }
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
   renderChoicePickerOptions('');
   bindChoicePickerViewportHandlers();
@@ -1296,6 +1311,7 @@ function closeComponentSheet(){
   hideChoicePickerMenu();
   sheet.hidden=true;
   unbindChoicePickerViewportHandlers();
+  if($('choicePickerAdd'))$('choicePickerAdd').hidden=false;
   activeChoicePicker={type:'category',index:-1};
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   unlockModalLayer({restoreFocus:true});
@@ -2027,20 +2043,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 038.2 demo softbait';
+  const demoKey='build 038.2a demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 038.2 Demo Softbait',
+    model:'Build 038.2a Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
     sku:'DEMO-0381-SB74',
-    notes:'Offline demo blank for BUILD 038.2 validation.',
+    notes:'Offline demo blank for BUILD 038.2a validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -2066,7 +2082,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 038.2 Demo Softbait',
+    buildName:'Build 038.2a Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
