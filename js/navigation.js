@@ -1,6 +1,9 @@
 function goScreen(id){
 	document.querySelectorAll('.screen').forEach((screen)=>screen.classList.toggle('active',screen.id===id));
 	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===id));
+	if(window.KLABS_UI && typeof window.KLABS_UI.onScreenChange==='function'){
+		window.KLABS_UI.onScreenChange(id);
+	}
 	const menuButton=document.querySelector('[data-menu-action="open-menu"]');
 	if(menuButton){menuButton.setAttribute('aria-expanded','false');}
 	const menuSheet=document.getElementById('navMenuSheet');
@@ -25,7 +28,7 @@ function ensureNavMenu(){
 			<div class="component-sheet__body">
 					<div class="component-sheet__list nav-menu-list">
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="homeScreen">Home</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Builds</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="buildsScreen">Builds</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="layoutScreen">Guide Layout</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">More</button></div>
 				</div>

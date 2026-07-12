@@ -42,13 +42,13 @@
         <h1>K-Labs Studio</h1>
         <p class="lead">New Build, then Customer, then Select Blank, then Continue Build.</p>
         <div class="hero-actions">
-          <button class="primary-action" data-nav="workshopScreen">New Build</button>
-          <button class="ghost-action" data-nav="workshopScreen">Builds</button>
+          <button id="homeNewBuildBtn" class="primary-action" type="button">New Build</button>
+          <button class="ghost-action" data-nav="buildsScreen" type="button">Builds</button>
         </div>
       </div>
       <div class="module-stack">
-        <button class="module-card featured" data-nav="workshopScreen"><span>Continue</span><strong>Builds</strong><em>Open saved builds, begin customer details, and continue active work.</em><b>›</b></button>
-        <button class="module-card" data-nav="layoutScreen"><span>Layout</span><strong>Guide Layout</strong><em>Go to guide spacing after build details are set.</em><b>›</b></button>
+        <button class="module-card featured" data-nav="buildsScreen" type="button"><span>Continue</span><strong>Builds</strong><em>Open saved builds, begin customer details, and continue active work.</em><b>›</b></button>
+        <button class="module-card" data-nav="layoutScreen" type="button"><span>Layout</span><strong>Guide Layout</strong><em>Go to guide spacing after build details are set.</em><b>›</b></button>
       </div>
     </section>
 
@@ -133,19 +133,55 @@
           </div>
         </header>
 
-        <article class="quote-section">
-          <header class="quote-section__header">
-            <h2>Customer</h2>
-          </header>
-          <div class="quote-grid quote-grid--two quote-section__body">
+        <article class="quote-section quote-section--collapsible">
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopCustomerBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Customer</span>
+              <small id="quoteCustomerSummaryName" class="quote-section__subtle">No customer name entered</small>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopCustomerBody" class="quote-grid quote-grid--two quote-section__body">
             <label><span>Customer Name</span><input id="quoteCustomerName" type="text" placeholder="Customer name" /></label>
             <label><span>Phone</span><input id="quoteCustomerPhone" type="text" placeholder="Phone" /></label>
             <label><span>Email</span><input id="quoteCustomerEmail" type="email" placeholder="Email" /></label>
-            <label class="quote-grid__full"><span>Address</span><input id="quoteCustomerAddress" type="text" placeholder="Full address" /></label>
+            <label class="quote-grid__full"><span>Address Line 1</span><input id="quoteAddressLine1" type="text" placeholder="104 Back Miranda Road" /></label>
+            <label class="quote-grid__full"><span>Address Line 2</span><input id="quoteAddressLine2" type="text" placeholder="Unit, apartment, building or RD" /></label>
+            <label><span>Suburb / Locality</span><input id="quoteSuburbLocality" type="text" placeholder="Suburb or locality" /></label>
+            <label><span>City / Town</span><input id="quoteCityTown" type="text" placeholder="City or town" /></label>
+            <label><span>Region / State</span><input id="quoteRegionState" type="text" placeholder="Region, province, state or county" /></label>
+            <label><span>Postcode / ZIP</span><input id="quotePostcode" type="text" inputmode="text" placeholder="Postal or ZIP code" /></label>
+            <label class="quote-grid__full"><span>Country</span><input id="quoteCountry" type="text" list="quoteCountryList" placeholder="Country" /></label>
             <label><span>Build Name</span><input id="quoteBuildName" type="text" placeholder="Build name" /></label>
             <label class="quote-grid__full"><span>Notes</span><textarea id="quoteNotes" rows="2" placeholder="Build notes"></textarea></label>
           </div>
         </article>
+
+        <datalist id="quoteCountryList">
+          <option value="New Zealand"></option>
+          <option value="Australia"></option>
+          <option value="United States"></option>
+          <option value="Canada"></option>
+          <option value="United Kingdom"></option>
+          <option value="Ireland"></option>
+          <option value="South Africa"></option>
+          <option value="Singapore"></option>
+          <option value="Japan"></option>
+          <option value="Germany"></option>
+          <option value="France"></option>
+          <option value="Netherlands"></option>
+          <option value="Spain"></option>
+          <option value="Italy"></option>
+          <option value="Sweden"></option>
+          <option value="Norway"></option>
+          <option value="Denmark"></option>
+          <option value="Finland"></option>
+          <option value="Switzerland"></option>
+          <option value="United Arab Emirates"></option>
+          <option value="India"></option>
+          <option value="Brazil"></option>
+          <option value="Mexico"></option>
+        </datalist>
 
         <article class="quote-section quote-section--collapsible" data-internal-only>
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBlankDetailsBody">
@@ -235,6 +271,14 @@
       </section>
     </section>
 
+    <section class="screen" id="buildsScreen">
+      <div class="screen-head"><p class="eyebrow">Builds</p><h1>Saved builds</h1></div>
+      <div class="blank-library-controls">
+        <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search saved builds" autocomplete="off" />
+      </div>
+      <div id="buildCards"></div>
+    </section>
+
     <section class="screen" id="blanksScreen">
       <div class="screen-head"><p class="eyebrow">Component Manager</p><h1>Blanks</h1></div>
       <article class="settings-card" aria-label="Component manager roadmap">
@@ -292,7 +336,7 @@
 
   <nav class="bottom-nav">
     <button class="active" data-nav="homeScreen">⌂<span>Home</span></button>
-    <button data-nav="workshopScreen">▣<span>Builds</span></button>
+    <button data-nav="buildsScreen">▣<span>Builds</span></button>
     <button data-nav="layoutScreen">⌖<span>Guide Layout</span></button>
     <button data-nav="settingsScreen">⚙<span>More</span></button>
   </nav>
