@@ -49,6 +49,57 @@ body.component-sheet-open{overflow:hidden}
 body.nav-menu-open{overflow:hidden}
 body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
+#homeScreen .home-hero{
+  padding:16px 18px 14px;
+  margin-bottom:16px;
+  border-color:rgba(214,210,200,.08);
+}
+
+#homeScreen .home-hero h1{
+  margin:2px 0 6px;
+}
+
+#homeScreen .home-hero .lead{
+  margin:0;
+  max-width:34ch;
+  font-size:12px;
+  line-height:1.28;
+  color:#6f736d;
+}
+
+#homeScreen .hero-actions{
+  margin-top:14px;
+  gap:8px;
+}
+
+#homeScreen .hero-actions .primary-action,
+#homeScreen .hero-actions .ghost-action{
+  min-height:50px;
+}
+
+#homeScreen .module-stack{
+  gap:16px;
+}
+
+#homeScreen .module-card{
+  padding:14px 16px;
+  border-color:rgba(214,210,200,.08);
+}
+
+#homeScreen .module-card.featured{
+  border-color:rgba(214,210,200,.1);
+}
+
+#homeScreen .module-card em{
+  font-size:12px;
+  line-height:1.3;
+  color:#757971;
+}
+
+#homeScreen .module-card b{
+  color:#8b8f88;
+}
+
 .bottom-nav{
   display:grid;
   grid-template-columns:repeat(4,minmax(0,1fr));
@@ -62,7 +113,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
 .bottom-nav button{
   display:grid;
-  grid-template-rows:18px 20px;
+  grid-template-rows:18px 22px;
   align-content:center;
   justify-items:center;
   align-items:center;
@@ -87,16 +138,15 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   height:18px;
   font-size:14px;
   line-height:1;
-  transform:translateY(1px);
 }
 
 .bottom-nav__label{
   display:flex;
-  align-items:flex-start;
+  align-items:center;
   justify-content:center;
   width:100%;
-  height:20px;
-  max-width:56px;
+  height:22px;
+  max-width:60px;
   text-align:center;
   font-size:8px;
   letter-spacing:.14em;
@@ -106,10 +156,15 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   color:#8f938c;
 }
 
+.bottom-nav button[data-nav="homeScreen"] .bottom-nav__icon{font-size:13px;transform:translateY(.5px)}
+.bottom-nav button[data-nav="buildsScreen"] .bottom-nav__icon{font-size:13px;transform:translateY(.5px)}
+.bottom-nav button[data-nav="layoutScreen"] .bottom-nav__icon{font-size:14px;transform:translateY(.5px)}
+.bottom-nav button[data-nav="settingsScreen"] .bottom-nav__icon{font-size:13px;transform:translateY(.5px)}
+
 .bottom-nav button.active{
   color:#d4cdc0;
   border-color:rgba(214,210,200,.16);
-  background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02));
+  background:rgba(255,255,255,.03);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 -2px 0 rgba(173,37,49,.42);
 }
 
