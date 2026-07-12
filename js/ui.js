@@ -20,6 +20,7 @@ const BUILD_SPEC_FIELDS=[
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
+let buildsSearch='';
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
@@ -254,6 +255,53 @@ function markQuoteDirty(){
 function markQuoteSaved(){
   hasUnsavedQuoteChanges=false;
   updateQuoteActionPriority();
+}
+function quoteHasMeaningfulDraft(currentQuote){
+  const candidate=normalizeQuote(currentQuote||{});
+  const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode,candidate.country]
+    .some((value)=>!!specificationValue(value));
+  const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.marginPercent)>0;
+  const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
+    return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
+  });
+  return hasIdentity || hasBlank || hasCosts || hasComponentData;
+}
+function ensureCustomerSectionExpanded(){
+  const body=$('workshopCustomerBody');
+  if(!body)return;
+  const section=body.closest('.quote-section--collapsible');
+  if(!section)return;
+  section.classList.remove('quote-section--collapsed');
+  const trigger=section.querySelector('[data-collapsible-trigger]');
+  if(trigger){trigger.setAttribute('aria-expanded','true');}
+}
+function beginFreshBuild(){
+  quote=normalizeQuote(newQuoteTemplate());
+  saveQuoteCurrent();
+  markQuoteSaved();
+  renderWorkshopQuote();
+  ensureCustomerSectionExpanded();
+  goScreen('workshopScreen');
+  window.requestAnimationFrame(()=>{
+    const firstField=$('quoteCustomerName');
+    if(firstField && typeof firstField.focus==='function'){
+      firstField.focus({preventScroll:true});
+    }
+  });
+}
+function startNewBuildFlow(){
+  if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
+    openConfirmDialog({
+      title:'Start New Build',
+      message:'Replace the current unsaved build draft and start a new build?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Build',kind:'primary'}]
+    },(action)=>{
+      if(action==='start'){beginFreshBuild();}
+    });
+    return;
+  }
+  beginFreshBuild();
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
@@ -1545,6 +1593,77 @@ function persistQuoteRecord(currentQuote){
   records.unshift(record);
   Store.set('klabs-workshop-quotes',records);
 }
+function savedBuildEntries(){
+  const savedQuotes=Array.isArray(Store.get('klabs-workshop-quotes',[]))?Store.get('klabs-workshop-quotes',[]):[];
+  const savedBuilds=Array.isArray(Store.get('klabs-workshop-builds',[]))?Store.get('klabs-workshop-builds',[]):[];
+  const quoteEntries=savedQuotes.map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}));
+  const buildEntries=savedBuilds.map((record,index)=>({source:'build',index,record:normalizeQuote(record)}));
+  return quoteEntries.concat(buildEntries).sort((left,right)=>{
+    const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
+    const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
+    return rightDate-leftDate;
+  });
+}
+function savedBuildSearchText(entry){
+  const record=entry&&entry.record?entry.record:{};
+  return [record.buildNumber,record.customerName,record.buildName,record.blankName,record.blankMaker,record.blankSeries,record.savedAt,entry&&entry.source]
+    .map((value)=>String(value||''))
+    .join(' ')
+    .toLowerCase();
+}
+function savedBuildRowMarkup(entry){
+  const record=entry.record;
+  const sourceLabel=entry.source==='build'?'Build':'Quote';
+  const title=specificationValue(record.buildName)||specificationValue(record.customerName)||'Untitled Build';
+  const buildRef=specificationValue(record.buildNumber)||'Unnumbered';
+  const customerRef=specificationValue(record.customerName)||'No customer';
+  const blankRef=specificationValue(record.blankName)||'No blank selected';
+  const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+  return `<article class="module-card blank-card"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${escapeHtml(entry.source)}" data-build-index="${entry.index}">Open</button><button class="ghost-action blank-card__load" type="button" data-build-action="duplicate" data-build-source="${escapeHtml(entry.source)}" data-build-index="${entry.index}">Duplicate</button></div></article>`;
+}
+function getSavedEntryBySource(source,index){
+  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
+  const numericIndex=Number(index);
+  if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return null;
+  return normalizeQuote(records[numericIndex]);
+}
+function openSavedBuildRecord(source,index){
+  const selected=getSavedEntryBySource(source,index);
+  if(!selected)return;
+  quote=normalizeQuote(selected);
+  saveQuoteCurrent();
+  markQuoteSaved();
+  renderWorkshopQuote();
+  ensureCustomerSectionExpanded();
+  goScreen('workshopScreen');
+}
+function duplicateSavedBuildRecord(source,index){
+  const selected=getSavedEntryBySource(source,index);
+  if(!selected)return;
+  quote=normalizeQuote({
+    ...selected,
+    buildNumber:'',
+    quoteStatus:'draft',
+    savedAt:'',
+  });
+  saveQuoteCurrent();
+  markQuoteDirty();
+  renderWorkshopQuote();
+  ensureCustomerSectionExpanded();
+  goScreen('workshopScreen');
+}
+function renderBuilds(){
+  const host=$('buildCards');
+  if(!host)return;
+  const query=String(buildsSearch||'').trim().toLowerCase();
+  const records=savedBuildEntries().filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
+  if(!records.length){
+    host.innerHTML='<div class="empty-card">No saved builds found.</div>';
+    return;
+  }
+  host.innerHTML=records.map(savedBuildRowMarkup).join('');
+}
 function ensureConfirmSheet(){
   if($('confirmSheet'))return;
   const sheet=document.createElement('div');
@@ -2095,20 +2214,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 040 demo softbait';
+  const demoKey='build 041 demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 040 Demo Softbait',
+    model:'Build 041 Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
     sku:'DEMO-0381-SB74',
-    notes:'Offline demo blank for BUILD 040 validation.',
+    notes:'Offline demo blank for BUILD 041 validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -2134,7 +2253,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 040 Demo Softbait',
+    buildName:'Build 041 Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
@@ -2241,6 +2360,41 @@ function bindBlankLibraryControls(){
     if(event.key==='Escape'){hideBlankRowMenu();}
   });
 }
+function bindHomeActions(){
+  const newBuildBtn=$('homeNewBuildBtn');
+  if(!newBuildBtn)return;
+  newBuildBtn.addEventListener('click',()=>{
+    startNewBuildFlow();
+  });
+}
+function bindBuildsControls(){
+  const searchInput=$('buildsSearchInput');
+  if(searchInput){
+    searchInput.addEventListener('input',()=>{
+      buildsSearch=searchInput.value||'';
+      renderBuilds();
+    });
+  }
+  const host=$('buildCards');
+  if(host){
+    host.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-build-action]');
+      if(!button)return;
+      const action=button.getAttribute('data-build-action')||'';
+      const source=button.getAttribute('data-build-source')||'quote';
+      const index=Number(button.getAttribute('data-build-index'));
+      if(action==='open'){openSavedBuildRecord(source,index);}
+      if(action==='duplicate'){duplicateSavedBuildRecord(source,index);}
+    });
+  }
+}
+function onScreenChange(screenId){
+  if(screenId==='buildsScreen'){
+    const searchInput=$('buildsSearchInput');
+    if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
+    renderBuilds();
+  }
+}
 function bindSettingsControls(){
   const demoButton=$('loadDemoBuildBtn');
   if(!demoButton)return;
@@ -2299,6 +2453,8 @@ function render(){
 });
 bindLayoutControls();
 bindWorkshopQuoteBuilder();
+bindHomeActions();
+bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,loadDemoBuild};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange};
