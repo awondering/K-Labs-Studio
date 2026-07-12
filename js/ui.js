@@ -1281,11 +1281,6 @@ function openSupplierSheet(index){
 function openBlankSheet(){
   openChoicePicker('blank',-1,document.activeElement);
 }
-function shouldAutoFocusPickerSearch(type){
-  const isCategoryOrSupplier=type==='category' || type==='supplier';
-  const isTouchCoarse=typeof window.matchMedia==='function' && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-  return !(isCategoryOrSupplier && isTouchCoarse);
-}
 function openChoicePicker(type,index,openerEl){
   ensureChoicePicker();
   activeChoicePicker={type,index};
@@ -1308,7 +1303,6 @@ function openChoicePicker(type,index,openerEl){
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
   renderChoicePickerOptions('');
   bindChoicePickerViewportHandlers();
-  if(shouldAutoFocusPickerSearch(type) && $('choicePickerSearch'))$('choicePickerSearch').focus();
   scheduleChoicePickerViewportSync(40);
 }
 function closeComponentSheet(){
@@ -2053,20 +2047,20 @@ function loadBlank(i){
   save();saveQuoteCurrent();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
-  const demoKey='build 038.2b demo softbait';
+  const demoKey='build 038.2c demo softbait';
   const existing=blanks.find((blank)=>normalizeNameKey(blank&&blank.model)===demoKey);
   const incoming=normalizeBlank({
     id:existing?existing.id:generateId('blank'),
     maker:'K-Labs',
     series:'Demo Series',
-    model:'Build 038.2b Demo Softbait',
+    model:'Build 038.2c Demo Softbait',
     length:"7'4",
     power:'MH',
     action:'Fast',
     pieces:'2',
     cost:438,
     sku:'DEMO-0381-SB74',
-    notes:'Offline demo blank for BUILD 038.2b validation.',
+    notes:'Offline demo blank for BUILD 038.2c validation.',
     fg:108,
     gc:10,
     ts:1330,
@@ -2092,7 +2086,7 @@ function loadDemoBuild(){
     customerName:'Demo Angler',
     phone:'021 555 0131',
     email:'demo@klabs.co.nz',
-    buildName:'Build 038.2b Demo Softbait',
+    buildName:'Build 038.2c Demo Softbait',
     notes:'Loaded via Settings > Load Demo Build for rapid testing.',
     blankId:demoBlank.id,
     blankName:blankDisplayName(demoBlank),
