@@ -56,7 +56,7 @@ function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
 function homeRodElement(){return $('homeLivingRod');}
-function homeRodLedPositions(){return [6,18,31,45,60,74,86,96];}
+function homeRodLedPositions(){return [96,86,74,60,45,31,18,6];}
 function homeRodEnsureLeds(){
   const rod=homeRodElement();
   if(!rod)return null;

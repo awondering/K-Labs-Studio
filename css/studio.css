@@ -55,16 +55,16 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
 #homeScreen .home-premium-shell{
   display:grid;
-  gap:30px;
+  gap:34px;
   width:100%;
   max-width:940px;
   margin:0 auto;
-  padding:46px 0 18px;
+  padding:50px 0 18px;
 }
 
 #homeScreen .home-premium-hero{
   display:grid;
-  gap:18px;
+  gap:15px;
   max-width:760px;
 }
 
@@ -91,19 +91,36 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 #homeScreen .home-living-rod{
   position:relative;
   width:100vw;
-  height:28px;
-  margin:6px calc(50% - 50vw) 14px;
+  height:30px;
+  margin:2px calc(50% - 50vw) 8px;
   left:auto;
   transform:none;
   opacity:0;
   overflow:hidden;
   border-radius:999px;
-  clip-path:polygon(0 0,100% 18%,100% 82%,0 100%);
+  clip-path:polygon(0 8%,42% 10%,72% 14%,88% 18%,96% 24%,100% 31%,100% 69%,96% 76%,88% 82%,72% 86%,42% 90%,0 92%);
   background-color:#090a0a;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3Cpattern id='c' width='6' height='6' patternUnits='userSpaceOnUse' patternTransform='rotate(45)'%3E%3Cpath d='M0 0H6' stroke='%23ffffff' stroke-opacity='.068' stroke-width='1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='24' height='24' fill='%23090a0b'/%3E%3Crect width='24' height='24' fill='url(%23c)'/%3E%3C/svg%3E");
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.03),inset 0 -1px 0 rgba(0,0,0,.62),0 0 0 1px rgba(255,255,255,.03);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3Cpattern id='c' width='6' height='6' patternUnits='userSpaceOnUse' patternTransform='rotate(45)'%3E%3Cpath d='M0 0H6' stroke='%23ffffff' stroke-opacity='.078' stroke-width='1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='24' height='24' fill='%23090a0b'/%3E%3Crect width='24' height='24' fill='url(%23c)'/%3E%3C/svg%3E");
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02),inset 0 -1px 0 rgba(0,0,0,.62),0 0 0 1px rgba(255,255,255,.03);
   transition:opacity 1400ms ease;
   will-change:opacity;
+}
+
+#homeScreen .home-living-rod::before,
+#homeScreen .home-living-rod::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+
+#homeScreen .home-living-rod::before{
+  /* Subtle cylindrical shading to keep the blank reading as round and matte. */
+  background:linear-gradient(180deg,rgba(0,0,0,.22) 0%,rgba(255,255,255,.045) 28%,rgba(255,255,255,.02) 50%,rgba(0,0,0,.16) 74%,rgba(0,0,0,.3) 100%);
+}
+
+#homeScreen .home-living-rod::after{
+  background:linear-gradient(90deg,rgba(255,255,255,.03) 0%,rgba(255,255,255,.012) 26%,rgba(0,0,0,.08) 74%,rgba(0,0,0,.18) 100%);
 }
 
 #homeScreen .home-living-rod.is-ready{
@@ -130,27 +147,27 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 #homeScreen .home-living-rod__led{
   position:absolute;
   top:50%;
-  width:3px;
-  height:3px;
+  width:4px;
+  height:4px;
   border-radius:999px;
-  background:#5f1017;
-  box-shadow:inset 0 0 0 1px rgba(110,17,26,.48),0 0 0 1px rgba(95,16,23,.25);
+  background:radial-gradient(circle at 32% 32%,#9f3945 0%,#7e1d28 48%,#4a0d14 100%);
+  box-shadow:inset 0 0 .8px rgba(179,70,82,.42),0 0 0 1px rgba(86,13,21,.3);
   opacity:0;
   transform:translate(-50%,-50%);
-  transition:opacity 900ms ease,background-color 900ms ease,box-shadow 900ms ease;
+  transition:opacity 560ms ease-out,box-shadow 560ms ease-out,background-image 560ms ease-out;
   will-change:opacity;
 }
 
 #homeScreen .home-living-rod__led.is-lit{
   opacity:1;
-  background:#911824;
-  box-shadow:inset 0 0 1px rgba(176,44,58,.45),0 0 0 1px rgba(120,22,32,.36);
+  background:radial-gradient(circle at 32% 32%,#bc4b58 0%,#972230 42%,#5b1019 100%);
+  box-shadow:inset 0 0 1px rgba(194,76,88,.48),0 0 0 1px rgba(117,23,34,.42),0 0 3px rgba(146,26,38,.24);
 }
 
 #homeScreen .home-enter-rod-button{
   width:100%;
-  min-height:56px;
-  border-radius:12px;
+  min-height:50px;
+  border-radius:10px;
   letter-spacing:.12em;
   text-transform:uppercase;
   font-size:13px;
@@ -188,7 +205,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 @media (max-width:720px){
   #homeScreen .home-premium-shell{
     padding-top:34px;
-    gap:24px;
+    gap:26px;
   }
 }
 
