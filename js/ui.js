@@ -36,7 +36,7 @@ let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
 const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
-const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true};
+const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null};
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
 let choicePickerViewportBound=false;
@@ -56,13 +56,30 @@ function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
 function homeRodElement(){return $('homeLivingRod');}
-function homeRodLedPositions(){return [96,86,74,60,45,31,18,6];}
+function homeRodLedPositions(){
+  return[
+    {x:8,y:14},
+    {x:18,y:17},
+    {x:30,y:21},
+    {x:43,y:26},
+    {x:57,y:32},
+    {x:71,y:39},
+    {x:84,y:47},
+    {x:94,y:55}
+  ];
+}
+function homeRodClearSequenceTimer(){
+  if(homeRodState.sequenceTimer){
+    clearTimeout(homeRodState.sequenceTimer);
+    homeRodState.sequenceTimer=null;
+  }
+}
 function homeRodEnsureLeds(){
   const rod=homeRodElement();
   if(!rod)return null;
   let leds=rod.querySelectorAll('.home-living-rod__led');
   if(leds.length===homeRodState.ledCount)return rod;
-  const ledMarkup=homeRodLedPositions().map((position)=>`<span class="home-living-rod__led" style="left:${position}%;"></span>`).join('');
+  const ledMarkup=homeRodLedPositions().map((position)=>`<span class="home-living-rod__led" style="--x:${position.x}%;--y:${position.y}%;"></span>`).join('');
   rod.querySelector('.home-living-rod__leds').innerHTML=ledMarkup;
   leds=rod.querySelectorAll('.home-living-rod__led');
   homeRodState.ledCount=leds.length;
@@ -77,8 +94,9 @@ function homeRodSetLitCount(count){
   const nextCount=Math.max(0,Math.min(homeRodState.ledCount,Math.round(Number(count)||0)));
   homeRodState.litCount=nextCount;
   const leds=rod.querySelectorAll('.home-living-rod__led');
+  const threshold=Math.max(0,homeRodState.ledCount-nextCount);
   leds.forEach((led,index)=>{
-    led.classList.toggle('is-lit',index<nextCount);
+    led.classList.toggle('is-lit',index>=threshold);
   });
   homeRodState.ready=nextCount>0;
 }
@@ -94,21 +112,36 @@ function homeRodAnimateToLitCount(target){
   };
   tick();
 }
-function homeRodRefreshFromState(){
+function homeRodRunStartupSequence(){
+  const rod=homeRodEnsureLeds();
+  if(!rod)return;
+  homeRodClearSequenceTimer();
+  const total=Math.max(1,homeRodState.ledCount);
+  homeRodSetLitCount(0);
+  let nextLit=1;
+  const tick=()=>{
+    homeRodSetLitCount(nextLit);
+    if(nextLit<total){
+      nextLit+=1;
+      homeRodState.sequenceTimer=setTimeout(tick,210);
+      return;
+    }
+    homeRodState.sequenceTimer=null;
+  };
+  homeRodState.sequenceTimer=setTimeout(tick,150);
+}
+function homeRodRefreshFromState(triggerSequence){
   const buildCount=homeBuildCount();
   const rod=homeRodEnsureLeds();
-  const targetCount=Math.min(homeRodState.ledCount,Math.max(1,buildCount+1));
+  const shouldTriggerSequence=triggerSequence===true;
   if(rod && !rod.classList.contains('is-ready')){
     requestAnimationFrame(()=>rod.classList.add('is-ready'));
   }
-  if(homeRodState.homeFirstOpen){
+  if(homeRodState.homeFirstOpen || shouldTriggerSequence){
     homeRodState.homeFirstOpen=false;
-    homeRodSetLitCount(1);
-    if(targetCount>1){
-      setTimeout(()=>homeRodAnimateToLitCount(targetCount),420);
-    }
+    homeRodRunStartupSequence();
   }else{
-    homeRodAnimateToLitCount(targetCount);
+    homeRodSetLitCount(homeRodState.ledCount);
   }
   const continueButton=$('homeContinueLastBuildBtn');
   if(continueButton){
@@ -2677,7 +2710,7 @@ function bindBuildsControls(){
 }
 function onScreenChange(screenId){
   if(screenId==='homeScreen'){
-    homeRodRefreshFromState();
+    homeRodRefreshFromState(true);
   }
   if(screenId==='buildsScreen'){
     const searchInput=$('buildsSearchInput');
