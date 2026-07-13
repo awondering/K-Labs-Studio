@@ -49,89 +49,75 @@ body.component-sheet-open{overflow:hidden}
 body.nav-menu-open{overflow:hidden}
 body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
-#homeScreen .home-hero{
-  padding:16px 18px 14px;
-  margin-bottom:16px;
-  border-color:rgba(214,210,200,.08);
+#homeScreen{
+  padding-top:12px;
 }
 
-#homeScreen .home-hero h1{
-  margin:2px 0 6px;
+#homeScreen .home-premium-shell{
+  display:grid;
+  gap:22px;
+  width:min(100%,940px);
+  margin:0 auto;
+  padding:40px 0 14px;
 }
 
-#homeScreen .home-hero .lead{
+#homeScreen .home-premium-hero{
+  display:grid;
+  gap:14px;
+  max-width:760px;
+}
+
+#homeScreen .home-premium-hero h1{
   margin:0;
-  max-width:34ch;
-  font-size:12px;
-  line-height:1.28;
-  color:#6f736d;
+  font-size:clamp(42px,9.8vw,88px);
+  line-height:.9;
+  letter-spacing:-.06em;
+  font-weight:640;
+  text-transform:uppercase;
+  color:#d7d1c5;
 }
 
-#homeScreen .hero-actions{
-  margin-top:14px;
-  gap:8px;
-}
-
-#homeScreen .hero-actions .primary-action,
-#homeScreen .hero-actions .ghost-action{
-  min-height:50px;
-}
-
-#homeScreen .module-stack{
-  gap:16px;
+#homeScreen .home-premium-hero p{
+  margin:0;
+  max-width:620px;
+  color:#8f938c;
+  font-size:13px;
+  letter-spacing:.05em;
+  line-height:1.6;
+  text-transform:uppercase;
 }
 
 #homeScreen .home-living-rod{
   position:relative;
-  display:block;
-  width:calc(100% + 30px);
-  height:16px;
-  margin:12px -15px 10px;
-  border-radius:999px;
+  width:100vw;
+  height:14px;
+  margin:8px 0 10px;
+  left:50%;
+  transform:translateX(-50%);
   opacity:0;
-  transform:translateY(6px) scaleX(.985);
-  transition:opacity 700ms ease,transform 700ms ease;
   overflow:hidden;
-  pointer-events:none;
-  will-change:opacity,transform;
+  border-radius:999px;
+  background-color:#090a0a;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3Cpattern id='c' width='6' height='6' patternUnits='userSpaceOnUse' patternTransform='rotate(45)'%3E%3Cpath d='M0 0H6' stroke='%23ffffff' stroke-opacity='.06' stroke-width='1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='24' height='24' fill='%23090a0b'/%3E%3Crect width='24' height='24' fill='url(%23c)'/%3E%3C/svg%3E");
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),inset 0 -1px 0 rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.04);
+  transition:opacity 1400ms ease;
+  will-change:opacity;
 }
 
 #homeScreen .home-living-rod.is-ready{
   opacity:1;
-  transform:none;
 }
 
 #homeScreen .home-living-rod__blank,
-#homeScreen .home-living-rod__glint,
-#homeScreen .home-living-rod__sweep{
-  position:absolute;
+#homeScreen .home-living-rod__leds{
+  position:relative;
   inset:0;
-  border-radius:inherit;
 }
 
 #homeScreen .home-living-rod__blank{
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 32%,rgba(0,0,0,.14) 56%,rgba(255,255,255,.02)),
-    repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,rgba(255,255,255,0) 2px 8px),
-    repeating-linear-gradient(-45deg,rgba(255,255,255,.022) 0 2px,rgba(255,255,255,0) 2px 8px),
-    linear-gradient(180deg,#17191a 0%,#090b0c 48%,#111314 100%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -1px 0 rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.05);
-}
-
-#homeScreen .home-living-rod__glint{
-  background:linear-gradient(90deg,rgba(255,255,255,0) 0,rgba(255,255,255,.06) 18%,rgba(255,255,255,.01) 47%,rgba(255,255,255,.06) 82%,rgba(255,255,255,0) 100%);
-  opacity:.82;
-}
-
-#homeScreen .home-living-rod__sweep{
-  left:-28%;
-  width:28%;
-  background:linear-gradient(90deg,rgba(173,37,49,0),rgba(173,37,49,.26),rgba(173,37,49,.08),rgba(173,37,49,0));
-  opacity:0;
-}
-
-#homeScreen .home-living-rod.is-pulsing .home-living-rod__sweep{
-  animation:homeRodSweep 860ms cubic-bezier(.2,.8,.2,1) 1;
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
 }
 
 #homeScreen .home-living-rod__leds{
@@ -145,43 +131,63 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   width:4px;
   height:4px;
   border-radius:999px;
-  background:linear-gradient(180deg,#db4a55 0%,#a0151f 100%);
-  box-shadow:0 0 0 1px rgba(186,31,44,.08),0 0 6px rgba(186,31,44,.22);
+  background:#7a151d;
+  box-shadow:0 0 0 1px rgba(164,34,46,.35);
   opacity:0;
-  transform:translate(-50%,-50%) scale(.5);
-  transition:opacity 220ms ease,transform 220ms ease,box-shadow 220ms ease;
-  will-change:transform,opacity;
+  transform:translate(-50%,-50%);
+  transition:opacity 900ms ease,background-color 900ms ease,box-shadow 900ms ease;
+  will-change:opacity;
 }
 
 #homeScreen .home-living-rod__led.is-lit{
   opacity:1;
-  transform:translate(-50%,-50%) scale(1);
-  box-shadow:0 0 0 1px rgba(186,31,44,.14),0 0 10px rgba(186,31,44,.34);
+  background:#a21c27;
+  box-shadow:0 0 0 1px rgba(178,38,51,.5);
 }
 
-@keyframes homeRodSweep{
-  0%{transform:translateX(0);opacity:0}
-  12%{opacity:.9}
-  100%{transform:translateX(520%);opacity:0}
+#homeScreen .home-enter-rod-button{
+  width:100%;
+  min-height:64px;
+  border-radius:14px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  font-size:13px;
+  font-weight:700;
+  background:#8f2029;
+  border:1px solid #a72a34;
+  color:#eadfd3;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 20px rgba(0,0,0,.24);
 }
 
-#homeScreen .module-card{
-  padding:14px 16px;
-  border-color:rgba(214,210,200,.08);
+#homeScreen .home-enter-rod-button:hover,
+#homeScreen .home-enter-rod-button:focus-visible{
+  background:#9b2430;
+  border-color:#b6313c;
 }
 
-#homeScreen .module-card.featured{
-  border-color:rgba(214,210,200,.1);
+#homeScreen .home-continue-last-build{
+  border:0;
+  background:none;
+  justify-self:start;
+  color:#8a8f87;
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:0;
+  min-height:24px;
 }
 
-#homeScreen .module-card em{
-  font-size:12px;
-  line-height:1.3;
-  color:#757971;
+#homeScreen .home-continue-last-build:hover,
+#homeScreen .home-continue-last-build:focus-visible{
+  color:#c4bcae;
 }
 
-#homeScreen .module-card b{
-  color:#8b8f88;
+@media (max-width:720px){
+  #homeScreen .home-premium-shell{
+    padding-top:30px;
+    gap:18px;
+  }
 }
 
 .bottom-nav{
