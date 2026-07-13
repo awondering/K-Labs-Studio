@@ -28,8 +28,8 @@ function ensureNavMenu(){
 			<div class="component-sheet__body">
 					<div class="component-sheet__list nav-menu-list">
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="homeScreen">Home</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Build</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="buildsScreen">Builds</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Workshop</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="layoutScreen">Guide Layout</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">More</button></div>
 				</div>
