@@ -81,6 +81,90 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   gap:16px;
 }
 
+#homeScreen .home-living-rod{
+  position:relative;
+  display:block;
+  width:calc(100% + 30px);
+  height:16px;
+  margin:12px -15px 10px;
+  border-radius:999px;
+  opacity:0;
+  transform:translateY(6px) scaleX(.985);
+  transition:opacity 700ms ease,transform 700ms ease;
+  overflow:hidden;
+  pointer-events:none;
+  will-change:opacity,transform;
+}
+
+#homeScreen .home-living-rod.is-ready{
+  opacity:1;
+  transform:none;
+}
+
+#homeScreen .home-living-rod__blank,
+#homeScreen .home-living-rod__glint,
+#homeScreen .home-living-rod__sweep{
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+}
+
+#homeScreen .home-living-rod__blank{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 32%,rgba(0,0,0,.14) 56%,rgba(255,255,255,.02)),
+    repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 2px,rgba(255,255,255,0) 2px 8px),
+    repeating-linear-gradient(-45deg,rgba(255,255,255,.022) 0 2px,rgba(255,255,255,0) 2px 8px),
+    linear-gradient(180deg,#17191a 0%,#090b0c 48%,#111314 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -1px 0 rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.05);
+}
+
+#homeScreen .home-living-rod__glint{
+  background:linear-gradient(90deg,rgba(255,255,255,0) 0,rgba(255,255,255,.06) 18%,rgba(255,255,255,.01) 47%,rgba(255,255,255,.06) 82%,rgba(255,255,255,0) 100%);
+  opacity:.82;
+}
+
+#homeScreen .home-living-rod__sweep{
+  left:-28%;
+  width:28%;
+  background:linear-gradient(90deg,rgba(173,37,49,0),rgba(173,37,49,.26),rgba(173,37,49,.08),rgba(173,37,49,0));
+  opacity:0;
+}
+
+#homeScreen .home-living-rod.is-pulsing .home-living-rod__sweep{
+  animation:homeRodSweep 860ms cubic-bezier(.2,.8,.2,1) 1;
+}
+
+#homeScreen .home-living-rod__leds{
+  position:absolute;
+  inset:0;
+}
+
+#homeScreen .home-living-rod__led{
+  position:absolute;
+  top:50%;
+  width:4px;
+  height:4px;
+  border-radius:999px;
+  background:linear-gradient(180deg,#db4a55 0%,#a0151f 100%);
+  box-shadow:0 0 0 1px rgba(186,31,44,.08),0 0 6px rgba(186,31,44,.22);
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.5);
+  transition:opacity 220ms ease,transform 220ms ease,box-shadow 220ms ease;
+  will-change:transform,opacity;
+}
+
+#homeScreen .home-living-rod__led.is-lit{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+  box-shadow:0 0 0 1px rgba(186,31,44,.14),0 0 10px rgba(186,31,44,.34);
+}
+
+@keyframes homeRodSweep{
+  0%{transform:translateX(0);opacity:0}
+  12%{opacity:.9}
+  100%{transform:translateX(520%);opacity:0}
+}
+
 #homeScreen .module-card{
   padding:14px 16px;
   border-color:rgba(214,210,200,.08);

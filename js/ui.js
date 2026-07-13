@@ -34,6 +34,7 @@ let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
 const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
+const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true};
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
 let choicePickerViewportBound=false;
@@ -52,6 +53,74 @@ function save(){Store.set('klabs-studio-state',state)}
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
+function homeRodElement(){return $('homeLivingRod');}
+function homeRodLedPositions(){return [7,18,30,43,57,71,83,92,97];}
+function homeRodEnsureLeds(){
+  const rod=homeRodElement();
+  if(!rod)return null;
+  let leds=rod.querySelectorAll('.home-living-rod__led');
+  if(leds.length===homeRodState.ledCount)return rod;
+  const ledMarkup=homeRodLedPositions().map((position)=>`<span class="home-living-rod__led" style="left:${position}%;"></span>`).join('');
+  rod.querySelector('.home-living-rod__leds').innerHTML=ledMarkup;
+  leds=rod.querySelectorAll('.home-living-rod__led');
+  homeRodState.ledCount=leds.length;
+  return rod;
+}
+function homeRodSetLitCount(count,options){
+  const rod=homeRodEnsureLeds();
+  if(!rod)return;
+  const nextCount=Math.max(0,Math.min(homeRodState.ledCount,Math.round(Number(count)||0)));
+  const previousCount=homeRodState.litCount;
+  homeRodState.litCount=nextCount;
+  const leds=rod.querySelectorAll('.home-living-rod__led');
+  leds.forEach((led,index)=>{
+    led.classList.toggle('is-lit',index<nextCount);
+  });
+  if(nextCount>0){
+    rod.classList.add('is-ready');
+  }
+  const shouldPulse=options&&options.pulse;
+  if(shouldPulse){
+    rod.classList.add('is-pulsing');
+    window.setTimeout(()=>rod.classList.remove('is-pulsing'),900);
+  }
+  if(previousCount!==nextCount){
+    homeRodState.ready=nextCount>0;
+  }
+}
+function homeRodRefreshFromState(){
+  const quoteReady=[specificationValue(quote.blankId),specificationValue(quote.blankName)].some(Boolean);
+  const componentsReady=Array.isArray(quote.components)&&quote.components.some((item)=>!!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0));
+  const layoutReady=Number(state.guideCount)>=9 && Number(state.targetStripper)>=1000 && Number(state.firstGuide)>=80;
+  const quoteComplete=quoteReady && componentsReady && isAcceptedQuoteStatus(quote.quoteStatus) && !hasUnsavedQuoteChanges;
+  let litCount=1;
+  if(quoteReady)litCount=Math.max(litCount,2);
+  if(layoutReady)litCount=Math.max(litCount,Math.min(homeRodState.ledCount,4+Math.min(2,Math.max(0,Math.round(Number(state.guideCount)||0)-6))));
+  if(componentsReady)litCount=Math.max(litCount,Math.min(homeRodState.ledCount,6));
+  if(quoteComplete)litCount=homeRodState.ledCount;
+  homeRodState.layoutLitCount=layoutReady?Math.max(2,Math.min(homeRodState.ledCount,Math.round(Number(state.guideCount)||0))):homeRodState.layoutLitCount;
+  homeRodState.componentLitCount=componentsReady?Math.max(homeRodState.componentLitCount,Math.min(homeRodState.ledCount,6)):homeRodState.componentLitCount;
+  homeRodSetLitCount(litCount,{pulse:false});
+}
+function homeRodMarkBuildStarted(){
+  homeRodSetLitCount(Math.max(homeRodState.litCount,1));
+}
+function homeRodMarkBlankSelected(){
+  homeRodSetLitCount(Math.max(homeRodState.litCount,2));
+}
+function homeRodMarkLayoutComplete(){
+  const guideCount=Math.max(0,Math.min(homeRodState.ledCount,Number(state.guideCount)||0));
+  homeRodSetLitCount(Math.max(homeRodState.litCount,Math.min(homeRodState.ledCount,Math.max(3,guideCount))),{pulse:false});
+}
+function homeRodMarkComponentsAdded(){
+  homeRodSetLitCount(Math.max(homeRodState.litCount,Math.min(homeRodState.ledCount,6)),{pulse:false});
+}
+function homeRodMarkQuoteComplete(){
+  homeRodSetLitCount(homeRodState.ledCount,{pulse:false});
+}
+function homeRodMarkBuildSaved(){
+  homeRodSetLitCount(homeRodState.ledCount,{pulse:true});
+}
 function newQuoteTemplate(){
   return{
     buildNumber:'',
@@ -282,6 +351,7 @@ function beginFreshBuild(){
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
+  homeRodMarkBuildStarted();
   renderWorkshopQuote();
   ensureCustomerSectionExpanded();
   goScreen('workshopScreen');
@@ -570,6 +640,7 @@ function applyBlankToQuote(blank){
   quote.blankNotes=blank.notes;
   saveQuoteCurrent();
   markQuoteDirty();
+  homeRodMarkBlankSelected();
 }
 function selectedBlankLibraryRecord(){
   return quote.blankId?findBlankById(quote.blankId):null;
@@ -855,6 +926,7 @@ function persistBuildRecord(currentQuote){
   const record={...currentQuote,savedAt};
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
+  homeRodMarkBuildSaved();
 }
 function saveBlankLibrarySearch(value){
   blankLibrarySearch=String(value||'');
@@ -1433,6 +1505,7 @@ function renderQuoteComponents(){
       </article>
     `).join('');
   shouldAnimateComponentRows=false;
+    homeRodMarkComponentsAdded();
 }
 function waitForDomRender(callback){
   requestAnimationFrame(()=>requestAnimationFrame(callback));
@@ -2155,6 +2228,11 @@ function renderWorkshopQuote(){
   const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
   if(!isEditingComponent){renderQuoteComponents();}
   updateQuoteSummary();
+  if(isAcceptedQuoteStatus(quote.quoteStatus) && !hasUnsavedQuoteChanges && Array.isArray(quote.components) && quote.components.length){
+    homeRodMarkQuoteComplete();
+  }else{
+    homeRodRefreshFromState();
+  }
 }
 function updateQuoteSummary(){
   const math=quoteMaths();
@@ -2566,6 +2644,14 @@ function bindBuildsControls(){
   });
 }
 function onScreenChange(screenId){
+  if(screenId==='homeScreen'){
+    homeRodRefreshFromState();
+    if(homeRodState.homeFirstOpen){
+      homeRodState.homeFirstOpen=false;
+      const rod=homeRodEnsureLeds();
+      if(rod)rod.classList.add('is-ready');
+    }
+  }
   if(screenId==='buildsScreen'){
     const searchInput=$('buildsSearchInput');
     if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
@@ -2642,6 +2728,7 @@ function render(){
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
   const workshopScreen=$('workshopScreen');
   if(workshopScreen && workshopScreen.classList.contains('active')){renderWorkshopQuote();}
+  if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
 }
 ['nextGuide','prevGuide'].forEach((id)=>{
   const el=$(id);
