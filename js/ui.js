@@ -32,6 +32,8 @@ let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 let shouldAnimateComponentRows=false;
 let activeConfirmHandler=null;
 let activeBlankEditorId='';
+let pendingControlPersist=false;
+const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
 let choicePickerViewportBound=false;
@@ -1619,7 +1621,55 @@ function savedBuildRowMarkup(entry){
   const customerRef=specificationValue(record.customerName)||'No customer';
   const blankRef=specificationValue(record.blankName)||'No blank selected';
   const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
-  return `<article class="module-card blank-card"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${escapeHtml(entry.source)}" data-build-index="${entry.index}">Open</button><button class="ghost-action blank-card__load" type="button" data-build-action="duplicate" data-build-source="${escapeHtml(entry.source)}" data-build-index="${entry.index}">Duplicate</button></div></article>`;
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  return `<article class="module-card blank-card" data-build-row data-build-source="${source}" data-build-index="${index}"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button><button class="ghost-action blank-card__load" type="button" data-build-action="duplicate" data-build-source="${source}" data-build-index="${index}">Duplicate</button>${savedBuildRowMenuMarkup(entry,title)}</div></article>`;
+}
+function savedBuildRowMenuMarkup(entry,title){
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  const sourceLabel=entry.source==='build'?'build':'quote';
+  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-build-menu-trigger data-build-source="${source}" data-build-index="${index}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(title||sourceLabel)}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-build-menu data-build-source="${source}" data-build-index="${index}"><button class="component-picker-menu__item" data-build-action="delete" data-build-source="${source}" data-build-index="${index}" type="button">Delete</button></div>`;
+}
+function hideSavedBuildRowMenu(){
+  document.querySelectorAll('[data-build-menu]').forEach((menu)=>{menu.hidden=true;});
+  document.querySelectorAll('[data-build-menu-trigger]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
+}
+function toggleSavedBuildRowMenu(triggerEl,source,index){
+  const card=triggerEl && triggerEl.closest('[data-build-row]');
+  const menu=card && card.querySelector('[data-build-menu]');
+  if(!card || !menu)return;
+  const activeSource=menu.getAttribute('data-build-source')||'';
+  const activeIndex=Number(menu.getAttribute('data-build-index'));
+  const alreadyOpen=!menu.hidden && activeSource===String(source||'') && activeIndex===Number(index);
+  hideSavedBuildRowMenu();
+  if(alreadyOpen)return;
+  positionRowMenu(menu,triggerEl,card,164);
+  menu.hidden=false;
+  triggerEl.setAttribute('aria-expanded','true');
+}
+function deleteSavedEntryBySource(source,index){
+  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
+  const numericIndex=Number(index);
+  if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
+  records.splice(numericIndex,1);
+  Store.set(storageKey,records);
+  return true;
+}
+function requestDeleteSavedBuildRecord(source,index){
+  const selected=getSavedEntryBySource(source,index);
+  if(!selected)return;
+  const label=source==='build'?'build':'quote';
+  openConfirmDialog({
+    title:`Delete this ${label}?`,
+    message:'This action cannot be undone.',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]
+  },(action)=>{
+    if(action!=='delete')return;
+    if(!deleteSavedEntryBySource(source,index))return;
+    renderBuilds();
+  });
 }
 function getSavedEntryBySource(source,index){
   const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
@@ -1656,6 +1706,7 @@ function duplicateSavedBuildRecord(source,index){
 function renderBuilds(){
   const host=$('buildCards');
   if(!host)return;
+  hideSavedBuildRowMenu();
   const query=String(buildsSearch||'').trim().toLowerCase();
   const records=savedBuildEntries().filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
   if(!records.length){
@@ -1751,40 +1802,139 @@ function nextBuildNumber(){
 }
 function clampValue(value,min,max){const parsed=Number(value);if(!Number.isFinite(parsed))return min;return Math.min(max,Math.max(min,Math.round(parsed)))}
 function buildWheels(){return null}
-function setControlValue(field,rawValue){
-  const cfg=controlMeta[field];
-  if(!cfg)return;
-  const parsed=Number(rawValue);
-  if(!Number.isFinite(parsed))return;
-  state[cfg.key]=clampValue(parsed,cfg.min,cfg.max);
+function isLayoutLocked(){return !!state.locked;}
+function setLayoutLocked(nextLocked){
+  const locked=typeof nextLocked==='boolean'?nextLocked:!state.locked;
+  if(state.locked===locked)return;
+  state.locked=locked;
   save();
   render();
 }
-function changeControlValue(field,direction){
+function persistLayoutControlState(){
+  if(!pendingControlPersist)return;
+  pendingControlPersist=false;
+  save();
+}
+function focusLayoutField(field){
+  const target=document.querySelector(`.layout-control-card__value[data-field="${field}"]`);
+  if(!target || !target.isContentEditable)return;
+  target.focus();
+}
+function nextLayoutField(field){
+  const index=layoutFieldOrder.indexOf(field);
+  if(index<0)return layoutFieldOrder[0];
+  return layoutFieldOrder[(index+1)%layoutFieldOrder.length];
+}
+function setControlValue(field,rawValue,options){
   const cfg=controlMeta[field];
   if(!cfg)return;
-  setControlValue(field,state[cfg.key]+(direction*cfg.step));
+  const opts=options||{};
+  if(isLayoutLocked() && !opts.force)return;
+  const parsed=Number(rawValue);
+  if(!Number.isFinite(parsed))return;
+  const nextValue=clampValue(parsed,cfg.min,cfg.max);
+  if(state[cfg.key]===nextValue){
+    if(opts.persist){save();}
+    return;
+  }
+  state[cfg.key]=nextValue;
+  if(opts.persist===false){
+    pendingControlPersist=true;
+  }else{
+    pendingControlPersist=false;
+    save();
+  }
+  render();
 }
-function stopHold(){if(holdTimer){clearInterval(holdTimer);holdTimer=null;}}
+function changeControlValue(field,direction,options){
+  const cfg=controlMeta[field];
+  if(!cfg)return;
+  setControlValue(field,state[cfg.key]+(direction*cfg.step),options);
+}
+function stopHold(){
+  if(holdTimer){clearInterval(holdTimer);holdTimer=null;}
+  persistLayoutControlState();
+}
 function startHold(field,direction){
+  if(isLayoutLocked())return;
   stopHold();
-  changeControlValue(field,direction);
-  holdTimer=window.setInterval(()=>changeControlValue(field,direction),140);
+  changeControlValue(field,direction,{persist:false});
+  holdTimer=window.setInterval(()=>changeControlValue(field,direction,{persist:false}),120);
 }
 function bindLayoutControls(){
+  const statusBadge=$('layoutStatusBadge');
+  if(statusBadge && statusBadge.getAttribute('data-layout-lock-bound')!=='true'){
+    statusBadge.setAttribute('data-layout-lock-bound','true');
+    statusBadge.setAttribute('role','button');
+    statusBadge.setAttribute('tabindex','0');
+    statusBadge.setAttribute('aria-pressed',String(!!state.locked));
+    statusBadge.addEventListener('click',()=>setLayoutLocked());
+    statusBadge.addEventListener('keydown',(event)=>{
+      if(event.key==='Enter' || event.key===' '){
+        event.preventDefault();
+        setLayoutLocked();
+      }
+    });
+  }
+
+  const guideSpacingCards=$('guideSpacingCards');
+  if(guideSpacingCards && guideSpacingCards.getAttribute('data-layout-row-bound')!=='true'){
+    guideSpacingCards.setAttribute('data-layout-row-bound','true');
+    guideSpacingCards.addEventListener('click',(event)=>{
+      const row=event.target.closest('[data-guide-index]');
+      if(!row)return;
+      const index=Number(row.getAttribute('data-guide-index'));
+      if(!Number.isFinite(index) || state.workshopIndex===index)return;
+      state.workshopIndex=index;
+      save();
+      render();
+    });
+    guideSpacingCards.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter' && event.key!==' ')return;
+      const row=event.target.closest('[data-guide-index]');
+      if(!row)return;
+      event.preventDefault();
+      const index=Number(row.getAttribute('data-guide-index'));
+      if(!Number.isFinite(index) || state.workshopIndex===index)return;
+      state.workshopIndex=index;
+      save();
+      render();
+    });
+  }
+
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
     const field=el.getAttribute('data-field');
     if(!field || !controlMeta[field])return;
+    const tabOrder=layoutFieldOrder.indexOf(field);
+    if(tabOrder>=0){el.tabIndex=tabOrder+1;}
     el.addEventListener('focus',()=>{
+      if(isLayoutLocked()){
+        el.blur();
+        return;
+      }
       const value=String(state[controlMeta[field].key]);
       if(el.textContent!==value){el.textContent=value;}
+      const range=document.createRange();
+      range.selectNodeContents(el);
+      const selection=window.getSelection();
+      if(selection){selection.removeAllRanges();selection.addRange(range);}
     });
     el.addEventListener('blur',()=>{
       const raw=(el.textContent||'').replace(/[^0-9.-]/g,'');
-      setControlValue(field,raw);
+      setControlValue(field,raw,{persist:true});
+    });
+    el.addEventListener('beforeinput',(event)=>{
+      if(event.inputType==='deleteContentBackward' || event.inputType==='deleteContentForward' || event.inputType==='insertFromPaste')return;
+      if(event.data && /[^0-9]/.test(event.data)){event.preventDefault();}
     });
     el.addEventListener('keydown',(event)=>{
-      if(event.key==='Enter'){event.preventDefault();el.blur();}
+      if(event.key==='ArrowUp'){event.preventDefault();changeControlValue(field,1,{persist:true});return;}
+      if(event.key==='ArrowDown'){event.preventDefault();changeControlValue(field,-1,{persist:true});return;}
+      if(event.key==='Enter'){
+        event.preventDefault();
+        el.blur();
+        focusLayoutField(nextLayoutField(field));
+      }
       if(event.key==='Escape'){event.preventDefault();el.textContent=String(state[controlMeta[field].key]);el.blur();}
     });
   });
@@ -1795,6 +1945,14 @@ function bindLayoutControls(){
     button.addEventListener('pointerdown',(event)=>{
       event.preventDefault();
       startHold(field,direction);
+    });
+    button.addEventListener('click',(event)=>{
+      if(isLayoutLocked()){
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      changeControlValue(field,direction,{persist:true});
     });
     ['pointerup','pointerleave','pointercancel'].forEach((type)=>button.addEventListener(type,stopHold));
   });
@@ -2378,21 +2536,49 @@ function bindBuildsControls(){
   const host=$('buildCards');
   if(host){
     host.addEventListener('click',(event)=>{
+      const menuTrigger=event.target.closest('[data-build-menu-trigger]');
+      if(menuTrigger){
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSavedBuildRowMenu(menuTrigger,menuTrigger.getAttribute('data-build-source')||'',menuTrigger.getAttribute('data-build-index'));
+        return;
+      }
       const button=event.target.closest('[data-build-action]');
       if(!button)return;
       const action=button.getAttribute('data-build-action')||'';
       const source=button.getAttribute('data-build-source')||'quote';
       const index=Number(button.getAttribute('data-build-index'));
+      hideSavedBuildRowMenu();
       if(action==='open'){openSavedBuildRecord(source,index);}
       if(action==='duplicate'){duplicateSavedBuildRecord(source,index);}
+      if(action==='delete'){requestDeleteSavedBuildRecord(source,index);}
     });
   }
+  document.addEventListener('click',(event)=>{
+    const openMenu=document.querySelector('[data-build-menu]:not([hidden])');
+    if(!openMenu)return;
+    if(event.target.closest('[data-build-menu]'))return;
+    if(event.target.closest('[data-build-menu-trigger]'))return;
+    hideSavedBuildRowMenu();
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){hideSavedBuildRowMenu();}
+  });
 }
 function onScreenChange(screenId){
   if(screenId==='buildsScreen'){
     const searchInput=$('buildsSearchInput');
     if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
     renderBuilds();
+  }
+  if(screenId==='workshopScreen'){
+    renderWorkshopQuote();
+  }
+  if(screenId==='layoutScreen' && !isLayoutLocked()){
+    const canAutoFocus=window.matchMedia&&window.matchMedia('(pointer:fine)').matches;
+    if(canAutoFocus){
+      requestAnimationFrame(()=>focusLayoutField(layoutFieldOrder[0]));
+    }
   }
 }
 function bindSettingsControls(){
@@ -2412,14 +2598,22 @@ function bindSettingsControls(){
 }
 function render(){
   const r=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+  const appEl=$('app');
+  if(appEl){appEl.classList.toggle('locked',!!state.locked);}
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
     const field=el.getAttribute('data-field');
-    if(field && controlMeta[field]){el.textContent=String(state[controlMeta[field].key]);}
+    if(field && controlMeta[field] && document.activeElement!==el){el.textContent=String(state[controlMeta[field].key]);}
+    const editable=!state.locked;
+    el.setAttribute('contenteditable',editable?'true':'false');
+    el.setAttribute('aria-readonly',editable?'false':'true');
+  });
+  document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
+    button.disabled=!!state.locked;
   });
   const guideSpacingCards=$('guideSpacingCards');
   if(guideSpacingCards){
     guideSpacingCards.innerHTML=r.rows.map((row,i)=>`
-      <article class="guide-spacing-row" data-guide-index="${i}">
+      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${row.cum.toFixed(1)} millimeters. Spacing ${row.spacing.toFixed(1)} millimeters" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
           <span>Guide ${row.g}</span>
           <small>Pos ${row.cum.toFixed(1)} mm</small>
@@ -2433,14 +2627,21 @@ function render(){
     `).join('');
   }
   const statusBadge=$('layoutStatusBadge');
-  if(statusBadge){statusBadge.textContent='Live';}
+  if(statusBadge){
+    statusBadge.textContent=state.locked?'Locked':'Live';
+    statusBadge.setAttribute('aria-pressed',String(!!state.locked));
+    statusBadge.setAttribute('title',state.locked?'Locked. Tap to unlock controls.':'Live. Tap to lock controls.');
+  }
+  const guideNotice=$('layoutGuideNotice');
+  if(guideNotice){guideNotice.textContent='Guide only. Confirm final placement by static testing and builder judgement.';}
   const row=r.rows[Math.max(0,Math.min(state.workshopIndex,r.rows.length-1))]||r.rows[0];
   if($('workshopProgress'))$('workshopProgress').textContent='Guide '+row.g+' of '+state.guideCount;
   if($('workshopGuide'))$('workshopGuide').textContent='Guide '+row.g;
   if($('workshopMeasure'))$('workshopMeasure').textContent=row.cum.toFixed(1);
   if($('workshopSpacing'))$('workshopSpacing').textContent='Spacing from previous: '+row.spacing.toFixed(1)+' mm';
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
-  renderWorkshopQuote();
+  const workshopScreen=$('workshopScreen');
+  if(workshopScreen && workshopScreen.classList.contains('active')){renderWorkshopQuote();}
 }
 ['nextGuide','prevGuide'].forEach((id)=>{
   const el=$(id);

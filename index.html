@@ -42,10 +42,7 @@
         <h1>K-Labs Studio</h1>
       </div>
       <div class="module-stack" aria-label="Homepage actions">
-        <button id="homeNewBuildBtn" class="module-card featured" type="button"><span>BUILD 041</span><strong>New Build</strong><em>Start a new custom rod build.</em><b>›</b></button>
-        <button class="module-card" data-nav="buildsScreen" type="button"><span>Builds</span><strong>Builds</strong><em>Open and continue saved builds.</em><b>›</b></button>
-        <button class="module-card" data-nav="layoutScreen" type="button"><span>Tool</span><strong>Guide Layout</strong><em>Progressive guide spacing tool.</em><b>›</b></button>
-        <button class="module-card" data-nav="blanksScreen" type="button"><span>Library</span><strong>Blank Library</strong><em>Manage blank records.</em><b>›</b></button>
+        <button id="homeNewBuildBtn" class="module-card featured home-enter-card" type="button"><span>BUILD 041</span><strong>Enter Rod Studio</strong><em>Begin or continue your custom rod build workflow.</em><b>›</b></button>
       </div>
     </section>
 
@@ -115,6 +112,7 @@
             <span class="guide-spacing-panel__badge" id="layoutStatusBadge">Live</span>
           </div>
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
+          <p id="layoutGuideNotice" class="subtle">Guide only. Confirm final placement by static testing and builder judgement.</p>
         </section>
       </div>
     </section>
@@ -309,11 +307,10 @@
   </main>
 
   <nav class="bottom-nav">
-    <button class="active" data-nav="homeScreen">⌂<span>Home</span></button>
-    <button data-nav="buildsScreen">▣<span>Builds</span></button>
-    <button data-nav="layoutScreen">⌖<span>Layout</span></button>
-    <button data-nav="blanksScreen">▤<span>Blanks</span></button>
-    <button data-nav="settingsScreen">⚙<span>More</span></button>
+    <button class="active" data-nav="homeScreen"><i aria-hidden="true">⌂</i><span>Home</span></button>
+    <button data-nav="buildsScreen"><i aria-hidden="true">▣</i><span>Builds</span></button>
+    <button data-nav="workshopScreen"><i aria-hidden="true">⌖</i><span>Workshop</span></button>
+    <button data-nav="settingsScreen"><i aria-hidden="true">⚙</i><span>More</span></button>
   </nav>
   <script src="js/config.js"></script>
   <script src="js/storage.js"></script>

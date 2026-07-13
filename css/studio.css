@@ -1275,6 +1275,265 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   color:#9aa097;
 }
 
+#layoutGuideNotice{
+  margin:7px 2px 0;
+  font-size:10px;
+  line-height:1.35;
+}
+
+.layout-control-card__button:disabled{
+  opacity:.56;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 2px 4px rgba(0,0,0,.12);
+}
+
+/* Build 041 UI refinement pass: centered shell, home focus, and nav precision */
+:root{
+  --app-max-width:488px;
+  --app-gutter:14px;
+  --surface-radius:18px;
+  --surface-padding:16px;
+  --surface-stack-gap:10px;
+  --surface-shadow:0 8px 20px rgba(0,0,0,.15);
+  --micro-motion:180ms;
+}
+
+.app-shell{
+  width:min(100%,var(--app-max-width));
+  margin:0 auto;
+  padding-left:var(--app-gutter);
+  padding-right:var(--app-gutter);
+  padding-bottom:calc(122px + var(--safe-bottom));
+}
+
+.home-hero,
+.module-card,
+.layout-control-card,
+.guide-spacing-panel,
+.settings-card,
+.empty-card,
+.rod-blank-visual,
+#workshopScreen .quote-builder__head,
+#workshopScreen .quote-section{
+  border-radius:var(--surface-radius);
+  box-shadow:var(--surface-shadow);
+}
+
+#homeScreen.active{
+  display:grid;
+  align-content:center;
+  gap:var(--surface-stack-gap);
+  min-height:calc(100dvh - 218px);
+  padding-block:clamp(8px,2.2vh,22px);
+}
+
+#homeScreen .home-hero{
+  margin-bottom:0;
+  padding:18px var(--surface-padding);
+  text-align:center;
+}
+
+#homeScreen .home-hero h1{
+  margin:8px 0 2px;
+  letter-spacing:-.025em;
+  line-height:1.02;
+}
+
+#homeScreen .module-stack{
+  gap:10px;
+}
+
+#homeScreen .home-enter-card{
+  min-height:102px;
+  padding:17px var(--surface-padding);
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  column-gap:14px;
+  row-gap:3px;
+  align-items:center;
+}
+
+#homeScreen .home-enter-card span,
+#homeScreen .home-enter-card strong,
+#homeScreen .home-enter-card em{
+  grid-column:1;
+}
+
+#homeScreen .home-enter-card strong{
+  margin:6px 0 4px;
+}
+
+#homeScreen .home-enter-card b{
+  position:static;
+  grid-column:2;
+  grid-row:1 / span 3;
+  align-self:center;
+  justify-self:end;
+  transform:none;
+}
+
+.bottom-nav{
+  width:min(100%,var(--app-max-width));
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:4px;
+  padding:5px;
+}
+
+.bottom-nav button{
+  min-height:50px;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  line-height:1;
+  border-radius:11px;
+  position:relative;
+  color:#7f837d;
+  transition:color var(--micro-motion) ease,background-color var(--micro-motion) ease,box-shadow var(--micro-motion) ease;
+}
+
+.bottom-nav button i{
+  display:block;
+  min-height:15px;
+  line-height:1;
+  font-size:15px;
+  font-style:normal;
+  color:inherit;
+  opacity:.78;
+  transform:translateY(1px);
+  transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease;
+}
+
+.bottom-nav button span{
+  margin:0;
+  width:100%;
+  text-align:center;
+  font-size:8px;
+  line-height:1.15;
+  letter-spacing:.08em;
+  opacity:.8;
+  transform:translateY(1px);
+  transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease,color var(--micro-motion) ease;
+}
+
+.bottom-nav button::after{
+  content:'';
+  position:absolute;
+  left:50%;
+  bottom:5px;
+  width:16px;
+  height:2px;
+  border-radius:999px;
+  background:rgba(186,31,44,.7);
+  opacity:0;
+  transform:translateX(-50%) scaleX(.5);
+  transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease;
+}
+
+.bottom-nav button:hover,
+.bottom-nav button:focus-visible{
+  color:#b8b2a5;
+  background:rgba(255,255,255,.03);
+}
+
+.bottom-nav button.active{
+  color:#d9d2c5;
+}
+
+.bottom-nav button.active i,
+.bottom-nav button.active span{
+  opacity:1;
+  transform:translateY(0);
+}
+
+.bottom-nav button.active::after{
+  opacity:1;
+  transform:translateX(-50%) scaleX(1);
+}
+
+.live-build-status,
+.offline-ready-status{
+  width:min(100%,var(--app-max-width));
+  padding:0 6px;
+}
+
+.screen-head h1,
+#workshopScreen .quote-builder__head h1,
+.home-hero h1{
+  letter-spacing:-.02em;
+  line-height:1.02;
+}
+
+.eyebrow{
+  letter-spacing:.2em;
+  font-size:10px;
+}
+
+.quote-grid span,
+.quote-component-row span,
+.layout-control-card__meta,
+.guide-spacing-row__meta small,
+.brand-copy span,
+.brand-lockup small{
+  font-size:9px;
+  letter-spacing:.11em;
+}
+
+.module-card,
+.layout-control-card,
+.guide-spacing-panel,
+#workshopScreen .quote-builder__head,
+#workshopScreen .quote-section,
+.settings-card,
+.blank-card,
+.selected-blank-card,
+.rod-blank-visual{
+  border:1px solid rgba(214,210,200,.1);
+}
+
+button,
+.module-card,
+.quote-section__toggle,
+.layout-control-card__button,
+.component-sheet__option,
+.component-sheet__menu-trigger,
+.ghost-action,
+.primary-action{
+  transition:background-color var(--micro-motion) ease,border-color var(--micro-motion) ease,color var(--micro-motion) ease,box-shadow var(--micro-motion) ease,transform var(--micro-motion) ease,opacity var(--micro-motion) ease;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible{
+  outline:1px solid rgba(186,31,44,.56);
+  outline-offset:1px;
+  box-shadow:0 0 0 2px rgba(186,31,44,.16);
+}
+
+@media (max-width:520px){
+  :root{
+    --app-gutter:12px;
+  }
+
+  #homeScreen.active{
+    min-height:calc(100dvh - 206px);
+    padding-block:8px;
+  }
+
+  #homeScreen .home-enter-card{
+    min-height:94px;
+  }
+
+  .bottom-nav button{
+    min-height:52px;
+  }
+}
+
 @media (max-width:420px){
   .quote-component-row{
     padding:11px;
