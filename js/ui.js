@@ -58,14 +58,14 @@ function currency(value){return '$'+numberOrZero(value).toFixed(2)}
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
   return[
-    {x:8,y:14},
-    {x:18,y:17},
-    {x:30,y:21},
-    {x:43,y:26},
-    {x:57,y:32},
-    {x:71,y:39},
-    {x:84,y:47},
-    {x:94,y:55}
+    {x:8,y:25},
+    {x:18,y:26},
+    {x:30,y:30},
+    {x:43,y:37},
+    {x:57,y:46},
+    {x:71,y:55},
+    {x:84,y:62},
+    {x:94,y:66}
   ];
 }
 function homeRodClearSequenceTimer(){

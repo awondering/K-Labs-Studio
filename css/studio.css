@@ -158,43 +158,85 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   position:absolute;
   left:var(--x,8%);
   top:var(--y,15%);
-  width:3px;
-  height:3px;
+  width:2.6px;
+  height:2.6px;
   border-radius:999px;
-  background:radial-gradient(circle at 36% 34%,#983744 0%,#741923 56%,#430c14 100%);
-  box-shadow:inset 0 0 .7px rgba(171,60,73,.36),0 0 0 .75px rgba(83,11,19,.38);
-  opacity:0;
+  background:radial-gradient(circle at 38% 34%,rgba(34,12,17,.86) 0%,rgba(18,7,10,.94) 62%,rgba(8,3,5,.98) 100%);
+  box-shadow:inset 0 0 1.25px rgba(0,0,0,.84),inset 0 .16px .38px rgba(255,255,255,.07),0 0 0 .6px rgba(216,212,202,.07);
+  opacity:.35;
   transform:translate(-50%,-50%);
   transition:opacity 520ms ease-out,box-shadow 520ms ease-out,background-image 520ms ease-out;
   will-change:opacity;
 }
 
+#homeScreen .home-living-rod__led::before,
+#homeScreen .home-living-rod__led::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  border-radius:999px;
+  pointer-events:none;
+}
+
+#homeScreen .home-living-rod__led::before{
+  width:4.8px;
+  height:4.8px;
+  background:radial-gradient(circle,rgba(255,255,255,.042) 0%,rgba(185,182,172,.026) 44%,rgba(0,0,0,0) 76%);
+  box-shadow:inset 0 0 .95px rgba(0,0,0,.4);
+}
+
+#homeScreen .home-living-rod__led::after{
+  width:1.8px;
+  height:.86px;
+  background:linear-gradient(90deg,rgba(255,255,255,.17),rgba(255,255,255,.025));
+  opacity:.34;
+  transform:translate(-56%,-66%) rotate(-19deg);
+}
+
 #homeScreen .home-living-rod__led.is-lit{
   opacity:1;
-  background:radial-gradient(circle at 36% 34%,#c2515d 0%,#962733 48%,#5b131c 100%);
-  box-shadow:inset 0 0 1.1px rgba(199,82,94,.5),0 0 0 .75px rgba(122,25,36,.54),0 0 1.6px rgba(154,31,43,.22);
+  background:radial-gradient(circle at 38% 34%,#b84d58 0%,#912833 46%,#57151d 100%);
+  box-shadow:inset 0 0 1px rgba(206,84,97,.42),inset 0 -.24px .5px rgba(0,0,0,.5),0 0 0 .62px rgba(124,29,40,.56),0 0 .95px rgba(148,31,42,.14);
 }
 
 #homeScreen .home-enter-rod-button{
   width:100%;
-  min-height:50px;
+  min-height:45px;
   position:relative;
   z-index:2;
-  border-radius:10px;
-  letter-spacing:.12em;
+  border-radius:9px;
+  letter-spacing:.13em;
   text-transform:uppercase;
   font-size:13px;
   font-weight:700;
-  background:#8f2029;
-  border:1px solid #a72a34;
+  background:linear-gradient(180deg,#91242e 0%,#8c1f29 54%,#841b25 100%);
+  border:1px solid #a62b35;
   color:#eadfd3;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(80,14,20,.28),0 8px 20px rgba(0,0,0,.24);
+  text-shadow:0 -.35px 0 rgba(75,16,22,.5),0 .35px 0 rgba(255,255,255,.04);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 0 rgba(66,12,18,.36),0 4px 10px rgba(0,0,0,.2);
+  transition:transform 120ms cubic-bezier(.2,.75,.28,1),background-color 120ms ease,border-color 120ms ease,box-shadow 120ms ease,filter 120ms ease;
+  will-change:transform;
+  -webkit-tap-highlight-color:transparent;
 }
 
-#homeScreen .home-enter-rod-button:hover,
+#homeScreen .home-enter-rod-button:hover{
+  background:linear-gradient(180deg,#962731 0%,#91242f 54%,#891e28 100%);
+  border-color:#ad303a;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.13),inset 0 -1px 0 rgba(66,12,18,.38),0 4px 11px rgba(0,0,0,.22);
+}
+
 #homeScreen .home-enter-rod-button:focus-visible{
-  background:#9b2430;
-  border-color:#b6313c;
+  outline:2px solid rgba(182,72,84,.44);
+  outline-offset:2px;
+}
+
+#homeScreen .home-enter-rod-button:active{
+  transform:translateY(1.5px);
+  background:linear-gradient(180deg,#8a1f29 0%,#841a24 54%,#7d1720 100%);
+  border-color:#962530;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(56,10,15,.44),0 2px 6px rgba(0,0,0,.18);
 }
 
 #homeScreen .home-continue-last-build{
@@ -215,6 +257,16 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 #homeScreen .home-continue-last-build:hover,
 #homeScreen .home-continue-last-build:focus-visible{
   color:#c4bcae;
+}
+
+/* Keep Home visually self-contained by suppressing cross-screen bleed-through labels/panels. */
+.app-shell:has(#homeScreen.active) > .screen:not(#homeScreen){
+  display:none!important;
+}
+
+.app-shell:has(#homeScreen.active) > .live-build-status,
+.app-shell:has(#homeScreen.active) > .offline-ready-status{
+  display:none!important;
 }
 
 @media (max-width:720px){
