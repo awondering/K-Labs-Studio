@@ -26,6 +26,8 @@ let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
+let holdDelayTimer=null;
+let holdContext=null;
 let activeChoicePicker={type:'category',index:-1};
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
@@ -1914,14 +1916,21 @@ function changeControlValue(field,direction,options){
   setControlValue(field,state[cfg.key]+(direction*cfg.step),options);
 }
 function stopHold(){
+  if(holdDelayTimer){clearTimeout(holdDelayTimer);holdDelayTimer=null;}
   if(holdTimer){clearInterval(holdTimer);holdTimer=null;}
+  holdContext=null;
   persistLayoutControlState();
 }
-function startHold(field,direction){
+function startHold(field,direction,button){
   if(isLayoutLocked())return;
   stopHold();
-  changeControlValue(field,direction,{persist:false});
-  holdTimer=window.setInterval(()=>changeControlValue(field,direction,{persist:false}),120);
+  holdContext={field,direction,button,repeating:false};
+  holdDelayTimer=window.setTimeout(()=>{
+    if(!holdContext || holdContext.button!==button)return;
+    holdContext.repeating=true;
+    changeControlValue(field,direction,{persist:false});
+    holdTimer=window.setInterval(()=>changeControlValue(field,direction,{persist:false}),135);
+  },500);
 }
 function bindLayoutControls(){
   const statusBadge=$('layoutStatusBadge');
@@ -2001,22 +2010,49 @@ function bindLayoutControls(){
     });
   });
   document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
+    if(button.getAttribute('data-layout-control-bound')==='true')return;
+    button.setAttribute('data-layout-control-bound','true');
     const field=button.getAttribute('data-target-field');
     if(!field || !controlMeta[field])return;
     const direction=button.getAttribute('data-action')==='increment'?1:-1;
+    button.style.touchAction='manipulation';
     button.addEventListener('pointerdown',(event)=>{
+      if(event.button!==0 || !event.isPrimary)return;
       event.preventDefault();
-      startHold(field,direction);
+      startHold(field,direction,button);
     });
-    button.addEventListener('click',(event)=>{
-      if(isLayoutLocked()){
+    const finishPress=(event)=>{
+      if(holdContext && holdContext.button===button && !holdContext.repeating){
+        if(isLayoutLocked()){
+          event.preventDefault();
+          stopHold();
+          return;
+        }
         event.preventDefault();
+        changeControlValue(field,direction,{persist:true});
+      }
+      stopHold();
+    };
+    button.addEventListener('pointerup',finishPress);
+    button.addEventListener('pointercancel',stopHold);
+    button.addEventListener('pointerleave',(event)=>{
+      if(holdContext && holdContext.repeating && holdContext.button===button){
+        stopHold();
         return;
       }
+      if(holdContext && holdContext.button===button && !holdContext.repeating){
+        stopHold();
+      }
+    });
+    button.addEventListener('click',(event)=>{
       event.preventDefault();
+    });
+    button.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter' && event.key!==' ')return;
+      event.preventDefault();
+      if(isLayoutLocked())return;
       changeControlValue(field,direction,{persist:true});
     });
-    ['pointerup','pointerleave','pointercancel'].forEach((type)=>button.addEventListener(type,stopHold));
   });
 }
 function workshopInputMap(){
