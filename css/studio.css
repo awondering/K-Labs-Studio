@@ -56,7 +56,8 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 #homeScreen .home-premium-shell{
   display:grid;
   gap:30px;
-  width:min(100%,940px);
+  width:100%;
+  max-width:940px;
   margin:0 auto;
   padding:46px 0 18px;
 }
@@ -91,9 +92,9 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   position:relative;
   width:100vw;
   height:28px;
-  margin:6px 0 14px;
-  left:50%;
-  transform:translateX(-50%);
+  margin:6px calc(50% - 50vw) 14px;
+  left:auto;
+  transform:none;
   opacity:0;
   overflow:hidden;
   border-radius:999px;
@@ -188,6 +189,57 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   #homeScreen .home-premium-shell{
     padding-top:34px;
     gap:24px;
+  }
+}
+
+@media (min-width:1024px){
+  :root{
+    --home-desktop-shell-max:1160px;
+    --home-desktop-page-pad:24px;
+  }
+
+  .app-shell:has(#homeScreen.active){
+    width:min(100%,var(--home-desktop-shell-max));
+    max-width:var(--home-desktop-shell-max);
+    box-sizing:border-box;
+    padding-left:var(--home-desktop-page-pad);
+    padding-right:var(--home-desktop-page-pad);
+  }
+
+  #homeScreen{
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+    padding-left:var(--home-desktop-page-pad);
+    padding-right:var(--home-desktop-page-pad);
+  }
+
+  #homeScreen .home-premium-shell{
+    width:100%;
+    max-width:var(--home-desktop-shell-max);
+    box-sizing:border-box;
+    margin:0 auto;
+  }
+
+  #homeScreen .home-premium-hero,
+  #homeScreen .home-living-rod,
+  #homeScreen .home-enter-rod-button{
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+  }
+
+  #homeScreen .home-living-rod{
+    left:auto;
+    transform:none;
+    margin-left:0;
+    margin-right:0;
+  }
+
+  .bottom-nav{
+    width:calc(100% - 48px)!important;
+    max-width:1112px!important;
+    box-sizing:border-box;
   }
 }
 
