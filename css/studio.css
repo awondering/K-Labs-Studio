@@ -245,7 +245,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
 .bottom-nav{
   display:grid;
-  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
   align-items:stretch;
   border:1px solid rgba(214,210,200,.1);
   background:rgba(10,12,13,.88);
