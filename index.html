@@ -46,12 +46,12 @@
           <svg class="home-living-rod__blank" viewBox="0 0 1200 360" preserveAspectRatio="none" role="presentation" focusable="false">
             <defs>
               <pattern id="homeRodCarbonWeave" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <path d="M0 0H8" stroke="#ffffff" stroke-opacity="0.132" stroke-width="0.9"></path>
+                <path d="M0 0H8" stroke="#ffffff" stroke-opacity="0.16" stroke-width="0.92"></path>
               </pattern>
               <linearGradient id="homeRodBlankBase" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#15191b"></stop>
-                <stop offset="56%" stop-color="#0b0f11"></stop>
-                <stop offset="100%" stop-color="#111416"></stop>
+                <stop offset="0%" stop-color="#181d1f"></stop>
+                <stop offset="58%" stop-color="#0a0e10"></stop>
+                <stop offset="100%" stop-color="#121618"></stop>
               </linearGradient>
               <linearGradient id="homeRodCylinderShade" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stop-color="rgba(255,255,255,0.025)"></stop>
@@ -60,12 +60,12 @@
                 <stop offset="100%" stop-color="rgba(0,0,0,0.2)"></stop>
               </linearGradient>
               <clipPath id="homeRodBlankClip">
-                <path d="M1138 252 C938 228 758 194 550 152 C364 114 196 96 28 95 C18 95 11 94 8 93 L8 92 C12 90 19 89 29 88 C198 87 370 104 558 138 C768 174 952 206 1142 222 Z"></path>
+                <path d="M1142 244 C926 220 734 182 526 136 C334 94 162 78 26 80 C16 80 10 79 6 78 L6 77 C12 75 19 74 30 74 C170 74 346 90 542 124 C756 162 954 198 1148 214 Z"></path>
               </clipPath>
             </defs>
-            <path d="M1138 252 C938 228 758 194 550 152 C364 114 196 96 28 95 C18 95 11 94 8 93 L8 92 C12 90 19 89 29 88 C198 87 370 104 558 138 C768 174 952 206 1142 222 Z" fill="url(#homeRodBlankBase)"></path>
+            <path d="M1142 244 C926 220 734 182 526 136 C334 94 162 78 26 80 C16 80 10 79 6 78 L6 77 C12 75 19 74 30 74 C170 74 346 90 542 124 C756 162 954 198 1148 214 Z" fill="url(#homeRodBlankBase)"></path>
             <rect x="74" y="34" width="1064" height="260" fill="url(#homeRodCarbonWeave)" clip-path="url(#homeRodBlankClip)" opacity="0.98"></rect>
-            <path d="M1130 238 C938 216 762 186 560 146 C376 110 208 93 34 92" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="13" stroke-linecap="round" opacity="0.55"></path>
+            <path d="M1128 230 C928 206 738 170 542 130 C352 92 182 77 32 78" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="12.2" stroke-linecap="round" opacity="0.56"></path>
           </svg>
           <span class="home-living-rod__leds"></span>
         </div>
@@ -269,11 +269,10 @@
           </header>
           <div class="quote-grid quote-grid--three quote-section__body">
             <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
-            <label id="quoteMarginPercentField"><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
-            <label class="quote-gst-toggle quote-grid__full"><span>Include Tax (15%)</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
-            <label id="quoteGstField"><span>Tax (15%)</span><input id="quoteGst" type="text" readonly /></label>
-            <label><span>Final Customer Price</span><input id="quoteTotal" type="text" readonly /></label>
-            <label id="quoteProfitField"><span>Profit</span><input id="quoteProfit" type="text" readonly /></label>
+            <label id="quoteMarkupPercentField"><span>Markup %</span><input id="quoteMarkupPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
+            <label id="quoteGstField"><span id="quoteTaxLabel">Tax (15%)</span><input id="quoteGst" type="text" readonly /></label>
+            <label><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label id="quoteProfitField"><span>Target Profit</span><input id="quoteProfit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
           </div>
         </article>
@@ -316,7 +315,7 @@
           <li>Cork Grips</li>
           <li>Winding Checks</li>
           <li>Hook Keepers</li>
-          <li>Thread</li>
+          <li>Thread &amp; Finish</li>
           <li>Decals</li>
         </ol>
       </article>
@@ -331,6 +330,7 @@
       <div class="settings-card">
         <div><span>Version</span><strong>BUILD 051.2</strong></div>
         <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
+        <div><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /></strong></div>
         <div class="settings-card__actions">
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
         </div>

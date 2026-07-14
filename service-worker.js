@@ -1,4 +1,4 @@
-const CACHE='klabs-studio-build0512-v1';
+const CACHE='klabs-studio-build057-v1';
 const ASSETS=[
 	'/',
 	'/index.html',

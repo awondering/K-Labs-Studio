@@ -1,6 +1,11 @@
+function syncHomeScreenClass(activeScreenId){
+	document.body.classList.toggle('home-screen-active',activeScreenId==='homeScreen');
+}
+
 function goScreen(id){
 	document.querySelectorAll('.screen').forEach((screen)=>screen.classList.toggle('active',screen.id===id));
 	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===id));
+	syncHomeScreenClass(id);
 	if(window.KLABS_UI && typeof window.KLABS_UI.onScreenChange==='function'){
 		window.KLABS_UI.onScreenChange(id);
 	}
@@ -82,3 +87,6 @@ document.addEventListener('click',(event)=>{
 document.addEventListener('keydown',(event)=>{
 	if(event.key==='Escape'){closeNavMenu();}
 });
+
+const initialActiveScreen=document.querySelector('.screen.active');
+syncHomeScreenClass(initialActiveScreen?initialActiveScreen.id:'homeScreen');

@@ -1,6 +1,6 @@
 const $=id=>document.getElementById(id);
 let state=Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0});
-const DEFAULT_CATEGORY_NAMES=['Blank','Guides','Tip','Reel Seat','Grip','Butt Cap','Winding Checks','Thread','Decals','Other'];
+const DEFAULT_CATEGORY_NAMES=['Butt Cap','Decals','Freight','Grip','Guides','Hook Keeper','Reel Seat','Thread & Finish','Tip Top','Winding Checks','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
@@ -8,6 +8,7 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
+const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
@@ -17,6 +18,7 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'customer'},
   {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Builder Notes',visibility:'workshop'}
 ];
+let studioSettings=normalizeStudioSettings(Store.get(SETTINGS_STORAGE_KEY,{}));
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
@@ -55,17 +57,63 @@ function save(){Store.set('klabs-studio-state',state)}
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
+function normalizeStudioSettings(settings){
+  const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
+  return {taxRate};
+}
+function saveStudioSettings(){
+  Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+}
+function activeTaxRate(){
+  return Math.max(0,numberOrZero(studioSettings&&studioSettings.taxRate)||15);
+}
+function roundMoney(value){
+  return Math.round(numberOrZero(value)*100)/100;
+}
+function normalizePricingDriver(value){
+  const next=String(value||'').trim().toLowerCase();
+  if(next==='final' || next==='profit' || next==='markup')return next;
+  return 'markup';
+}
+function syncQuotePricing(driver){
+  const internalCost=numberOrZero(quote.blankCost)+quote.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
+  const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
+  let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
+  let targetProfit=numberOrZero(quote.targetProfit);
+  let markupPercent=numberOrZero(quote.markupPercent);
+
+  if(activeDriver==='final'){
+    finalCustomerPrice=Math.max(0,finalCustomerPrice);
+    targetProfit=Math.max(0,finalCustomerPrice-internalCost);
+    markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
+  }else if(activeDriver==='profit'){
+    targetProfit=Math.max(0,targetProfit);
+    finalCustomerPrice=internalCost+targetProfit;
+    markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
+  }else{
+    markupPercent=Math.max(0,markupPercent);
+    targetProfit=internalCost*(markupPercent/100);
+    finalCustomerPrice=internalCost+targetProfit;
+  }
+
+  quote.pricingDriver=activeDriver;
+  quote.markupPercent=roundMoney(markupPercent);
+  quote.targetProfit=roundMoney(targetProfit);
+  quote.finalCustomerPrice=roundMoney(finalCustomerPrice);
+  quote.marginPercent=quote.markupPercent;
+  quote.gstRate=activeTaxRate();
+}
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
   return[
-    {x:8,y:25},
-    {x:18,y:26},
-    {x:30,y:30},
-    {x:43,y:37},
-    {x:57,y:46},
+    {x:8,y:44},
+    {x:18,y:45},
+    {x:30,y:47},
+    {x:43,y:49},
+    {x:57,y:52},
     {x:71,y:55},
-    {x:84,y:62},
-    {x:94,y:66}
+    {x:84,y:58},
+    {x:94,y:61}
   ];
 }
 function homeRodClearSequenceTimer(){
@@ -157,7 +205,7 @@ function newQuoteTemplate(){
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,marginPercent:0,includeGst:true,quoteMode:'internal',gstRate:15,quoteStatus:'draft'
+    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',includeGst:true,quoteMode:'internal',gstRate:15,quoteStatus:'draft'
   };
 }
 function normalizeAddressText(value){
@@ -266,8 +314,11 @@ function specificationRowsMarkup(rows){
   return safeRows.map((row)=>`<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('');
 }
 function normalizeComponent(component){
+  const rawCategory=(component&&typeof component.category==='string')?component.category:(component&&typeof component.name==='string')?component.name:'';
+  const categoryKey=normalizeNameKey(rawCategory);
+  const category=categoryKey==='tip'?'Tip Top':categoryKey==='thread'?'Thread & Finish':rawCategory;
   return{
-    category:(component&&typeof component.category==='string')?component.category:(component&&typeof component.name==='string')?component.name:'',
+    category,
     description:(component&&typeof component.description==='string')?component.description:'',
     supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
     cost:numberOrZero(component&&component.cost),
@@ -288,10 +339,14 @@ function normalizeQuote(inputQuote){
   const merged={...base,...(inputQuote||{})};
   const components=Array.isArray(inputQuote&&inputQuote.components)&&inputQuote.components.length?inputQuote.components:[{category:'',description:'',supplier:'',cost:0}];
   merged.components=components.map(normalizeComponent);
-  merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:true;
+  merged.includeGst=true;
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
-  merged.gstRate=numberOrZero(inputQuote&&inputQuote.gstRate)||15;
+  merged.gstRate=activeTaxRate();
+  merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
+  merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
+  merged.finalCustomerPrice=numberOrZero(inputQuote&&inputQuote.finalCustomerPrice);
+  merged.pricingDriver=normalizePricingDriver(inputQuote&&inputQuote.pricingDriver);
   merged.blankId=String(inputQuote&&inputQuote.blankId||'');
   merged.blankMaker=String(inputQuote&&inputQuote.blankMaker||'');
   merged.blankSeries=String(inputQuote&&inputQuote.blankSeries||'');
@@ -316,6 +371,15 @@ function normalizeQuote(inputQuote){
   merged.postcode=normalizeAddressText(inputQuote&&inputQuote.postcode);
   merged.country=normalizeAddressText(inputQuote&&inputQuote.country)||'New Zealand';
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
+  const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
+  const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
+  const internalBuildCost=numberOrZero(merged.blankCost)+merged.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
+  if(!hasFinal && !hasProfit){
+    merged.targetProfit=internalBuildCost*(merged.markupPercent/100);
+    merged.finalCustomerPrice=internalBuildCost+merged.targetProfit;
+    merged.pricingDriver='markup';
+  }
+  merged.marginPercent=merged.markupPercent;
   return merged;
 }
 function canConvertToBuild(){
@@ -360,7 +424,7 @@ function quoteHasMeaningfulDraft(currentQuote){
   const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode,candidate.country]
     .some((value)=>!!specificationValue(value));
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
-  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.marginPercent)>0;
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
@@ -542,6 +606,7 @@ function unbindChoicePickerViewportHandlers(){
   clearChoicePickerViewportStyles();
 }
 function quoteMaths(){
+  syncQuotePricing();
   const blankCost=numberOrZero(quote.blankCost);
   const buildCostTotal=quote.components.reduce((sum,item)=>{
     return sum+numberOrZero(item.cost);
@@ -549,13 +614,13 @@ function quoteMaths(){
   const materialCost=blankCost+buildCostTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const internalBuildCost=materialCost+labourCost;
-  const marginAmount=internalBuildCost*(numberOrZero(quote.marginPercent)/100);
-  const subtotal=internalBuildCost+marginAmount;
-  const gstRate=numberOrZero(quote.gstRate)||15;
-  const gst=(quote.includeGst!==false)?(subtotal-(subtotal/(1+(gstRate/100)))):0;
+  const markupAmount=numberOrZero(quote.targetProfit);
+  const subtotal=numberOrZero(quote.finalCustomerPrice);
+  const gstRate=activeTaxRate();
+  const gst=subtotal*(gstRate/(100+gstRate));
   const total=subtotal;
-  const profit=marginAmount;
-  return{materialCost,labourCost,internalBuildCost,marginAmount,subtotal,gst,total,profit};
+  const profit=markupAmount;
+  return{materialCost,labourCost,internalBuildCost,markupAmount,subtotal,gst,total,profit,markupPercent:numberOrZero(quote.markupPercent),taxRate:gstRate};
 }
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -987,16 +1052,23 @@ function saveArchivedChoiceNames(type,names){
 function normalizeNameKey(name){
   return String(name||'').trim().toLowerCase();
 }
+function categoryOptionNameOrder(customNames){
+  const defaultOther=DEFAULT_CATEGORY_NAMES.find((name)=>normalizeNameKey(name)==='other')||'Other';
+  const defaultsWithoutOther=DEFAULT_CATEGORY_NAMES.filter((name)=>normalizeNameKey(name)!=='other');
+  const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
+  const safeCustoms=(customNames||[]).filter((name)=>{
+    const normalized=normalizeNameKey(name);
+    return normalized && normalized!=='other' && !defaultKeys.has(normalized);
+  });
+  return defaultsWithoutOther.concat(safeCustoms,[defaultOther]);
+}
 function allComponentNameOptions(){
-  const defaults=DEFAULT_CATEGORY_NAMES.slice();
-  const defaultKeys=new Set(defaults.map(normalizeNameKey));
-  const customs=getCustomCategoryNames().filter((name)=>!defaultKeys.has(normalizeNameKey(name)));
-  return defaults.concat(customs);
+  return categoryOptionNameOrder(getCustomCategoryNames());
 }
 function componentOptionRecords(query){
-  const defaults=DEFAULT_CATEGORY_NAMES.map((name)=>({name,isCustom:false}));
-  const customNames=getCustomCategoryNames().map((name)=>({name,isCustom:true}));
-  const all=defaults.concat(customNames);
+  const orderedNames=categoryOptionNameOrder(getCustomCategoryNames());
+  const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
+  const all=orderedNames.map((name)=>({name,isCustom:!defaultKeys.has(normalizeNameKey(name))}));
   const normalized=normalizeNameKey(query);
   const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
   return all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
@@ -2094,7 +2166,7 @@ function workshopInputMap(){
     ['quoteAddressLine1','addressLine1'],['quoteAddressLine2','addressLine2'],['quoteSuburbLocality','suburbLocality'],['quoteCityTown','cityTown'],['quoteRegionState','regionState'],['quotePostcode','postcode'],['quoteCountry','country'],
     ['quoteBuildName','buildName'],['quoteNotes','notes'],
     ['quoteBlankName','blankName'],['quoteBlankMaker','blankMaker'],['quoteBlankSeries','blankSeries'],['quoteBlankLength','blankLength'],['quoteBlankPower','blankPower'],['quoteBlankAction','blankAction'],['quoteBlankPieces','blankPieces'],
-    ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours'],['quoteMarginPercent','marginPercent'],['quoteGstRate','gstRate']
+    ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours']
   ];
 }
 function bindBuildSpecificationInputs(){
@@ -2138,7 +2210,7 @@ function bindWorkshopQuoteBuilder(){
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
-    const isNumeric=['blankCost','labourRate','labourHours','marginPercent','gstRate'].includes(key);
+    const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     const onFieldUpdate=()=>{
       quote[key]=isNumeric?numberOrZero(el.value):el.value;
       saveQuoteCurrent();
@@ -2148,15 +2220,23 @@ function bindWorkshopQuoteBuilder(){
     el.addEventListener('input',onFieldUpdate);
     el.addEventListener('change',onFieldUpdate);
   });
-  const includeGstInput=$('quoteIncludeGst');
-  if(includeGstInput){
-    includeGstInput.addEventListener('change',()=>{
-      quote.includeGst=includeGstInput.checked;
+  [
+    {id:'quoteTotal',key:'finalCustomerPrice',driver:'final'},
+    {id:'quoteProfit',key:'targetProfit',driver:'profit'},
+    {id:'quoteMarkupPercent',key:'markupPercent',driver:'markup'}
+  ].forEach((config)=>{
+    const input=$(config.id);
+    if(!input)return;
+    const onPricingUpdate=()=>{
+      quote[config.key]=numberOrZero(input.value);
+      syncQuotePricing(config.driver);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
-    });
-  }
+    };
+    input.addEventListener('input',onPricingUpdate);
+    input.addEventListener('change',onPricingUpdate);
+  });
   document.querySelectorAll('[data-quote-mode]').forEach((button)=>{
     button.addEventListener('click',()=>{
       quote.quoteMode=normalizeQuoteMode(button.getAttribute('data-quote-mode'));
@@ -2245,7 +2325,7 @@ function bindWorkshopQuoteBuilder(){
       if(id==='emailQuoteBtn' && normalizeQuoteMode(quote.quoteMode)==='internal'){
         openConfirmDialog({
           title:'⚠ INTERNAL QUOTE',
-          message:'This quote contains confidential build costs and margin information. Do you wish to continue?',
+          message:'This quote contains confidential build costs and markup information. Do you wish to continue?',
           actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'continue',label:'Continue',kind:'primary'}]
         },(action)=>{
           if(action==='continue'){alert('Coming soon');}
@@ -2266,17 +2346,15 @@ function renderWorkshopQuote(){
     const el=$(id);
     if(!el)return;
     if(document.activeElement===el)return;
-    const isNumeric=['blankCost','labourRate','labourHours','marginPercent'].includes(key);
+    const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
-  const includeGstInput=$('quoteIncludeGst');
-  if(includeGstInput && document.activeElement!==includeGstInput){includeGstInput.checked=quote.includeGst!==false;}
   const mode=normalizeQuoteMode(quote.quoteMode);
   document.querySelectorAll('[data-quote-mode]').forEach((button)=>button.classList.toggle('active',button.getAttribute('data-quote-mode')===mode));
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Margin • Quote Summary';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Markup • Quote Summary';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
   if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';
   updateQuoteActionPriority();
@@ -2295,14 +2373,16 @@ function updateQuoteSummary(){
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
-  if($('quoteTotal'))$('quoteTotal').value=currency(math.total);
-  if($('quoteProfit'))$('quoteProfit').value=currency(math.profit);
+  if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
+  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
+  if($('quoteMarkupPercent') && document.activeElement!==$('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
+  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`Tax (${numberOrZero(math.taxRate).toFixed(1)}%)`;
   if($('quoteModeLabel'))$('quoteModeLabel').textContent=mode==='customer'?'Customer mode':'Internal mode';
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');
-  if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
-  if(gstStatus){gstStatus.textContent=quote.includeGst===false?'Tax not included in displayed price.':'Tax included in displayed price.';}
-  ['quoteCostBeforeMarginField','quoteMarginPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=mode==='customer';});
+  if(gstField){gstField.classList.remove('quote-field--muted');}
+  if(gstStatus){gstStatus.textContent=`Tax is automatically applied from Settings (${numberOrZero(math.taxRate).toFixed(1)}%).`;}
+  ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=mode==='customer';});
 }
 
 function ensureQuotePreviewSheet(){
@@ -2358,7 +2438,7 @@ function renderQuotePreviewSheet(){
   if($('quotePreviewSpecs'))$('quotePreviewSpecs').innerHTML=specificationRowsMarkup(specificationViews.customer);
   if($('quotePreviewSummary'))$('quotePreviewSummary').innerHTML=`
     <div><span>Total Customer Price</span><strong>${currency(math.total)}</strong></div>
-    <div><span>Tax</span><strong>${quote.includeGst===false?'Not Included':currency(math.gst)}</strong></div>
+    <div><span>Tax</span><strong>${currency(math.gst)}</strong></div>
   `;
 }
 function openQuotePreviewSheet(action){
@@ -2559,11 +2639,14 @@ function loadDemoBuild(){
     components:[
       {category:'Guides',supplier:'Fuji',description:'Fuji K-Series guide set',cost:96},
       {category:'Reel Seat',supplier:'Alps',description:'Alps triangle reel seat',cost:28},
-      {category:'Thread',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
+      {category:'Thread & Finish',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
     ],
     labourRate:50,
     labourHours:2,
-    marginPercent:20,
+    markupPercent:20,
+    targetProfit:0,
+    finalCustomerPrice:0,
+    pricingDriver:'markup',
     includeGst:true,
     quoteMode:'internal',
     gstRate:15,
@@ -2726,8 +2809,25 @@ function onScreenChange(screenId){
       requestAnimationFrame(()=>focusLayoutField(layoutFieldOrder[0]));
     }
   }
+  if(screenId==='settingsScreen' && $('settingsTaxRate')){
+    $('settingsTaxRate').value=numberOrZero(activeTaxRate()).toFixed(1);
+  }
 }
 function bindSettingsControls(){
+  const taxRateInput=$('settingsTaxRate');
+  if(taxRateInput){
+    taxRateInput.value=numberOrZero(activeTaxRate()).toFixed(1);
+    const onTaxRateChange=()=>{
+      studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
+      saveStudioSettings();
+      syncQuotePricing();
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    taxRateInput.addEventListener('input',onTaxRateChange);
+    taxRateInput.addEventListener('change',onTaxRateChange);
+  }
   const demoButton=$('loadDemoBuildBtn');
   if(!demoButton)return;
   demoButton.addEventListener('click',()=>{
