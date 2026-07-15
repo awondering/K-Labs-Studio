@@ -47,6 +47,8 @@ let activeChoicePicker={type:'category',index:-1};
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 let shouldAnimateComponentRows=false;
+let expandedComponentRowIndex=-1;
+let componentRowMenuPointerDown={index:-1,expiresAt:0};
 let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
@@ -1722,13 +1724,177 @@ function setComponentName(index,name){
 function defaultComponentRow(){
   return{category:'',description:'',supplier:'',cost:0};
 }
+function componentRowIsEffectivelyEmpty(item){
+  return !specificationValue(item&&item.category) && !specificationValue(item&&item.description) && numberOrZero(item&&item.cost)<=0;
+}
+function componentRowHasMeaningfulData(item){
+  return !componentRowIsEffectivelyEmpty(item) && !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||numberOrZero(item&&item.cost)>0);
+}
+function componentRowCategoryLabel(item){
+  return specificationValue(item&&item.category)||'';
+}
+function componentRowItemLabel(item){
+  const description=specificationValue(item&&item.description);
+  if(description)return description;
+  const category=specificationValue(item&&item.category);
+  if(category && !isBlankCategory(category))return category;
+  return isBlankCategory(item&&item.category)?'Choose blank':'New item';
+}
+function componentRowSupplierLabel(item){
+  return specificationValue(item&&item.supplier);
+}
+function componentRowSummaryMetaParts(item){
+  if(componentRowIsEffectivelyEmpty(item))return['Editing'];
+  const parts=[];
+  const category=componentRowCategoryLabel(item);
+  const description=specificationValue(item&&item.description);
+  if(category && description && normalizeNameKey(category)!==normalizeNameKey(description)){
+    parts.push(category);
+  }
+  const supplier=componentRowSupplierLabel(item);
+  if(supplier)parts.push(supplier);
+  return parts;
+}
+function componentRowCostLabel(item){
+  if(componentRowIsEffectivelyEmpty(item))return'';
+  return currency(item&&item.cost);
+}
+function pruneComponentDraftRows(preserveIndex){
+  const keepIndex=Number.isInteger(preserveIndex)?preserveIndex:-1;
+  const next=[];
+  const indexMap=new Map();
+  quote.components.forEach((item,index)=>{
+    if(componentRowIsEffectivelyEmpty(item) && index!==keepIndex)return;
+    indexMap.set(index,next.length);
+    next.push(item);
+  });
+  const changed=next.length!==quote.components.length;
+  quote.components=next;
+  expandedComponentRowIndex=indexMap.has(expandedComponentRowIndex)?indexMap.get(expandedComponentRowIndex):-1;
+  return {changed,preserveIndex:indexMap.has(keepIndex)?indexMap.get(keepIndex):-1,indexMap};
+}
+function persistComponentDraftCleanup(changed){
+  if(!changed)return;
+  saveQuoteCurrent();
+  markQuoteDirty();
+}
+function buildCostsSummaryData(){
+  const categories=[];
+  const seen=new Set();
+  let total=0;
+  quote.components.forEach((item)=>{
+    total+=numberOrZero(item&&item.cost);
+    if(!componentRowHasMeaningfulData(item))return;
+    const category=specificationValue(item&&item.category);
+    const fallback=specificationValue(item&&item.description);
+    const label=category||fallback;
+    const key=normalizeNameKey(label);
+    if(!key || seen.has(key))return;
+    seen.add(key);
+    categories.push(label);
+  });
+  const visible=categories.slice(0,4);
+  const overflow=Math.max(0,categories.length-visible.length);
+  return {
+    itemsText:visible.length?(overflow>0?`${visible.join(' · ')} +${overflow} more`:visible.join(' · ')):'No parts added yet',
+    totalText:`${currency(total)} total`
+  };
+}
+function updateBuildCostsSummary(){
+  const itemsEl=$('workshopBuildCostsSummaryItems');
+  const totalEl=$('workshopBuildCostsSummaryTotal');
+  if(!itemsEl || !totalEl)return;
+  const summary=buildCostsSummaryData();
+  itemsEl.textContent=summary.itemsText;
+  totalEl.textContent=summary.totalText;
+}
+function componentRowMenuMarkup(item,index){
+  const itemName=componentRowItemLabel(item);
+  const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Draft':'Delete Item';
+  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}"><button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
+}
+function componentRowEditorMarkup(item,index){
+  const isDraftEmpty=componentRowIsEffectivelyEmpty(item);
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Item / Description</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen part..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions">${isDraftEmpty?'<span class="quote-component-row__draft-note">Draft item</span>':''}<button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+}
+function hideComponentRowMenu(){
+  document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
+  document.querySelectorAll('[data-component-action="toggle-row-menu"]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
+}
+function toggleComponentRowMenu(triggerEl,index){
+  const row=triggerEl&&triggerEl.closest('.quote-component-row');
+  const menu=row&&row.querySelector('[data-component-row-menu]');
+  if(!row || !menu)return;
+  const key=String(index);
+  const alreadyOpen=!menu.hidden && menu.getAttribute('data-component-row-menu')===key;
+  hideComponentRowMenu();
+  if(alreadyOpen)return;
+  positionRowMenu(menu,triggerEl,row,164);
+  menu.hidden=false;
+  triggerEl.setAttribute('aria-expanded','true');
+}
+function toggleComponentRow(index,options){
+  if(index<0 || index>=quote.components.length)return;
+  const isClosingCurrent=expandedComponentRowIndex===index;
+  let targetIndex=index;
+  let draftCleanupChanged=false;
+  if(isClosingCurrent){
+    if(componentRowIsEffectivelyEmpty(quote.components[index])){
+      const prune=pruneComponentDraftRows(-1);
+      draftCleanupChanged=prune.changed;
+    }
+    expandedComponentRowIndex=-1;
+    persistComponentDraftCleanup(draftCleanupChanged);
+    hideComponentRowMenu();
+    renderQuoteComponents();
+    updateQuoteSummary();
+    return;
+  }
+  if(expandedComponentRowIndex>=0 && expandedComponentRowIndex<quote.components.length && componentRowIsEffectivelyEmpty(quote.components[expandedComponentRowIndex])){
+    const prune=pruneComponentDraftRows(-1);
+    draftCleanupChanged=prune.changed;
+    targetIndex=prune.indexMap.has(index)?prune.indexMap.get(index):index;
+  }
+  expandedComponentRowIndex=targetIndex;
+  persistComponentDraftCleanup(draftCleanupChanged);
+  hideComponentRowMenu();
+  renderQuoteComponents();
+  waitForDomRender(()=>{
+    scrollNewComponentRowIntoView(targetIndex);
+    if(options&&options.focusDescription){
+      focusNewComponentWithRetry(targetIndex,6);
+    }
+  });
+}
+function bindComponentRowMenus(){
+  if(document.body.getAttribute('data-component-row-menus-bound')==='true')return;
+  document.body.setAttribute('data-component-row-menus-bound','true');
+  document.addEventListener('pointerdown',(event)=>{
+    const actionButton=event.target.closest('[data-component-action="toggle-row-menu"]');
+    if(!actionButton)return;
+    const i=Number(actionButton.getAttribute('data-component-index'));
+    componentRowMenuPointerDown={index:i,expiresAt:Date.now()+450};
+    event.preventDefault();
+    event.stopPropagation();
+    toggleComponentRowMenu(actionButton,i);
+  },true);
+  document.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-component-action="toggle-row-menu"]'))return;
+    if(event.target.closest('[data-component-row-menu]'))return;
+    hideComponentRowMenu();
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape')hideComponentRowMenu();
+  });
+}
 function removeComponentRow(index){
   if(index<0 || index>=quote.components.length)return;
   const removedWasBlank=isBlankCategory(quote.components[index]&&quote.components[index].category);
-  if(quote.components.length>1){
-    quote.components.splice(index,1);
-  }else{
-    quote.components[0]=defaultComponentRow();
+  quote.components.splice(index,1);
+  if(expandedComponentRowIndex===index){
+    expandedComponentRowIndex=-1;
+  }else if(expandedComponentRowIndex>index){
+    expandedComponentRowIndex-=1;
   }
   if(removedWasBlank){
     syncQuoteBlankFromComponents();
@@ -1736,8 +1902,24 @@ function removeComponentRow(index){
   shouldAnimateComponentRows=true;
   saveQuoteCurrent();
   markQuoteDirty();
+  hideComponentRowMenu();
   renderQuoteComponents();
   updateQuoteSummary();
+}
+function requestDeleteComponentRow(index){
+  if(index<0 || index>=quote.components.length)return;
+  const item=quote.components[index];
+  const isDraft=componentRowIsEffectivelyEmpty(item);
+  hideComponentRowMenu();
+  openConfirmDialog({
+    title:isDraft?'Remove Draft':'Delete Item',
+    message:isDraft?'Remove this draft item?':'Delete this item?',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:isDraft?'Remove Draft':'Delete Item',kind:'danger'}]
+  },(action)=>{
+    if(action==='delete'){
+      removeComponentRow(index);
+    }
+  });
 }
 function openComponentSheet(index){
   openChoicePicker('category',index,document.activeElement);
@@ -1790,21 +1972,48 @@ function closeComponentSheet(){
 function renderQuoteComponents(){
   const componentsList=$('quoteComponentsList');
   if(!componentsList)return;
+  if(expandedComponentRowIndex>=quote.components.length){
+    expandedComponentRowIndex=quote.components.length-1;
+  }
   const animateClass=shouldAnimateComponentRows?' quote-component-row--shift':'';
-  componentsList.innerHTML=quote.components.map((item,i)=>`
-      <article class="quote-component-row${animateClass}" data-component-row-index="${i}" aria-label="Build cost row ${i+1}">
-        <div class="quote-component-row__head">
-          <p class="quote-component-row__title">Build Cost ${i+1}</p>
-          <button class="component-row-delete" data-component-action="delete-row" data-component-index="${i}" type="button" aria-label="Delete build cost row ${i+1}">×</button>
+  componentsList.innerHTML=quote.components.map((item,i)=>({item,i})).filter(({item,i})=>!componentRowIsEffectivelyEmpty(item) || expandedComponentRowIndex===i).map(({item,i})=>`
+      <article class="quote-component-row${animateClass}${expandedComponentRowIndex===i?' is-expanded':''}" data-component-row-index="${i}" aria-label="Build cost item ${i+1}">
+        <div class="quote-component-row__summary">
+          <button class="quote-component-row__open" data-component-action="open-row" data-component-index="${i}" type="button" aria-expanded="${expandedComponentRowIndex===i?'true':'false'}">
+            <span class="quote-component-row__summary-copy">
+              <strong class="quote-component-row__summary-item">${escapeHtml(componentRowItemLabel(item))}</strong>
+              ${componentRowSummaryMetaParts(item).length?`<span class="quote-component-row__summary-meta">${componentRowSummaryMetaParts(item).map((part)=>`<span>${escapeHtml(part)}</span>`).join('')}</span>`:''}
+            </span>
+            ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
+          </button>
+          ${componentRowMenuMarkup(item,i)}
         </div>
-        <div class="quote-component-row__fields">
-          <label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label>
-          <label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label>
-          <label class="quote-component-field quote-component-field--description"><span>Description</span><input data-component-index="${i}" data-component-key="description" type="text" placeholder="Enter description..." value="${escapeHtml(item.description||'')}" /></label>
-          <label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${i}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label>
-        </div>
+        ${expandedComponentRowIndex===i?componentRowEditorMarkup(item,i):''}
       </article>
     `).join('');
+  componentsList.querySelectorAll('[data-component-action="toggle-row-menu"]').forEach((button)=>{
+    button.addEventListener('pointerdown',(event)=>{
+      const i=Number(button.getAttribute('data-component-index'));
+      componentRowMenuPointerDown={index:i,expiresAt:Date.now()+450};
+      event.preventDefault();
+      event.stopPropagation();
+      toggleComponentRowMenu(button,i);
+    });
+  });
+  componentsList.querySelectorAll('[data-component-action="request-delete-row"]').forEach((button)=>{
+    button.addEventListener('pointerdown',(event)=>{
+      const i=Number(button.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    });
+    button.addEventListener('click',(event)=>{
+      const i=Number(button.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    });
+  });
   shouldAnimateComponentRows=false;
 }
 function waitForDomRender(callback){
@@ -2403,9 +2612,18 @@ function ensureConfirmSheet(){
     </section>
   `;
   document.body.appendChild(sheet);
+  sheet.addEventListener('pointerdown',(event)=>{
+    const actionButton=event.target.closest('[data-confirm-action]');
+    if(!actionButton)return;
+    const action=actionButton.getAttribute('data-confirm-action')||'cancel';
+    event.preventDefault();
+    event.stopPropagation();
+    closeConfirmDialog(action);
+  },true);
   sheet.addEventListener('click',(event)=>{
     const actionButton=event.target.closest('[data-confirm-action]');
     if(!actionButton)return;
+    if(actionButton.getAttribute('data-confirm-action')==='cancel' && event.target.closest('.component-sheet__scrim'))return;
     const action=actionButton.getAttribute('data-confirm-action')||'cancel';
     closeConfirmDialog(action);
   });
@@ -2821,6 +3039,7 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
+  bindComponentRowMenus();
   const newQuoteEntryBtn=$('newQuoteEntryBtn');
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
@@ -2908,6 +3127,14 @@ function bindWorkshopQuoteBuilder(){
   const componentsList=$('quoteComponentsList');
   if(componentsList){
     ensureChoicePicker();
+    document.addEventListener('pointerdown',(event)=>{
+      const actionButton=event.target.closest('[data-component-action="request-delete-row"]');
+      if(!actionButton || !componentsList.contains(actionButton))return;
+      const i=Number(actionButton.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    },true);
     componentsList.addEventListener('input',(event)=>{
       const input=event.target.closest('[data-component-index]');
       if(!input)return;
@@ -2925,6 +3152,11 @@ function bindWorkshopQuoteBuilder(){
     componentsList.addEventListener('click',(event)=>{
       const actionButton=event.target.closest('[data-component-action]');
       const action=actionButton?actionButton.getAttribute('data-component-action'):'';
+      if(action==='open-row' || action==='close-row'){
+        const i=Number(actionButton.getAttribute('data-component-index'));
+        toggleComponentRow(i,{focusDescription:false});
+        return;
+      }
       if(action==='open-component-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('category',i,actionButton);
@@ -2933,25 +3165,44 @@ function bindWorkshopQuoteBuilder(){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('supplier',i,actionButton);
       }
-      if(action==='delete-row'){
+      if(action==='request-delete-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
-        removeComponentRow(i);
+        requestDeleteComponentRow(i);
       }
     });
+    componentsList.addEventListener('pointerdown',(event)=>{
+      const actionButton=event.target.closest('[data-component-action="request-delete-row"]');
+      if(!actionButton)return;
+      const i=Number(actionButton.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    },true);
   }
   const addComponentBtn=$('addComponentBtn');
   if(addComponentBtn){
     addComponentBtn.addEventListener('click',()=>{
-      quote.components.push(defaultComponentRow());
-      const newIndex=quote.components.length-1;
-      shouldAnimateComponentRows=true;
-      saveQuoteCurrent();
-      markQuoteDirty();
+      let draftIndex=quote.components.findIndex((item)=>componentRowIsEffectivelyEmpty(item));
+      let changed=false;
+      if(draftIndex>=0){
+        const prune=pruneComponentDraftRows(draftIndex);
+        draftIndex=prune.preserveIndex;
+        changed=prune.changed;
+      }else{
+        const prune=pruneComponentDraftRows(-1);
+        changed=prune.changed;
+        quote.components.push(defaultComponentRow());
+        draftIndex=quote.components.length-1;
+        shouldAnimateComponentRows=true;
+        changed=true;
+      }
+      expandedComponentRowIndex=draftIndex;
+      persistComponentDraftCleanup(changed);
       renderQuoteComponents();
       updateQuoteSummary();
       waitForDomRender(()=>{
-        scrollNewComponentRowIntoView(newIndex);
-        setTimeout(()=>focusNewComponentWithRetry(newIndex,6),220);
+        scrollNewComponentRowIntoView(draftIndex);
+        focusNewComponentWithRetry(draftIndex,6);
       });
     });
   }
@@ -3038,6 +3289,7 @@ function renderWorkshopQuote(){
 }
 function updateQuoteSummary(){
   const math=quoteMaths();
+  updateBuildCostsSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);

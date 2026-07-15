@@ -227,13 +227,17 @@
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildCostsBody">
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Costs</span>
+              <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
+                <span id="workshopBuildCostsSummaryItems"></span>
+                <span id="workshopBuildCostsSummaryTotal"></span>
+              </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
           <div id="workshopBuildCostsBody" class="quote-section__body">
             <div id="quoteComponentsList" class="quote-components"></div>
             <div class="quote-actions-row">
-            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Build Cost</button>
+            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Item</button>
             </div>
           </div>
         </article>
