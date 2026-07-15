@@ -40,7 +40,7 @@
       <div class="home-premium-shell">
         <header class="home-premium-hero" aria-label="K-Labs Studio branding">
           <h1>K-Labs Studio</h1>
-          <p>Professional custom fishing rod building, quoting and build companion.</p>
+          <p>Precision custom fishing rod building, quoting and build companion.</p>
         </header>
         <div id="homeLivingRod" class="home-living-rod" aria-hidden="true">
           <svg class="home-living-rod__blank" viewBox="0 0 1200 360" preserveAspectRatio="none" role="presentation" focusable="false">
@@ -49,23 +49,23 @@
                 <path d="M0 0H8" stroke="#ffffff" stroke-opacity="0.16" stroke-width="0.92"></path>
               </pattern>
               <linearGradient id="homeRodBlankBase" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#181d1f"></stop>
-                <stop offset="58%" stop-color="#0a0e10"></stop>
-                <stop offset="100%" stop-color="#121618"></stop>
+                <stop offset="0%" stop-color="#1c2123"></stop>
+                <stop offset="58%" stop-color="#0d1113"></stop>
+                <stop offset="100%" stop-color="#151a1c"></stop>
               </linearGradient>
               <linearGradient id="homeRodCylinderShade" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="rgba(255,255,255,0.025)"></stop>
-                <stop offset="30%" stop-color="rgba(255,255,255,0.07)"></stop>
-                <stop offset="56%" stop-color="rgba(255,255,255,0.028)"></stop>
-                <stop offset="100%" stop-color="rgba(0,0,0,0.2)"></stop>
+                <stop offset="0%" stop-color="rgba(255,255,255,0.03)"></stop>
+                <stop offset="30%" stop-color="rgba(255,255,255,0.08)"></stop>
+                <stop offset="56%" stop-color="rgba(255,255,255,0.03)"></stop>
+                <stop offset="100%" stop-color="rgba(0,0,0,0.22)"></stop>
               </linearGradient>
               <clipPath id="homeRodBlankClip">
-                <path d="M1142 244 C926 220 734 182 526 136 C334 94 162 78 26 80 C16 80 10 79 6 78 L6 77 C12 75 19 74 30 74 C170 74 346 90 542 124 C756 162 954 198 1148 214 Z"></path>
+                <path d="M8 124 L1148 129.3 L1148 130.7 L8 136 Z"></path>
               </clipPath>
             </defs>
-            <path d="M1142 244 C926 220 734 182 526 136 C334 94 162 78 26 80 C16 80 10 79 6 78 L6 77 C12 75 19 74 30 74 C170 74 346 90 542 124 C756 162 954 198 1148 214 Z" fill="url(#homeRodBlankBase)"></path>
-            <rect x="74" y="34" width="1064" height="260" fill="url(#homeRodCarbonWeave)" clip-path="url(#homeRodBlankClip)" opacity="0.98"></rect>
-            <path d="M1128 230 C928 206 738 170 542 130 C352 92 182 77 32 78" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="12.2" stroke-linecap="round" opacity="0.56"></path>
+            <path d="M8 124 L1148 129.3 L1148 130.7 L8 136 Z" fill="url(#homeRodBlankBase)"></path>
+            <rect x="8" y="123" width="1140" height="14" fill="url(#homeRodCarbonWeave)" clip-path="url(#homeRodBlankClip)" opacity="0.8"></rect>
+            <path d="M42 126.8 L1126 130" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="1.6" stroke-linecap="round" opacity="0.5"></path>
           </svg>
           <span class="home-living-rod__leds"></span>
         </div>
@@ -206,17 +206,6 @@
           <option value="Mexico"></option>
         </datalist>
 
-        <article class="quote-section quote-section--collapsible" data-internal-only>
-          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBlankDetailsBody">
-            <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">SELECTED BLANK</span>
-            </span>
-            <b class="quote-section__chevron" aria-hidden="true">▾</b>
-          </button>
-          <div id="workshopBlankDetailsBody" class="selected-blank-panel quote-section__body"></div>
-          </div>
-        </article>
-
         <article class="quote-section quote-section--collapsible" data-internal-only aria-label="Build Specifications">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildSpecsBody">
             <span class="quote-section__toggle-copy">
@@ -263,14 +252,19 @@
           </div>
         </article>
 
-        <article class="quote-section">
-          <header class="quote-section__header">
-            <h2>Quote Summary</h2>
-          </header>
-          <div class="quote-grid quote-grid--three quote-section__body">
+        <article class="quote-section quote-section--collapsible">
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopQuoteSummaryBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Quote Summary</span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--three quote-section__body">
             <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
             <label id="quoteMarkupPercentField"><span>Markup %</span><input id="quoteMarkupPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
-            <label id="quoteGstField"><span id="quoteTaxLabel">Tax (15%)</span><input id="quoteGst" type="text" readonly /></label>
+            <label id="quoteIncludeGstField" class="quote-gst-toggle"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+            <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
+            <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
             <label><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteProfitField"><span>Target Profit</span><input id="quoteProfit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
@@ -330,7 +324,8 @@
       <div class="settings-card">
         <div><span>Version</span><strong>BUILD 051.2</strong></div>
         <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
-        <div><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /></strong></div>
+        <div><span>Tax Enabled (Default)</span><strong><input id="settingsTaxEnabled" type="checkbox" checked /></strong></div>
+        <div><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
         <div class="settings-card__actions">
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
         </div>

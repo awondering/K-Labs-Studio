@@ -1,6 +1,16 @@
 const $=id=>document.getElementById(id);
-let state=Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0});
-const DEFAULT_CATEGORY_NAMES=['Butt Cap','Decals','Freight','Grip','Guides','Hook Keeper','Reel Seat','Thread & Finish','Tip Top','Winding Checks','Other'];
+function normalizeLayoutState(input){
+  const raw=input&&typeof input==='object'?input:{};
+  return {
+    firstGuide:clampValue(raw.firstGuide,50,300),
+    guideCount:clampValue(raw.guideCount,5,20),
+    targetStripper:clampValue(raw.targetStripper,500,2500),
+    locked:false,
+    workshopIndex:Math.max(0,clampValue(raw.workshopIndex,0,1000))
+  };
+}
+let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0}));
+const DEFAULT_CATEGORY_NAMES=['Blank','Butt Cap','Decals','Freight','Grip','Guides','Hook Keeper','Reel Seat','Thread & Finish','Tip Top','Winding Checks','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
@@ -53,13 +63,22 @@ const choicePickerViewportState={
   keyboardActive:false,
 };
 
-function save(){Store.set('klabs-studio-state',state)}
+function save(){
+  Store.set('klabs-studio-state',{
+    firstGuide:numberOrZero(state.firstGuide),
+    guideCount:numberOrZero(state.guideCount),
+    targetStripper:numberOrZero(state.targetStripper),
+    locked:false,
+    workshopIndex:numberOrZero(state.workshopIndex)
+  });
+}
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
 function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
-  return {taxRate};
+  const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
+  return {taxRate,taxEnabled};
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
@@ -67,8 +86,121 @@ function saveStudioSettings(){
 function activeTaxRate(){
   return Math.max(0,numberOrZero(studioSettings&&studioSettings.taxRate)||15);
 }
+function activeTaxEnabled(){
+  return (studioSettings&&typeof studioSettings.taxEnabled==='boolean')?studioSettings.taxEnabled:true;
+}
 function roundMoney(value){
   return Math.round(numberOrZero(value)*100)/100;
+}
+function isBlankCategory(category){
+  return normalizeNameKey(category)==='blank';
+}
+function blankComponentFromBlank(blank,currentRow){
+  const row=currentRow&&typeof currentRow==='object'?currentRow:{};
+  const normalized=blank?normalizeBlank(blank):null;
+  const blankName=normalized?blankDisplayName(normalized):String(row.description||row.blankName||'').trim();
+  return {
+    ...row,
+    category:'Blank',
+    description:blankName,
+    supplier:normalized?String(normalized.maker||''):String(row.supplier||row.blankMaker||''),
+    cost:normalized?numberOrZero(normalized.cost):numberOrZero(row.cost),
+    blankId:normalized?String(normalized.id||''):String(row.blankId||''),
+    blankName:blankName,
+    blankMaker:normalized?String(normalized.maker||''):String(row.blankMaker||''),
+    blankSeries:normalized?String(normalized.series||''):String(row.blankSeries||''),
+    blankLength:normalized?String(normalized.length||''):String(row.blankLength||''),
+    blankPower:normalized?String(normalized.power||''):String(row.blankPower||''),
+    blankAction:normalized?String(normalized.action||''):String(row.blankAction||''),
+    blankPieces:normalized?String(normalized.pieces||''):String(row.blankPieces||''),
+    blankSku:normalized?String(normalized.sku||''):String(row.blankSku||''),
+    blankNotes:normalized?String(normalized.notes||''):String(row.blankNotes||''),
+  };
+}
+function firstBlankComponentIndex(components){
+  return (components||[]).findIndex((item)=>isBlankCategory(item&&item.category));
+}
+function clearQuoteBlankSelection(){
+  quote.blankId='';
+  quote.blankName='';
+  quote.blankMaker='';
+  quote.blankSeries='';
+  quote.blankLength='';
+  quote.blankPower='';
+  quote.blankAction='';
+  quote.blankPieces='';
+  quote.blankCost=0;
+  quote.blankSku='';
+  quote.blankNotes='';
+}
+function applyBlankComponentToQuote(row){
+  if(!row || !isBlankCategory(row.category))return;
+  quote.blankId=String(row.blankId||quote.blankId||'');
+  quote.blankName=String(row.blankName||row.description||quote.blankName||'').trim();
+  quote.blankMaker=String(row.blankMaker||row.supplier||quote.blankMaker||'').trim();
+  quote.blankSeries=String(row.blankSeries||quote.blankSeries||'').trim();
+  quote.blankLength=String(row.blankLength||quote.blankLength||'').trim();
+  quote.blankPower=String(row.blankPower||quote.blankPower||'').trim();
+  quote.blankAction=String(row.blankAction||quote.blankAction||'').trim();
+  quote.blankPieces=String(row.blankPieces||quote.blankPieces||'').trim();
+  quote.blankCost=numberOrZero(row.cost);
+  quote.blankSku=String(row.blankSku||quote.blankSku||'').trim();
+  quote.blankNotes=String(row.blankNotes||quote.blankNotes||'').trim();
+}
+function syncQuoteBlankFromComponents(){
+  const blankIndex=firstBlankComponentIndex(quote.components);
+  if(blankIndex<0){
+    clearQuoteBlankSelection();
+    return;
+  }
+  applyBlankComponentToQuote(quote.components[blankIndex]);
+}
+function migrateBlankWorkflow(merged){
+  if(!Array.isArray(merged.components))merged.components=[];
+  let blankIndex=firstBlankComponentIndex(merged.components);
+  if(blankIndex<0 && (specificationValue(merged.blankId)||specificationValue(merged.blankName)||numberOrZero(merged.blankCost)>0)){
+    const row=blankComponentFromBlank(null,{
+      category:'Blank',
+      description:String(merged.blankName||'').trim(),
+      supplier:String(merged.blankMaker||'').trim(),
+      cost:numberOrZero(merged.blankCost),
+      blankId:String(merged.blankId||''),
+      blankName:String(merged.blankName||''),
+      blankMaker:String(merged.blankMaker||''),
+      blankSeries:String(merged.blankSeries||''),
+      blankLength:String(merged.blankLength||''),
+      blankPower:String(merged.blankPower||''),
+      blankAction:String(merged.blankAction||''),
+      blankPieces:String(merged.blankPieces||''),
+      blankSku:String(merged.blankSku||''),
+      blankNotes:String(merged.blankNotes||''),
+    });
+    merged.components.unshift(row);
+    blankIndex=0;
+  }
+  if(blankIndex>=0){
+    const primaryBlank=blankComponentFromBlank(null,merged.components[blankIndex]);
+    merged.components[blankIndex]=primaryBlank;
+    merged.components=merged.components.map((row,index)=>{
+      if(index===blankIndex)return row;
+      if(!isBlankCategory(row&&row.category))return row;
+      return {...row,category:'Other',description:(specificationValue(row.description)||'Legacy blank item')};
+    });
+    merged.blankId=String(primaryBlank.blankId||merged.blankId||'');
+    merged.blankName=String(primaryBlank.blankName||primaryBlank.description||merged.blankName||'').trim();
+    merged.blankMaker=String(primaryBlank.blankMaker||primaryBlank.supplier||merged.blankMaker||'').trim();
+    merged.blankSeries=String(primaryBlank.blankSeries||merged.blankSeries||'').trim();
+    merged.blankLength=String(primaryBlank.blankLength||merged.blankLength||'').trim();
+    merged.blankPower=String(primaryBlank.blankPower||merged.blankPower||'').trim();
+    merged.blankAction=String(primaryBlank.blankAction||merged.blankAction||'').trim();
+    merged.blankPieces=String(primaryBlank.blankPieces||merged.blankPieces||'').trim();
+    merged.blankCost=numberOrZero(primaryBlank.cost);
+    merged.blankSku=String(primaryBlank.blankSku||merged.blankSku||'').trim();
+    merged.blankNotes=String(primaryBlank.blankNotes||merged.blankNotes||'').trim();
+  }
+  if(!merged.components.length){
+    merged.components=[{category:'',description:'',supplier:'',cost:0}];
+  }
 }
 function normalizePricingDriver(value){
   const next=String(value||'').trim().toLowerCase();
@@ -76,24 +208,34 @@ function normalizePricingDriver(value){
   return 'markup';
 }
 function syncQuotePricing(driver){
-  const internalCost=numberOrZero(quote.blankCost)+quote.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
+  syncQuoteBlankFromComponents();
+  const buildCostTotal=quote.components.reduce((sum,item)=>{
+    if(isBlankCategory(item&&item.category))return sum;
+    return sum+numberOrZero(item&&item.cost);
+  },0);
+  const internalCost=numberOrZero(quote.blankCost)+buildCostTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
   const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
+  const gstRate=Math.max(0,numberOrZero(quote.gstRate));
+  const multiplier=(quote.includeGst!==false)?(1+(gstRate/100)):1;
   let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
   let targetProfit=numberOrZero(quote.targetProfit);
   let markupPercent=numberOrZero(quote.markupPercent);
 
   if(activeDriver==='final'){
     finalCustomerPrice=Math.max(0,finalCustomerPrice);
-    targetProfit=Math.max(0,finalCustomerPrice-internalCost);
+    const preTaxPrice=finalCustomerPrice/multiplier;
+    targetProfit=Math.max(0,preTaxPrice-internalCost);
     markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
   }else if(activeDriver==='profit'){
     targetProfit=Math.max(0,targetProfit);
-    finalCustomerPrice=internalCost+targetProfit;
+    const preTaxPrice=internalCost+targetProfit;
+    finalCustomerPrice=preTaxPrice*multiplier;
     markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
   }else{
     markupPercent=Math.max(0,markupPercent);
     targetProfit=internalCost*(markupPercent/100);
-    finalCustomerPrice=internalCost+targetProfit;
+    const preTaxPrice=internalCost+targetProfit;
+    finalCustomerPrice=preTaxPrice*multiplier;
   }
 
   quote.pricingDriver=activeDriver;
@@ -101,19 +243,18 @@ function syncQuotePricing(driver){
   quote.targetProfit=roundMoney(targetProfit);
   quote.finalCustomerPrice=roundMoney(finalCustomerPrice);
   quote.marginPercent=quote.markupPercent;
-  quote.gstRate=activeTaxRate();
 }
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
   return[
-    {x:8,y:44},
-    {x:18,y:45},
-    {x:30,y:47},
-    {x:43,y:49},
-    {x:57,y:52},
-    {x:71,y:55},
-    {x:84,y:58},
-    {x:94,y:61}
+    {x:8,y:36.1},
+    {x:18,y:36.1},
+    {x:30,y:36.1},
+    {x:43,y:36.1},
+    {x:57,y:36.1},
+    {x:71,y:36.1},
+    {x:84,y:36.1},
+    {x:94,y:36.1}
   ];
 }
 function homeRodClearSequenceTimer(){
@@ -205,7 +346,7 @@ function newQuoteTemplate(){
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',includeGst:true,quoteMode:'internal',gstRate:15,quoteStatus:'draft'
+    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'draft'
   };
 }
 function normalizeAddressText(value){
@@ -339,10 +480,13 @@ function normalizeQuote(inputQuote){
   const merged={...base,...(inputQuote||{})};
   const components=Array.isArray(inputQuote&&inputQuote.components)&&inputQuote.components.length?inputQuote.components:[{category:'',description:'',supplier:'',cost:0}];
   merged.components=components.map(normalizeComponent);
-  merged.includeGst=true;
+  const hasStoredTaxEnabled=(inputQuote&&typeof inputQuote.taxEnabled==='boolean');
+  merged.taxEnabled=hasStoredTaxEnabled?inputQuote.taxEnabled:((inputQuote&&typeof inputQuote==='object')?true:activeTaxEnabled());
+  merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
-  merged.gstRate=activeTaxRate();
+  const incomingGstRate=(inputQuote&&inputQuote.gstRate);
+  merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
   merged.finalCustomerPrice=numberOrZero(inputQuote&&inputQuote.finalCustomerPrice);
@@ -371,6 +515,7 @@ function normalizeQuote(inputQuote){
   merged.postcode=normalizeAddressText(inputQuote&&inputQuote.postcode);
   merged.country=normalizeAddressText(inputQuote&&inputQuote.country)||'New Zealand';
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
+  migrateBlankWorkflow(merged);
   const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
   const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
   const internalBuildCost=numberOrZero(merged.blankCost)+merged.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
@@ -439,19 +584,27 @@ function ensureCustomerSectionExpanded(){
   const trigger=section.querySelector('[data-collapsible-trigger]');
   if(trigger){trigger.setAttribute('aria-expanded','true');}
 }
+function setWorkshopSectionCollapsed(sectionId,collapsed){
+  const body=$(sectionId);
+  if(!body)return;
+  const section=body.closest('.quote-section--collapsible');
+  if(!section)return;
+  section.classList.toggle('quote-section--collapsed',!!collapsed);
+  const trigger=section.querySelector('[data-collapsible-trigger]');
+  if(trigger){trigger.setAttribute('aria-expanded',String(!collapsed));}
+}
+function collapseWorkshopSections(){
+  ['workshopCustomerBody','workshopBuildSpecsBody','workshopBuildCostsBody','workshopLabourBody','workshopQuoteSummaryBody'].forEach((id)=>{
+    setWorkshopSectionCollapsed(id,true);
+  });
+}
 function beginFreshBuild(){
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
   renderWorkshopQuote();
-  ensureCustomerSectionExpanded();
+  collapseWorkshopSections();
   goScreen('workshopScreen');
-  window.requestAnimationFrame(()=>{
-    const firstField=$('quoteCustomerName');
-    if(firstField && typeof firstField.focus==='function'){
-      firstField.focus({preventScroll:true});
-    }
-  });
 }
 function startNewBuildFlow(){
   if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
@@ -546,7 +699,7 @@ function syncChoicePickerViewport(){
   choicePickerViewportState.keyboardActive=keyboardActive;
 
   const sideGap=12;
-  const panelMaxWidth=Math.max(240,viewportWidth-(sideGap*2));
+  const panelMaxWidth=Math.min(620,Math.max(240,viewportWidth-(sideGap*2)));
   const panelMaxHeight=Math.max(160,viewportHeight-32);
   sheet.style.setProperty('--component-sheet-vv-left',`${viewportLeft}px`);
   sheet.style.setProperty('--component-sheet-vv-width',`${viewportWidth}px`);
@@ -609,6 +762,7 @@ function quoteMaths(){
   syncQuotePricing();
   const blankCost=numberOrZero(quote.blankCost);
   const buildCostTotal=quote.components.reduce((sum,item)=>{
+    if(isBlankCategory(item&&item.category))return sum;
     return sum+numberOrZero(item.cost);
   },0);
   const materialCost=blankCost+buildCostTotal;
@@ -616,8 +770,8 @@ function quoteMaths(){
   const internalBuildCost=materialCost+labourCost;
   const markupAmount=numberOrZero(quote.targetProfit);
   const subtotal=numberOrZero(quote.finalCustomerPrice);
-  const gstRate=activeTaxRate();
-  const gst=subtotal*(gstRate/(100+gstRate));
+  const gstRate=Math.max(0,numberOrZero(quote.gstRate));
+  const gst=(quote.includeGst!==false)?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
   const profit=markupAmount;
   return{materialCost,labourCost,internalBuildCost,markupAmount,subtotal,gst,total,profit,markupPercent:numberOrZero(quote.markupPercent),taxRate:gstRate};
@@ -730,6 +884,17 @@ function applyBlankToQuote(blank){
   quote.blankCost=numberOrZero(blank.cost);
   quote.blankSku=blank.sku;
   quote.blankNotes=blank.notes;
+  const existingBlankIndex=firstBlankComponentIndex(quote.components);
+  if(existingBlankIndex>=0){
+    quote.components[existingBlankIndex]=blankComponentFromBlank(blank,quote.components[existingBlankIndex]);
+    quote.components=quote.components.map((row,index)=>{
+      if(index===existingBlankIndex)return row;
+      if(!isBlankCategory(row&&row.category))return row;
+      return {...row,category:'Other',description:(specificationValue(row.description)||'Legacy blank item')};
+    });
+  }else{
+    quote.components.unshift(blankComponentFromBlank(blank,defaultComponentRow()));
+  }
   saveQuoteCurrent();
   markQuoteDirty();
 }
@@ -1143,8 +1308,13 @@ function ensureChoicePicker(){
       const selectedId=optionButton.getAttribute('data-choice-id')||'';
       const pickerContext={...activeChoicePicker};
       hideChoicePickerMenu();
-      closeComponentSheet();
-      applyChoiceSelection(selectedName,selectedId,pickerContext);
+      if(pickerContext.type==='blank'){
+        applyChoiceSelection(selectedName,selectedId,pickerContext);
+        closeComponentSheet();
+      }else{
+        closeComponentSheet();
+        applyChoiceSelection(selectedName,selectedId,pickerContext);
+      }
       return;
     }
     const deleteButton=event.target.closest('button[data-choice-delete-option]');
@@ -1419,22 +1589,66 @@ function setChoiceValue(type,index,value){
   if(type==='supplier'){
     quote.components[index].supplier=value;
   }else{
+    const wasBlank=isBlankCategory(quote.components[index].category);
     quote.components[index].category=value;
+    if(wasBlank && !isBlankCategory(value)){
+      syncQuoteBlankFromComponents();
+    }
   }
   saveQuoteCurrent();
   markQuoteDirty();
+}
+function applyBlankSelectionToBuildCosts(blank,targetIndex){
+  const selected=normalizeBlank(blank);
+  const existingIndex=firstBlankComponentIndex(quote.components);
+  const updateRowAt=(rowIndex)=>{
+    if(rowIndex<0 || rowIndex>=quote.components.length)return;
+    quote.components[rowIndex]=blankComponentFromBlank(selected,quote.components[rowIndex]);
+    applyBlankComponentToQuote(quote.components[rowIndex]);
+    saveQuoteCurrent();
+    markQuoteDirty();
+    renderWorkshopQuote();
+  };
+  if(existingIndex>=0 && existingIndex!==targetIndex){
+    openConfirmDialog({
+      title:'Replace Blank',
+      message:'Replace the current blank?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'replace',label:'Replace',kind:'primary'}]
+    },(action)=>{
+      if(action==='replace'){
+        updateRowAt(existingIndex);
+      }
+    });
+    return;
+  }
+  if(Number.isInteger(targetIndex) && targetIndex>=0 && targetIndex<quote.components.length){
+    updateRowAt(targetIndex);
+    return;
+  }
+  if(existingIndex>=0){
+    updateRowAt(existingIndex);
+    return;
+  }
+  quote.components.unshift(blankComponentFromBlank(selected,defaultComponentRow()));
+  applyBlankComponentToQuote(quote.components[0]);
+  saveQuoteCurrent();
+  markQuoteDirty();
+  renderWorkshopQuote();
 }
 function applyChoiceSelection(selectedName,selectedId,pickerContext){
   const context=pickerContext||activeChoicePicker;
   if(context.type==='blank'){
     const selectedBlank=findBlankById(selectedId) || blanks.find((blank)=>normalizeNameKey(blankDisplayName(blank))===normalizeNameKey(selectedName));
     if(selectedBlank){
-      applyBlankToQuote(selectedBlank);
-      renderWorkshopQuote();
+      applyBlankSelectionToBuildCosts(selectedBlank,context.index);
     }
     return;
   }
   if(context.index>=0){
+    if(context.type==='category' && isBlankCategory(selectedName)){
+      openChoicePicker('blank',context.index,document.activeElement);
+      return;
+    }
     setChoiceValue(context.type,context.index,selectedName);
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
@@ -1524,10 +1738,14 @@ function defaultComponentRow(){
 }
 function removeComponentRow(index){
   if(index<0 || index>=quote.components.length)return;
+  const removedWasBlank=isBlankCategory(quote.components[index]&&quote.components[index].category);
   if(quote.components.length>1){
     quote.components.splice(index,1);
   }else{
     quote.components[0]=defaultComponentRow();
+  }
+  if(removedWasBlank){
+    syncQuoteBlankFromComponents();
   }
   shouldAnimateComponentRows=true;
   saveQuoteCurrent();
@@ -1854,7 +2072,7 @@ function openSavedBuildRecord(source,index){
   saveQuoteCurrent();
   markQuoteSaved();
   renderWorkshopQuote();
-  ensureCustomerSectionExpanded();
+  collapseWorkshopSections();
   goScreen('workshopScreen');
 }
 function duplicateSavedBuildRecord(source,index){
@@ -1869,7 +2087,7 @@ function duplicateSavedBuildRecord(source,index){
   saveQuoteCurrent();
   markQuoteDirty();
   renderWorkshopQuote();
-  ensureCustomerSectionExpanded();
+  collapseWorkshopSections();
   goScreen('workshopScreen');
 }
 function renderBuilds(){
@@ -2120,9 +2338,11 @@ function bindLayoutControls(){
     const field=button.getAttribute('data-target-field');
     if(!field || !controlMeta[field])return;
     const direction=button.getAttribute('data-action')==='increment'?1:-1;
+    let pointerHandled=false;
     button.style.touchAction='manipulation';
     button.addEventListener('pointerdown',(event)=>{
       if(event.button!==0 || !event.isPrimary)return;
+      pointerHandled=false;
       event.preventDefault();
       startHold(field,direction,button);
     });
@@ -2134,6 +2354,7 @@ function bindLayoutControls(){
           return;
         }
         event.preventDefault();
+        pointerHandled=true;
         changeControlValue(field,direction,{persist:true});
       }
       stopHold();
@@ -2151,6 +2372,12 @@ function bindLayoutControls(){
     });
     button.addEventListener('click',(event)=>{
       event.preventDefault();
+      if(pointerHandled){
+        pointerHandled=false;
+        return;
+      }
+      if(isLayoutLocked())return;
+      changeControlValue(field,direction,{persist:true});
     });
     button.addEventListener('keydown',(event)=>{
       if(event.key!=='Enter' && event.key!==' ')return;
@@ -2206,7 +2433,6 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
-  bindSelectedBlankControls();
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -2237,6 +2463,37 @@ function bindWorkshopQuoteBuilder(){
     input.addEventListener('input',onPricingUpdate);
     input.addEventListener('change',onPricingUpdate);
   });
+  const includeTaxInput=$('quoteIncludeGst');
+  if(includeTaxInput){
+    const onTaxToggle=()=>{
+      quote.includeGst=includeTaxInput.checked;
+      syncQuotePricing();
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    includeTaxInput.addEventListener('input',onTaxToggle);
+    includeTaxInput.addEventListener('change',onTaxToggle);
+  }
+  const quoteTaxRateInput=$('quoteTaxRate');
+  if(quoteTaxRateInput){
+    const onQuoteTaxRateUpdate=()=>{
+      quote.gstRate=Math.max(0,numberOrZero(quoteTaxRateInput.value));
+      syncQuotePricing();
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    quoteTaxRateInput.addEventListener('input',onQuoteTaxRateUpdate);
+    quoteTaxRateInput.addEventListener('change',onQuoteTaxRateUpdate);
+    quoteTaxRateInput.addEventListener('blur',onQuoteTaxRateUpdate);
+    quoteTaxRateInput.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      onQuoteTaxRateUpdate();
+      quoteTaxRateInput.blur();
+    });
+  }
   document.querySelectorAll('[data-quote-mode]').forEach((button)=>{
     button.addEventListener('click',()=>{
       quote.quoteMode=normalizeQuoteMode(button.getAttribute('data-quote-mode'));
@@ -2256,6 +2513,9 @@ function bindWorkshopQuoteBuilder(){
       const key=input.getAttribute('data-component-key');
       if(!quote.components[i] || !key)return;
       quote.components[i][key]=['cost'].includes(key)?numberOrZero(input.value):input.value;
+      if(isBlankCategory(quote.components[i].category)){
+        applyBlankComponentToQuote(quote.components[i]);
+      }
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -2354,11 +2614,18 @@ function renderWorkshopQuote(){
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Markup • Quote Summary';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Build Specifications • Build Costs • Labour • Markup • Quote Summary';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
   if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';
   updateQuoteActionPriority();
-  renderSelectedBlankPanel();
+  const includeTaxInput=$('quoteIncludeGst');
+  if(includeTaxInput && document.activeElement!==includeTaxInput){
+    includeTaxInput.checked=quote.includeGst!==false;
+  }
+  const quoteTaxRateInput=$('quoteTaxRate');
+  if(quoteTaxRateInput && document.activeElement!==quoteTaxRateInput){
+    quoteTaxRateInput.value=numberOrZero(quote.gstRate).toFixed(1);
+  }
   renderBuildSpecificationInputs();
   const activeElement=document.activeElement;
   const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
@@ -2376,12 +2643,18 @@ function updateQuoteSummary(){
   if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
   if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
   if($('quoteMarkupPercent') && document.activeElement!==$('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
-  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`Tax (${numberOrZero(math.taxRate).toFixed(1)}%)`;
+  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
+  if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
+  const taxAvailable=quote.taxEnabled!==false;
+  const showTaxDetails=taxAvailable && quote.includeGst!==false;
+  if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
+  if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
+  if($('quoteGstField'))$('quoteGstField').hidden=!showTaxDetails;
   if($('quoteModeLabel'))$('quoteModeLabel').textContent=mode==='customer'?'Customer mode':'Internal mode';
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');
-  if(gstField){gstField.classList.remove('quote-field--muted');}
-  if(gstStatus){gstStatus.textContent=`Tax is automatically applied from Settings (${numberOrZero(math.taxRate).toFixed(1)}%).`;}
+  if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
+  if(gstStatus){gstStatus.textContent='';}
   ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=mode==='customer';});
 }
 
@@ -2738,6 +3011,7 @@ function bindHomeActions(){
   if(enterBtn && enterBtn.getAttribute('data-home-bound')!=='true'){
     enterBtn.setAttribute('data-home-bound','true');
     enterBtn.addEventListener('click',()=>{
+      collapseWorkshopSections();
       goScreen('workshopScreen');
     });
   }
@@ -2810,23 +3084,49 @@ function onScreenChange(screenId){
     }
   }
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
-    $('settingsTaxRate').value=numberOrZero(activeTaxRate()).toFixed(1);
+    $('settingsTaxRate').value=String(activeTaxRate());
+    if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   }
 }
 function bindSettingsControls(){
-  const taxRateInput=$('settingsTaxRate');
-  if(taxRateInput){
-    taxRateInput.value=numberOrZero(activeTaxRate()).toFixed(1);
-    const onTaxRateChange=()=>{
-      studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
+  const taxEnabledInput=$('settingsTaxEnabled');
+  if(taxEnabledInput){
+    taxEnabledInput.checked=activeTaxEnabled();
+    const onTaxEnabledChange=()=>{
+      studioSettings.taxEnabled=taxEnabledInput.checked;
       saveStudioSettings();
-      syncQuotePricing();
-      saveQuoteCurrent();
-      markQuoteDirty();
-      updateQuoteSummary();
     };
-    taxRateInput.addEventListener('input',onTaxRateChange);
-    taxRateInput.addEventListener('change',onTaxRateChange);
+    taxEnabledInput.addEventListener('input',onTaxEnabledChange);
+    taxEnabledInput.addEventListener('change',onTaxEnabledChange);
+  }
+  const taxRateInput=$('settingsTaxRate');
+  const taxSavedLabel=$('settingsTaxSaved');
+  let taxSavedTimer=null;
+  const showTaxSaved=()=>{
+    if(!taxSavedLabel)return;
+    taxSavedLabel.hidden=false;
+    if(taxSavedTimer){clearTimeout(taxSavedTimer);}
+    taxSavedTimer=window.setTimeout(()=>{
+      taxSavedLabel.hidden=true;
+      taxSavedTimer=null;
+    },1200);
+  };
+  if(taxRateInput){
+    taxRateInput.value=String(activeTaxRate());
+    const saveTaxRate=()=>{
+      studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
+      taxRateInput.value=String(studioSettings.taxRate);
+      saveStudioSettings();
+      showTaxSaved();
+    };
+    taxRateInput.addEventListener('change',saveTaxRate);
+    taxRateInput.addEventListener('blur',saveTaxRate);
+    taxRateInput.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      saveTaxRate();
+      taxRateInput.blur();
+    });
   }
   const demoButton=$('loadDemoBuildBtn');
   if(!demoButton)return;

@@ -158,14 +158,14 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   position:absolute;
   left:var(--x,8%);
   top:var(--y,15%);
-  width:2.2px;
-  height:2.2px;
+  width:2.6px;
+  height:2.6px;
   border-radius:999px;
-  background:radial-gradient(circle at 38% 34%,rgba(36,20,23,.82) 0%,rgba(20,9,12,.95) 58%,rgba(7,3,4,.99) 100%);
-  box-shadow:inset 0 0 .9px rgba(0,0,0,.82),0 0 0 .55px rgba(196,188,172,.05);
-  opacity:.7;
+  background:radial-gradient(circle at 36% 32%,#a7414c 0%,#7f202b 46%,#4a1219 100%);
+  box-shadow:inset 0 0 .8px rgba(228,164,174,.16),0 0 0 .62px rgba(28,7,11,.96);
+  opacity:.94;
   transform:translate(-50%,-50%);
-  transition:opacity 520ms ease-out,box-shadow 520ms ease-out,background-image 520ms ease-out,transform 520ms ease-out;
+  transition:opacity 520ms ease-out,box-shadow 520ms ease-out,background-image 520ms ease-out;
   will-change:opacity;
 }
 
@@ -181,25 +181,24 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 }
 
 #homeScreen .home-living-rod__led::before{
-  width:2.8px;
-  height:2.8px;
-  background:radial-gradient(circle,rgba(255,255,255,.03) 0%,rgba(0,0,0,0) 72%);
-  box-shadow:inset 0 0 .65px rgba(0,0,0,.46);
+  width:1.2px;
+  height:1.2px;
+  background:radial-gradient(circle,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 72%);
+  box-shadow:none;
 }
 
 #homeScreen .home-living-rod__led::after{
-  width:1.35px;
-  height:.58px;
-  background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,.015));
-  opacity:.26;
+  width:0;
+  height:0;
+  background:none;
+  opacity:0;
   transform:translate(-56%,-62%) rotate(-19deg);
 }
 
 #homeScreen .home-living-rod__led.is-lit{
   opacity:1;
-  background:radial-gradient(circle at 38% 34%,#a7434e 0%,#81202b 44%,#4f1219 100%);
-  box-shadow:inset 0 0 .8px rgba(188,74,86,.38),0 0 0 .62px rgba(112,27,37,.42);
-  transform:translate(-50%,-50%) scale(1.02);
+  background:radial-gradient(circle at 36% 32%,#b34854 0%,#8d2531 45%,#541720 100%);
+  box-shadow:inset 0 0 .82px rgba(238,174,184,.2),0 0 0 .68px rgba(33,8,13,.98);
 }
 
 #homeScreen .home-enter-rod-button{
@@ -212,20 +211,20 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   text-transform:uppercase;
   font-size:13px;
   font-weight:700;
-  background:linear-gradient(180deg,#3d4244 0%,#2a2f31 48%,#1f2426 100%);
-  border:1px solid #616768;
-  color:#ece4d8;
+  background:linear-gradient(180deg,#353a3c 0%,#2f3436 100%);
+  border:1px solid #5f6668;
+  color:#e7ded2;
   text-shadow:0 -.4px 0 rgba(0,0,0,.55),0 .35px 0 rgba(255,255,255,.08);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -1px 0 rgba(0,0,0,.45),0 3px 8px rgba(0,0,0,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 0 rgba(0,0,0,.5),inset 0 0 0 1px rgba(18,21,22,.72),0 2px 6px rgba(0,0,0,.24);
   transition:transform 120ms cubic-bezier(.2,.75,.28,1),background-color 120ms ease,border-color 120ms ease,box-shadow 120ms ease;
   will-change:transform;
   -webkit-tap-highlight-color:transparent;
 }
 
 #homeScreen .home-enter-rod-button:hover{
-  background:linear-gradient(180deg,#454b4d 0%,#303638 48%,#252b2d 100%);
-  border-color:#707778;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(0,0,0,.5),0 4px 9px rgba(0,0,0,.24);
+  background:linear-gradient(180deg,#393f41 0%,#33383a 100%);
+  border-color:#687072;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.52),inset 0 0 0 1px rgba(20,23,24,.75),0 2px 7px rgba(0,0,0,.26);
 }
 
 #homeScreen .home-enter-rod-button:focus-visible{
@@ -234,10 +233,10 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 }
 
 #homeScreen .home-enter-rod-button:active{
-  transform:translateY(1.6px);
-  background:linear-gradient(180deg,#2e3335 0%,#23282a 52%,#1b2022 100%);
-  border-color:#565c5d;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 rgba(0,0,0,.55),0 1px 4px rgba(0,0,0,.22);
+  transform:translateY(1px);
+  background:linear-gradient(180deg,#2d3234 0%,#2a2f31 100%);
+  border-color:#4f5658;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -1px 0 rgba(0,0,0,.56),inset 0 0 0 1px rgba(21,24,25,.78),0 1px 3px rgba(0,0,0,.24);
 }
 
 #homeScreen .home-continue-last-build{
@@ -412,6 +411,47 @@ body.home-screen-active #settingsScreen{
 }
 
 [hidden]{display:none!important}
+
+.screen{
+  display:none!important;
+  visibility:hidden;
+  pointer-events:none;
+  height:0;
+  overflow:hidden;
+}
+
+.screen.active{
+  display:block!important;
+  visibility:visible;
+  pointer-events:auto;
+  height:auto;
+  overflow:visible;
+  padding-bottom:calc(12px + var(--safe-bottom));
+}
+
+.bottom-nav{
+  z-index:60;
+  background:rgba(8,10,11,.97);
+}
+
+.live-build-status,
+.offline-ready-status{
+  z-index:61;
+}
+
+#layoutStatusBadge[aria-pressed="true"]{
+  background:rgba(167,23,34,.24);
+  border-color:rgba(186,31,44,.4);
+  color:#f5dedf;
+}
+
+#app.locked .layout-control-card__value{
+  opacity:.62;
+}
+
+#app.locked .layout-control-card__button{
+  opacity:.55;
+}
 
 .rod-blank-visual{
   display:grid;
@@ -927,8 +967,8 @@ body.home-screen-active #settingsScreen{
   right:auto;
   transform:none;
   margin:0;
-  width:min(100%,var(--component-sheet-panel-max-width,min(90dvw,460px)));
-  max-width:min(100%,var(--component-sheet-panel-max-width,min(90dvw,460px)));
+  width:min(100%,var(--component-sheet-panel-max-width,min(92dvw,620px)));
+  max-width:min(100%,var(--component-sheet-panel-max-width,min(92dvw,620px)));
   max-height:min(78vh,620px);
   max-height:min(78dvh,620px);
   max-height:min(100%,var(--component-sheet-panel-max-height,min(78dvh,620px)));
@@ -1267,6 +1307,16 @@ body.home-screen-active #settingsScreen{
   width:18px;
   height:18px;
   accent-color:#8b1720;
+}
+
+.settings-inline-saved{
+  display:inline-block;
+  margin-left:8px;
+  color:#9fc8a2;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
 }
 
 .quote-mode-switch{
