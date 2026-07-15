@@ -38,6 +38,7 @@ let customerFinderSelectedKey='';
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
+let quotePreviewIntent='view';
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
 let holdDelayTimer=null;
@@ -322,7 +323,6 @@ function homeRodRunStartupSequence(){
   tick();
 }
 function homeRodRefreshFromState(triggerSequence){
-  const buildCount=homeBuildCount();
   const rod=homeRodEnsureLeds();
   const shouldTriggerSequence=triggerSequence===true;
   if(rod && !rod.classList.contains('is-ready')){
@@ -333,11 +333,6 @@ function homeRodRefreshFromState(triggerSequence){
     homeRodRunStartupSequence();
   }else{
     homeRodSetLitCount(homeRodState.ledCount);
-  }
-  const continueButton=$('homeContinueLastBuildBtn');
-  if(continueButton){
-    continueButton.hidden=buildCount<=0;
-    continueButton.textContent='Continue last build →';
   }
 }
 function newQuoteTemplate(){
@@ -534,29 +529,9 @@ function canConvertToBuild(){
 }
 function updateQuoteActionPriority(){
   const saveQuoteBtn=$('saveQuoteBtn');
-  const convertToBuildBtn=$('convertToBuildBtn');
-  if(!saveQuoteBtn || !convertToBuildBtn)return;
-
-  const isAccepted=isAcceptedQuoteStatus(quote.quoteStatus);
-  const saveIsPrimary=!isAccepted || hasUnsavedQuoteChanges;
-
-  saveQuoteBtn.classList.toggle('primary-action',saveIsPrimary);
-  saveQuoteBtn.classList.toggle('ghost-action',!saveIsPrimary);
-  convertToBuildBtn.classList.toggle('primary-action',!saveIsPrimary);
-  convertToBuildBtn.classList.toggle('ghost-action',saveIsPrimary);
-
-  const convertEnabled=canConvertToBuild();
-  convertToBuildBtn.disabled=!convertEnabled;
-  convertToBuildBtn.setAttribute('aria-disabled',String(!convertEnabled));
-  if(!isAccepted){
-    convertToBuildBtn.title='Convert To Build is available only for Accepted quotes.';
-    return;
-  }
-  if(hasUnsavedQuoteChanges){
-    convertToBuildBtn.title='Save the Accepted quote before converting to a build.';
-    return;
-  }
-  convertToBuildBtn.title='Convert this Accepted quote to a build.';
+  if(!saveQuoteBtn)return;
+  saveQuoteBtn.classList.add('primary-action');
+  saveQuoteBtn.classList.remove('ghost-action');
 }
 function markQuoteDirty(){
   hasUnsavedQuoteChanges=true;
@@ -614,9 +589,9 @@ function beginFreshQuote(){
 function startNewQuoteFlow(){
   if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
     openConfirmDialog({
-      title:'Start New Quote',
-      message:'Discard the current unsaved quote and start a new quote?',
-      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Quote',kind:'primary'}]
+      title:'Start New Build',
+      message:'Discard the current unsaved build and start a new build?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Build',kind:'primary'}]
     },(action)=>{
       if(action==='start'){beginFreshQuote();}
     });
@@ -2061,18 +2036,18 @@ function customerFinderCustomerMenuMarkup(group){
 function customerFinderWorkMenuMarkup(entry){
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  const openLabel=entry.source==='build'?'Open Build':'Open Quote';
-  const duplicateAction=entry.source==='quote'?`<button class="component-picker-menu__item" type="button" data-customer-row-action="duplicate" data-customer-open-source="${source}" data-customer-open-index="${index}">Duplicate Quote</button>`:'';
-  const deleteLabel=entry.source==='build'?'Delete Build':'Delete Quote';
-  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved item actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="open" data-customer-open-source="${source}" data-customer-open-index="${index}">${openLabel}</button>${duplicateAction}<button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
+  const openLabel='Open Job';
+  const deleteLabel='Delete Job';
+  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved item actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="open" data-customer-open-source="${source}" data-customer-open-index="${index}">${openLabel}</button><button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
 }
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
   const isBuild=entry.source==='build';
-  const title=specificationValue(record.buildName)||(isBuild?'Untitled Build':'Untitled Quote');
+  const title=specificationValue(record.buildName)||'Untitled Job';
+  const typeLabel=isBuild?'Build job':'Legacy quote';
   const refText=isBuild
-    ? (specificationValue(record.buildNumber)?`Build ${specificationValue(record.buildNumber)}`:'Build record')
-    : 'Quote';
+    ? (specificationValue(record.buildNumber)?`${typeLabel} ${specificationValue(record.buildNumber)}`:typeLabel)
+    : typeLabel;
   const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
   return `<div class="customer-finder__work-row"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
 }
@@ -2118,7 +2093,7 @@ function requestDeleteCustomerGroup(customerKey,customerName){
   if(refs>0){
     openConfirmDialog({
       title:'Delete Customer',
-      message:'This customer has saved quotes or builds. Delete those records first.',
+      message:'This customer has saved jobs. Delete those records first.',
       actions:[{id:'ok',label:'OK',kind:'primary'}]
     },()=>{});
     return;
@@ -2148,7 +2123,8 @@ function renderCustomerFinder(){
   closeCustomerFinderMenus();
   resultHost.innerHTML=groups.map((group)=>{
     const active=group.key===customerFinderSelectedKey;
-    const summary=`${group.quotes.length} quote${group.quotes.length===1?'':'s'} • ${group.builds.length} build${group.builds.length===1?'':'s'}`;
+    const totalJobs=group.quotes.length+group.builds.length;
+    const summary=`${totalJobs} saved job${totalJobs===1?'':'s'}`;
     return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button>${customerFinderCustomerMenuMarkup(group)}</div>`;
   }).join('');
   const selected=groups.find((group)=>group.key===customerFinderSelectedKey)||groups[0];
@@ -2157,21 +2133,16 @@ function renderCustomerFinder(){
     detailHost.innerHTML='';
     return;
   }
-  const quoteRows=selected.quotes.length?selected.quotes.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved quotes for this customer.</div>';
-  const buildRows=selected.builds.length?selected.builds.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved builds for this customer.</div>';
+  const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved jobs for this customer.</div>';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customer-finder__detail-head">
       <h3>${escapeHtml(selected.name)}</h3>
-      <p>Saved work for this customer.</p>
+      <p>Saved jobs for this customer.</p>
     </header>
-    <section class="customer-finder__work-section" aria-label="Saved Quotes">
-      <h4>Saved Quotes</h4>
-      <div class="customer-finder__work-list">${quoteRows}</div>
-    </section>
-    <section class="customer-finder__work-section" aria-label="Saved Builds">
-      <h4>Saved Builds</h4>
-      <div class="customer-finder__work-list">${buildRows}</div>
+    <section class="customer-finder__work-section" aria-label="Saved Jobs">
+      <h4>Saved Jobs</h4>
+      <div class="customer-finder__work-list">${jobRows}</div>
     </section>
   `;
 }
@@ -2210,7 +2181,7 @@ function ensureCustomerFinderSheet(){
         <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">×</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
-        <p class="customer-finder__intro">Search customer name and open their saved quotes or builds.</p>
+        <p class="customer-finder__intro">Search customer name and open their saved jobs.</p>
         <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
         <section class="customer-finder__layout" aria-label="Customer finder layout">
           <aside class="customer-finder__list-pane" aria-label="Customers">
@@ -2264,7 +2235,7 @@ function ensureCustomerFinderSheet(){
         closeCustomerFinderSheet();
         openSavedBuildRecord(source,index);
       }
-      if(action==='duplicate' && source==='quote'){
+      if(action==='duplicate'){
         closeCustomerFinderSheet();
         duplicateSavedBuildRecord(source,index);
       }
@@ -2304,7 +2275,7 @@ function savedBuildSearchText(entry){
 }
 function savedBuildRowMarkup(entry){
   const record=entry.record;
-  const sourceLabel=entry.source==='build'?'Build':'Quote';
+  const sourceLabel=entry.source==='build'?'Saved Job':'Legacy Quote';
   const title=specificationValue(record.buildName)||specificationValue(record.customerName)||'Untitled Build';
   const buildRef=specificationValue(record.buildNumber)||'Unnumbered';
   const customerRef=specificationValue(record.customerName)||'No customer';
@@ -2312,7 +2283,7 @@ function savedBuildRowMarkup(entry){
   const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="module-card blank-card" data-build-row data-build-source="${source}" data-build-index="${index}"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button><button class="ghost-action blank-card__load" type="button" data-build-action="duplicate" data-build-source="${source}" data-build-index="${index}">Duplicate</button>${savedBuildRowMenuMarkup(entry,title)}</div></article>`;
+  return `<article class="module-card blank-card" data-build-row data-build-source="${source}" data-build-index="${index}"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,title)}</div></article>`;
 }
 function savedBuildRowMenuMarkup(entry,title){
   const source=escapeHtml(entry.source);
@@ -2400,7 +2371,7 @@ function renderBuilds(){
   const query=String(buildsSearch||'').trim().toLowerCase();
   const records=savedBuildEntries().filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
   if(!records.length){
-    host.innerHTML='<div class="empty-card">No saved builds found.</div>';
+    host.innerHTML='<div class="empty-card">No saved jobs found.</div>';
     return;
   }
   host.innerHTML=records.map(savedBuildRowMarkup).join('');
@@ -2875,9 +2846,9 @@ function bindWorkshopQuoteBuilder(){
     saveQuoteBtn.addEventListener('click',()=>{
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
-      persistQuoteRecord(quote);
+      persistBuildRecord(quote);
       markQuoteSaved();
-      alert('Quote saved.');
+      alert('Build job saved.');
     });
   }
   const convertToBuildBtn=$('convertToBuildBtn');
@@ -2895,25 +2866,22 @@ function bindWorkshopQuoteBuilder(){
       goScreen('layoutScreen');
     });
   }
-  ['duplicateQuoteBtn','printQuoteBtn','exportPdfBtn','emailQuoteBtn'].forEach((id)=>{
+  ['printQuoteBtn','emailQuoteBtn','viewCustomerCopyBtn'].forEach((id)=>{
     const btn=$(id);
     if(!btn)return;
     btn.addEventListener('click',()=>{
-      if(id==='emailQuoteBtn' && normalizeQuoteMode(quote.quoteMode)==='internal'){
-        openConfirmDialog({
-          title:'⚠ INTERNAL QUOTE',
-          message:'This quote contains confidential build costs and markup information. Do you wish to continue?',
-          actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'continue',label:'Continue',kind:'primary'}]
-        },(action)=>{
-          if(action==='continue'){alert('Coming soon');}
-        });
-        return;
-      }
-      if(id==='emailQuoteBtn' && normalizeQuoteMode(quote.quoteMode)==='customer'){
+      if(id==='emailQuoteBtn'){
         openQuotePreviewSheet('email');
         return;
       }
-      alert('Coming soon');
+      if(id==='viewCustomerCopyBtn'){
+        openQuotePreviewSheet('view');
+        return;
+      }
+      if(id==='printQuoteBtn'){
+        openQuotePreviewSheet('view');
+        return;
+      }
     });
   });
   updateQuoteActionPriority();
@@ -2926,27 +2894,17 @@ function renderWorkshopQuote(){
     const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
-  let mode=normalizeQuoteMode(quote.quoteMode);
-  const hasMeaningfulQuoteData=quoteHasMeaningfulDraft(quote);
-  if(!hasMeaningfulQuoteData && mode!=='internal'){
+  const mode=normalizeQuoteMode(quote.quoteMode);
+  if(mode!=='internal'){
     quote.quoteMode='internal';
-    mode='internal';
     saveQuoteCurrent();
   }
-  const modeSwitch=$('quoteModeSwitch');
-  const customerModeBtn=document.querySelector('[data-quote-mode="customer"]');
-  if(modeSwitch){
-    modeSwitch.classList.toggle('quote-mode-switch--subdued',!hasMeaningfulQuoteData);
-  }
-  if(customerModeBtn){
-    customerModeBtn.hidden=!hasMeaningfulQuoteData;
-  }
-  document.querySelectorAll('[data-quote-mode]').forEach((button)=>button.classList.toggle('active',button.getAttribute('data-quote-mode')===mode));
-  document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
-  document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');
-  if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Build Specifications • Build Costs • Labour • Markup • Quote Summary';
-  if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
+  document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=false);
+  document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=true);
+  if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Studio';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Build Specifications • Build Costs • Labour • Markup • Build Pricing';
+  if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
+  if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
   if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';
   updateQuoteActionPriority();
   const includeTaxInput=$('quoteIncludeGst');
@@ -2966,7 +2924,6 @@ function renderWorkshopQuote(){
 }
 function updateQuoteSummary(){
   const math=quoteMaths();
-  const mode=normalizeQuoteMode(quote.quoteMode);
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);
@@ -2981,12 +2938,12 @@ function updateQuoteSummary(){
   if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
   if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
   if($('quoteGstField'))$('quoteGstField').hidden=!showTaxDetails;
-  if($('quoteModeLabel'))$('quoteModeLabel').textContent=mode==='customer'?'Customer mode':'Internal mode';
+  if($('quoteModeLabel'))$('quoteModeLabel').textContent='Builder view';
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');
   if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
   if(gstStatus){gstStatus.textContent='';}
-  ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=mode==='customer';});
+  ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
 }
 
 function ensureQuotePreviewSheet(){
@@ -2997,15 +2954,15 @@ function ensureQuotePreviewSheet(){
   sheet.hidden=true;
   sheet.innerHTML=`
     <div class="component-sheet__scrim" data-quote-preview-action="close"></div>
-    <section class="component-sheet__panel quote-preview-panel" role="dialog" aria-modal="true" aria-label="Preview quote">
+    <section class="component-sheet__panel quote-preview-panel" role="dialog" aria-modal="true" aria-label="Preview customer copy">
       <header class="component-sheet__header">
-        <h2>Preview Quote</h2>
+        <h2>Preview Customer Copy</h2>
         <button class="component-sheet__close" type="button" data-quote-preview-action="close" aria-label="Close preview">×</button>
       </header>
       <div class="component-sheet__body quote-preview-body">
         <div class="quote-preview-card">
           <div class="quote-preview-card__head">
-            <strong id="quotePreviewName">Customer Quote</strong>
+            <strong id="quotePreviewName">Customer Copy</strong>
             <span id="quotePreviewBuild"></span>
           </div>
           <p id="quotePreviewCustomer"></p>
@@ -3015,7 +2972,7 @@ function ensureQuotePreviewSheet(){
         </div>
         <div class="quote-preview-actions">
           <button id="quotePreviewBackBtn" class="ghost-action" type="button">Back</button>
-          <button id="quotePreviewApproveBtn" class="primary-action" type="button">Approve & Send</button>
+          <button id="quotePreviewApproveBtn" class="primary-action" type="button">Send Customer Copy</button>
         </div>
       </div>
     </section>
@@ -3028,24 +2985,32 @@ function ensureQuotePreviewSheet(){
   $('quotePreviewBackBtn').addEventListener('click',closeQuotePreviewSheet);
   $('quotePreviewApproveBtn').addEventListener('click',()=>{
     closeQuotePreviewSheet();
-    alert('Quote approved and ready to send.');
+    alert('Customer copy ready to send.');
   });
 }
 function renderQuotePreviewSheet(){
   const math=quoteMaths();
   const specificationViews=buildSpecificationViews();
   const customerLines=customerPreviewLines();
-  if($('quotePreviewName'))$('quotePreviewName').textContent='Customer Quote';
-  if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber||'Unnumbered quote';
+  const isEmailIntent=quotePreviewIntent==='email';
+  const previewTitle=($('quotePreviewSheet')||document).querySelector('.component-sheet__header h2');
+  if(previewTitle){previewTitle.textContent=isEmailIntent?'Email Customer Copy':'View Customer Copy';}
+  if($('quotePreviewName'))$('quotePreviewName').textContent='Customer Copy';
+  if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber||'Unnumbered build';
   if($('quotePreviewCustomer'))$('quotePreviewCustomer').innerHTML=customerLines.length?customerLines.map(escapeHtml).join('<br>'):'No customer details entered';
   if($('quotePreviewBuildName'))$('quotePreviewBuildName').textContent=quote.buildName||'No build name entered';
   if($('quotePreviewSpecs'))$('quotePreviewSpecs').innerHTML=specificationRowsMarkup(specificationViews.customer);
+  if($('quotePreviewApproveBtn')){
+    $('quotePreviewApproveBtn').hidden=!isEmailIntent;
+    $('quotePreviewApproveBtn').textContent='Send Customer Copy';
+  }
   if($('quotePreviewSummary'))$('quotePreviewSummary').innerHTML=`
     <div><span>Total Customer Price</span><strong>${currency(math.total)}</strong></div>
     <div><span>Tax</span><strong>${currency(math.gst)}</strong></div>
   `;
 }
 function openQuotePreviewSheet(action){
+  quotePreviewIntent=action==='email'?'email':'view';
   ensureQuotePreviewSheet();
   renderQuotePreviewSheet();
   const sheet=$('quotePreviewSheet');
@@ -3344,15 +3309,6 @@ function bindHomeActions(){
     enterBtn.addEventListener('click',()=>{
       collapseWorkshopSections();
       goScreen('workshopScreen');
-    });
-  }
-  const continueBtn=$('homeContinueLastBuildBtn');
-  if(continueBtn && continueBtn.getAttribute('data-home-bound')!=='true'){
-    continueBtn.setAttribute('data-home-bound','true');
-    continueBtn.addEventListener('click',()=>{
-      const latest=savedBuildEntries()[0];
-      if(!latest)return;
-      openSavedBuildRecord(latest.source,latest.index);
     });
   }
 }

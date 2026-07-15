@@ -239,26 +239,6 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -1px 0 rgba(0,0,0,.56),inset 0 0 0 1px rgba(21,24,25,.78),0 1px 3px rgba(0,0,0,.24);
 }
 
-#homeScreen .home-continue-last-build{
-  border:0;
-  background:none;
-  justify-self:start;
-  position:relative;
-  z-index:2;
-  color:#8a8f87;
-  font-size:10px;
-  font-weight:600;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  padding:0;
-  min-height:24px;
-}
-
-#homeScreen .home-continue-last-build:hover,
-#homeScreen .home-continue-last-build:focus-visible{
-  color:#c4bcae;
-}
-
 /* Keep Home visually self-contained by suppressing cross-screen bleed-through labels/panels. */
 .app-shell:has(#homeScreen.active) > .screen:not(#homeScreen){
   display:none!important;
@@ -958,6 +938,11 @@ body.home-screen-active #settingsScreen{
   text-align:center;
 }
 
+#workshopScreen .quote-action-tertiary{
+  grid-column:1 / -1;
+  opacity:.9;
+}
+
 #workshopScreen .quote-actions-secondary{
   grid-column:1 / -1;
   display:grid;
@@ -1353,19 +1338,20 @@ body.home-screen-active #settingsScreen{
 }
 
 .component-sheet__menu-trigger{
-  width:34px;
-  min-width:34px;
-  max-width:34px;
-  height:34px;
+  width:40px;
+  min-width:40px;
+  max-width:40px;
+  height:40px;
   border-radius:9px;
-  border:1px solid transparent;
-  background:transparent;
+  border:1px solid rgba(214,210,200,.14);
+  background:rgba(255,255,255,.01);
   color:#9ea39b;
   font-size:18px;
   line-height:1;
   display:grid;
   place-items:center;
   appearance:none;
+  cursor:pointer;
 }
 
 .component-picker-menu{
@@ -1406,8 +1392,10 @@ body.home-screen-active #settingsScreen{
 .component-sheet__menu-trigger:focus-visible,
 .component-picker-menu__item:hover,
 .component-picker-menu__item:focus-visible{
-  background:rgba(155,31,42,.16);
+  border-color:rgba(206,44,58,.42);
+  background:rgba(155,31,42,.24);
   color:#f2ece0;
+  box-shadow:0 8px 16px rgba(0,0,0,.22);
   outline:none;
 }
 
@@ -1610,10 +1598,19 @@ body.home-screen-active #settingsScreen{
 
 .quote-preview-panel{
   width:min(92vw,480px);
+  max-height:min(100%,calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 14px));
 }
 
 .quote-preview-body{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
   gap:10px;
+  padding-bottom:max(8px,env(safe-area-inset-bottom,0px));
 }
 
 /* Typography polish: small labels read a bit sharper without changing layout structure. */
@@ -1709,6 +1706,12 @@ body.home-screen-active #settingsScreen{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:8px;
+  margin-top:auto;
+  position:sticky;
+  bottom:0;
+  z-index:2;
+  padding:8px 0 max(8px,env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg,rgba(13,17,18,0),rgba(13,17,18,.92) 38%,rgba(13,17,18,.98) 100%);
 }
 
 .quote-gst-status{
@@ -2241,6 +2244,10 @@ select:focus-visible{
     width:min(96vw,392px);
     max-height:min(88vh,640px);
     max-height:min(88dvh,640px);
+  }
+  .quote-preview-panel{
+    width:min(96vw,392px);
+    max-height:min(100%,calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 10px));
   }
   .component-sheet__custom{
     grid-template-columns:1fr;

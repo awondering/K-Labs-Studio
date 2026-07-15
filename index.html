@@ -70,7 +70,6 @@
           <span class="home-living-rod__leds"></span>
         </div>
         <button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">ENTER ROD STUDIO</button>
-        <button id="homeContinueLastBuildBtn" class="home-continue-last-build" type="button" hidden>Continue last build →</button>
       </div>
     </section>
 
@@ -149,15 +148,11 @@
       <section class="quote-builder" aria-label="Rod Builder Quote">
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
-          <h1 id="quoteBuilderTitle">Rod Builder Quote</h1>
-          <div id="quoteModeSwitch" class="quote-mode-switch" role="tablist" aria-label="Quote mode">
-            <button class="ghost-action active" data-quote-mode="internal" type="button">Internal Quote</button>
-            <button class="ghost-action" data-quote-mode="customer" type="button">Customer Quote</button>
-          </div>
+          <h1 id="quoteBuilderTitle">Studio</h1>
         </header>
 
         <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
-          <button id="newQuoteEntryBtn" class="primary-action quote-builder__new-quote" type="button">New Quote</button>
+          <button id="newQuoteEntryBtn" class="primary-action quote-builder__new-quote" type="button">New Build</button>
           <button id="findCustomerBtn" class="ghost-action quote-builder__find-customer" type="button">Find Customer</button>
         </div>
 
@@ -260,7 +255,7 @@
         <article class="quote-section quote-section--collapsible">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopQuoteSummaryBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Quote Summary</span>
+              <span class="quote-section__toggle-title">Build Pricing</span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
@@ -278,18 +273,16 @@
 
         <article class="quote-section">
           <header class="quote-section__header">
-            <h2>Actions</h2>
+            <h2>Build Actions</h2>
           </header>
           <div class="quote-actions-grid quote-section__body">
-            <button id="saveQuoteBtn" class="primary-action" type="button">Save Quote</button>
-            <button id="convertToBuildBtn" class="ghost-action" type="button">Convert To Build</button>
-            <details class="quote-actions-secondary" id="quoteActionsSecondary">
-              <summary>More Actions</summary>
+            <button id="saveQuoteBtn" class="primary-action" type="button">Save Build Job</button>
+            <details class="quote-actions-secondary" id="customerCopyActions">
+              <summary>Customer Copy</summary>
               <div class="quote-actions-secondary__list">
-                <button id="duplicateQuoteBtn" class="ghost-action" type="button">Duplicate Quote</button>
-                <button id="printQuoteBtn" class="ghost-action" type="button">Print Quote</button>
-                <button id="exportPdfBtn" class="ghost-action" type="button">Export PDF</button>
-                <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
+                <button id="viewCustomerCopyBtn" class="ghost-action" type="button">View Customer Copy</button>
+                <button id="emailQuoteBtn" class="ghost-action" type="button">Email Customer Copy</button>
+                <button id="printQuoteBtn" class="ghost-action" type="button">Print Customer Copy</button>
               </div>
             </details>
           </div>
