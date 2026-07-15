@@ -33,6 +33,8 @@ let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuot
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
+let customerFinderSearch='';
+let customerFinderSelectedKey='';
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
@@ -566,14 +568,17 @@ function markQuoteSaved(){
 }
 function quoteHasMeaningfulDraft(currentQuote){
   const candidate=normalizeQuote(currentQuote||{});
-  const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode,candidate.country]
+  const baseline=normalizeQuote(newQuoteTemplate());
+  const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode]
     .some((value)=>!!specificationValue(value));
+  const hasCountryOverride=specificationValue(candidate.country)!==specificationValue(baseline.country);
+  const hasBuildSpecs=Object.keys(candidate.buildSpecifications||{}).some((key)=>!!specificationValue(candidate.buildSpecifications&&candidate.buildSpecifications[key]));
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
-  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0;
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
-  return hasIdentity || hasBlank || hasCosts || hasComponentData;
+  return hasIdentity || hasCountryOverride || hasBuildSpecs || hasBlank || hasCosts || hasComponentData;
 }
 function ensureCustomerSectionExpanded(){
   const body=$('workshopCustomerBody');
@@ -598,7 +603,7 @@ function collapseWorkshopSections(){
     setWorkshopSectionCollapsed(id,true);
   });
 }
-function beginFreshBuild(){
+function beginFreshQuote(){
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
@@ -606,18 +611,21 @@ function beginFreshBuild(){
   collapseWorkshopSections();
   goScreen('workshopScreen');
 }
-function startNewBuildFlow(){
+function startNewQuoteFlow(){
   if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
     openConfirmDialog({
-      title:'Start New Build',
-      message:'Replace the current unsaved build draft and start a new build?',
-      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Build',kind:'primary'}]
+      title:'Start New Quote',
+      message:'Discard the current unsaved quote and start a new quote?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Quote',kind:'primary'}]
     },(action)=>{
-      if(action==='start'){beginFreshBuild();}
+      if(action==='start'){beginFreshQuote();}
     });
     return;
   }
-  beginFreshBuild();
+  beginFreshQuote();
+}
+function startNewBuildFlow(){
+  startNewQuoteFlow();
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
@@ -1982,15 +1990,309 @@ function persistQuoteRecord(currentQuote){
   records.unshift(record);
   Store.set('klabs-workshop-quotes',records);
 }
+function savedQuoteRecords(){
+  const records=Store.get('klabs-workshop-quotes',[]);
+  return Array.isArray(records)?records:[];
+}
+function savedBuildRecords(){
+  const records=Store.get('klabs-workshop-builds',[]);
+  return Array.isArray(records)?records:[];
+}
+function allSavedEntries(){
+  const quoteEntries=savedQuoteRecords().map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}));
+  const buildEntries=savedBuildRecords().map((record,index)=>({source:'build',index,record:normalizeQuote(record)}));
+  return quoteEntries.concat(buildEntries);
+}
 function savedBuildEntries(){
-  const savedQuotes=Array.isArray(Store.get('klabs-workshop-quotes',[]))?Store.get('klabs-workshop-quotes',[]):[];
-  const savedBuilds=Array.isArray(Store.get('klabs-workshop-builds',[]))?Store.get('klabs-workshop-builds',[]):[];
-  const quoteEntries=savedQuotes.map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}));
-  const buildEntries=savedBuilds.map((record,index)=>({source:'build',index,record:normalizeQuote(record)}));
-  return quoteEntries.concat(buildEntries).sort((left,right)=>{
+  return allSavedEntries().sort((left,right)=>{
     const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
     const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
     return rightDate-leftDate;
+  });
+}
+function customerSavedGroups(searchValue){
+  const grouped=new Map();
+  allSavedEntries().forEach((entry)=>{
+    const record=entry&&entry.record?entry.record:{};
+    const customerName=specificationValue(record.customerName);
+    const key=normalizeNameKey(customerName)||'__no_customer__';
+    if(!grouped.has(key)){
+      grouped.set(key,{key,name:customerName||'No customer name',entries:[]});
+    }
+    const target=grouped.get(key);
+    target.entries.push(entry);
+    if(customerName && target.name==='No customer name')target.name=customerName;
+  });
+  const normalizedSearch=normalizeNameKey(searchValue);
+  const groups=Array.from(grouped.values()).map((group)=>{
+    const entries=[...group.entries].sort((left,right)=>{
+      const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
+      const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
+      return rightDate-leftDate;
+    });
+    return {
+      ...group,
+      entries,
+      quotes:entries.filter((entry)=>entry.source==='quote'),
+      builds:entries.filter((entry)=>entry.source==='build'),
+      latestSavedAt:entries[0]&&entries[0].record?entries[0].record.savedAt:'',
+    };
+  }).filter((group)=>{
+    if(!normalizedSearch)return true;
+    return normalizeNameKey(group.name).includes(normalizedSearch);
+  });
+  return groups.sort((left,right)=>{
+    const leftDate=Date.parse(left.latestSavedAt||'')||0;
+    const rightDate=Date.parse(right.latestSavedAt||'')||0;
+    return rightDate-leftDate;
+  });
+}
+function customerFinderMatchesKey(customerKey,name){
+  const normalized=normalizeNameKey(name);
+  if(customerKey==='__no_customer__')return !normalized;
+  return normalized===customerKey;
+}
+function closeCustomerFinderMenus(){
+  document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{menu.open=false;});
+}
+function customerFinderCustomerMenuMarkup(group){
+  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Customer actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-list-action="rename" data-customer-key="${escapeHtml(group.key)}" data-customer-name="${escapeHtml(group.name)}">Rename Customer</button><button class="component-picker-menu__item" type="button" data-customer-list-action="delete" data-customer-key="${escapeHtml(group.key)}" data-customer-name="${escapeHtml(group.name)}">Delete Customer</button></div></details>`;
+}
+function customerFinderWorkMenuMarkup(entry){
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  const openLabel=entry.source==='build'?'Open Build':'Open Quote';
+  const duplicateAction=entry.source==='quote'?`<button class="component-picker-menu__item" type="button" data-customer-row-action="duplicate" data-customer-open-source="${source}" data-customer-open-index="${index}">Duplicate Quote</button>`:'';
+  const deleteLabel=entry.source==='build'?'Delete Build':'Delete Quote';
+  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved item actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="open" data-customer-open-source="${source}" data-customer-open-index="${index}">${openLabel}</button>${duplicateAction}<button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
+}
+function customerFinderWorkRowMarkup(entry){
+  const record=entry&&entry.record?entry.record:{};
+  const isBuild=entry.source==='build';
+  const title=specificationValue(record.buildName)||(isBuild?'Untitled Build':'Untitled Quote');
+  const refText=isBuild
+    ? (specificationValue(record.buildNumber)?`Build ${specificationValue(record.buildNumber)}`:'Build record')
+    : 'Quote';
+  const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+  return `<div class="customer-finder__work-row"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
+}
+function requestRenameCustomer(customerKey,currentName){
+  const existing=currentName==='No customer name'?'':String(currentName||'');
+  const proposed=window.prompt('Rename customer',existing);
+  if(proposed===null)return;
+  const nextName=String(proposed||'').trim();
+  if(!nextName){
+    alert('Customer name is required.');
+    return;
+  }
+  const quoteRecords=savedQuoteRecords();
+  const buildRecords=savedBuildRecords();
+  let quoteChanged=false;
+  let buildChanged=false;
+  quoteRecords.forEach((record)=>{
+    if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
+      record.customerName=nextName;
+      quoteChanged=true;
+    }
+  });
+  buildRecords.forEach((record)=>{
+    if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
+      record.customerName=nextName;
+      buildChanged=true;
+    }
+  });
+  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
+  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
+  if(customerFinderMatchesKey(customerKey,quote.customerName)){
+    quote.customerName=nextName;
+    saveQuoteCurrent();
+    renderWorkshopQuote();
+  }
+  customerFinderSelectedKey=normalizeNameKey(nextName)||'__no_customer__';
+  renderBuilds();
+  renderCustomerFinder();
+}
+function requestDeleteCustomerGroup(customerKey,customerName){
+  const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
+  const refs=group?(group.quotes.length+group.builds.length):0;
+  if(refs>0){
+    openConfirmDialog({
+      title:'Delete Customer',
+      message:'This customer has saved quotes or builds. Delete those records first.',
+      actions:[{id:'ok',label:'OK',kind:'primary'}]
+    },()=>{});
+    return;
+  }
+  openConfirmDialog({
+    title:'Delete Customer',
+    message:`Delete customer ${customerName||'record'}?`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete Customer',kind:'danger'}]
+  },()=>{});
+}
+function renderCustomerFinder(){
+  const resultHost=$('customerFinderResults');
+  const detailHost=$('customerFinderDetail');
+  if(!resultHost || !detailHost)return;
+  const groups=customerSavedGroups(customerFinderSearch);
+  if(!groups.length){
+    customerFinderSelectedKey='';
+    resultHost.innerHTML='<div class="component-sheet__empty">No customers matched that name.</div>';
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
+  const hasSelected=groups.some((group)=>group.key===customerFinderSelectedKey);
+  if(!hasSelected){
+    customerFinderSelectedKey=groups[0].key;
+  }
+  closeCustomerFinderMenus();
+  resultHost.innerHTML=groups.map((group)=>{
+    const active=group.key===customerFinderSelectedKey;
+    const summary=`${group.quotes.length} quote${group.quotes.length===1?'':'s'} • ${group.builds.length} build${group.builds.length===1?'':'s'}`;
+    return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button>${customerFinderCustomerMenuMarkup(group)}</div>`;
+  }).join('');
+  const selected=groups.find((group)=>group.key===customerFinderSelectedKey)||groups[0];
+  if(!selected){
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
+  const quoteRows=selected.quotes.length?selected.quotes.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved quotes for this customer.</div>';
+  const buildRows=selected.builds.length?selected.builds.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved builds for this customer.</div>';
+  detailHost.hidden=false;
+  detailHost.innerHTML=`
+    <header class="customer-finder__detail-head">
+      <h3>${escapeHtml(selected.name)}</h3>
+      <p>Saved work for this customer.</p>
+    </header>
+    <section class="customer-finder__work-section" aria-label="Saved Quotes">
+      <h4>Saved Quotes</h4>
+      <div class="customer-finder__work-list">${quoteRows}</div>
+    </section>
+    <section class="customer-finder__work-section" aria-label="Saved Builds">
+      <h4>Saved Builds</h4>
+      <div class="customer-finder__work-list">${buildRows}</div>
+    </section>
+  `;
+}
+function closeCustomerFinderSheet(){
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  sheet.hidden=true;
+  unlockModalLayer({restoreFocus:true});
+}
+function openCustomerFinderSheet(){
+  ensureCustomerFinderSheet();
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  customerFinderSearch='';
+  customerFinderSelectedKey='';
+  if($('customerFinderSearch'))$('customerFinderSearch').value='';
+  renderCustomerFinder();
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
+  const input=$('customerFinderSearch');
+  if(input){
+    try{input.focus({preventScroll:true});}catch{input.focus();}
+  }
+}
+function ensureCustomerFinderSheet(){
+  if($('customerFinderSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='customerFinderSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-customer-finder-action="close"></div>
+    <section class="component-sheet__panel customer-finder__panel" role="dialog" aria-modal="true" aria-label="Find Customer">
+      <header class="component-sheet__header">
+        <h2>Find Customer</h2>
+        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">×</button>
+      </header>
+      <div class="component-sheet__body customer-finder__body">
+        <p class="customer-finder__intro">Search customer name and open their saved quotes or builds.</p>
+        <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
+        <section class="customer-finder__layout" aria-label="Customer finder layout">
+          <aside class="customer-finder__list-pane" aria-label="Customers">
+            <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
+          </aside>
+          <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
+        </section>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('toggle',(event)=>{
+    const opened=event.target.closest('.customer-finder__menu-wrap');
+    if(!opened || !opened.open)return;
+    document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{
+      if(menu!==opened)menu.open=false;
+    });
+  },true);
+  sheet.addEventListener('click',(event)=>{
+    const actionEl=event.target.closest('[data-customer-finder-action]');
+    if(actionEl && actionEl.getAttribute('data-customer-finder-action')==='close'){
+      closeCustomerFinderSheet();
+      return;
+    }
+    if(!event.target.closest('.customer-finder__menu-wrap')){
+      closeCustomerFinderMenus();
+    }
+    const customerMenuAction=event.target.closest('[data-customer-list-action]');
+    if(customerMenuAction){
+      const action=customerMenuAction.getAttribute('data-customer-list-action')||'';
+      const customerKey=customerMenuAction.getAttribute('data-customer-key')||'';
+      const customerName=customerMenuAction.getAttribute('data-customer-name')||'';
+      closeCustomerFinderMenus();
+      if(action==='rename'){requestRenameCustomer(customerKey,customerName);}
+      if(action==='delete'){requestDeleteCustomerGroup(customerKey,customerName);}
+      return;
+    }
+    const customerButton=event.target.closest('[data-customer-key]');
+    if(customerButton){
+      customerFinderSelectedKey=customerButton.getAttribute('data-customer-key')||'';
+      renderCustomerFinder();
+      return;
+    }
+    const rowAction=event.target.closest('[data-customer-row-action]');
+    if(rowAction){
+      const action=rowAction.getAttribute('data-customer-row-action')||'';
+      const source=rowAction.getAttribute('data-customer-open-source')||'quote';
+      const index=Number(rowAction.getAttribute('data-customer-open-index'));
+      closeCustomerFinderMenus();
+      if(action==='open'){
+        closeCustomerFinderSheet();
+        openSavedBuildRecord(source,index);
+      }
+      if(action==='duplicate' && source==='quote'){
+        closeCustomerFinderSheet();
+        duplicateSavedBuildRecord(source,index);
+      }
+      if(action==='delete'){
+        requestDeleteSavedBuildRecord(source,index);
+      }
+      return;
+    }
+    const openButton=event.target.closest('[data-customer-open-source][data-customer-open-index]');
+    if(openButton){
+      const source=openButton.getAttribute('data-customer-open-source')||'quote';
+      const index=Number(openButton.getAttribute('data-customer-open-index'));
+      closeCustomerFinderSheet();
+      openSavedBuildRecord(source,index);
+    }
+  });
+  const searchInput=sheet.querySelector('#customerFinderSearch');
+  if(searchInput){
+    searchInput.addEventListener('input',()=>{
+      customerFinderSearch=searchInput.value||'';
+      customerFinderSelectedKey='';
+      renderCustomerFinder();
+    });
+  }
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape' && $('customerFinderSheet') && !$('customerFinderSheet').hidden){
+      closeCustomerFinderSheet();
+    }
   });
 }
 function savedBuildSearchText(entry){
@@ -2056,6 +2358,7 @@ function requestDeleteSavedBuildRecord(source,index){
     if(action!=='delete')return;
     if(!deleteSavedEntryBySource(source,index))return;
     renderBuilds();
+    renderCustomerFinder();
   });
 }
 function getSavedEntryBySource(source,index){
@@ -2433,6 +2736,20 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
+  const newQuoteEntryBtn=$('newQuoteEntryBtn');
+  if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
+    newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
+    newQuoteEntryBtn.addEventListener('click',()=>{
+      startNewQuoteFlow();
+    });
+  }
+  const findCustomerBtn=$('findCustomerBtn');
+  if(findCustomerBtn && findCustomerBtn.getAttribute('data-find-customer-bound')!=='true'){
+    findCustomerBtn.setAttribute('data-find-customer-bound','true');
+    findCustomerBtn.addEventListener('click',()=>{
+      openCustomerFinderSheet();
+    });
+  }
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -2609,7 +2926,21 @@ function renderWorkshopQuote(){
     const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
-  const mode=normalizeQuoteMode(quote.quoteMode);
+  let mode=normalizeQuoteMode(quote.quoteMode);
+  const hasMeaningfulQuoteData=quoteHasMeaningfulDraft(quote);
+  if(!hasMeaningfulQuoteData && mode!=='internal'){
+    quote.quoteMode='internal';
+    mode='internal';
+    saveQuoteCurrent();
+  }
+  const modeSwitch=$('quoteModeSwitch');
+  const customerModeBtn=document.querySelector('[data-quote-mode="customer"]');
+  if(modeSwitch){
+    modeSwitch.classList.toggle('quote-mode-switch--subdued',!hasMeaningfulQuoteData);
+  }
+  if(customerModeBtn){
+    customerModeBtn.hidden=!hasMeaningfulQuoteData;
+  }
   document.querySelectorAll('[data-quote-mode]').forEach((button)=>button.classList.toggle('active',button.getAttribute('data-quote-mode')===mode));
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');

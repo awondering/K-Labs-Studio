@@ -150,11 +150,16 @@
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
           <h1 id="quoteBuilderTitle">Rod Builder Quote</h1>
-          <div class="quote-mode-switch" role="tablist" aria-label="Quote mode">
+          <div id="quoteModeSwitch" class="quote-mode-switch" role="tablist" aria-label="Quote mode">
             <button class="ghost-action active" data-quote-mode="internal" type="button">Internal Quote</button>
             <button class="ghost-action" data-quote-mode="customer" type="button">Customer Quote</button>
           </div>
         </header>
+
+        <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
+          <button id="newQuoteEntryBtn" class="primary-action quote-builder__new-quote" type="button">New Quote</button>
+          <button id="findCustomerBtn" class="ghost-action quote-builder__find-customer" type="button">Find Customer</button>
+        </div>
 
         <article class="quote-section quote-section--collapsible">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopCustomerBody">
@@ -277,11 +282,16 @@
           </header>
           <div class="quote-actions-grid quote-section__body">
             <button id="saveQuoteBtn" class="primary-action" type="button">Save Quote</button>
-            <button id="duplicateQuoteBtn" class="ghost-action" type="button">Duplicate Quote</button>
-            <button id="printQuoteBtn" class="ghost-action" type="button">Print Quote</button>
-            <button id="exportPdfBtn" class="ghost-action" type="button">Export PDF</button>
-            <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
             <button id="convertToBuildBtn" class="ghost-action" type="button">Convert To Build</button>
+            <details class="quote-actions-secondary" id="quoteActionsSecondary">
+              <summary>More Actions</summary>
+              <div class="quote-actions-secondary__list">
+                <button id="duplicateQuoteBtn" class="ghost-action" type="button">Duplicate Quote</button>
+                <button id="printQuoteBtn" class="ghost-action" type="button">Print Quote</button>
+                <button id="exportPdfBtn" class="ghost-action" type="button">Export PDF</button>
+                <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
+              </div>
+            </details>
           </div>
         </article>
       </section>
@@ -354,9 +364,9 @@
 
   <nav class="bottom-nav">
     <button class="active" data-nav="homeScreen" type="button"><i aria-hidden="true">⌂</i><span>Home</span></button>
-    <button data-nav="buildsScreen" type="button"><i aria-hidden="true">▣</i><span>Builds</span></button>
+    <button data-nav="workshopScreen" type="button"><i aria-hidden="true">▣</i><span>Studio</span></button>
     <button data-nav="layoutScreen" type="button"><i aria-hidden="true">⌖</i><span>Guide Layout</span></button>
-    <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>More</span></button>
+    <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
   <script src="js/config.js"></script>
   <script src="js/storage.js"></script>
