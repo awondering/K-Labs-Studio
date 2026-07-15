@@ -317,7 +317,7 @@ function homeRodRunStartupSequence(){
     }
     homeRodState.sequenceTimer=null;
   };
-  homeRodState.sequenceTimer=setTimeout(tick,150);
+  tick();
 }
 function homeRodRefreshFromState(triggerSequence){
   const buildCount=homeBuildCount();

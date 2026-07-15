@@ -158,12 +158,12 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   position:absolute;
   left:var(--x,8%);
   top:var(--y,15%);
-  width:2.6px;
-  height:2.6px;
+  width:3px;
+  height:3px;
   border-radius:999px;
-  background:radial-gradient(circle at 36% 32%,#a7414c 0%,#7f202b 46%,#4a1219 100%);
-  box-shadow:inset 0 0 .8px rgba(228,164,174,.16),0 0 0 .62px rgba(28,7,11,.96);
-  opacity:.94;
+  background:radial-gradient(circle at 34% 30%,#b04a56 0%,#8d2631 44%,#55161f 100%);
+  box-shadow:inset 0 0 .72px rgba(241,182,191,.18),0 0 0 .66px rgba(31,8,12,.98);
+  opacity:.98;
   transform:translate(-50%,-50%);
   transition:opacity 520ms ease-out,box-shadow 520ms ease-out,background-image 520ms ease-out;
   will-change:opacity;
@@ -197,8 +197,8 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
 #homeScreen .home-living-rod__led.is-lit{
   opacity:1;
-  background:radial-gradient(circle at 36% 32%,#b34854 0%,#8d2531 45%,#541720 100%);
-  box-shadow:inset 0 0 .82px rgba(238,174,184,.2),0 0 0 .68px rgba(33,8,13,.98);
+  background:radial-gradient(circle at 34% 30%,#bf515d 0%,#982b37 45%,#5b1822 100%);
+  box-shadow:inset 0 0 .78px rgba(250,195,203,.22),0 0 0 .72px rgba(36,9,14,.99);
 }
 
 #homeScreen .home-enter-rod-button{
@@ -393,21 +393,21 @@ body.home-screen-active #settingsScreen{
   color:#8f938c;
 }
 
-.bottom-nav button[data-nav="homeScreen"] .bottom-nav__icon{font-size:13px;transform:translateY(.5px)}
-.bottom-nav button[data-nav="buildsScreen"] .bottom-nav__icon{font-size:13px;transform:translateY(.5px)}
-.bottom-nav button[data-nav="layoutScreen"] .bottom-nav__icon{font-size:14px;transform:translateY(.5px)}
-.bottom-nav button[data-nav="settingsScreen"] .bottom-nav__icon{font-size:13px;transform:translateY(.5px)}
+.bottom-nav button[data-nav="homeScreen"] .bottom-nav__icon{font-size:15px;transform:translateY(.4px)}
+.bottom-nav button[data-nav="buildsScreen"] .bottom-nav__icon{font-size:15px;transform:translateY(.4px)}
+.bottom-nav button[data-nav="layoutScreen"] .bottom-nav__icon{font-size:15px;transform:translateY(.4px)}
+.bottom-nav button[data-nav="settingsScreen"] .bottom-nav__icon{font-size:15px;transform:translateY(.4px)}
 
 .bottom-nav button.active{
-  color:#d4cdc0;
-  border-color:rgba(214,210,200,.12);
-  background:rgba(255,255,255,.02);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 -1px 0 rgba(173,37,49,.32);
+  color:#e3dccf;
+  border-color:rgba(216,212,202,.18);
+  background:rgba(255,255,255,.045);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(173,37,49,.46);
 }
 
 .bottom-nav button.active .bottom-nav__label,
 .bottom-nav button.active .bottom-nav__icon{
-  color:#c5beb2;
+  color:#ece4d7;
 }
 
 [hidden]{display:none!important}
@@ -1824,12 +1824,20 @@ body.home-screen-active #settingsScreen{
   display:block;
   min-height:15px;
   line-height:1;
-  font-size:15px;
+  font-size:16px;
   font-style:normal;
   color:inherit;
-  opacity:.78;
+  opacity:.8;
   transform:translateY(1px);
   transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease;
+}
+
+.bottom-nav .bottom-nav__icon{
+  opacity:.78;
+}
+
+.bottom-nav .bottom-nav__label{
+  opacity:.78;
 }
 
 .bottom-nav button span{
@@ -1839,7 +1847,7 @@ body.home-screen-active #settingsScreen{
   font-size:8px;
   line-height:1.15;
   letter-spacing:.08em;
-  opacity:.8;
+  opacity:.78;
   transform:translateY(1px);
   transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease,color var(--micro-motion) ease;
 }
@@ -1849,10 +1857,10 @@ body.home-screen-active #settingsScreen{
   position:absolute;
   left:50%;
   bottom:5px;
-  width:16px;
-  height:2px;
+  width:20px;
+  height:2.6px;
   border-radius:999px;
-  background:rgba(186,31,44,.7);
+  background:rgba(186,31,44,.9);
   opacity:0;
   transform:translateX(-50%) scaleX(.5);
   transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease;
@@ -1865,7 +1873,10 @@ body.home-screen-active #settingsScreen{
 }
 
 .bottom-nav button.active{
-  color:#d9d2c5;
+  color:#ebe4d7;
+  background:rgba(255,255,255,.055);
+  border-color:rgba(216,212,202,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(173,37,49,.52);
 }
 
 .bottom-nav button.active i,
@@ -1875,6 +1886,7 @@ body.home-screen-active #settingsScreen{
 }
 
 .bottom-nav button.active::after{
+  background:rgba(186,31,44,.94);
   opacity:1;
   transform:translateX(-50%) scaleX(1);
 }
