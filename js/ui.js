@@ -2488,6 +2488,16 @@ function focusLayoutField(field){
   if(!target || !target.isContentEditable)return;
   target.focus();
 }
+function clearLayoutFieldFocusSelection(){
+  const activeEl=document.activeElement;
+  if(activeEl && typeof activeEl.closest==='function' && activeEl.closest('#layoutScreen .layout-control-card__value[data-field]')){
+    activeEl.blur();
+  }
+  const selection=window.getSelection?window.getSelection():null;
+  if(selection && selection.rangeCount>0){
+    selection.removeAllRanges();
+  }
+}
 function nextLayoutField(field){
   const index=layoutFieldOrder.indexOf(field);
   if(index<0)return layoutFieldOrder[0];
@@ -3457,6 +3467,7 @@ function bindBuildsControls(){
   });
 }
 function onScreenChange(screenId){
+  clearLayoutFieldFocusSelection();
   if(screenId==='homeScreen'){
     homeRodRefreshFromState(true);
   }
@@ -3467,12 +3478,6 @@ function onScreenChange(screenId){
   }
   if(screenId==='workshopScreen'){
     renderWorkshopQuote();
-  }
-  if(screenId==='layoutScreen' && !isLayoutLocked()){
-    const canAutoFocus=window.matchMedia&&window.matchMedia('(pointer:fine)').matches;
-    if(canAutoFocus){
-      requestAnimationFrame(()=>focusLayoutField(layoutFieldOrder[0]));
-    }
   }
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
