@@ -259,6 +259,47 @@ body.home-screen-active #settingsScreen{
   display:none!important;
 }
 
+.workshop-back-to-top{
+  position:fixed;
+  right:max(14px,calc((100vw - var(--app-max-width))/2 + 14px));
+  bottom:calc(108px + var(--safe-bottom));
+  min-height:40px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid rgba(214,210,200,.2);
+  background:linear-gradient(180deg,rgba(26,31,33,.95),rgba(14,18,20,.96));
+  color:#b9b3a7;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  z-index:8;
+  box-shadow:0 8px 18px rgba(0,0,0,.22);
+  opacity:0;
+  transform:translateY(8px);
+  pointer-events:none;
+  transition:opacity var(--micro-motion) ease,transform var(--micro-motion) ease,background-color var(--micro-motion) ease,border-color var(--micro-motion) ease,color var(--micro-motion) ease;
+}
+
+.workshop-back-to-top.is-visible{
+  opacity:.94;
+  transform:translateY(0);
+  pointer-events:auto;
+}
+
+.workshop-back-to-top:hover,
+.workshop-back-to-top:focus-visible{
+  border-color:rgba(206,44,58,.42);
+  background:rgba(155,31,42,.24);
+  color:#f0e9dc;
+  outline:none;
+}
+
+body.component-sheet-open .workshop-back-to-top{
+  opacity:0!important;
+  pointer-events:none!important;
+}
+
 @media (max-width:720px){
   #homeScreen .home-premium-shell{
     padding-top:34px;
@@ -1147,6 +1188,17 @@ body.home-screen-active #settingsScreen{
   border-radius:10px;
   background:rgba(255,255,255,.015);
   padding:8px;
+  cursor:pointer;
+  transition:border-color var(--micro-motion) ease,background-color var(--micro-motion) ease,box-shadow var(--micro-motion) ease;
+}
+
+.customer-finder__work-row:hover,
+.customer-finder__work-row:focus-visible,
+.customer-finder__work-row:focus-within{
+  border-color:rgba(206,44,58,.38);
+  background:rgba(155,31,42,.16);
+  box-shadow:0 7px 14px rgba(0,0,0,.2);
+  outline:none;
 }
 
 .customer-finder__work-copy{

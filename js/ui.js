@@ -58,6 +58,9 @@ let choicePickerViewportBound=false;
 let choicePickerViewportRaf=0;
 let workshopKeyboardDismissGuardBound=false;
 let workshopInputFocusStabilityBound=false;
+let workshopBackToTopBound=false;
+let workshopBackToTopRafId=0;
+let workshopBackToTopLastScrollY=-1;
 const workshopKeyboardDismissState={
   suppressNavUntil:0,
   preservedScrollY:0,
@@ -2036,9 +2039,8 @@ function customerFinderCustomerMenuMarkup(group){
 function customerFinderWorkMenuMarkup(entry){
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  const openLabel='Open Job';
   const deleteLabel='Delete Job';
-  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved item actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="open" data-customer-open-source="${source}" data-customer-open-index="${index}">${openLabel}</button><button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
+  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved job actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
 }
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
@@ -2049,7 +2051,9 @@ function customerFinderWorkRowMarkup(entry){
     ? (specificationValue(record.buildNumber)?`${typeLabel} ${specificationValue(record.buildNumber)}`:typeLabel)
     : typeLabel;
   const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
-  return `<div class="customer-finder__work-row"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
 }
 function requestRenameCustomer(customerKey,currentName){
   const existing=currentName==='No customer name'?'':String(currentName||'');
@@ -2231,26 +2235,29 @@ function ensureCustomerFinderSheet(){
       const source=rowAction.getAttribute('data-customer-open-source')||'quote';
       const index=Number(rowAction.getAttribute('data-customer-open-index'));
       closeCustomerFinderMenus();
-      if(action==='open'){
-        closeCustomerFinderSheet();
-        openSavedBuildRecord(source,index);
-      }
-      if(action==='duplicate'){
-        closeCustomerFinderSheet();
-        duplicateSavedBuildRecord(source,index);
-      }
       if(action==='delete'){
         requestDeleteSavedBuildRecord(source,index);
       }
       return;
     }
-    const openButton=event.target.closest('[data-customer-open-source][data-customer-open-index]');
-    if(openButton){
-      const source=openButton.getAttribute('data-customer-open-source')||'quote';
-      const index=Number(openButton.getAttribute('data-customer-open-index'));
+    const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
+    if(openRow && !event.target.closest('.customer-finder__menu-wrap')){
+      const source=openRow.getAttribute('data-customer-open-source')||'quote';
+      const index=Number(openRow.getAttribute('data-customer-open-index'));
       closeCustomerFinderSheet();
       openSavedBuildRecord(source,index);
+      return;
     }
+  });
+  sheet.addEventListener('keydown',(event)=>{
+    if(event.key!=='Enter' && event.key!==' ')return;
+    const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
+    if(!openRow || event.target.closest('.customer-finder__menu-wrap'))return;
+    event.preventDefault();
+    const source=openRow.getAttribute('data-customer-open-source')||'quote';
+    const index=Number(openRow.getAttribute('data-customer-open-index'));
+    closeCustomerFinderSheet();
+    openSavedBuildRecord(source,index);
   });
   const searchInput=sheet.querySelector('#customerFinderSearch');
   if(searchInput){
@@ -2691,6 +2698,100 @@ function renderBuildSpecificationInputs(){
     el.value=quote.buildSpecifications[field.key]||'';
   });
 }
+function workshopTopUiOffset(){
+  const candidates=['.topbar','.live-build-status','.offline-ready-status'];
+  let maxBottom=0;
+  candidates.forEach((selector)=>{
+    const el=document.querySelector(selector);
+    if(!el || el.hidden)return;
+    const styles=getComputedStyle(el);
+    if(styles.display==='none' || styles.visibility==='hidden')return;
+    if(styles.position!=='fixed' && styles.position!=='sticky')return;
+    const rect=el.getBoundingClientRect();
+    if(rect.bottom<=0)return;
+    if(rect.top>4)return;
+    maxBottom=Math.max(maxBottom,rect.bottom);
+  });
+  return maxBottom;
+}
+function scrollWorkshopSectionIntoView(section){
+  if(!section)return;
+  const reduceMotion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const topGap=12;
+  const uiOffset=workshopTopUiOffset();
+  const targetTop=window.scrollY+section.getBoundingClientRect().top-uiOffset-topGap;
+  const maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const clamped=Math.max(0,Math.min(targetTop,maxScroll));
+  const startY=window.scrollY;
+  const useSmooth=!reduceMotion;
+  window.scrollTo({top:clamped,behavior:useSmooth?'smooth':'auto'});
+  if(useSmooth && Math.abs(clamped-startY)>2){
+    window.setTimeout(()=>{
+      if(Math.abs(window.scrollY-startY)<1){
+        window.scrollTo({top:clamped,behavior:'auto'});
+      }
+    },180);
+  }
+}
+function updateWorkshopBackToTopVisibility(){
+  const button=$('workshopBackToTopBtn');
+  if(!button)return;
+  const workshop=$('workshopScreen');
+  const workshopActive=!!(workshop && workshop.classList.contains('active'));
+  const blockedByModal=document.body.classList.contains('component-sheet-open');
+  const shouldShow=workshopActive && !blockedByModal && window.scrollY>320;
+  button.hidden=!shouldShow;
+  button.classList.toggle('is-visible',shouldShow);
+}
+function scrollToWorkshopTop(){
+  const workshop=$('workshopScreen');
+  if(!workshop)return;
+  const reduceMotion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const uiOffset=workshopTopUiOffset();
+  const targetTop=window.scrollY+workshop.getBoundingClientRect().top-uiOffset-8;
+  const maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const clamped=Math.max(0,Math.min(targetTop,maxScroll));
+  const startY=window.scrollY;
+  const useSmooth=!reduceMotion;
+  window.scrollTo({top:clamped,behavior:useSmooth?'smooth':'auto'});
+  if(useSmooth && Math.abs(clamped-startY)>2){
+    window.setTimeout(()=>{
+      if(Math.abs(window.scrollY-startY)<1){
+        window.scrollTo({top:clamped,behavior:'auto'});
+      }
+    },180);
+  }
+}
+function startWorkshopBackToTopWatcher(){
+  if(workshopBackToTopRafId)return;
+  const tick=()=>{
+    const scrollY=Math.round(window.scrollY||window.pageYOffset||0);
+    if(scrollY!==workshopBackToTopLastScrollY){
+      workshopBackToTopLastScrollY=scrollY;
+      updateWorkshopBackToTopVisibility();
+    }
+    workshopBackToTopRafId=window.requestAnimationFrame(tick);
+  };
+  workshopBackToTopRafId=window.requestAnimationFrame(tick);
+}
+function bindWorkshopBackToTopControl(){
+  if(workshopBackToTopBound)return;
+  workshopBackToTopBound=true;
+  const button=$('workshopBackToTopBtn');
+  if(button){
+    button.addEventListener('click',()=>{
+      scrollToWorkshopTop();
+      window.setTimeout(updateWorkshopBackToTopVisibility,260);
+    });
+  }
+  window.addEventListener('scroll',updateWorkshopBackToTopVisibility,{passive:true});
+  window.addEventListener('resize',updateWorkshopBackToTopVisibility);
+  window.addEventListener('orientationchange',()=>{
+    window.setTimeout(updateWorkshopBackToTopVisibility,120);
+  });
+  startWorkshopBackToTopWatcher();
+  updateWorkshopBackToTopVisibility();
+}
 function bindWorkshopCollapsibleSections(){
   document.querySelectorAll('[data-collapsible-trigger]').forEach((trigger)=>{
     if(trigger.getAttribute('data-collapsible-bound')==='true')return;
@@ -2700,6 +2801,9 @@ function bindWorkshopCollapsibleSections(){
       if(!section)return;
       const isCollapsed=section.classList.toggle('quote-section--collapsed');
       trigger.setAttribute('aria-expanded',String(!isCollapsed));
+      if(!isCollapsed){
+        window.setTimeout(()=>scrollWorkshopSectionIntoView(section),36);
+      }
     });
   });
 }
@@ -3374,6 +3478,7 @@ function onScreenChange(screenId){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   }
+  updateWorkshopBackToTopVisibility();
 }
 function bindSettingsControls(){
   const taxEnabledInput=$('settingsTaxEnabled');
@@ -3488,6 +3593,7 @@ function render(){
 });
 bindLayoutControls();
 bindWorkshopQuoteBuilder();
+bindWorkshopBackToTopControl();
 bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
