@@ -1279,6 +1279,18 @@ function ensureChoicePicker(){
   `;
   document.body.appendChild(sheet);
 
+  const commitChoiceSelection=(selectedName,selectedId)=>{
+    const pickerContext={...activeChoicePicker};
+    hideChoicePickerMenu();
+    if(pickerContext.type==='blank'){
+      applyChoiceSelection(selectedName,selectedId,pickerContext);
+      closeComponentSheet();
+      return;
+    }
+    closeComponentSheet();
+    applyChoiceSelection(selectedName,selectedId,pickerContext);
+  };
+
   sheet.addEventListener('click',(event)=>{
     const actionEl=event.target.closest('[data-sheet-action]');
     if(actionEl && actionEl.getAttribute('data-sheet-action')==='close'){closeComponentSheet();}
@@ -1290,19 +1302,18 @@ function ensureChoicePicker(){
       toggleChoicePickerMenu(menuTrigger,optionName,optionId);
       return;
     }
+    const optionRow=event.target.closest('.component-sheet__row[data-choice-row]');
+    if(optionRow){
+      const selectedName=optionRow.getAttribute('data-choice-row')||'';
+      const selectedId=optionRow.getAttribute('data-choice-id')||'';
+      commitChoiceSelection(selectedName,selectedId);
+      return;
+    }
     const optionButton=event.target.closest('button[data-choice-option]');
     if(optionButton){
       const selectedName=optionButton.getAttribute('data-choice-option')||'';
       const selectedId=optionButton.getAttribute('data-choice-id')||'';
-      const pickerContext={...activeChoicePicker};
-      hideChoicePickerMenu();
-      if(pickerContext.type==='blank'){
-        applyChoiceSelection(selectedName,selectedId,pickerContext);
-        closeComponentSheet();
-      }else{
-        closeComponentSheet();
-        applyChoiceSelection(selectedName,selectedId,pickerContext);
-      }
+      commitChoiceSelection(selectedName,selectedId);
       return;
     }
     const deleteButton=event.target.closest('button[data-choice-delete-option]');
@@ -1668,7 +1679,7 @@ function renderChoicePickerOptions(query){
   }
   const rowsMarkup=options.map((item)=>{
     const hasMenu=choicePickerSupportsContextMenu();
-    return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
+    return `<div class="component-sheet__row" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup+addInlineMarkup;
 }
@@ -1738,13 +1749,13 @@ function componentRowItemLabel(item){
   if(description)return description;
   const category=specificationValue(item&&item.category);
   if(category && !isBlankCategory(category))return category;
-  return isBlankCategory(item&&item.category)?'Choose blank':'New item';
+  return isBlankCategory(item&&item.category)?'Choose blank':'Draft item';
 }
 function componentRowSupplierLabel(item){
   return specificationValue(item&&item.supplier);
 }
 function componentRowSummaryMetaParts(item){
-  if(componentRowIsEffectivelyEmpty(item))return['Editing'];
+  if(componentRowIsEffectivelyEmpty(item))return[];
   const parts=[];
   const category=componentRowCategoryLabel(item);
   const description=specificationValue(item&&item.description);
@@ -1814,8 +1825,7 @@ function componentRowMenuMarkup(item,index){
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}"><button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowEditorMarkup(item,index){
-  const isDraftEmpty=componentRowIsEffectivelyEmpty(item);
-  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Item / Description</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen part..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions">${isDraftEmpty?'<span class="quote-component-row__draft-note">Draft item</span>':''}<button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Item / Description</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen part..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Item</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -1986,20 +1996,10 @@ function renderQuoteComponents(){
             </span>
             ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
           </button>
-          ${componentRowMenuMarkup(item,i)}
         </div>
         ${expandedComponentRowIndex===i?componentRowEditorMarkup(item,i):''}
       </article>
     `).join('');
-  componentsList.querySelectorAll('[data-component-action="toggle-row-menu"]').forEach((button)=>{
-    button.addEventListener('pointerdown',(event)=>{
-      const i=Number(button.getAttribute('data-component-index'));
-      componentRowMenuPointerDown={index:i,expiresAt:Date.now()+450};
-      event.preventDefault();
-      event.stopPropagation();
-      toggleComponentRowMenu(button,i);
-    });
-  });
   componentsList.querySelectorAll('[data-component-action="request-delete-row"]').forEach((button)=>{
     button.addEventListener('pointerdown',(event)=>{
       const i=Number(button.getAttribute('data-component-index'));
@@ -2014,6 +2014,10 @@ function renderQuoteComponents(){
       requestDeleteComponentRow(i);
     });
   });
+  const addComponentBtn=$('addComponentBtn');
+  if(addComponentBtn){
+    addComponentBtn.hidden=expandedComponentRowIndex>=0;
+  }
   shouldAnimateComponentRows=false;
 }
 function waitForDomRender(callback){
@@ -3039,7 +3043,6 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
-  bindComponentRowMenus();
   const newQuoteEntryBtn=$('newQuoteEntryBtn');
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
