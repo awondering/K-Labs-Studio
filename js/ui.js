@@ -225,27 +225,22 @@ function syncQuotePricing(driver){
   },0);
   const internalCost=numberOrZero(quote.blankCost)+buildCostTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
   const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
-  const gstRate=Math.max(0,numberOrZero(quote.gstRate));
-  const multiplier=(quote.includeGst!==false)?(1+(gstRate/100)):1;
   let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
   let targetProfit=numberOrZero(quote.targetProfit);
   let markupPercent=numberOrZero(quote.markupPercent);
 
   if(activeDriver==='final'){
     finalCustomerPrice=Math.max(0,finalCustomerPrice);
-    const preTaxPrice=finalCustomerPrice/multiplier;
-    targetProfit=Math.max(0,preTaxPrice-internalCost);
+    targetProfit=Math.max(0,finalCustomerPrice-internalCost);
     markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
   }else if(activeDriver==='profit'){
     targetProfit=Math.max(0,targetProfit);
-    const preTaxPrice=internalCost+targetProfit;
-    finalCustomerPrice=preTaxPrice*multiplier;
+    finalCustomerPrice=internalCost+targetProfit;
     markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
   }else{
     markupPercent=Math.max(0,markupPercent);
     targetProfit=internalCost*(markupPercent/100);
-    const preTaxPrice=internalCost+targetProfit;
-    finalCustomerPrice=preTaxPrice*multiplier;
+    finalCustomerPrice=internalCost+targetProfit;
   }
 
   quote.pricingDriver=activeDriver;
@@ -960,7 +955,8 @@ function quoteMaths(){
   const markupAmount=numberOrZero(quote.targetProfit);
   const subtotal=numberOrZero(quote.finalCustomerPrice);
   const gstRate=Math.max(0,numberOrZero(quote.gstRate));
-  const gst=(quote.includeGst!==false)?(subtotal*(gstRate/(100+gstRate))):0;
+  const taxActive=(quote.taxEnabled!==false) && (quote.includeGst!==false);
+  const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
   const profit=markupAmount;
   return{materialCost,labourCost,internalBuildCost,markupAmount,subtotal,gst,total,profit,markupPercent:numberOrZero(quote.markupPercent),taxRate:gstRate};
@@ -4041,13 +4037,12 @@ function render(){
       <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${row.cum.toFixed(1)} millimeters. Spacing ${row.spacing.toFixed(1)} millimeters" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
           <span>Guide ${row.g}</span>
-          <small>Pos ${row.cum.toFixed(1)} mm</small>
         </div>
         <div class="guide-spacing-row__meta">
           <small>Position</small>
           <span>${row.cum.toFixed(1)} mm</span>
         </div>
-        <strong>Sp ${row.spacing.toFixed(1)} mm</strong>
+        <strong>Spacing ${row.spacing.toFixed(1)} mm</strong>
       </article>
     `).join('');
   }
