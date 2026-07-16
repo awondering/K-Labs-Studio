@@ -76,11 +76,19 @@ document.addEventListener('click',(event)=>{
 	}
 	const menuNav=event.target.closest('#navMenuSheet [data-nav]');
 	if(menuNav){
+		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
+			window.KLABS_UI.prepareWorkshopEntry('fresh');
+		}
 		goScreen(menuNav.dataset.nav);
 		return;
 	}
 	const nav=event.target.closest('[data-nav]');
-	if(nav){goScreen(nav.dataset.nav);}
+	if(nav){
+		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
+			window.KLABS_UI.prepareWorkshopEntry('fresh');
+		}
+		goScreen(nav.dataset.nav);
+	}
 });
 
 document.addEventListener('keydown',(event)=>{

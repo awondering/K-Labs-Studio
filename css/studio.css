@@ -1840,16 +1840,24 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 .quote-preview-card__head strong{
-  color:#d7d0c3;
-  font-size:13px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
+  color:#e6dece;
+  font-size:15px;
+  letter-spacing:.01em;
+  text-transform:none;
+  line-height:1.3;
 }
 
 .quote-preview-card__head span,
 .quote-preview-card p{
-  color:#8a8d86;
+  color:#9ca094;
   font-size:11px;
+}
+
+#quotePreviewBuildName{
+  color:#c9c1b0;
+  font-size:12px;
+  letter-spacing:.03em;
+  text-transform:none;
 }
 
 .quote-preview-summary{
@@ -1875,6 +1883,33 @@ body.component-sheet-open .workshop-back-to-top{
 .quote-preview-summary strong{
   color:#ece6d8;
   font-size:12px;
+}
+
+.quote-preview-parts{
+  display:grid;
+  gap:8px;
+  padding:10px 0 2px;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+
+.quote-preview-parts span{
+  color:#b8b19f;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.quote-preview-parts ul{
+  margin:0;
+  padding-left:16px;
+  display:grid;
+  gap:5px;
+}
+
+.quote-preview-parts li{
+  color:#ddd5c7;
+  font-size:12px;
+  line-height:1.35;
 }
 
 .quote-preview-actions{
