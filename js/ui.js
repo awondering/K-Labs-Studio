@@ -38,6 +38,9 @@ let customerFinderSearch='';
 let customerFinderSelectedKey='';
 let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
+let customerBrowserSearch='';
+let customerBrowserSelectedKey='';
+let customerBrowserEditMode=false;
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
@@ -3228,6 +3231,208 @@ function ensureCustomerFinderSheet(){
     }
   });
 }
+function customerBrowserPrimaryRecord(group){
+  if(!group || !Array.isArray(group.entries) || !group.entries.length)return {};
+  const sorted=[...group.entries].sort((left,right)=>{
+    const leftDate=Date.parse(left&&left.record&&left.record.savedAt||'')||0;
+    const rightDate=Date.parse(right&&right.record&&right.record.savedAt||'')||0;
+    return rightDate-leftDate;
+  });
+  return sorted[0]&&sorted[0].record?sorted[0].record:{};
+}
+function customerBrowserGroups(){
+  return customerSavedGroups(customerBrowserSearch);
+}
+function renderCustomerBrowser(){
+  const listHost=$('customerBrowserList');
+  const detailHost=$('customerBrowserDetail');
+  if(!listHost || !detailHost)return;
+  const groups=customerBrowserGroups();
+  if(!groups.length){
+    customerBrowserSelectedKey='';
+    customerBrowserEditMode=false;
+    listHost.innerHTML='<div class="component-sheet__empty">No customers matched that search.</div>';
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
+  if(!groups.some((group)=>group.key===customerBrowserSelectedKey)){
+    customerBrowserSelectedKey=groups[0].key;
+    customerBrowserEditMode=false;
+  }
+  listHost.innerHTML=groups.map((group)=>{
+    const isActive=group.key===customerBrowserSelectedKey;
+    const totalJobs=group.entries.length;
+    return `<div class="component-sheet__row customers-browser__row"><button class="component-sheet__option customers-browser__option${isActive?' is-active-customer':''}" type="button" data-customer-browser-select="${escapeHtml(group.key)}"><span class="customers-browser__name">${escapeHtml(group.name)}</span><small class="customers-browser__meta">${totalJobs} saved job${totalJobs===1?'':'s'}</small></button></div>`;
+  }).join('');
+  const selected=groups.find((group)=>group.key===customerBrowserSelectedKey)||groups[0];
+  if(!selected){
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
+  const primary=customerBrowserPrimaryRecord(selected);
+  const jobsMarkup=selected.entries.length
+    ? selected.entries.map((entry)=>{
+      const source=String(entry&&entry.source||'quote');
+      const index=Number(entry&&entry.index);
+      const record=entry&&entry.record?entry.record:{};
+      const title=specificationValue(record.buildName)||'Untitled Job';
+      const type=source==='build'?'Build':'Quote';
+      const ref=specificationValue(record.buildNumber)||'Unnumbered';
+      const savedAt=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+      return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(type)} ${escapeHtml(ref)} • Saved ${escapeHtml(savedAt)}</small></button>`;
+    }).join('')
+    : '<div class="component-sheet__empty">No saved jobs for this customer.</div>';
+  detailHost.hidden=false;
+  detailHost.innerHTML=`
+    <header class="customers-browser__detail-head">
+      <h3>${escapeHtml(selected.name)}</h3>
+      <p>${selected.entries.length} saved job${selected.entries.length===1?'':'s'}</p>
+    </header>
+    <div class="customers-browser__detail-actions">
+      <button class="primary-action" type="button" data-customer-browser-action="start-build">Start New Build</button>
+      <button class="ghost-action" type="button" data-customer-browser-action="toggle-edit">${customerBrowserEditMode?'Cancel Edit':'Edit Details'}</button>
+      <button class="ghost-action" type="button" data-customer-browser-action="rename">Rename</button>
+      <button class="ghost-action" type="button" data-customer-browser-action="delete">Delete</button>
+    </div>
+    <form id="customerBrowserEditForm" class="customers-browser__edit-form" ${customerBrowserEditMode?'':'hidden'}>
+      <label><span>Phone</span><input id="customerBrowserPhone" type="text" value="${escapeHtml(primary.phone||'')}" /></label>
+      <label><span>Email</span><input id="customerBrowserEmail" type="email" value="${escapeHtml(primary.email||'')}" /></label>
+      <label class="customers-browser__edit-full"><span>Address Line 1</span><input id="customerBrowserAddress1" type="text" value="${escapeHtml(primary.addressLine1||'')}" /></label>
+      <label class="customers-browser__edit-full"><span>Address Line 2</span><input id="customerBrowserAddress2" type="text" value="${escapeHtml(primary.addressLine2||'')}" /></label>
+      <label><span>Suburb / Locality</span><input id="customerBrowserSuburb" type="text" value="${escapeHtml(primary.suburbLocality||'')}" /></label>
+      <label><span>City / Town</span><input id="customerBrowserCity" type="text" value="${escapeHtml(primary.cityTown||'')}" /></label>
+      <label><span>Region / State</span><input id="customerBrowserRegion" type="text" value="${escapeHtml(primary.regionState||'')}" /></label>
+      <label><span>Postcode / ZIP</span><input id="customerBrowserPostcode" type="text" value="${escapeHtml(primary.postcode||'')}" /></label>
+      <label class="customers-browser__edit-full"><span>Country</span><input id="customerBrowserCountry" type="text" value="${escapeHtml(primary.country||'New Zealand')}" /></label>
+      <div class="customers-browser__edit-actions">
+        <button class="ghost-action" type="button" data-customer-browser-action="toggle-edit">Cancel</button>
+        <button class="primary-action" type="button" data-customer-browser-action="save-edit">Save Details</button>
+      </div>
+    </form>
+    <section class="customers-browser__jobs" aria-label="Saved jobs">
+      <h4>Saved Jobs</h4>
+      <div class="customers-browser__jobs-list">${jobsMarkup}</div>
+    </section>
+  `;
+}
+function customerBrowserCurrentGroup(){
+  return customerBrowserGroups().find((group)=>group.key===customerBrowserSelectedKey)||null;
+}
+function startNewBuildForCustomerBrowserSelection(){
+  const group=customerBrowserCurrentGroup();
+  if(!group)return;
+  const source=customerBrowserPrimaryRecord(group);
+  runNewBuildStartAction(()=>{
+    startFreshQuoteForCustomer(source);
+  });
+}
+function saveCustomerBrowserDetails(){
+  const group=customerBrowserCurrentGroup();
+  if(!group)return;
+  const customerKey=group.key;
+  const nextValues={
+    phone:String(($('customerBrowserPhone')&&$('customerBrowserPhone').value)||'').trim(),
+    email:String(($('customerBrowserEmail')&&$('customerBrowserEmail').value)||'').trim(),
+    addressLine1:String(($('customerBrowserAddress1')&&$('customerBrowserAddress1').value)||'').trim(),
+    addressLine2:String(($('customerBrowserAddress2')&&$('customerBrowserAddress2').value)||'').trim(),
+    suburbLocality:String(($('customerBrowserSuburb')&&$('customerBrowserSuburb').value)||'').trim(),
+    cityTown:String(($('customerBrowserCity')&&$('customerBrowserCity').value)||'').trim(),
+    regionState:String(($('customerBrowserRegion')&&$('customerBrowserRegion').value)||'').trim(),
+    postcode:String(($('customerBrowserPostcode')&&$('customerBrowserPostcode').value)||'').trim(),
+    country:String(($('customerBrowserCountry')&&$('customerBrowserCountry').value)||'').trim()||'New Zealand',
+  };
+  const quoteRecords=savedQuoteRecords();
+  const buildRecords=savedBuildRecords();
+  let quoteChanged=false;
+  let buildChanged=false;
+  quoteRecords.forEach((record)=>{
+    if(!customerFinderMatchesKey(customerKey,record&&record.customerName))return;
+    Object.assign(record,nextValues);
+    quoteChanged=true;
+  });
+  buildRecords.forEach((record)=>{
+    if(!customerFinderMatchesKey(customerKey,record&&record.customerName))return;
+    Object.assign(record,nextValues);
+    buildChanged=true;
+  });
+  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
+  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
+  if(customerFinderMatchesKey(customerKey,quote.customerName)){
+    Object.assign(quote,nextValues);
+    saveQuoteCurrent();
+    renderWorkshopQuote();
+  }
+  customerBrowserEditMode=false;
+  renderCustomerBrowser();
+}
+function bindCustomerBrowserControls(){
+  const searchInput=$('customerBrowserSearchInput');
+  if(searchInput){
+    searchInput.addEventListener('input',()=>{
+      customerBrowserSearch=searchInput.value||'';
+      customerBrowserSelectedKey='';
+      customerBrowserEditMode=false;
+      renderCustomerBrowser();
+    });
+  }
+  const listHost=$('customerBrowserList');
+  if(listHost){
+    listHost.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-customer-browser-select]');
+      if(!button)return;
+      customerBrowserSelectedKey=button.getAttribute('data-customer-browser-select')||'';
+      customerBrowserEditMode=false;
+      renderCustomerBrowser();
+    });
+  }
+  const detailHost=$('customerBrowserDetail');
+  if(detailHost){
+    detailHost.addEventListener('click',(event)=>{
+      const actionButton=event.target.closest('[data-customer-browser-action]');
+      if(actionButton){
+        const action=actionButton.getAttribute('data-customer-browser-action')||'';
+        if(action==='start-build'){
+          startNewBuildForCustomerBrowserSelection();
+          return;
+        }
+        if(action==='toggle-edit'){
+          customerBrowserEditMode=!customerBrowserEditMode;
+          renderCustomerBrowser();
+          return;
+        }
+        if(action==='save-edit'){
+          saveCustomerBrowserDetails();
+          return;
+        }
+        if(action==='rename'){
+          const group=customerBrowserCurrentGroup();
+          if(group){
+            requestRenameCustomer(group.key,group.name);
+            customerBrowserSelectedKey=normalizeNameKey(group.name)||group.key;
+            customerBrowserEditMode=false;
+            renderCustomerBrowser();
+          }
+          return;
+        }
+        if(action==='delete'){
+          const group=customerBrowserCurrentGroup();
+          if(group){
+            requestDeleteCustomerGroup(group.key,group.name);
+          }
+          return;
+        }
+      }
+      const openButton=event.target.closest('[data-customer-browser-open-source][data-customer-browser-open-index]');
+      if(openButton){
+        const source=openButton.getAttribute('data-customer-browser-open-source')||'quote';
+        const index=Number(openButton.getAttribute('data-customer-browser-open-index'));
+        openSavedBuildRecord(source,index);
+      }
+    });
+  }
+}
 function savedBuildSearchText(entry){
   const record=entry&&entry.record?entry.record:{};
   return [record.buildNumber,record.customerName,record.buildName,record.blankName,record.blankMaker,record.blankSeries,record.savedAt,entry&&entry.source]
@@ -3798,7 +4003,8 @@ function bindWorkshopQuoteBuilder(){
   if(findCustomerBtn && findCustomerBtn.getAttribute('data-find-customer-bound')!=='true'){
     findCustomerBtn.setAttribute('data-find-customer-bound','true');
     findCustomerBtn.addEventListener('click',()=>{
-      openCustomerFinderSheet('browse');
+      preserveWorkshopQuoteOnEntry=true;
+      goScreen('customersScreen');
     });
   }
   workshopInputMap().forEach(([id,key])=>{
@@ -4504,6 +4710,13 @@ function onScreenChange(screenId){
     if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
     renderBuilds();
   }
+  if(screenId==='customersScreen'){
+    const searchInput=$('customerBrowserSearchInput');
+    if(searchInput && searchInput.value!==customerBrowserSearch){
+      searchInput.value=customerBrowserSearch;
+    }
+    renderCustomerBrowser();
+  }
   if(screenId==='workshopScreen'){
     if(preserveWorkshopQuoteOnEntry){
       preserveWorkshopQuoteOnEntry=false;
@@ -4633,6 +4846,7 @@ bindWorkshopQuoteBuilder();
 bindWorkshopBackToTopControl();
 bindHomeActions();
 bindBuildsControls();
+bindCustomerBrowserControls();
 bindBlankLibraryControls();
 bindSettingsControls();
 window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');}};

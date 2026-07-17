@@ -282,6 +282,19 @@
       <div id="buildCards"></div>
     </section>
 
+    <section class="screen" id="customersScreen">
+      <div class="screen-head"><p class="eyebrow">Customers</p><h1>Customer Browser</h1></div>
+      <div class="blank-library-controls customers-browser__controls">
+        <input id="customerBrowserSearchInput" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
+      </div>
+      <section class="customers-browser__layout" aria-label="Customer browser layout">
+        <aside class="customers-browser__list-pane" aria-label="Customers">
+          <div id="customerBrowserList" class="component-sheet__list customers-browser__list" aria-live="polite"></div>
+        </aside>
+        <section id="customerBrowserDetail" class="customers-browser__detail" aria-live="polite" hidden></section>
+      </section>
+    </section>
+
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
       <div class="settings-card">
