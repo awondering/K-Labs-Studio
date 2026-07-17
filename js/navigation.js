@@ -1,6 +1,11 @@
+function syncHomeScreenClass(activeScreenId){
+	document.body.classList.toggle('home-screen-active',activeScreenId==='homeScreen');
+}
+
 function goScreen(id){
 	document.querySelectorAll('.screen').forEach((screen)=>screen.classList.toggle('active',screen.id===id));
 	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===id));
+	syncHomeScreenClass(id);
 	if(window.KLABS_UI && typeof window.KLABS_UI.onScreenChange==='function'){
 		window.KLABS_UI.onScreenChange(id);
 	}
@@ -28,10 +33,9 @@ function ensureNavMenu(){
 			<div class="component-sheet__body">
 					<div class="component-sheet__list nav-menu-list">
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="homeScreen">Home</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="buildsScreen">Builds</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Workshop</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Studio</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="layoutScreen">Guide Layout</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">More</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">Settings</button></div>
 				</div>
 			</div>
 		</section>
@@ -72,13 +76,24 @@ document.addEventListener('click',(event)=>{
 	}
 	const menuNav=event.target.closest('#navMenuSheet [data-nav]');
 	if(menuNav){
+		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
+			window.KLABS_UI.prepareWorkshopEntry('fresh');
+		}
 		goScreen(menuNav.dataset.nav);
 		return;
 	}
 	const nav=event.target.closest('[data-nav]');
-	if(nav){goScreen(nav.dataset.nav);}
+	if(nav){
+		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
+			window.KLABS_UI.prepareWorkshopEntry('fresh');
+		}
+		goScreen(nav.dataset.nav);
+	}
 });
 
 document.addEventListener('keydown',(event)=>{
 	if(event.key==='Escape'){closeNavMenu();}
 });
+
+const initialActiveScreen=document.querySelector('.screen.active');
+syncHomeScreenClass(initialActiveScreen?initialActiveScreen.id:'homeScreen');

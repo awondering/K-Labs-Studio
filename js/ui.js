@@ -1,6 +1,16 @@
 const $=id=>document.getElementById(id);
-let state=Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0});
-const DEFAULT_CATEGORY_NAMES=['Blank','Guides','Tip','Reel Seat','Grip','Butt Cap','Winding Checks','Thread','Decals','Other'];
+function normalizeLayoutState(input){
+  const raw=input&&typeof input==='object'?input:{};
+  return {
+    firstGuide:clampValue(raw.firstGuide,50,300),
+    guideCount:clampValue(raw.guideCount,5,20),
+    targetStripper:clampValue(raw.targetStripper,500,2500),
+    locked:false,
+    workshopIndex:Math.max(0,clampValue(raw.workshopIndex,0,1000))
+  };
+}
+let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0}));
+const DEFAULT_CATEGORY_NAMES=['Blank','Reel Seat','Grip','Winding Checks','Butt Cap','Hook Keeper','Guides','Tip Top','Thread & Finish','Epoxy','Clear coat','Freight','Decals','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
@@ -8,7 +18,7 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
-const CHOICE_FAVOURITES_STORAGE_PREFIX='klabs-workshop-favourites-';
+const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
@@ -18,13 +28,17 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'customer'},
   {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Builder Notes',visibility:'workshop'}
 ];
+let studioSettings=normalizeStudioSettings(Store.get(SETTINGS_STORAGE_KEY,{}));
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
+let customerFinderSearch='';
+let customerFinderSelectedKey='';
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
+let quotePreviewIntent='view';
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
 let holdDelayTimer=null;
@@ -33,17 +47,24 @@ let activeChoicePicker={type:'category',index:-1};
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 let shouldAnimateComponentRows=false;
+let expandedComponentRowIndex=-1;
+let componentRowMenuPointerDown={index:-1,expiresAt:0};
+const pendingComponentDraftRows=new WeakSet();
 let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
 const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
-const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true};
+const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null};
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
 let choicePickerViewportBound=false;
 let choicePickerViewportRaf=0;
 let workshopKeyboardDismissGuardBound=false;
 let workshopInputFocusStabilityBound=false;
+let workshopBackToTopBound=false;
+let workshopBackToTopRafId=0;
+let workshopBackToTopLastScrollY=-1;
+let preserveWorkshopQuoteOnEntry=false;
 const workshopKeyboardDismissState={
   suppressNavUntil:0,
   preservedScrollY:0,
@@ -52,18 +73,207 @@ const choicePickerViewportState={
   keyboardActive:false,
 };
 
-function save(){Store.set('klabs-studio-state',state)}
+function save(){
+  Store.set('klabs-studio-state',{
+    firstGuide:numberOrZero(state.firstGuide),
+    guideCount:numberOrZero(state.guideCount),
+    targetStripper:numberOrZero(state.targetStripper),
+    locked:false,
+    workshopIndex:numberOrZero(state.workshopIndex)
+  });
+}
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
+function normalizeStudioSettings(settings){
+  const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
+  const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
+  return {taxRate,taxEnabled};
+}
+function saveStudioSettings(){
+  Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+}
+function activeTaxRate(){
+  return Math.max(0,numberOrZero(studioSettings&&studioSettings.taxRate)||15);
+}
+function activeTaxEnabled(){
+  return (studioSettings&&typeof studioSettings.taxEnabled==='boolean')?studioSettings.taxEnabled:true;
+}
+function roundMoney(value){
+  return Math.round(numberOrZero(value)*100)/100;
+}
+function isBlankCategory(category){
+  return normalizeNameKey(category)==='blank';
+}
+function blankComponentFromBlank(blank,currentRow){
+  const row=currentRow&&typeof currentRow==='object'?currentRow:{};
+  const normalized=blank?normalizeBlank(blank):null;
+  const blankName=normalized?blankDisplayName(normalized):String(row.description||row.blankName||'').trim();
+  return {
+    ...row,
+    category:'Blank',
+    description:blankName,
+    supplier:normalized?String(normalized.maker||''):String(row.supplier||row.blankMaker||''),
+    cost:normalized?numberOrZero(normalized.cost):numberOrZero(row.cost),
+    blankId:normalized?String(normalized.id||''):String(row.blankId||''),
+    blankName:blankName,
+    blankMaker:normalized?String(normalized.maker||''):String(row.blankMaker||''),
+    blankSeries:normalized?String(normalized.series||''):String(row.blankSeries||''),
+    blankLength:normalized?String(normalized.length||''):String(row.blankLength||''),
+    blankPower:normalized?String(normalized.power||''):String(row.blankPower||''),
+    blankAction:normalized?String(normalized.action||''):String(row.blankAction||''),
+    blankPieces:normalized?String(normalized.pieces||''):String(row.blankPieces||''),
+    blankSku:normalized?String(normalized.sku||''):String(row.blankSku||''),
+    blankNotes:normalized?String(normalized.notes||''):String(row.blankNotes||''),
+  };
+}
+function firstBlankComponentIndex(components){
+  return (components||[]).findIndex((item)=>isBlankCategory(item&&item.category));
+}
+function clearQuoteBlankSelection(){
+  quote.blankId='';
+  quote.blankName='';
+  quote.blankMaker='';
+  quote.blankSeries='';
+  quote.blankLength='';
+  quote.blankPower='';
+  quote.blankAction='';
+  quote.blankPieces='';
+  quote.blankCost=0;
+  quote.blankSku='';
+  quote.blankNotes='';
+}
+function applyBlankComponentToQuote(row){
+  if(!row || !isBlankCategory(row.category))return;
+  quote.blankId=String(row.blankId||quote.blankId||'');
+  quote.blankName=String(row.blankName||row.description||quote.blankName||'').trim();
+  quote.blankMaker=String(row.blankMaker||row.supplier||quote.blankMaker||'').trim();
+  quote.blankSeries=String(row.blankSeries||quote.blankSeries||'').trim();
+  quote.blankLength=String(row.blankLength||quote.blankLength||'').trim();
+  quote.blankPower=String(row.blankPower||quote.blankPower||'').trim();
+  quote.blankAction=String(row.blankAction||quote.blankAction||'').trim();
+  quote.blankPieces=String(row.blankPieces||quote.blankPieces||'').trim();
+  quote.blankCost=numberOrZero(row.cost);
+  quote.blankSku=String(row.blankSku||quote.blankSku||'').trim();
+  quote.blankNotes=String(row.blankNotes||quote.blankNotes||'').trim();
+}
+function syncQuoteBlankFromComponents(){
+  const blankIndex=firstBlankComponentIndex(quote.components);
+  if(blankIndex<0){
+    clearQuoteBlankSelection();
+    return;
+  }
+  applyBlankComponentToQuote(quote.components[blankIndex]);
+}
+function migrateBlankWorkflow(merged){
+  if(!Array.isArray(merged.components))merged.components=[];
+  let blankIndex=firstBlankComponentIndex(merged.components);
+  if(blankIndex<0 && (specificationValue(merged.blankId)||specificationValue(merged.blankName)||numberOrZero(merged.blankCost)>0)){
+    const row=blankComponentFromBlank(null,{
+      category:'Blank',
+      description:String(merged.blankName||'').trim(),
+      supplier:String(merged.blankMaker||'').trim(),
+      cost:numberOrZero(merged.blankCost),
+      blankId:String(merged.blankId||''),
+      blankName:String(merged.blankName||''),
+      blankMaker:String(merged.blankMaker||''),
+      blankSeries:String(merged.blankSeries||''),
+      blankLength:String(merged.blankLength||''),
+      blankPower:String(merged.blankPower||''),
+      blankAction:String(merged.blankAction||''),
+      blankPieces:String(merged.blankPieces||''),
+      blankSku:String(merged.blankSku||''),
+      blankNotes:String(merged.blankNotes||''),
+    });
+    merged.components.unshift(row);
+    blankIndex=0;
+  }
+  if(blankIndex>=0){
+    const primaryBlank=blankComponentFromBlank(null,merged.components[blankIndex]);
+    merged.components[blankIndex]=primaryBlank;
+    merged.components=merged.components.map((row,index)=>{
+      if(index===blankIndex)return row;
+      if(!isBlankCategory(row&&row.category))return row;
+      return {...row,category:'Other',description:(specificationValue(row.description)||'Legacy blank item')};
+    });
+    merged.blankId=String(primaryBlank.blankId||merged.blankId||'');
+    merged.blankName=String(primaryBlank.blankName||primaryBlank.description||merged.blankName||'').trim();
+    merged.blankMaker=String(primaryBlank.blankMaker||primaryBlank.supplier||merged.blankMaker||'').trim();
+    merged.blankSeries=String(primaryBlank.blankSeries||merged.blankSeries||'').trim();
+    merged.blankLength=String(primaryBlank.blankLength||merged.blankLength||'').trim();
+    merged.blankPower=String(primaryBlank.blankPower||merged.blankPower||'').trim();
+    merged.blankAction=String(primaryBlank.blankAction||merged.blankAction||'').trim();
+    merged.blankPieces=String(primaryBlank.blankPieces||merged.blankPieces||'').trim();
+    merged.blankCost=numberOrZero(primaryBlank.cost);
+    merged.blankSku=String(primaryBlank.blankSku||merged.blankSku||'').trim();
+    merged.blankNotes=String(primaryBlank.blankNotes||merged.blankNotes||'').trim();
+  }
+  if(!merged.components.length){
+    merged.components=[{category:'',description:'',supplier:'',cost:0}];
+  }
+}
+function normalizePricingDriver(value){
+  const next=String(value||'').trim().toLowerCase();
+  if(next==='final' || next==='profit' || next==='markup')return next;
+  return 'markup';
+}
+function syncQuotePricing(driver){
+  syncQuoteBlankFromComponents();
+  const buildCostTotal=quote.components.reduce((sum,item)=>{
+    if(isBlankCategory(item&&item.category))return sum;
+    return sum+numberOrZero(item&&item.cost);
+  },0);
+  const internalCost=numberOrZero(quote.blankCost)+buildCostTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
+  const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
+  let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
+  let targetProfit=numberOrZero(quote.targetProfit);
+  let markupPercent=numberOrZero(quote.markupPercent);
+
+  if(activeDriver==='final'){
+    finalCustomerPrice=Math.max(0,finalCustomerPrice);
+    targetProfit=Math.max(0,finalCustomerPrice-internalCost);
+    markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
+  }else if(activeDriver==='profit'){
+    targetProfit=Math.max(0,targetProfit);
+    finalCustomerPrice=internalCost+targetProfit;
+    markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
+  }else{
+    markupPercent=Math.max(0,markupPercent);
+    targetProfit=internalCost*(markupPercent/100);
+    finalCustomerPrice=internalCost+targetProfit;
+  }
+
+  quote.pricingDriver=activeDriver;
+  quote.markupPercent=roundMoney(markupPercent);
+  quote.targetProfit=roundMoney(targetProfit);
+  quote.finalCustomerPrice=roundMoney(finalCustomerPrice);
+  quote.marginPercent=quote.markupPercent;
+}
 function homeRodElement(){return $('homeLivingRod');}
-function homeRodLedPositions(){return [6,18,31,45,60,74,86,96];}
+function homeRodLedPositions(){
+  return[
+    {x:8,y:36.1},
+    {x:18,y:36.1},
+    {x:30,y:36.1},
+    {x:43,y:36.1},
+    {x:57,y:36.1},
+    {x:71,y:36.1},
+    {x:84,y:36.1},
+    {x:94,y:36.1}
+  ];
+}
+function homeRodClearSequenceTimer(){
+  if(homeRodState.sequenceTimer){
+    clearTimeout(homeRodState.sequenceTimer);
+    homeRodState.sequenceTimer=null;
+  }
+}
 function homeRodEnsureLeds(){
   const rod=homeRodElement();
   if(!rod)return null;
   let leds=rod.querySelectorAll('.home-living-rod__led');
   if(leds.length===homeRodState.ledCount)return rod;
-  const ledMarkup=homeRodLedPositions().map((position)=>`<span class="home-living-rod__led" style="left:${position}%;"></span>`).join('');
+  const ledMarkup=homeRodLedPositions().map((position)=>`<span class="home-living-rod__led" style="--x:${position.x}%;--y:${position.y}%;"></span>`).join('');
   rod.querySelector('.home-living-rod__leds').innerHTML=ledMarkup;
   leds=rod.querySelectorAll('.home-living-rod__led');
   homeRodState.ledCount=leds.length;
@@ -78,8 +288,9 @@ function homeRodSetLitCount(count){
   const nextCount=Math.max(0,Math.min(homeRodState.ledCount,Math.round(Number(count)||0)));
   homeRodState.litCount=nextCount;
   const leds=rod.querySelectorAll('.home-living-rod__led');
+  const threshold=Math.max(0,homeRodState.ledCount-nextCount);
   leds.forEach((led,index)=>{
-    led.classList.toggle('is-lit',index<nextCount);
+    led.classList.toggle('is-lit',index>=threshold);
   });
   homeRodState.ready=nextCount>0;
 }
@@ -95,26 +306,35 @@ function homeRodAnimateToLitCount(target){
   };
   tick();
 }
-function homeRodRefreshFromState(){
-  const buildCount=homeBuildCount();
+function homeRodRunStartupSequence(){
   const rod=homeRodEnsureLeds();
-  const targetCount=Math.min(homeRodState.ledCount,Math.max(1,buildCount+1));
+  if(!rod)return;
+  homeRodClearSequenceTimer();
+  const total=Math.max(1,homeRodState.ledCount);
+  homeRodSetLitCount(0);
+  let nextLit=1;
+  const tick=()=>{
+    homeRodSetLitCount(nextLit);
+    if(nextLit<total){
+      nextLit+=1;
+      homeRodState.sequenceTimer=setTimeout(tick,210);
+      return;
+    }
+    homeRodState.sequenceTimer=null;
+  };
+  tick();
+}
+function homeRodRefreshFromState(triggerSequence){
+  const rod=homeRodEnsureLeds();
+  const shouldTriggerSequence=triggerSequence===true;
   if(rod && !rod.classList.contains('is-ready')){
     requestAnimationFrame(()=>rod.classList.add('is-ready'));
   }
-  if(homeRodState.homeFirstOpen){
+  if(homeRodState.homeFirstOpen || shouldTriggerSequence){
     homeRodState.homeFirstOpen=false;
-    homeRodSetLitCount(1);
-    if(targetCount>1){
-      setTimeout(()=>homeRodAnimateToLitCount(targetCount),420);
-    }
+    homeRodRunStartupSequence();
   }else{
-    homeRodAnimateToLitCount(targetCount);
-  }
-  const continueButton=$('homeContinueLastBuildBtn');
-  if(continueButton){
-    continueButton.hidden=buildCount<=0;
-    continueButton.textContent='Continue last build →';
+    homeRodSetLitCount(homeRodState.ledCount);
   }
 }
 function newQuoteTemplate(){
@@ -125,7 +345,7 @@ function newQuoteTemplate(){
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,marginPercent:0,includeGst:true,quoteMode:'internal',gstRate:15,quoteStatus:'draft'
+    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'draft'
   };
 }
 function normalizeAddressText(value){
@@ -152,6 +372,43 @@ function appendSpecRow(rows,label,value){
   if(!text)return;
   rows.push({label,value:text});
 }
+function normalizeCustomerMeasurements(text){
+  return String(text||'').replace(/(\d+(?:\.\d+)?)\s*cm\b/gi,(_,value)=>{
+    const mm=Number(value)*10;
+    const rendered=Number.isInteger(mm)?String(mm):String(mm.toFixed(1)).replace(/\.0$/,'');
+    return `${rendered} mm`;
+  });
+}
+function isLikelyJunkCustomerText(text){
+  const normalized=normalizeNameKey(text);
+  if(!normalized)return true;
+  const blockedExact=new Set(['n a','na','n/a','none','tbd','test','testing','asdf','qwerty','lorem ipsum','junk','xxx']);
+  if(blockedExact.has(normalized))return true;
+  if(/^(?:[-_\s]+|[?!.]{2,})$/.test(text))return true;
+  if(/(^|\b)(asdf|qwerty|lorem|ipsum|junk|foobar|xxx)(\b|$)/i.test(text))return true;
+  if(/(^|\b)test(?:ing)?(\b|$)/i.test(text))return true;
+  const letterCount=(text.match(/[a-z]/gi)||[]).length;
+  const digitCount=(text.match(/[0-9]/g)||[]).length;
+  if(!letterCount && digitCount)return true;
+  return false;
+}
+function customerSafeText(value){
+  const text=normalizeCustomerMeasurements(specificationValue(value));
+  if(!text)return '';
+  if(isLikelyJunkCustomerText(text))return '';
+  return text;
+}
+function customerRequestText(value){
+  const text=normalizeCustomerMeasurements(specificationValue(value));
+  if(!text)return '';
+  if(isLikelyJunkCustomerText(text))return '';
+  return text;
+}
+function appendCustomerSpecRow(rows,label,value){
+  const safe=customerSafeText(value);
+  if(!safe)return;
+  rows.push({label,value:safe});
+}
 function firstComponentByCategory(categoryMatchers){
   if(!Array.isArray(quote.components))return null;
   const matchers=Array.isArray(categoryMatchers)?categoryMatchers:[categoryMatchers];
@@ -164,6 +421,17 @@ function firstComponentByCategory(categoryMatchers){
 function componentDescriptionOrCategory(component){
   if(!component)return '';
   return specificationValue(component.description)||specificationValue(component.category);
+}
+function firstSavedComponentByCategory(categoryMatchers){
+  if(!Array.isArray(quote.components))return null;
+  const matchers=Array.isArray(categoryMatchers)?categoryMatchers:[categoryMatchers];
+  return quote.components.find((item)=>{
+    if(!componentRowHasMeaningfulData(item))return false;
+    if(pendingComponentDraftRows.has(item))return false;
+    const category=normalizeNameKey(item&&item.category);
+    if(!category)return false;
+    return matchers.some((matcher)=>category.includes(normalizeNameKey(matcher)));
+  })||null;
 }
 function blankSpecificationSummary(){
   const details=[];
@@ -200,19 +468,157 @@ function customerPreviewLines(){
 
   return lines;
 }
+function customerGripConfigurationValue(){
+  const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
+    ? quote.buildSpecifications
+    : {};
+  const direct=specificationValue(
+    specs.gripConfiguration
+    || specs.gripSetup
+    || specs.gripStyle
+    || specs.handleConfiguration
+    || ''
+  );
+  if(direct)return direct;
+  const parts=[];
+  const rear=specificationValue(specs.rearGripLength);
+  const lower=specificationValue(specs.gripBelowReelSeatLength);
+  const fore=specificationValue(specs.foreGripLength);
+  if(rear)parts.push(`Rear ${rear}`);
+  if(lower)parts.push(`Lower ${lower}`);
+  if(fore)parts.push(`Fore ${fore}`);
+  return parts.join(' • ');
+}
+function customerGripFeatureSummary(){
+  const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
+    ? quote.buildSpecifications
+    : {};
+  const direct=customerSafeText(
+    specs.gripConfiguration
+    || specs.gripSetup
+    || specs.gripStyle
+    || specs.handleConfiguration
+    || ''
+  );
+  if(direct)return `Custom grip layout: ${direct}`;
+  const rear=customerSafeText(specs.rearGripLength);
+  const lower=customerSafeText(specs.gripBelowReelSeatLength);
+  const fore=customerSafeText(specs.foreGripLength);
+  if(rear && fore && !lower)return `Split-grip layout with a rear grip of ${rear} and a fore grip of ${fore}.`;
+  if(rear && lower && fore)return `Full handle layout with rear grip ${rear}, lower grip ${lower}, and fore grip ${fore}.`;
+  if(rear)return `Rear grip layout set at ${rear}.`;
+  if(lower)return `Lower grip section set at ${lower}.`;
+  if(fore)return `Fore grip section set at ${fore}.`;
+  return '';
+}
+function looksLikeComponentCode(value){
+  const text=specificationValue(value);
+  if(!text)return false;
+  return /^[A-Z0-9][A-Z0-9\-_/]{3,}$/.test(text.trim());
+}
+function humanizeComponentCode(value){
+  const raw=specificationValue(value);
+  if(!raw)return '';
+  const normalized=raw.replace(/[\-_\/]+/g,' ').replace(/\s+/g,' ').trim();
+  const tokens=normalized.split(' ').map((token)=>{
+    if(/[0-9]/.test(token))return token.toUpperCase();
+    if(token.length<=3)return token.toUpperCase();
+    return token.charAt(0).toUpperCase()+token.slice(1).toLowerCase();
+  });
+  return tokens.join(' ');
+}
+function savedComponentDisplayLabel(item){
+  const customerLabel=specificationValue(item&&item.customerLabel);
+  if(customerLabel)return customerLabel;
+  const category=specificationValue(item&&item.category);
+  const description=specificationValue(item&&item.description);
+  if(description && normalizeNameKey(description)!==normalizeNameKey(category)){
+    return description;
+  }
+  return category||description;
+}
+function friendlyComponentCategoryName(category){
+  const key=normalizeNameKey(category);
+  if(!key)return '';
+  if(key.includes('guide'))return 'Guide system';
+  if(key.includes('reel seat'))return 'Reel seat';
+  if(key.includes('buttcap') || key.includes('butt cap'))return 'Butt cap trim';
+  if(key.includes('tip top'))return 'Tip top guide';
+  if(key.includes('thread'))return 'Thread and finish';
+  if(key.includes('decal'))return 'Custom decals';
+  if(key.includes('winding'))return 'Winding checks';
+  if(key.includes('hook keeper'))return 'Hook keeper';
+  if(key.includes('grip'))return 'Grip assembly';
+  if(key.includes('blank'))return 'Rod blank';
+  return specificationValue(category);
+}
+function customerComponentFeatureValue(component,defaultLabel){
+  if(!component)return '';
+  const display=customerSafeText(savedComponentDisplayLabel(component));
+  if(display)return display;
+  return customerSafeText(defaultLabel);
+}
+function isFinishCategoryKey(categoryKey){
+  const key=normalizeNameKey(categoryKey);
+  return key.includes('thread') || key.includes('decal') || key.includes('winding');
+}
+function finishDescriptionText(description){
+  return customerSafeText(description);
+}
+function customerFinishDetailsSummary(){
+  if(!Array.isArray(quote.components))return '';
+  const details=[];
+  quote.components.forEach((item)=>{
+    if(!componentRowHasMeaningfulData(item))return;
+    if(pendingComponentDraftRows.has(item))return;
+    const categoryKey=normalizeNameKey(item&&item.category);
+    if(!isFinishCategoryKey(categoryKey))return;
+    const detail=finishDescriptionText(item&&item.description) || customerSafeText(specificationValue(item&&item.category));
+    if(!detail)return;
+    const normalized=normalizeNameKey(detail);
+    if(details.some((value)=>normalizeNameKey(value)===normalized))return;
+    details.push(detail);
+  });
+  return details.join(' • ');
+}
+function customerRodIdentity(){
+  const buildName=customerSafeText(quote.buildName);
+  const blankSummary=customerSafeText(blankSpecificationSummary());
+  if(buildName)return buildName;
+  if(blankSummary)return blankSummary;
+  return 'Custom Rod Build Confirmation';
+}
 function customerSpecificationRows(){
   const rows=[];
-  appendSpecRow(rows,'Blank',blankSpecificationSummary());
-  appendSpecRow(rows,'Guide Train',componentDescriptionOrCategory(firstComponentByCategory('guide')));
-  appendSpecRow(rows,'Reel Seat Model',componentDescriptionOrCategory(firstComponentByCategory('reel seat')));
-  appendSpecRow(rows,'Grip Configuration',componentDescriptionOrCategory(firstComponentByCategory(['grip','butt cap'])));
-  BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer').forEach((field)=>{
-    appendSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
+  appendCustomerSpecRow(rows,'Blank',blankSpecificationSummary());
+  appendCustomerSpecRow(rows,'Grip Feature',customerGripFeatureSummary());
+  BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer' && !['rearGripLength','gripBelowReelSeatLength','foreGripLength'].includes(field.key)).forEach((field)=>{
+    appendCustomerSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
   });
-  appendSpecRow(rows,'Special Customer Requests',quote.notes);
-  appendSpecRow(rows,'Decorative Notes',componentDescriptionOrCategory(firstComponentByCategory(['decals','thread','winding checks'])));
-  appendSpecRow(rows,'Build Summary',quote.buildName);
+  appendCustomerSpecRow(rows,'Customer Requests',customerRequestText(quote.notes));
   return rows;
+}
+function customerIncludedPartLabel(item){
+  return customerSafeText(savedComponentDisplayLabel(item));
+}
+function customerIncludedParts(){
+  if(!Array.isArray(quote.components))return[];
+  const parts=[];
+  quote.components.forEach((item)=>{
+    if(!componentRowHasMeaningfulData(item))return;
+    if(pendingComponentDraftRows.has(item))return;
+    const label=customerIncludedPartLabel(item);
+    if(!normalizeNameKey(label))return;
+    parts.push(label);
+  });
+  return parts;
+}
+function customerIncludedPartsMarkup(parts){
+  const safeParts=(Array.isArray(parts)?parts:[]).map(customerSafeText).filter((value)=>specificationValue(value));
+  const listItems=safeParts.length
+    ? safeParts.map((value)=>`<li>${escapeHtml(value)}</li>`).join('')
+    : '<li>Your final component list will be confirmed before build start.</li>';
+  return `<div class="quote-preview-parts"><span>What your rod includes</span><ul>${listItems}</ul></div>`;
 }
 function workshopSpecificationRows(){
   const rows=customerSpecificationRows();
@@ -234,9 +640,13 @@ function specificationRowsMarkup(rows){
   return safeRows.map((row)=>`<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('');
 }
 function normalizeComponent(component){
+  const rawCategory=(component&&typeof component.category==='string')?component.category:(component&&typeof component.name==='string')?component.name:'';
+  const categoryKey=normalizeNameKey(rawCategory);
+  const category=categoryKey==='tip'?'Tip Top':categoryKey==='thread'?'Thread & Finish':rawCategory;
   return{
-    category:(component&&typeof component.category==='string')?component.category:(component&&typeof component.name==='string')?component.name:'',
+    category,
     description:(component&&typeof component.description==='string')?component.description:'',
+    customerLabel:(component&&typeof component.customerLabel==='string')?component.customerLabel:'',
     supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
     cost:numberOrZero(component&&component.cost),
   };
@@ -251,32 +661,38 @@ function normalizeQuoteStatus(value){
 function isAcceptedQuoteStatus(value){
   return normalizeQuoteStatus(value)==='accepted';
 }
+function hasSavedBuildRecordForCurrentQuote(){
+  const buildNumber=specificationValue(quote&&quote.buildNumber);
+  if(!buildNumber)return false;
+  const records=Store.get('klabs-workshop-builds',[]);
+  if(!Array.isArray(records))return false;
+  const buildKey=normalizeNameKey(buildNumber);
+  return records.some((record)=>normalizeNameKey(record&&record.buildNumber)===buildKey);
+}
 function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
   const merged={...base,...(inputQuote||{})};
   const components=Array.isArray(inputQuote&&inputQuote.components)&&inputQuote.components.length?inputQuote.components:[{category:'',description:'',supplier:'',cost:0}];
   merged.components=components.map(normalizeComponent);
-  merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:true;
+  const hasStoredTaxEnabled=(inputQuote&&typeof inputQuote.taxEnabled==='boolean');
+  merged.taxEnabled=hasStoredTaxEnabled?inputQuote.taxEnabled:((inputQuote&&typeof inputQuote==='object')?true:activeTaxEnabled());
+  merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
-  merged.gstRate=numberOrZero(inputQuote&&inputQuote.gstRate)||15;
+  const incomingGstRate=(inputQuote&&inputQuote.gstRate);
+  merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
+  merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
+  merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
+  merged.finalCustomerPrice=numberOrZero(inputQuote&&inputQuote.finalCustomerPrice);
+  merged.pricingDriver=normalizePricingDriver(inputQuote&&inputQuote.pricingDriver);
   merged.blankId=String(inputQuote&&inputQuote.blankId||'');
   merged.blankMaker=String(inputQuote&&inputQuote.blankMaker||'');
   merged.blankSeries=String(inputQuote&&inputQuote.blankSeries||'');
   merged.blankPieces=String(inputQuote&&inputQuote.blankPieces||'');
   merged.blankSku=String(inputQuote&&inputQuote.blankSku||'');
   merged.blankNotes=String(inputQuote&&inputQuote.blankNotes||'');
-  const hasStructuredAddress=!!(
-    normalizeAddressText(inputQuote&&inputQuote.addressLine1) ||
-    normalizeAddressText(inputQuote&&inputQuote.addressLine2) ||
-    normalizeAddressText(inputQuote&&inputQuote.suburbLocality) ||
-    normalizeAddressText(inputQuote&&inputQuote.cityTown) ||
-    normalizeAddressText(inputQuote&&inputQuote.regionState) ||
-    normalizeAddressText(inputQuote&&inputQuote.postcode) ||
-    normalizeAddressText(inputQuote&&inputQuote.country)
-  );
   const legacyAddress=normalizeAddressText(inputQuote&&((inputQuote.addressLine1)||inputQuote.customerAddress||inputQuote.address));
-  merged.addressLine1=normalizeAddressText(inputQuote&&inputQuote.addressLine1)||(hasStructuredAddress?'':legacyAddress);
+  merged.addressLine1=normalizeAddressText(inputQuote&&inputQuote.addressLine1)||legacyAddress;
   merged.addressLine2=normalizeAddressText(inputQuote&&inputQuote.addressLine2);
   merged.suburbLocality=normalizeAddressText(inputQuote&&inputQuote.suburbLocality);
   merged.cityTown=normalizeAddressText(inputQuote&&inputQuote.cityTown);
@@ -284,6 +700,16 @@ function normalizeQuote(inputQuote){
   merged.postcode=normalizeAddressText(inputQuote&&inputQuote.postcode);
   merged.country=normalizeAddressText(inputQuote&&inputQuote.country)||'New Zealand';
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
+  migrateBlankWorkflow(merged);
+  const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
+  const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
+  const internalBuildCost=numberOrZero(merged.blankCost)+merged.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
+  if(!hasFinal && !hasProfit){
+    merged.targetProfit=internalBuildCost*(merged.markupPercent/100);
+    merged.finalCustomerPrice=internalBuildCost+merged.targetProfit;
+    merged.pricingDriver='markup';
+  }
+  merged.marginPercent=merged.markupPercent;
   return merged;
 }
 function canConvertToBuild(){
@@ -291,29 +717,21 @@ function canConvertToBuild(){
 }
 function updateQuoteActionPriority(){
   const saveQuoteBtn=$('saveQuoteBtn');
-  const convertToBuildBtn=$('convertToBuildBtn');
-  if(!saveQuoteBtn || !convertToBuildBtn)return;
-
-  const isAccepted=isAcceptedQuoteStatus(quote.quoteStatus);
-  const saveIsPrimary=!isAccepted || hasUnsavedQuoteChanges;
-
-  saveQuoteBtn.classList.toggle('primary-action',saveIsPrimary);
-  saveQuoteBtn.classList.toggle('ghost-action',!saveIsPrimary);
-  convertToBuildBtn.classList.toggle('primary-action',!saveIsPrimary);
-  convertToBuildBtn.classList.toggle('ghost-action',saveIsPrimary);
-
-  const convertEnabled=canConvertToBuild();
-  convertToBuildBtn.disabled=!convertEnabled;
-  convertToBuildBtn.setAttribute('aria-disabled',String(!convertEnabled));
-  if(!isAccepted){
-    convertToBuildBtn.title='Convert To Build is available only for Accepted quotes.';
-    return;
+  if(!saveQuoteBtn)return;
+  saveQuoteBtn.classList.add('primary-action');
+  saveQuoteBtn.classList.remove('ghost-action');
+  const customerCopyEnabled=hasSavedBuildRecordForCurrentQuote();
+  const customerCopyActions=$('customerCopyActions');
+  if(customerCopyActions){
+    customerCopyActions.hidden=!customerCopyEnabled;
+    if(!customerCopyEnabled)customerCopyActions.removeAttribute('open');
   }
-  if(hasUnsavedQuoteChanges){
-    convertToBuildBtn.title='Save the Accepted quote before converting to a build.';
-    return;
-  }
-  convertToBuildBtn.title='Convert this Accepted quote to a build.';
+  ['viewCustomerCopyBtn','emailQuoteBtn','printQuoteBtn'].forEach((id)=>{
+    const button=$(id);
+    if(!button)return;
+    button.disabled=!customerCopyEnabled;
+    button.setAttribute('aria-disabled',String(!customerCopyEnabled));
+  });
 }
 function markQuoteDirty(){
   hasUnsavedQuoteChanges=true;
@@ -325,14 +743,17 @@ function markQuoteSaved(){
 }
 function quoteHasMeaningfulDraft(currentQuote){
   const candidate=normalizeQuote(currentQuote||{});
-  const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode,candidate.country]
+  const baseline=normalizeQuote(newQuoteTemplate());
+  const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode]
     .some((value)=>!!specificationValue(value));
+  const hasCountryOverride=specificationValue(candidate.country)!==specificationValue(baseline.country);
+  const hasBuildSpecs=Object.keys(candidate.buildSpecifications||{}).some((key)=>!!specificationValue(candidate.buildSpecifications&&candidate.buildSpecifications[key]));
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
-  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.marginPercent)>0;
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
-  return hasIdentity || hasBlank || hasCosts || hasComponentData;
+  return hasIdentity || hasCountryOverride || hasBuildSpecs || hasBlank || hasCosts || hasComponentData;
 }
 function ensureCustomerSectionExpanded(){
   const body=$('workshopCustomerBody');
@@ -343,32 +764,44 @@ function ensureCustomerSectionExpanded(){
   const trigger=section.querySelector('[data-collapsible-trigger]');
   if(trigger){trigger.setAttribute('aria-expanded','true');}
 }
-function beginFreshBuild(){
+function setWorkshopSectionCollapsed(sectionId,collapsed){
+  const body=$(sectionId);
+  if(!body)return;
+  const section=body.closest('.quote-section--collapsible');
+  if(!section)return;
+  section.classList.toggle('quote-section--collapsed',!!collapsed);
+  const trigger=section.querySelector('[data-collapsible-trigger]');
+  if(trigger){trigger.setAttribute('aria-expanded',String(!collapsed));}
+}
+function collapseWorkshopSections(){
+  ['workshopCustomerBody','workshopBuildSpecsBody','workshopBuildCostsBody','workshopLabourBody','workshopQuoteSummaryBody'].forEach((id)=>{
+    setWorkshopSectionCollapsed(id,true);
+  });
+}
+function beginFreshQuote(options){
+  const settings={navigate:true,...(options||{})};
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
   renderWorkshopQuote();
-  ensureCustomerSectionExpanded();
-  goScreen('workshopScreen');
-  window.requestAnimationFrame(()=>{
-    const firstField=$('quoteCustomerName');
-    if(firstField && typeof firstField.focus==='function'){
-      firstField.focus({preventScroll:true});
-    }
-  });
+  collapseWorkshopSections();
+  if(settings.navigate){goScreen('workshopScreen');}
 }
-function startNewBuildFlow(){
+function startNewQuoteFlow(){
   if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
     openConfirmDialog({
       title:'Start New Build',
-      message:'Replace the current unsaved build draft and start a new build?',
+      message:'Discard the current unsaved build and start a new build?',
       actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Build',kind:'primary'}]
     },(action)=>{
-      if(action==='start'){beginFreshBuild();}
+      if(action==='start'){beginFreshQuote();}
     });
     return;
   }
-  beginFreshBuild();
+  beginFreshQuote();
+}
+function startNewBuildFlow(){
+  startNewQuoteFlow();
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
@@ -450,7 +883,7 @@ function syncChoicePickerViewport(){
   choicePickerViewportState.keyboardActive=keyboardActive;
 
   const sideGap=12;
-  const panelMaxWidth=Math.max(240,viewportWidth-(sideGap*2));
+  const panelMaxWidth=Math.min(620,Math.max(240,viewportWidth-(sideGap*2)));
   const panelMaxHeight=Math.max(160,viewportHeight-32);
   sheet.style.setProperty('--component-sheet-vv-left',`${viewportLeft}px`);
   sheet.style.setProperty('--component-sheet-vv-width',`${viewportWidth}px`);
@@ -510,20 +943,23 @@ function unbindChoicePickerViewportHandlers(){
   clearChoicePickerViewportStyles();
 }
 function quoteMaths(){
+  syncQuotePricing();
   const blankCost=numberOrZero(quote.blankCost);
   const buildCostTotal=quote.components.reduce((sum,item)=>{
+    if(isBlankCategory(item&&item.category))return sum;
     return sum+numberOrZero(item.cost);
   },0);
   const materialCost=blankCost+buildCostTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const internalBuildCost=materialCost+labourCost;
-  const marginAmount=internalBuildCost*(numberOrZero(quote.marginPercent)/100);
-  const subtotal=internalBuildCost+marginAmount;
-  const gstRate=numberOrZero(quote.gstRate)||15;
-  const gst=(quote.includeGst!==false)?(subtotal-(subtotal/(1+(gstRate/100)))):0;
+  const markupAmount=numberOrZero(quote.targetProfit);
+  const subtotal=numberOrZero(quote.finalCustomerPrice);
+  const gstRate=Math.max(0,numberOrZero(quote.gstRate));
+  const taxActive=(quote.taxEnabled!==false) && (quote.includeGst!==false);
+  const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
-  const profit=marginAmount;
-  return{materialCost,labourCost,internalBuildCost,marginAmount,subtotal,gst,total,profit};
+  const profit=markupAmount;
+  return{materialCost,labourCost,internalBuildCost,markupAmount,subtotal,gst,total,profit,markupPercent:numberOrZero(quote.markupPercent),taxRate:gstRate};
 }
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -596,21 +1032,6 @@ function favoriteBlankIds(){
   if(!Array.isArray(stored))return new Set();
   return new Set(stored.map((value)=>String(value||'').trim()).filter(Boolean));
 }
-function saveFavoriteBlankIds(ids){
-  const next=Array.from(new Set((ids||[]).map((value)=>String(value||'').trim()).filter(Boolean)));
-  Store.set('klabs-blank-favourites',next);
-}
-function toggleBlankFavourite(blankId){
-  const id=String(blankId||'').trim();
-  if(!id)return;
-  const favourites=favoriteBlankIds();
-  if(favourites.has(id)){
-    favourites.delete(id);
-  }else{
-    favourites.add(id);
-  }
-  saveFavoriteBlankIds(Array.from(favourites));
-}
 function blankIsFavourite(blank){
   if(!blank)return false;
   if(blank.favorite || blank.favourite || blank.isFavorite || blank.isFavourite)return true;
@@ -648,6 +1069,17 @@ function applyBlankToQuote(blank){
   quote.blankCost=numberOrZero(blank.cost);
   quote.blankSku=blank.sku;
   quote.blankNotes=blank.notes;
+  const existingBlankIndex=firstBlankComponentIndex(quote.components);
+  if(existingBlankIndex>=0){
+    quote.components[existingBlankIndex]=blankComponentFromBlank(blank,quote.components[existingBlankIndex]);
+    quote.components=quote.components.map((row,index)=>{
+      if(index===existingBlankIndex)return row;
+      if(!isBlankCategory(row&&row.category))return row;
+      return {...row,category:'Other',description:(specificationValue(row.description)||'Legacy blank item')};
+    });
+  }else{
+    quote.components.unshift(blankComponentFromBlank(blank,defaultComponentRow()));
+  }
   saveQuoteCurrent();
   markQuoteDirty();
 }
@@ -686,7 +1118,7 @@ function selectedBlankSummaryMarkup(blank){
   const lines=selectedBlankSummaryLines(blank);
   const title=escapeHtml(blankModelName(blank)||'Choose Blank');
   const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">⋯</button>`:'';
-  const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Rename</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
+  const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Edit Blank</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
   return blank
     ?`<div class="selected-blank-card" data-selected-blank-state="summary"><div class="selected-blank-card__head"><strong class="selected-blank-card__name">${title}</strong></div><div class="selected-blank-card__summary">${lines.map((line)=>`<div>${escapeHtml(line)}</div>`).join('')}</div><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button>${menuButton}</div>${menu}</div>`
     :`<div class="selected-blank-card selected-blank-card--empty" data-selected-blank-state="empty"><strong class="selected-blank-card__name">Choose Blank</strong><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button></div></div>`;
@@ -696,7 +1128,7 @@ function selectedBlankEditMarkup(blank){
   const numberValue=(key)=>escapeHtml(String(numberOrZero(blank&&blank[key])));
   return `
     <div class="selected-blank-card selected-blank-card--edit" data-selected-blank-state="edit">
-      <div class="selected-blank-card__head"><p class="eyebrow">SELECTED BLANK</p><strong>Rename Blank</strong></div>
+      <div class="selected-blank-card__head"><p class="eyebrow">SELECTED BLANK</p><strong>Edit Blank</strong></div>
       <div class="blank-editor-grid selected-blank-edit-grid">
         <label class="blank-editor-grid__full"><span>Blank Name</span><input data-selected-blank-field="model" type="text" value="${escapeHtml(String(blankModelName(blank)||''))}" /></label>
         <label><span>Manufacturer</span><input data-selected-blank-field="maker" type="text" value="${value('maker')}" /></label>
@@ -932,7 +1364,7 @@ function bindSelectedBlankControls(){
 function persistBuildRecord(currentQuote){
   const savedAt=new Date().toISOString();
   const records=Store.get('klabs-workshop-builds',[]);
-  const record={...currentQuote,savedAt};
+  const record={...quoteForPersistence(currentQuote),savedAt};
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
 }
@@ -970,76 +1402,26 @@ function saveArchivedChoiceNames(type,names){
 function normalizeNameKey(name){
   return String(name||'').trim().toLowerCase();
 }
-function choiceFavouriteStorageKey(type){
-  if(type==='blank')return 'klabs-blank-favourites';
-  return CHOICE_FAVOURITES_STORAGE_PREFIX+String(type||'category');
-}
-function choiceRecordFavouriteKey(type,record){
-  if(type==='blank')return String(record&&record.id||'').trim();
-  return normalizeNameKey(record&&record.name);
-}
-function getChoiceFavouriteSet(type){
-  if(type==='blank')return favoriteBlankIds();
-  const stored=Store.get(choiceFavouriteStorageKey(type),[]);
-  if(!Array.isArray(stored))return new Set();
-  return new Set(stored.map((value)=>normalizeNameKey(value)).filter(Boolean));
-}
-function saveChoiceFavouriteSet(type,values){
-  const next=Array.from(new Set((values||[]).map((value)=>String(value||'').trim()).filter(Boolean)));
-  if(type==='blank'){
-    saveFavoriteBlankIds(next);
-    return;
-  }
-  Store.set(choiceFavouriteStorageKey(type),next);
-}
-function choiceRecordIsFavourite(type,record){
-  if(type==='blank')return blankIsFavourite(record&&record.blank?record.blank:record);
-  const key=choiceRecordFavouriteKey(type,record);
-  if(!key)return false;
-  return getChoiceFavouriteSet(type).has(key);
-}
-function toggleChoiceRecordFavourite(type,record){
-  const key=choiceRecordFavouriteKey(type,record);
-  if(!key)return;
-  if(type==='blank'){
-    toggleBlankFavourite(key);
-    return;
-  }
-  const favourites=getChoiceFavouriteSet(type);
-  if(favourites.has(key)){
-    favourites.delete(key);
-  }else{
-    favourites.add(key);
-  }
-  saveChoiceFavouriteSet(type,Array.from(favourites));
-}
-function compareChoiceRecordNames(left,right){
-  return String(left&&left.name||'').localeCompare(String(right&&right.name||''),undefined,{sensitivity:'base'});
-}
-function sortChoiceRecords(type,records){
-  return records.slice().sort((left,right)=>{
-    const favouriteDiff=Number(choiceRecordIsFavourite(type,right))-Number(choiceRecordIsFavourite(type,left));
-    if(favouriteDiff)return favouriteDiff;
-    if(type==='blank'){
-      return compareBlankDisplayNames(left.blank||left,right.blank||right);
-    }
-    return compareChoiceRecordNames(left,right);
+function categoryOptionNameOrder(customNames){
+  const defaultOther=DEFAULT_CATEGORY_NAMES.find((name)=>normalizeNameKey(name)==='other')||'Other';
+  const defaultsWithoutOther=DEFAULT_CATEGORY_NAMES.filter((name)=>normalizeNameKey(name)!=='other');
+  const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
+  const safeCustoms=(customNames||[]).filter((name)=>{
+    const normalized=normalizeNameKey(name);
+    return normalized && normalized!=='other' && !defaultKeys.has(normalized);
   });
+  return defaultsWithoutOther.concat(safeCustoms,[defaultOther]);
 }
 function allComponentNameOptions(){
-  const defaults=DEFAULT_CATEGORY_NAMES.slice();
-  const defaultKeys=new Set(defaults.map(normalizeNameKey));
-  const customs=getCustomCategoryNames().filter((name)=>!defaultKeys.has(normalizeNameKey(name)));
-  return defaults.concat(customs);
+  return categoryOptionNameOrder(getCustomCategoryNames());
 }
 function componentOptionRecords(query){
-  const defaults=DEFAULT_CATEGORY_NAMES.map((name)=>({name,isCustom:false}));
-  const customNames=getCustomCategoryNames().map((name)=>({name,isCustom:true}));
-  const all=defaults.concat(customNames);
+  const orderedNames=categoryOptionNameOrder(getCustomCategoryNames());
+  const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
+  const all=orderedNames.map((name)=>({name,isCustom:!defaultKeys.has(normalizeNameKey(name))}));
   const normalized=normalizeNameKey(query);
   const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
-  const visible=all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
-  return sortChoiceRecords('category',visible);
+  return all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
 }
 function supplierOptionRecords(query){
   const defaults=DEFAULT_SUPPLIER_NAMES.map((name)=>({name,isCustom:false}));
@@ -1047,39 +1429,19 @@ function supplierOptionRecords(query){
   const all=defaults.concat(customNames);
   const normalized=normalizeNameKey(query);
   const archived=new Set(getArchivedChoiceNames('supplier').map(normalizeNameKey));
-  const visible=all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
-  return sortChoiceRecords('supplier',visible);
+  return all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
 }
 function blankOptionRecords(query){
   const normalized=normalizeNameKey(query);
-  return sortChoiceRecords('blank',blanks
+  return blanks
     .filter((blank)=>!blank.archived)
     .map((blank)=>({id:blank.id,name:blankDisplayName(blank),isCustom:true,blank}))
-    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized)));
-}
-function uniqueChoiceName(baseName,type){
-  const normalizedBase=String(baseName||'').trim()||'Custom Item';
-  const keySet=new Set();
-  if(type==='blank'){
-    blanks.forEach((blank)=>keySet.add(normalizeNameKey(blankDisplayName(blank))));
-  }else{
-    recordsForChoiceType(type,'').forEach((record)=>keySet.add(normalizeNameKey(record.name)));
-  }
-  let nextName=normalizedBase;
-  let suffix=2;
-  while(keySet.has(normalizeNameKey(nextName))){
-    nextName=`${normalizedBase} ${suffix}`;
-    suffix+=1;
-  }
-  return nextName;
-}
-function duplicateChoice(optionName,optionId){
-  if(activeChoicePicker.type==='blank'){
-    duplicateBlank(optionId);
-    return;
-  }
-  const duplicateName=uniqueChoiceName(`${optionName||'Custom Item'} Copy`,activeChoicePicker.type);
-  addCustomChoice(duplicateName);
+    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized))
+    .sort((left,right)=>{
+      const favoriteDiff=Number(blankIsFavourite(right.blank))-Number(blankIsFavourite(left.blank));
+      if(favoriteDiff)return favoriteDiff;
+      return compareBlankDisplayNames(left.blank,right.blank);
+    });
 }
 function ensureChoicePicker(){
   if($('choicePickerSheet'))return;
@@ -1098,9 +1460,8 @@ function ensureChoicePicker(){
         <input id="choicePickerSearch" class="component-sheet__search" type="text" placeholder="Search" autocomplete="off" spellcheck="false" />
         <div id="choicePickerList" class="component-sheet__list"></div>
         <div id="choicePickerMenu" class="component-picker-menu" hidden>
-          <button id="choicePickerMenuSelect" class="component-picker-menu__item" type="button">Select</button>
           <button id="choicePickerMenuRename" class="component-picker-menu__item" type="button">Rename</button>
-          <button id="choicePickerMenuDuplicate" class="component-picker-menu__item" type="button">Duplicate</button>
+          <button id="choicePickerMenuDuplicate" class="component-picker-menu__item" type="button" hidden>Duplicate</button>
           <button id="choicePickerMenuDelete" class="component-picker-menu__item" type="button">Delete</button>
         </div>
         <button id="choicePickerAdd" class="component-sheet__add" type="button">+ Add Custom Item</button>
@@ -1115,6 +1476,18 @@ function ensureChoicePicker(){
   `;
   document.body.appendChild(sheet);
 
+  const commitChoiceSelection=(selectedName,selectedId)=>{
+    const pickerContext={...activeChoicePicker};
+    hideChoicePickerMenu();
+    if(pickerContext.type==='blank'){
+      applyChoiceSelection(selectedName,selectedId,pickerContext);
+      closeComponentSheet();
+      return;
+    }
+    closeComponentSheet();
+    applyChoiceSelection(selectedName,selectedId,pickerContext);
+  };
+
   sheet.addEventListener('click',(event)=>{
     const actionEl=event.target.closest('[data-sheet-action]');
     if(actionEl && actionEl.getAttribute('data-sheet-action')==='close'){closeComponentSheet();}
@@ -1126,23 +1499,18 @@ function ensureChoicePicker(){
       toggleChoicePickerMenu(menuTrigger,optionName,optionId);
       return;
     }
+    const optionRow=event.target.closest('.component-sheet__row[data-choice-row]');
+    if(optionRow){
+      const selectedName=optionRow.getAttribute('data-choice-row')||'';
+      const selectedId=optionRow.getAttribute('data-choice-id')||'';
+      commitChoiceSelection(selectedName,selectedId);
+      return;
+    }
     const optionButton=event.target.closest('button[data-choice-option]');
     if(optionButton){
       const selectedName=optionButton.getAttribute('data-choice-option')||'';
       const selectedId=optionButton.getAttribute('data-choice-id')||'';
-      const pickerContext={...activeChoicePicker};
-      hideChoicePickerMenu();
-      closeComponentSheet();
-      applyChoiceSelection(selectedName,selectedId,pickerContext);
-      return;
-    }
-    const favouriteButton=event.target.closest('button[data-choice-favourite-option]');
-    if(favouriteButton){
-      const optionName=favouriteButton.getAttribute('data-choice-favourite-option')||'';
-      const optionId=favouriteButton.getAttribute('data-choice-favourite-id')||'';
-      const optionRecord={name:optionName,id:optionId,blank:findBlankById(optionId)};
-      toggleChoiceRecordFavourite(activeChoicePicker.type,optionRecord);
-      renderChoicePickerOptions($('choicePickerSearch')?$('choicePickerSearch').value:'');
+      commitChoiceSelection(selectedName,selectedId);
       return;
     }
     const deleteButton=event.target.closest('button[data-choice-delete-option]');
@@ -1215,21 +1583,11 @@ function ensureChoicePicker(){
     startChoiceEditor('rename',activeChoiceMenu.name);
     hideChoicePickerMenu();
   });
-  $('choicePickerMenuSelect').addEventListener('click',()=>{
-    if(!activeChoiceMenu.open)return;
-    const pickerContext={...activeChoicePicker};
-    const selectedName=activeChoiceMenu.name;
-    const selectedId=activeChoiceMenu.id;
-    hideChoicePickerMenu();
-    closeComponentSheet();
-    applyChoiceSelection(selectedName,selectedId,pickerContext);
-  });
   $('choicePickerMenuDuplicate').addEventListener('click',()=>{
-    if(!activeChoiceMenu.open)return;
-    const optionName=activeChoiceMenu.name;
-    const optionId=activeChoiceMenu.id;
+    if(!activeChoiceMenu.open || activeChoicePicker.type!=='blank')return;
+    const blankId=activeChoiceMenu.id;
     hideChoicePickerMenu();
-    duplicateChoice(optionName,optionId);
+    duplicateBlank(blankId);
     if($('choicePickerSheet') && !$('choicePickerSheet').hidden){
       renderChoicePickerOptions($('choicePickerSearch').value);
     }
@@ -1304,10 +1662,10 @@ function toggleChoicePickerMenu(triggerEl,optionName,optionId){
     name:optionName,
     id:optionId,
     top:Math.max(8,triggerRect.bottom-panelRect.top+6),
-    left:Math.max(8,Math.min(panelRect.width-172,triggerRect.right-panelRect.left-164)),
+    left:Math.max(8,Math.min(panelRect.width-156,triggerRect.right-panelRect.left-144)),
     open:true,
   };
-  positionRowMenu(menu,triggerEl,panel,164);
+  positionRowMenu(menu,triggerEl,panel,144);
   menu.hidden=false;
 }
 function hideBlankRowMenu(){
@@ -1315,18 +1673,14 @@ function hideBlankRowMenu(){
   document.querySelectorAll('[data-blank-menu-trigger]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
 }
 function syncChoicePickerMenuActions(){
-  const selectButton=$('choicePickerMenuSelect');
   const renameButton=$('choicePickerMenuRename');
   const duplicateButton=$('choicePickerMenuDuplicate');
   const deleteButton=$('choicePickerMenuDelete');
-  if(!selectButton || !renameButton || !duplicateButton || !deleteButton)return;
+  if(!renameButton || !duplicateButton || !deleteButton)return;
   const isBlank=activeChoicePicker.type==='blank';
-  selectButton.textContent='Select';
-  selectButton.setAttribute('aria-label','Select this item');
-  renameButton.textContent='Rename';
-  renameButton.setAttribute('aria-label',isBlank?'Rename this blank':'Rename this item');
-  duplicateButton.hidden=false;
-  duplicateButton.setAttribute('aria-label','Duplicate this item');
+  renameButton.textContent=isBlank?'Edit Blank':'Rename';
+  renameButton.setAttribute('aria-label',isBlank?'Edit this blank':'Rename this item');
+  duplicateButton.hidden=!isBlank;
   deleteButton.textContent='Delete';
   deleteButton.setAttribute('aria-label',isBlank?'Delete this blank':'Delete this item');
 }
@@ -1343,7 +1697,9 @@ function toggleBlankRowMenu(triggerEl,blankId){
 }
 function blankRowMenuMarkup(blank){
   const blankId=escapeHtml(blank.id);
-  const actions=`<button class="component-picker-menu__item" data-blank-action="select" data-blank-id="${blankId}" type="button">Select</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
+  const actions=blank.archived
+    ?`<button class="component-picker-menu__item" data-blank-action="restore" data-blank-id="${blankId}" type="button">Restore</button><button class="component-picker-menu__item" data-blank-action="edit" data-blank-id="${blankId}" type="button">Edit Blank</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`
+    :`<button class="component-picker-menu__item" data-blank-action="edit" data-blank-id="${blankId}" type="button">Edit Blank</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
   return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
 function addCustomChoice(name){
@@ -1429,27 +1785,71 @@ function setChoiceValue(type,index,value){
   if(type==='supplier'){
     quote.components[index].supplier=value;
   }else{
+    const wasBlank=isBlankCategory(quote.components[index].category);
     quote.components[index].category=value;
+    if(wasBlank && !isBlankCategory(value)){
+      syncQuoteBlankFromComponents();
+    }
   }
   saveQuoteCurrent();
   markQuoteDirty();
+}
+function applyBlankSelectionToBuildCosts(blank,targetIndex){
+  const selected=normalizeBlank(blank);
+  const existingIndex=firstBlankComponentIndex(quote.components);
+  const updateRowAt=(rowIndex)=>{
+    if(rowIndex<0 || rowIndex>=quote.components.length)return;
+    quote.components[rowIndex]=blankComponentFromBlank(selected,quote.components[rowIndex]);
+    applyBlankComponentToQuote(quote.components[rowIndex]);
+    saveQuoteCurrent();
+    markQuoteDirty();
+    renderWorkshopQuote();
+  };
+  if(existingIndex>=0 && existingIndex!==targetIndex){
+    openConfirmDialog({
+      title:'Replace Blank',
+      message:'Replace the current blank?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'replace',label:'Replace',kind:'primary'}]
+    },(action)=>{
+      if(action==='replace'){
+        updateRowAt(existingIndex);
+      }
+    });
+    return;
+  }
+  if(Number.isInteger(targetIndex) && targetIndex>=0 && targetIndex<quote.components.length){
+    updateRowAt(targetIndex);
+    return;
+  }
+  if(existingIndex>=0){
+    updateRowAt(existingIndex);
+    return;
+  }
+  quote.components.unshift(blankComponentFromBlank(selected,defaultComponentRow()));
+  applyBlankComponentToQuote(quote.components[0]);
+  saveQuoteCurrent();
+  markQuoteDirty();
+  renderWorkshopQuote();
 }
 function applyChoiceSelection(selectedName,selectedId,pickerContext){
   const context=pickerContext||activeChoicePicker;
   if(context.type==='blank'){
     const selectedBlank=findBlankById(selectedId) || blanks.find((blank)=>normalizeNameKey(blankDisplayName(blank))===normalizeNameKey(selectedName));
     if(selectedBlank){
-      applyBlankToQuote(selectedBlank);
-      renderWorkshopQuote();
+      applyBlankSelectionToBuildCosts(selectedBlank,context.index);
     }
     return;
   }
   if(context.index>=0){
+    if(context.type==='category' && isBlankCategory(selectedName)){
+      openChoicePicker('blank',context.index,document.activeElement);
+      return;
+    }
     setChoiceValue(context.type,context.index,selectedName);
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
     if(trigger){
-      trigger.textContent=selectedName|| (context.type==='supplier'?'Select supplier':'Select component');
+      trigger.textContent=selectedName|| (context.type==='supplier'?'Select supplier':'Select category');
     }
     updateQuoteSummary();
   }
@@ -1458,35 +1858,6 @@ function recordsForChoiceType(type,query){
   if(type==='supplier')return supplierOptionRecords(query).map((record)=>({...record,id:''}));
   if(type==='blank')return blankOptionRecords(query);
   return componentOptionRecords(query).map((record)=>({...record,id:''}));
-}
-function choicePickerSecondaryText(type,item){
-  if(type==='blank'){
-    const blank=item&&item.blank;
-    if(!blank)return '';
-    const line=[blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean);
-    return line.join(' • ');
-  }
-  return item&&item.isCustom?'Custom option':'';
-}
-function choicePickerTitleForCategory(index){
-  const categoryValue=getChoiceValue('category',quote.components[index])||'';
-  const key=normalizeNameKey(categoryValue);
-  if(!key)return 'Select Component';
-  if(key.includes('blank'))return 'Select Blank';
-  if(key.includes('reel'))return 'Select Reel Seat';
-  if(key.includes('guide'))return 'Select Guide Set';
-  if(key.includes('tip'))return 'Select Tip Top';
-  if(key.includes('grip'))return 'Select Grip';
-  if(key.includes('winding'))return 'Select Winding Checks';
-  if(key.includes('hook'))return 'Select Hook Keeper';
-  if(key.includes('thread') || key.includes('finish') || key.includes('decal'))return 'Select Thread & Finish';
-  if(key.includes('butt'))return 'Select Butt Cap';
-  return 'Select Component';
-}
-function choicePickerTitle(type,index){
-  if(type==='blank')return 'Select Blank';
-  if(type==='supplier')return 'Select Supplier';
-  return choicePickerTitleForCategory(index);
 }
 function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
@@ -1505,12 +1876,7 @@ function renderChoicePickerOptions(query){
   }
   const rowsMarkup=options.map((item)=>{
     const hasMenu=choicePickerSupportsContextMenu();
-    const isFavourite=choiceRecordIsFavourite(activeChoicePicker.type,item);
-    const secondary=choicePickerSecondaryText(activeChoicePicker.type,item);
-    const actionsMarkup=hasMenu
-      ?`<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-label="${isFavourite?'Remove from favourites':'Add to favourites'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">${isFavourite?'★':'☆'}</span></button><button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button></div>`
-      :'';
-    return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${actionsMarkup}</div>`;
+    return `<div class="component-sheet__row" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup+addInlineMarkup;
 }
@@ -1564,20 +1930,207 @@ function setComponentName(index,name){
   saveQuoteCurrent();
 }
 function defaultComponentRow(){
-  return{category:'',description:'',supplier:'',cost:0};
+  return{category:'',description:'',customerLabel:'',supplier:'',cost:0};
+}
+function componentRowIsEffectivelyEmpty(item){
+  return !specificationValue(item&&item.category) && !specificationValue(item&&item.description) && numberOrZero(item&&item.cost)<=0;
+}
+function componentRowHasMeaningfulData(item){
+  return !componentRowIsEffectivelyEmpty(item) && !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||numberOrZero(item&&item.cost)>0);
+}
+function componentRowCategoryLabel(item){
+  return specificationValue(item&&item.category)||'';
+}
+function componentRowItemLabel(item){
+  const description=specificationValue(item&&item.description);
+  if(description)return description;
+  const category=specificationValue(item&&item.category);
+  if(category && !isBlankCategory(category))return category;
+  return isBlankCategory(item&&item.category)?'Choose blank':'Draft item';
+}
+function componentRowSupplierLabel(item){
+  return specificationValue(item&&item.supplier);
+}
+function componentRowSummaryMetaParts(item){
+  if(componentRowIsEffectivelyEmpty(item))return[];
+  const parts=[];
+  const category=componentRowCategoryLabel(item);
+  const description=specificationValue(item&&item.description);
+  if(category && description && normalizeNameKey(category)!==normalizeNameKey(description)){
+    parts.push(category);
+  }
+  const supplier=componentRowSupplierLabel(item);
+  if(supplier)parts.push(supplier);
+  return parts;
+}
+function componentRowCostLabel(item){
+  if(componentRowIsEffectivelyEmpty(item))return'';
+  return currency(item&&item.cost);
+}
+function pruneComponentDraftRows(preserveIndex){
+  const keepIndex=Number.isInteger(preserveIndex)?preserveIndex:-1;
+  const next=[];
+  const indexMap=new Map();
+  quote.components.forEach((item,index)=>{
+    if(componentRowIsEffectivelyEmpty(item) && index!==keepIndex)return;
+    indexMap.set(index,next.length);
+    next.push(item);
+  });
+  const changed=next.length!==quote.components.length;
+  quote.components=next;
+  expandedComponentRowIndex=indexMap.has(expandedComponentRowIndex)?indexMap.get(expandedComponentRowIndex):-1;
+  return {changed,preserveIndex:indexMap.has(keepIndex)?indexMap.get(keepIndex):-1,indexMap};
+}
+function persistComponentDraftCleanup(changed){
+  if(!changed)return;
+  saveQuoteCurrent();
+  markQuoteDirty();
+}
+function buildCostsSummaryData(){
+  const categories=[];
+  const seen=new Set();
+  let total=0;
+  quote.components.forEach((item)=>{
+    total+=numberOrZero(item&&item.cost);
+    if(!componentRowHasMeaningfulData(item))return;
+    const category=specificationValue(item&&item.category);
+    const fallback=specificationValue(item&&item.description);
+    const label=category||fallback;
+    const key=normalizeNameKey(label);
+    if(!key || seen.has(key))return;
+    seen.add(key);
+    categories.push(label);
+  });
+  const visible=categories.slice(0,4);
+  const overflow=Math.max(0,categories.length-visible.length);
+  return {
+    itemsText:visible.length?(overflow>0?`${visible.join(' · ')} +${overflow} more`:visible.join(' · ')):'No parts added yet',
+    totalText:`${currency(total)} total`
+  };
+}
+function updateBuildCostsSummary(){
+  const itemsEl=$('workshopBuildCostsSummaryItems');
+  const totalEl=$('workshopBuildCostsSummaryTotal');
+  if(!itemsEl || !totalEl)return;
+  const summary=buildCostsSummaryData();
+  itemsEl.textContent=summary.itemsText;
+  totalEl.textContent=summary.totalText;
+}
+function componentRowMenuMarkup(item,index){
+  const itemName=componentRowItemLabel(item);
+  const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Draft':'Delete Item';
+  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}"><button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
+}
+function componentRowEditorMarkup(item,index){
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Item / Description</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen part..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Item</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+}
+function hideComponentRowMenu(){
+  document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
+  document.querySelectorAll('[data-component-action="toggle-row-menu"]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
+}
+function toggleComponentRowMenu(triggerEl,index){
+  const row=triggerEl&&triggerEl.closest('.quote-component-row');
+  const menu=row&&row.querySelector('[data-component-row-menu]');
+  if(!row || !menu)return;
+  const key=String(index);
+  const alreadyOpen=!menu.hidden && menu.getAttribute('data-component-row-menu')===key;
+  hideComponentRowMenu();
+  if(alreadyOpen)return;
+  positionRowMenu(menu,triggerEl,row,164);
+  menu.hidden=false;
+  triggerEl.setAttribute('aria-expanded','true');
+}
+function toggleComponentRow(index,options){
+  if(index<0 || index>=quote.components.length)return;
+  const isClosingCurrent=expandedComponentRowIndex===index;
+  let targetIndex=index;
+  let draftCleanupChanged=false;
+  if(isClosingCurrent){
+    const closingRow=quote.components[index];
+    if(componentRowIsEffectivelyEmpty(closingRow)){
+      const prune=pruneComponentDraftRows(-1);
+      draftCleanupChanged=prune.changed;
+      if(closingRow)pendingComponentDraftRows.delete(closingRow);
+    }else if(closingRow){
+      pendingComponentDraftRows.delete(closingRow);
+    }
+    expandedComponentRowIndex=-1;
+    persistComponentDraftCleanup(draftCleanupChanged);
+    hideComponentRowMenu();
+    renderQuoteComponents();
+    updateQuoteSummary();
+    return;
+  }
+  if(expandedComponentRowIndex>=0 && expandedComponentRowIndex<quote.components.length && componentRowIsEffectivelyEmpty(quote.components[expandedComponentRowIndex])){
+    const prune=pruneComponentDraftRows(-1);
+    draftCleanupChanged=prune.changed;
+    targetIndex=prune.indexMap.has(index)?prune.indexMap.get(index):index;
+  }
+  expandedComponentRowIndex=targetIndex;
+  persistComponentDraftCleanup(draftCleanupChanged);
+  hideComponentRowMenu();
+  renderQuoteComponents();
+  waitForDomRender(()=>{
+    scrollNewComponentRowIntoView(targetIndex);
+    if(options&&options.focusDescription){
+      focusNewComponentWithRetry(targetIndex,6);
+    }
+  });
+}
+function bindComponentRowMenus(){
+  if(document.body.getAttribute('data-component-row-menus-bound')==='true')return;
+  document.body.setAttribute('data-component-row-menus-bound','true');
+  document.addEventListener('pointerdown',(event)=>{
+    const actionButton=event.target.closest('[data-component-action="toggle-row-menu"]');
+    if(!actionButton)return;
+    const i=Number(actionButton.getAttribute('data-component-index'));
+    componentRowMenuPointerDown={index:i,expiresAt:Date.now()+450};
+    event.preventDefault();
+    event.stopPropagation();
+    toggleComponentRowMenu(actionButton,i);
+  },true);
+  document.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-component-action="toggle-row-menu"]'))return;
+    if(event.target.closest('[data-component-row-menu]'))return;
+    hideComponentRowMenu();
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape')hideComponentRowMenu();
+  });
 }
 function removeComponentRow(index){
   if(index<0 || index>=quote.components.length)return;
-  if(quote.components.length>1){
-    quote.components.splice(index,1);
-  }else{
-    quote.components[0]=defaultComponentRow();
+  const removedWasBlank=isBlankCategory(quote.components[index]&&quote.components[index].category);
+  quote.components.splice(index,1);
+  if(expandedComponentRowIndex===index){
+    expandedComponentRowIndex=-1;
+  }else if(expandedComponentRowIndex>index){
+    expandedComponentRowIndex-=1;
+  }
+  if(removedWasBlank){
+    syncQuoteBlankFromComponents();
   }
   shouldAnimateComponentRows=true;
   saveQuoteCurrent();
   markQuoteDirty();
+  hideComponentRowMenu();
   renderQuoteComponents();
   updateQuoteSummary();
+}
+function requestDeleteComponentRow(index){
+  if(index<0 || index>=quote.components.length)return;
+  const item=quote.components[index];
+  const isDraft=componentRowIsEffectivelyEmpty(item);
+  hideComponentRowMenu();
+  openConfirmDialog({
+    title:isDraft?'Remove Draft':'Delete Item',
+    message:isDraft?'Remove this draft item?':'Delete this item?',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:isDraft?'Remove Draft':'Delete Item',kind:'danger'}]
+  },(action)=>{
+    if(action==='delete'){
+      removeComponentRow(index);
+    }
+  });
 }
 function openComponentSheet(index){
   openChoicePicker('category',index,document.activeElement);
@@ -1601,13 +2154,13 @@ function openChoicePicker(type,index,openerEl){
   hideChoicePickerMenu();
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   if($('choicePickerSearch'))$('choicePickerSearch').value='';
-  if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(type,index);
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=type==='supplier'?'Select Supplier':type==='blank'?'Select Blank':'Select Category';
   const addButton=$('choicePickerAdd');
   if(addButton){
-    addButton.textContent=type==='supplier'?'+ Add Supplier':type==='blank'?'+ Add Blank':'+ Add Component';
+    addButton.textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
     addButton.hidden=type==='blank';
   }
-  if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'Supplier name':type==='blank'?'Blank name':'Component name';
+  if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
   renderChoicePickerOptions('');
   bindChoicePickerViewportHandlers();
   scheduleChoicePickerViewportSync(40);
@@ -1630,21 +2183,42 @@ function closeComponentSheet(){
 function renderQuoteComponents(){
   const componentsList=$('quoteComponentsList');
   if(!componentsList)return;
+  if(expandedComponentRowIndex>=quote.components.length){
+    expandedComponentRowIndex=quote.components.length-1;
+  }
   const animateClass=shouldAnimateComponentRows?' quote-component-row--shift':'';
-  componentsList.innerHTML=quote.components.map((item,i)=>`
-      <article class="quote-component-row${animateClass}" data-component-row-index="${i}" aria-label="Build cost row ${i+1}">
-        <div class="quote-component-row__head">
-          <p class="quote-component-row__title">Build Cost ${i+1}</p>
-          <button class="component-row-delete" data-component-action="delete-row" data-component-index="${i}" type="button" aria-label="Delete build cost row ${i+1}">×</button>
+  componentsList.innerHTML=quote.components.map((item,i)=>({item,i})).filter(({item,i})=>!componentRowIsEffectivelyEmpty(item) || expandedComponentRowIndex===i).map(({item,i})=>`
+      <article class="quote-component-row${animateClass}${expandedComponentRowIndex===i?' is-expanded':''}" data-component-row-index="${i}" aria-label="Build cost item ${i+1}">
+        <div class="quote-component-row__summary">
+          <button class="quote-component-row__open" data-component-action="open-row" data-component-index="${i}" type="button" aria-expanded="${expandedComponentRowIndex===i?'true':'false'}">
+            <span class="quote-component-row__summary-copy">
+              <strong class="quote-component-row__summary-item">${escapeHtml(componentRowItemLabel(item))}</strong>
+              ${componentRowSummaryMetaParts(item).length?`<span class="quote-component-row__summary-meta">${componentRowSummaryMetaParts(item).map((part)=>`<span>${escapeHtml(part)}</span>`).join('')}</span>`:''}
+            </span>
+            ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
+          </button>
         </div>
-        <div class="quote-component-row__fields">
-          <label class="quote-component-field quote-component-field--category"><span>Component</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select component')}</span><b>▾</b></button></label>
-          <label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label>
-          <label class="quote-component-field quote-component-field--description"><span>Description</span><input data-component-index="${i}" data-component-key="description" type="text" placeholder="Enter description..." value="${escapeHtml(item.description||'')}" /></label>
-          <label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${i}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label>
-        </div>
+        ${expandedComponentRowIndex===i?componentRowEditorMarkup(item,i):''}
       </article>
     `).join('');
+  componentsList.querySelectorAll('[data-component-action="request-delete-row"]').forEach((button)=>{
+    button.addEventListener('pointerdown',(event)=>{
+      const i=Number(button.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    });
+    button.addEventListener('click',(event)=>{
+      const i=Number(button.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    });
+  });
+  const addComponentBtn=$('addComponentBtn');
+  if(addComponentBtn){
+    addComponentBtn.hidden=expandedComponentRowIndex>=0;
+  }
   shouldAnimateComponentRows=false;
 }
 function waitForDomRender(callback){
@@ -1801,22 +2375,324 @@ function bindWorkshopInputFocusStability(){
     },0);
   });
 }
+function quoteForPersistence(currentQuote){
+  const source=currentQuote&&typeof currentQuote==='object'?currentQuote:quote;
+  const rawComponents=Array.isArray(source&&source.components)?source.components:[];
+  const persistedComponents=rawComponents
+    .filter((component)=>componentRowHasMeaningfulData(component) && !pendingComponentDraftRows.has(component))
+    .map(normalizeComponent);
+  return normalizeQuote({...source,components:persistedComponents});
+}
 function persistQuoteRecord(currentQuote){
   const savedAt=new Date().toISOString();
   const records=Store.get('klabs-workshop-quotes',[]);
-  const record={...currentQuote,savedAt};
+  const record={...quoteForPersistence(currentQuote),savedAt};
   records.unshift(record);
   Store.set('klabs-workshop-quotes',records);
 }
+function savedQuoteRecords(){
+  const records=Store.get('klabs-workshop-quotes',[]);
+  return Array.isArray(records)?records:[];
+}
+function savedBuildRecords(){
+  const records=Store.get('klabs-workshop-builds',[]);
+  return Array.isArray(records)?records:[];
+}
+function allSavedEntries(){
+  const quoteEntries=savedQuoteRecords().map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}));
+  const buildEntries=savedBuildRecords().map((record,index)=>({source:'build',index,record:normalizeQuote(record)}));
+  return quoteEntries.concat(buildEntries);
+}
 function savedBuildEntries(){
-  const savedQuotes=Array.isArray(Store.get('klabs-workshop-quotes',[]))?Store.get('klabs-workshop-quotes',[]):[];
-  const savedBuilds=Array.isArray(Store.get('klabs-workshop-builds',[]))?Store.get('klabs-workshop-builds',[]):[];
-  const quoteEntries=savedQuotes.map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}));
-  const buildEntries=savedBuilds.map((record,index)=>({source:'build',index,record:normalizeQuote(record)}));
-  return quoteEntries.concat(buildEntries).sort((left,right)=>{
+  return allSavedEntries().sort((left,right)=>{
     const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
     const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
     return rightDate-leftDate;
+  });
+}
+function customerSavedGroups(searchValue){
+  const grouped=new Map();
+  allSavedEntries().forEach((entry)=>{
+    const record=entry&&entry.record?entry.record:{};
+    const customerName=specificationValue(record.customerName);
+    const key=normalizeNameKey(customerName)||'__no_customer__';
+    if(!grouped.has(key)){
+      grouped.set(key,{key,name:customerName||'No customer name',entries:[]});
+    }
+    const target=grouped.get(key);
+    target.entries.push(entry);
+    if(customerName && target.name==='No customer name')target.name=customerName;
+  });
+  const normalizedSearch=normalizeNameKey(searchValue);
+  const groups=Array.from(grouped.values()).map((group)=>{
+    const entries=[...group.entries].sort((left,right)=>{
+      const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
+      const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
+      return rightDate-leftDate;
+    });
+    return {
+      ...group,
+      entries,
+      quotes:entries.filter((entry)=>entry.source==='quote'),
+      builds:entries.filter((entry)=>entry.source==='build'),
+      latestSavedAt:entries[0]&&entries[0].record?entries[0].record.savedAt:'',
+    };
+  }).filter((group)=>{
+    if(!normalizedSearch)return true;
+    return normalizeNameKey(group.name).includes(normalizedSearch);
+  });
+  return groups.sort((left,right)=>{
+    const leftDate=Date.parse(left.latestSavedAt||'')||0;
+    const rightDate=Date.parse(right.latestSavedAt||'')||0;
+    return rightDate-leftDate;
+  });
+}
+function customerFinderMatchesKey(customerKey,name){
+  const normalized=normalizeNameKey(name);
+  if(customerKey==='__no_customer__')return !normalized;
+  return normalized===customerKey;
+}
+function closeCustomerFinderMenus(){
+  document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{menu.open=false;});
+}
+function customerFinderCustomerMenuMarkup(group){
+  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Customer actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-list-action="rename" data-customer-key="${escapeHtml(group.key)}" data-customer-name="${escapeHtml(group.name)}">Rename Customer</button><button class="component-picker-menu__item" type="button" data-customer-list-action="delete" data-customer-key="${escapeHtml(group.key)}" data-customer-name="${escapeHtml(group.name)}">Delete Customer</button></div></details>`;
+}
+function customerFinderWorkMenuMarkup(entry){
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  const deleteLabel='Delete Job';
+  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved job actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
+}
+function customerFinderWorkRowMarkup(entry){
+  const record=entry&&entry.record?entry.record:{};
+  const isBuild=entry.source==='build';
+  const title=specificationValue(record.buildName)||'Untitled Job';
+  const typeLabel=isBuild?'Build job':'Legacy quote';
+  const refText=isBuild
+    ? (specificationValue(record.buildNumber)?`${typeLabel} ${specificationValue(record.buildNumber)}`:typeLabel)
+    : typeLabel;
+  const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
+}
+function requestRenameCustomer(customerKey,currentName){
+  const existing=currentName==='No customer name'?'':String(currentName||'');
+  const proposed=window.prompt('Rename customer',existing);
+  if(proposed===null)return;
+  const nextName=String(proposed||'').trim();
+  if(!nextName){
+    alert('Customer name is required.');
+    return;
+  }
+  const quoteRecords=savedQuoteRecords();
+  const buildRecords=savedBuildRecords();
+  let quoteChanged=false;
+  let buildChanged=false;
+  quoteRecords.forEach((record)=>{
+    if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
+      record.customerName=nextName;
+      quoteChanged=true;
+    }
+  });
+  buildRecords.forEach((record)=>{
+    if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
+      record.customerName=nextName;
+      buildChanged=true;
+    }
+  });
+  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
+  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
+  if(customerFinderMatchesKey(customerKey,quote.customerName)){
+    quote.customerName=nextName;
+    saveQuoteCurrent();
+    renderWorkshopQuote();
+  }
+  customerFinderSelectedKey=normalizeNameKey(nextName)||'__no_customer__';
+  renderBuilds();
+  renderCustomerFinder();
+}
+function requestDeleteCustomerGroup(customerKey,customerName){
+  const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
+  const refs=group?(group.quotes.length+group.builds.length):0;
+  if(refs>0){
+    openConfirmDialog({
+      title:'Delete Customer',
+      message:'This customer has saved jobs. Delete those records first.',
+      actions:[{id:'ok',label:'OK',kind:'primary'}]
+    },()=>{});
+    return;
+  }
+  openConfirmDialog({
+    title:'Delete Customer',
+    message:`Delete customer ${customerName||'record'}?`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete Customer',kind:'danger'}]
+  },()=>{});
+}
+function renderCustomerFinder(){
+  const resultHost=$('customerFinderResults');
+  const detailHost=$('customerFinderDetail');
+  if(!resultHost || !detailHost)return;
+  const groups=customerSavedGroups(customerFinderSearch);
+  if(!groups.length){
+    customerFinderSelectedKey='';
+    resultHost.innerHTML='<div class="component-sheet__empty">No customers matched that name.</div>';
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
+  const hasSelected=groups.some((group)=>group.key===customerFinderSelectedKey);
+  if(!hasSelected){
+    customerFinderSelectedKey=groups[0].key;
+  }
+  closeCustomerFinderMenus();
+  resultHost.innerHTML=groups.map((group)=>{
+    const active=group.key===customerFinderSelectedKey;
+    const totalJobs=group.quotes.length+group.builds.length;
+    const summary=`${totalJobs} saved job${totalJobs===1?'':'s'}`;
+    return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button>${customerFinderCustomerMenuMarkup(group)}</div>`;
+  }).join('');
+  const selected=groups.find((group)=>group.key===customerFinderSelectedKey)||groups[0];
+  if(!selected){
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
+  const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved jobs for this customer.</div>';
+  detailHost.hidden=false;
+  detailHost.innerHTML=`
+    <header class="customer-finder__detail-head">
+      <h3>${escapeHtml(selected.name)}</h3>
+      <p>Saved jobs for this customer.</p>
+    </header>
+    <section class="customer-finder__work-section" aria-label="Saved Jobs">
+      <h4>Saved Jobs</h4>
+      <div class="customer-finder__work-list">${jobRows}</div>
+    </section>
+  `;
+}
+function closeCustomerFinderSheet(){
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  sheet.hidden=true;
+  unlockModalLayer({restoreFocus:true});
+}
+function openCustomerFinderSheet(){
+  ensureCustomerFinderSheet();
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  customerFinderSearch='';
+  customerFinderSelectedKey='';
+  if($('customerFinderSearch'))$('customerFinderSearch').value='';
+  renderCustomerFinder();
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
+  const input=$('customerFinderSearch');
+  if(input){
+    try{input.focus({preventScroll:true});}catch{input.focus();}
+  }
+}
+function ensureCustomerFinderSheet(){
+  if($('customerFinderSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='customerFinderSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-customer-finder-action="close"></div>
+    <section class="component-sheet__panel customer-finder__panel" role="dialog" aria-modal="true" aria-label="Find Customer">
+      <header class="component-sheet__header">
+        <h2>Find Customer</h2>
+        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">×</button>
+      </header>
+      <div class="component-sheet__body customer-finder__body">
+        <p class="customer-finder__intro">Search customer name and open their saved jobs.</p>
+        <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
+        <section class="customer-finder__layout" aria-label="Customer finder layout">
+          <aside class="customer-finder__list-pane" aria-label="Customers">
+            <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
+          </aside>
+          <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
+        </section>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('toggle',(event)=>{
+    const opened=event.target.closest('.customer-finder__menu-wrap');
+    if(!opened || !opened.open)return;
+    document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{
+      if(menu!==opened)menu.open=false;
+    });
+  },true);
+  sheet.addEventListener('click',(event)=>{
+    const actionEl=event.target.closest('[data-customer-finder-action]');
+    if(actionEl && actionEl.getAttribute('data-customer-finder-action')==='close'){
+      closeCustomerFinderSheet();
+      return;
+    }
+    if(!event.target.closest('.customer-finder__menu-wrap')){
+      closeCustomerFinderMenus();
+    }
+    const customerMenuAction=event.target.closest('[data-customer-list-action]');
+    if(customerMenuAction){
+      const action=customerMenuAction.getAttribute('data-customer-list-action')||'';
+      const customerKey=customerMenuAction.getAttribute('data-customer-key')||'';
+      const customerName=customerMenuAction.getAttribute('data-customer-name')||'';
+      closeCustomerFinderMenus();
+      if(action==='rename'){requestRenameCustomer(customerKey,customerName);}
+      if(action==='delete'){requestDeleteCustomerGroup(customerKey,customerName);}
+      return;
+    }
+    const customerButton=event.target.closest('[data-customer-key]');
+    if(customerButton){
+      customerFinderSelectedKey=customerButton.getAttribute('data-customer-key')||'';
+      renderCustomerFinder();
+      return;
+    }
+    const rowAction=event.target.closest('[data-customer-row-action]');
+    if(rowAction){
+      const action=rowAction.getAttribute('data-customer-row-action')||'';
+      const source=rowAction.getAttribute('data-customer-open-source')||'quote';
+      const index=Number(rowAction.getAttribute('data-customer-open-index'));
+      closeCustomerFinderMenus();
+      if(action==='delete'){
+        requestDeleteSavedBuildRecord(source,index);
+      }
+      return;
+    }
+    const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
+    if(openRow && !event.target.closest('.customer-finder__menu-wrap')){
+      const source=openRow.getAttribute('data-customer-open-source')||'quote';
+      const index=Number(openRow.getAttribute('data-customer-open-index'));
+      closeCustomerFinderSheet();
+      openSavedBuildRecord(source,index);
+      return;
+    }
+  });
+  sheet.addEventListener('keydown',(event)=>{
+    if(event.key!=='Enter' && event.key!==' ')return;
+    const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
+    if(!openRow || event.target.closest('.customer-finder__menu-wrap'))return;
+    event.preventDefault();
+    const source=openRow.getAttribute('data-customer-open-source')||'quote';
+    const index=Number(openRow.getAttribute('data-customer-open-index'));
+    closeCustomerFinderSheet();
+    openSavedBuildRecord(source,index);
+  });
+  const searchInput=sheet.querySelector('#customerFinderSearch');
+  if(searchInput){
+    searchInput.addEventListener('input',()=>{
+      customerFinderSearch=searchInput.value||'';
+      customerFinderSelectedKey='';
+      renderCustomerFinder();
+    });
+  }
+  document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape' && $('customerFinderSheet') && !$('customerFinderSheet').hidden){
+      closeCustomerFinderSheet();
+    }
   });
 }
 function savedBuildSearchText(entry){
@@ -1828,7 +2704,7 @@ function savedBuildSearchText(entry){
 }
 function savedBuildRowMarkup(entry){
   const record=entry.record;
-  const sourceLabel=entry.source==='build'?'Build':'Quote';
+  const sourceLabel=entry.source==='build'?'Saved Job':'Legacy Quote';
   const title=specificationValue(record.buildName)||specificationValue(record.customerName)||'Untitled Build';
   const buildRef=specificationValue(record.buildNumber)||'Unnumbered';
   const customerRef=specificationValue(record.customerName)||'No customer';
@@ -1836,7 +2712,7 @@ function savedBuildRowMarkup(entry){
   const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="module-card blank-card" data-build-row data-build-source="${source}" data-build-index="${index}"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button><button class="ghost-action blank-card__load" type="button" data-build-action="duplicate" data-build-source="${source}" data-build-index="${index}">Duplicate</button>${savedBuildRowMenuMarkup(entry,title)}</div></article>`;
+  return `<article class="module-card blank-card" data-build-row data-build-source="${source}" data-build-index="${index}"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,title)}</div></article>`;
 }
 function savedBuildRowMenuMarkup(entry,title){
   const source=escapeHtml(entry.source);
@@ -1882,6 +2758,7 @@ function requestDeleteSavedBuildRecord(source,index){
     if(action!=='delete')return;
     if(!deleteSavedEntryBySource(source,index))return;
     renderBuilds();
+    renderCustomerFinder();
   });
 }
 function getSavedEntryBySource(source,index){
@@ -1898,7 +2775,8 @@ function openSavedBuildRecord(source,index){
   saveQuoteCurrent();
   markQuoteSaved();
   renderWorkshopQuote();
-  ensureCustomerSectionExpanded();
+  collapseWorkshopSections();
+  preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
 }
 function duplicateSavedBuildRecord(source,index){
@@ -1913,7 +2791,8 @@ function duplicateSavedBuildRecord(source,index){
   saveQuoteCurrent();
   markQuoteDirty();
   renderWorkshopQuote();
-  ensureCustomerSectionExpanded();
+  collapseWorkshopSections();
+  preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
 }
 function renderBuilds(){
@@ -1923,7 +2802,7 @@ function renderBuilds(){
   const query=String(buildsSearch||'').trim().toLowerCase();
   const records=savedBuildEntries().filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
   if(!records.length){
-    host.innerHTML='<div class="empty-card">No saved builds found.</div>';
+    host.innerHTML='<div class="empty-card">No saved jobs found.</div>';
     return;
   }
   host.innerHTML=records.map(savedBuildRowMarkup).join('');
@@ -1948,9 +2827,18 @@ function ensureConfirmSheet(){
     </section>
   `;
   document.body.appendChild(sheet);
+  sheet.addEventListener('pointerdown',(event)=>{
+    const actionButton=event.target.closest('[data-confirm-action]');
+    if(!actionButton)return;
+    const action=actionButton.getAttribute('data-confirm-action')||'cancel';
+    event.preventDefault();
+    event.stopPropagation();
+    closeConfirmDialog(action);
+  },true);
   sheet.addEventListener('click',(event)=>{
     const actionButton=event.target.closest('[data-confirm-action]');
     if(!actionButton)return;
+    if(actionButton.getAttribute('data-confirm-action')==='cancel' && event.target.closest('.component-sheet__scrim'))return;
     const action=actionButton.getAttribute('data-confirm-action')||'cancel';
     closeConfirmDialog(action);
   });
@@ -2032,6 +2920,16 @@ function focusLayoutField(field){
   const target=document.querySelector(`.layout-control-card__value[data-field="${field}"]`);
   if(!target || !target.isContentEditable)return;
   target.focus();
+}
+function clearLayoutFieldFocusSelection(){
+  const activeEl=document.activeElement;
+  if(activeEl && typeof activeEl.closest==='function' && activeEl.closest('#layoutScreen .layout-control-card__value[data-field]')){
+    activeEl.blur();
+  }
+  const selection=window.getSelection?window.getSelection():null;
+  if(selection && selection.rangeCount>0){
+    selection.removeAllRanges();
+  }
 }
 function nextLayoutField(field){
   const index=layoutFieldOrder.indexOf(field);
@@ -2164,9 +3062,11 @@ function bindLayoutControls(){
     const field=button.getAttribute('data-target-field');
     if(!field || !controlMeta[field])return;
     const direction=button.getAttribute('data-action')==='increment'?1:-1;
+    let pointerHandled=false;
     button.style.touchAction='manipulation';
     button.addEventListener('pointerdown',(event)=>{
       if(event.button!==0 || !event.isPrimary)return;
+      pointerHandled=false;
       event.preventDefault();
       startHold(field,direction,button);
     });
@@ -2178,6 +3078,7 @@ function bindLayoutControls(){
           return;
         }
         event.preventDefault();
+        pointerHandled=true;
         changeControlValue(field,direction,{persist:true});
       }
       stopHold();
@@ -2195,6 +3096,12 @@ function bindLayoutControls(){
     });
     button.addEventListener('click',(event)=>{
       event.preventDefault();
+      if(pointerHandled){
+        pointerHandled=false;
+        return;
+      }
+      if(isLayoutLocked())return;
+      changeControlValue(field,direction,{persist:true});
     });
     button.addEventListener('keydown',(event)=>{
       if(event.key!=='Enter' && event.key!==' ')return;
@@ -2210,7 +3117,7 @@ function workshopInputMap(){
     ['quoteAddressLine1','addressLine1'],['quoteAddressLine2','addressLine2'],['quoteSuburbLocality','suburbLocality'],['quoteCityTown','cityTown'],['quoteRegionState','regionState'],['quotePostcode','postcode'],['quoteCountry','country'],
     ['quoteBuildName','buildName'],['quoteNotes','notes'],
     ['quoteBlankName','blankName'],['quoteBlankMaker','blankMaker'],['quoteBlankSeries','blankSeries'],['quoteBlankLength','blankLength'],['quoteBlankPower','blankPower'],['quoteBlankAction','blankAction'],['quoteBlankPieces','blankPieces'],
-    ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours'],['quoteMarginPercent','marginPercent'],['quoteGstRate','gstRate']
+    ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours']
   ];
 }
 function bindBuildSpecificationInputs(){
@@ -2234,6 +3141,100 @@ function renderBuildSpecificationInputs(){
     el.value=quote.buildSpecifications[field.key]||'';
   });
 }
+function workshopTopUiOffset(){
+  const candidates=['.topbar','.live-build-status','.offline-ready-status'];
+  let maxBottom=0;
+  candidates.forEach((selector)=>{
+    const el=document.querySelector(selector);
+    if(!el || el.hidden)return;
+    const styles=getComputedStyle(el);
+    if(styles.display==='none' || styles.visibility==='hidden')return;
+    if(styles.position!=='fixed' && styles.position!=='sticky')return;
+    const rect=el.getBoundingClientRect();
+    if(rect.bottom<=0)return;
+    if(rect.top>4)return;
+    maxBottom=Math.max(maxBottom,rect.bottom);
+  });
+  return maxBottom;
+}
+function scrollWorkshopSectionIntoView(section){
+  if(!section)return;
+  const reduceMotion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const topGap=12;
+  const uiOffset=workshopTopUiOffset();
+  const targetTop=window.scrollY+section.getBoundingClientRect().top-uiOffset-topGap;
+  const maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const clamped=Math.max(0,Math.min(targetTop,maxScroll));
+  const startY=window.scrollY;
+  const useSmooth=!reduceMotion;
+  window.scrollTo({top:clamped,behavior:useSmooth?'smooth':'auto'});
+  if(useSmooth && Math.abs(clamped-startY)>2){
+    window.setTimeout(()=>{
+      if(Math.abs(window.scrollY-startY)<1){
+        window.scrollTo({top:clamped,behavior:'auto'});
+      }
+    },180);
+  }
+}
+function updateWorkshopBackToTopVisibility(){
+  const button=$('workshopBackToTopBtn');
+  if(!button)return;
+  const workshop=$('workshopScreen');
+  const workshopActive=!!(workshop && workshop.classList.contains('active'));
+  const blockedByModal=document.body.classList.contains('component-sheet-open');
+  const shouldShow=workshopActive && !blockedByModal && window.scrollY>320;
+  button.hidden=!shouldShow;
+  button.classList.toggle('is-visible',shouldShow);
+}
+function scrollToWorkshopTop(){
+  const workshop=$('workshopScreen');
+  if(!workshop)return;
+  const reduceMotion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const uiOffset=workshopTopUiOffset();
+  const targetTop=window.scrollY+workshop.getBoundingClientRect().top-uiOffset-8;
+  const maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const clamped=Math.max(0,Math.min(targetTop,maxScroll));
+  const startY=window.scrollY;
+  const useSmooth=!reduceMotion;
+  window.scrollTo({top:clamped,behavior:useSmooth?'smooth':'auto'});
+  if(useSmooth && Math.abs(clamped-startY)>2){
+    window.setTimeout(()=>{
+      if(Math.abs(window.scrollY-startY)<1){
+        window.scrollTo({top:clamped,behavior:'auto'});
+      }
+    },180);
+  }
+}
+function startWorkshopBackToTopWatcher(){
+  if(workshopBackToTopRafId)return;
+  const tick=()=>{
+    const scrollY=Math.round(window.scrollY||window.pageYOffset||0);
+    if(scrollY!==workshopBackToTopLastScrollY){
+      workshopBackToTopLastScrollY=scrollY;
+      updateWorkshopBackToTopVisibility();
+    }
+    workshopBackToTopRafId=window.requestAnimationFrame(tick);
+  };
+  workshopBackToTopRafId=window.requestAnimationFrame(tick);
+}
+function bindWorkshopBackToTopControl(){
+  if(workshopBackToTopBound)return;
+  workshopBackToTopBound=true;
+  const button=$('workshopBackToTopBtn');
+  if(button){
+    button.addEventListener('click',()=>{
+      scrollToWorkshopTop();
+      window.setTimeout(updateWorkshopBackToTopVisibility,260);
+    });
+  }
+  window.addEventListener('scroll',updateWorkshopBackToTopVisibility,{passive:true});
+  window.addEventListener('resize',updateWorkshopBackToTopVisibility);
+  window.addEventListener('orientationchange',()=>{
+    window.setTimeout(updateWorkshopBackToTopVisibility,120);
+  });
+  startWorkshopBackToTopWatcher();
+  updateWorkshopBackToTopVisibility();
+}
 function bindWorkshopCollapsibleSections(){
   document.querySelectorAll('[data-collapsible-trigger]').forEach((trigger)=>{
     if(trigger.getAttribute('data-collapsible-bound')==='true')return;
@@ -2243,6 +3244,9 @@ function bindWorkshopCollapsibleSections(){
       if(!section)return;
       const isCollapsed=section.classList.toggle('quote-section--collapsed');
       trigger.setAttribute('aria-expanded',String(!isCollapsed));
+      if(!isCollapsed){
+        window.setTimeout(()=>scrollWorkshopSectionIntoView(section),36);
+      }
     });
   });
 }
@@ -2250,11 +3254,24 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
-  bindSelectedBlankControls();
+  const newQuoteEntryBtn=$('newQuoteEntryBtn');
+  if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
+    newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
+    newQuoteEntryBtn.addEventListener('click',()=>{
+      startNewQuoteFlow();
+    });
+  }
+  const findCustomerBtn=$('findCustomerBtn');
+  if(findCustomerBtn && findCustomerBtn.getAttribute('data-find-customer-bound')!=='true'){
+    findCustomerBtn.setAttribute('data-find-customer-bound','true');
+    findCustomerBtn.addEventListener('click',()=>{
+      openCustomerFinderSheet();
+    });
+  }
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
-    const isNumeric=['blankCost','labourRate','labourHours','marginPercent','gstRate'].includes(key);
+    const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     const onFieldUpdate=()=>{
       quote[key]=isNumeric?numberOrZero(el.value):el.value;
       saveQuoteCurrent();
@@ -2264,13 +3281,52 @@ function bindWorkshopQuoteBuilder(){
     el.addEventListener('input',onFieldUpdate);
     el.addEventListener('change',onFieldUpdate);
   });
-  const includeGstInput=$('quoteIncludeGst');
-  if(includeGstInput){
-    includeGstInput.addEventListener('change',()=>{
-      quote.includeGst=includeGstInput.checked;
+  [
+    {id:'quoteTotal',key:'finalCustomerPrice',driver:'final'},
+    {id:'quoteProfit',key:'targetProfit',driver:'profit'},
+    {id:'quoteMarkupPercent',key:'markupPercent',driver:'markup'}
+  ].forEach((config)=>{
+    const input=$(config.id);
+    if(!input)return;
+    const onPricingUpdate=()=>{
+      quote[config.key]=numberOrZero(input.value);
+      syncQuotePricing(config.driver);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
+    };
+    input.addEventListener('input',onPricingUpdate);
+    input.addEventListener('change',onPricingUpdate);
+  });
+  const includeTaxInput=$('quoteIncludeGst');
+  if(includeTaxInput){
+    const onTaxToggle=()=>{
+      quote.includeGst=includeTaxInput.checked;
+      syncQuotePricing();
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    includeTaxInput.addEventListener('input',onTaxToggle);
+    includeTaxInput.addEventListener('change',onTaxToggle);
+  }
+  const quoteTaxRateInput=$('quoteTaxRate');
+  if(quoteTaxRateInput){
+    const onQuoteTaxRateUpdate=()=>{
+      quote.gstRate=Math.max(0,numberOrZero(quoteTaxRateInput.value));
+      syncQuotePricing();
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    quoteTaxRateInput.addEventListener('input',onQuoteTaxRateUpdate);
+    quoteTaxRateInput.addEventListener('change',onQuoteTaxRateUpdate);
+    quoteTaxRateInput.addEventListener('blur',onQuoteTaxRateUpdate);
+    quoteTaxRateInput.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      onQuoteTaxRateUpdate();
+      quoteTaxRateInput.blur();
     });
   }
   document.querySelectorAll('[data-quote-mode]').forEach((button)=>{
@@ -2285,6 +3341,14 @@ function bindWorkshopQuoteBuilder(){
   const componentsList=$('quoteComponentsList');
   if(componentsList){
     ensureChoicePicker();
+    document.addEventListener('pointerdown',(event)=>{
+      const actionButton=event.target.closest('[data-component-action="request-delete-row"]');
+      if(!actionButton || !componentsList.contains(actionButton))return;
+      const i=Number(actionButton.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    },true);
     componentsList.addEventListener('input',(event)=>{
       const input=event.target.closest('[data-component-index]');
       if(!input)return;
@@ -2292,6 +3356,9 @@ function bindWorkshopQuoteBuilder(){
       const key=input.getAttribute('data-component-key');
       if(!quote.components[i] || !key)return;
       quote.components[i][key]=['cost'].includes(key)?numberOrZero(input.value):input.value;
+      if(isBlankCategory(quote.components[i].category)){
+        applyBlankComponentToQuote(quote.components[i]);
+      }
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -2299,6 +3366,11 @@ function bindWorkshopQuoteBuilder(){
     componentsList.addEventListener('click',(event)=>{
       const actionButton=event.target.closest('[data-component-action]');
       const action=actionButton?actionButton.getAttribute('data-component-action'):'';
+      if(action==='open-row' || action==='close-row'){
+        const i=Number(actionButton.getAttribute('data-component-index'));
+        toggleComponentRow(i,{focusDescription:false});
+        return;
+      }
       if(action==='open-component-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('category',i,actionButton);
@@ -2307,25 +3379,48 @@ function bindWorkshopQuoteBuilder(){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('supplier',i,actionButton);
       }
-      if(action==='delete-row'){
+      if(action==='request-delete-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
-        removeComponentRow(i);
+        requestDeleteComponentRow(i);
       }
     });
+    componentsList.addEventListener('pointerdown',(event)=>{
+      const actionButton=event.target.closest('[data-component-action="request-delete-row"]');
+      if(!actionButton)return;
+      const i=Number(actionButton.getAttribute('data-component-index'));
+      event.preventDefault();
+      event.stopPropagation();
+      requestDeleteComponentRow(i);
+    },true);
   }
   const addComponentBtn=$('addComponentBtn');
   if(addComponentBtn){
     addComponentBtn.addEventListener('click',()=>{
-      quote.components.push(defaultComponentRow());
-      const newIndex=quote.components.length-1;
-      shouldAnimateComponentRows=true;
-      saveQuoteCurrent();
-      markQuoteDirty();
+      let draftIndex=quote.components.findIndex((item)=>componentRowIsEffectivelyEmpty(item));
+      let changed=false;
+      if(draftIndex>=0){
+        const prune=pruneComponentDraftRows(draftIndex);
+        draftIndex=prune.preserveIndex;
+        changed=prune.changed;
+        if(draftIndex>=0 && quote.components[draftIndex]){
+          pendingComponentDraftRows.add(quote.components[draftIndex]);
+        }
+      }else{
+        const prune=pruneComponentDraftRows(-1);
+        changed=prune.changed;
+        quote.components.push(defaultComponentRow());
+        draftIndex=quote.components.length-1;
+        pendingComponentDraftRows.add(quote.components[draftIndex]);
+        shouldAnimateComponentRows=true;
+        changed=true;
+      }
+      expandedComponentRowIndex=draftIndex;
+      persistComponentDraftCleanup(changed);
       renderQuoteComponents();
       updateQuoteSummary();
       waitForDomRender(()=>{
-        scrollNewComponentRowIntoView(newIndex);
-        setTimeout(()=>focusNewComponentWithRetry(newIndex,6),220);
+        scrollNewComponentRowIntoView(draftIndex);
+        focusNewComponentWithRetry(draftIndex,6);
       });
     });
   }
@@ -2334,9 +3429,9 @@ function bindWorkshopQuoteBuilder(){
     saveQuoteBtn.addEventListener('click',()=>{
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
-      persistQuoteRecord(quote);
+      persistBuildRecord(quote);
       markQuoteSaved();
-      alert('Quote saved.');
+      alert('Build job saved.');
     });
   }
   const convertToBuildBtn=$('convertToBuildBtn');
@@ -2354,25 +3449,22 @@ function bindWorkshopQuoteBuilder(){
       goScreen('layoutScreen');
     });
   }
-  ['duplicateQuoteBtn','printQuoteBtn','exportPdfBtn','emailQuoteBtn'].forEach((id)=>{
+  ['printQuoteBtn','emailQuoteBtn','viewCustomerCopyBtn'].forEach((id)=>{
     const btn=$(id);
     if(!btn)return;
     btn.addEventListener('click',()=>{
-      if(id==='emailQuoteBtn' && normalizeQuoteMode(quote.quoteMode)==='internal'){
-        openConfirmDialog({
-          title:'⚠ INTERNAL QUOTE',
-          message:'This quote contains confidential build costs and margin information. Do you wish to continue?',
-          actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'continue',label:'Continue',kind:'primary'}]
-        },(action)=>{
-          if(action==='continue'){alert('Coming soon');}
-        });
-        return;
-      }
-      if(id==='emailQuoteBtn' && normalizeQuoteMode(quote.quoteMode)==='customer'){
+      if(id==='emailQuoteBtn'){
         openQuotePreviewSheet('email');
         return;
       }
-      alert('Coming soon');
+      if(id==='viewCustomerCopyBtn'){
+        openQuotePreviewSheet('view');
+        return;
+      }
+      if(id==='printQuoteBtn'){
+        openQuotePreviewSheet('view');
+        return;
+      }
     });
   });
   updateQuoteActionPriority();
@@ -2382,21 +3474,30 @@ function renderWorkshopQuote(){
     const el=$(id);
     if(!el)return;
     if(document.activeElement===el)return;
-    const isNumeric=['blankCost','labourRate','labourHours','marginPercent'].includes(key);
+    const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
-  const includeGstInput=$('quoteIncludeGst');
-  if(includeGstInput && document.activeElement!==includeGstInput){includeGstInput.checked=quote.includeGst!==false;}
   const mode=normalizeQuoteMode(quote.quoteMode);
-  document.querySelectorAll('[data-quote-mode]').forEach((button)=>button.classList.toggle('active',button.getAttribute('data-quote-mode')===mode));
-  document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=mode==='customer');
-  document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=mode!=='customer');
-  if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Rod Builder Quote';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent=mode==='customer'?'Customer-ready pricing view • internal figures hidden':'Customer • Blank Details • Build Specifications • Build Costs • Labour • Margin • Quote Summary';
-  if($('emailQuoteBtn'))$('emailQuoteBtn').textContent=mode==='customer'?'Preview & Email Quote':'Email Quote';
+  if(mode!=='internal'){
+    quote.quoteMode='internal';
+    saveQuoteCurrent();
+  }
+  document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=false);
+  document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=true);
+  if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Studio';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Build Specifications • Build Costs • Labour • Markup • Build Pricing';
+  if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
+  if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
   if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';
   updateQuoteActionPriority();
-  renderSelectedBlankPanel();
+  const includeTaxInput=$('quoteIncludeGst');
+  if(includeTaxInput && document.activeElement!==includeTaxInput){
+    includeTaxInput.checked=quote.includeGst!==false;
+  }
+  const quoteTaxRateInput=$('quoteTaxRate');
+  if(quoteTaxRateInput && document.activeElement!==quoteTaxRateInput){
+    quoteTaxRateInput.value=numberOrZero(quote.gstRate).toFixed(1);
+  }
   renderBuildSpecificationInputs();
   const activeElement=document.activeElement;
   const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
@@ -2406,19 +3507,27 @@ function renderWorkshopQuote(){
 }
 function updateQuoteSummary(){
   const math=quoteMaths();
-  const mode=normalizeQuoteMode(quote.quoteMode);
+  updateBuildCostsSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
-  if($('quoteTotal'))$('quoteTotal').value=currency(math.total);
-  if($('quoteProfit'))$('quoteProfit').value=currency(math.profit);
-  if($('quoteModeLabel'))$('quoteModeLabel').textContent=mode==='customer'?'Customer mode':'Internal mode';
+  if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
+  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
+  if($('quoteMarkupPercent') && document.activeElement!==$('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
+  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
+  if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
+  const taxAvailable=quote.taxEnabled!==false;
+  const showTaxDetails=taxAvailable && quote.includeGst!==false;
+  if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
+  if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
+  if($('quoteGstField'))$('quoteGstField').hidden=!showTaxDetails;
+  if($('quoteModeLabel'))$('quoteModeLabel').textContent='Builder view';
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');
   if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
-  if(gstStatus){gstStatus.textContent=quote.includeGst===false?'Tax not included in displayed price.':'Tax included in displayed price.';}
-  ['quoteCostBeforeMarginField','quoteMarginPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=mode==='customer';});
+  if(gstStatus){gstStatus.textContent='';}
+  ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
 }
 
 function ensureQuotePreviewSheet(){
@@ -2429,25 +3538,26 @@ function ensureQuotePreviewSheet(){
   sheet.hidden=true;
   sheet.innerHTML=`
     <div class="component-sheet__scrim" data-quote-preview-action="close"></div>
-    <section class="component-sheet__panel quote-preview-panel" role="dialog" aria-modal="true" aria-label="Preview quote">
+    <section class="component-sheet__panel quote-preview-panel" role="dialog" aria-modal="true" aria-label="Preview customer copy">
       <header class="component-sheet__header">
-        <h2>Preview Quote</h2>
+        <h2>Preview Customer Copy</h2>
         <button class="component-sheet__close" type="button" data-quote-preview-action="close" aria-label="Close preview">×</button>
       </header>
       <div class="component-sheet__body quote-preview-body">
         <div class="quote-preview-card">
           <div class="quote-preview-card__head">
-            <strong id="quotePreviewName">Customer Quote</strong>
+            <strong id="quotePreviewName">Customer Copy</strong>
             <span id="quotePreviewBuild"></span>
           </div>
           <p id="quotePreviewCustomer"></p>
           <p id="quotePreviewBuildName"></p>
           <div id="quotePreviewSpecs" class="quote-preview-summary"></div>
+          <div id="quotePreviewIncluded" class="quote-preview-summary quote-preview-summary--parts"></div>
           <div id="quotePreviewSummary" class="quote-preview-summary"></div>
         </div>
         <div class="quote-preview-actions">
           <button id="quotePreviewBackBtn" class="ghost-action" type="button">Back</button>
-          <button id="quotePreviewApproveBtn" class="primary-action" type="button">Approve & Send</button>
+          <button id="quotePreviewApproveBtn" class="primary-action" type="button">Send Customer Copy</button>
         </div>
       </div>
     </section>
@@ -2460,24 +3570,34 @@ function ensureQuotePreviewSheet(){
   $('quotePreviewBackBtn').addEventListener('click',closeQuotePreviewSheet);
   $('quotePreviewApproveBtn').addEventListener('click',()=>{
     closeQuotePreviewSheet();
-    alert('Quote approved and ready to send.');
+    alert('Customer copy ready to send.');
   });
 }
 function renderQuotePreviewSheet(){
   const math=quoteMaths();
   const specificationViews=buildSpecificationViews();
+  const includedParts=customerIncludedParts();
   const customerLines=customerPreviewLines();
-  if($('quotePreviewName'))$('quotePreviewName').textContent='Customer Quote';
-  if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber||'Unnumbered quote';
+  const isEmailIntent=quotePreviewIntent==='email';
+  const previewTitle=($('quotePreviewSheet')||document).querySelector('.component-sheet__header h2');
+  if(previewTitle){previewTitle.textContent=isEmailIntent?'Email Customer Copy':'View Customer Copy';}
+  if($('quotePreviewName'))$('quotePreviewName').textContent=customerRodIdentity();
+  if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber?`Build ${quote.buildNumber}`:'Build confirmation';
   if($('quotePreviewCustomer'))$('quotePreviewCustomer').innerHTML=customerLines.length?customerLines.map(escapeHtml).join('<br>'):'No customer details entered';
-  if($('quotePreviewBuildName'))$('quotePreviewBuildName').textContent=quote.buildName||'No build name entered';
+  if($('quotePreviewBuildName'))$('quotePreviewBuildName').textContent='';
   if($('quotePreviewSpecs'))$('quotePreviewSpecs').innerHTML=specificationRowsMarkup(specificationViews.customer);
+  if($('quotePreviewIncluded'))$('quotePreviewIncluded').innerHTML=customerIncludedPartsMarkup(includedParts);
+  if($('quotePreviewApproveBtn')){
+    $('quotePreviewApproveBtn').hidden=!isEmailIntent;
+    $('quotePreviewApproveBtn').textContent='Send Customer Copy';
+  }
   if($('quotePreviewSummary'))$('quotePreviewSummary').innerHTML=`
     <div><span>Total Customer Price</span><strong>${currency(math.total)}</strong></div>
-    <div><span>Tax</span><strong>${quote.includeGst===false?'Not Included':currency(math.gst)}</strong></div>
+    ${numberOrZero(math.gst)>0?`<div><span>Tax</span><strong>${currency(math.gst)}</strong></div>`:''}
   `;
 }
 function openQuotePreviewSheet(action){
+  quotePreviewIntent=action==='email'?'email':'view';
   ensureQuotePreviewSheet();
   renderQuotePreviewSheet();
   const sheet=$('quotePreviewSheet');
@@ -2540,7 +3660,7 @@ function openBlankEditor(blankId){
   activeBlankEditorId=blankId||'';
   const editing=findBlankById(activeBlankEditorId);
   const blank=editing?normalizeBlank(editing):normalizeBlank({id:generateId('blank')});
-  if($('blankEditorTitle'))$('blankEditorTitle').textContent=editing?'Rename Blank':'Add Blank';
+  if($('blankEditorTitle'))$('blankEditorTitle').textContent=editing?'Edit Blank':'Add Blank';
   if($('blankEditorMaker'))$('blankEditorMaker').value=blank.maker;
   if($('blankEditorSeries'))$('blankEditorSeries').value=blank.series;
   if($('blankEditorModel'))$('blankEditorModel').value=blank.model;
@@ -2675,11 +3795,14 @@ function loadDemoBuild(){
     components:[
       {category:'Guides',supplier:'Fuji',description:'Fuji K-Series guide set',cost:96},
       {category:'Reel Seat',supplier:'Alps',description:'Alps triangle reel seat',cost:28},
-      {category:'Thread',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
+      {category:'Thread & Finish',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
     ],
     labourRate:50,
     labourHours:2,
-    marginPercent:20,
+    markupPercent:20,
+    targetProfit:0,
+    finalCustomerPrice:0,
+    pricingDriver:'markup',
     includeGst:true,
     quoteMode:'internal',
     gstRate:15,
@@ -2694,22 +3817,15 @@ function renderBlanks(){
   const host=$('blankCards');
   if(!host)return;
   hideBlankRowMenu();
-  const filtered=blanks
-    .filter((blank)=>!blank.archived)
-    .filter((blank)=>blankMatchesSearch(blank,blankLibrarySearch))
-    .sort((left,right)=>{
-      const favoriteDiff=Number(blankIsFavourite(right))-Number(blankIsFavourite(left));
-      if(favoriteDiff)return favoriteDiff;
-      return compareBlankDisplayNames(left,right);
-    });
+  const filtered=blanks.filter((blank)=>blankMatchesSearch(blank,blankLibrarySearch));
   if(!filtered.length){
     host.innerHTML='<div class="empty-card">No blanks match your search.</div>';
     return;
   }
   host.innerHTML=filtered.map((blank)=>{
     const idx=blanks.findIndex((item)=>item.id===blank.id);
-    const isFavourite=blankIsFavourite(blank);
-    return `<article class="module-card blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.series||'Series n/a')} • ${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em><em>First ${blank.fg} mm • Guides ${blank.gc} • Target ${blank.ts} • Cost ${currency(blank.cost)}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Remove from favourites':'Add to favourites'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">${isFavourite?'★':'☆'}</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
+    const archiveTag=blank.archived?'<small class="blank-card__archive">Archived</small>':'';
+    return `<article class="module-card blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" tabindex="0" role="button" aria-label="Load blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.series||'Series n/a')} • ${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em><em>First ${blank.fg} mm • Guides ${blank.gc} mm • Target ${blank.ts} mm • Cost ${currency(blank.cost)}</em>${archiveTag}<div class="blank-card__actions"><button class="ghost-action blank-card__load" data-blank-action="load" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button">Load</button>${blankRowMenuMarkup(blank)}</div></article>`;
   }).join('');
 }
 function bindBlankLibraryControls(){
@@ -2725,13 +3841,6 @@ function bindBlankLibraryControls(){
   const host=$('blankCards');
   if(host){
     host.addEventListener('click',(event)=>{
-      const favouriteButton=event.target.closest('[data-blank-favourite-toggle]');
-      if(favouriteButton){
-        const blankId=favouriteButton.getAttribute('data-blank-id')||'';
-        toggleBlankFavourite(blankId);
-        renderBlanks();
-        return;
-      }
       const menuTrigger=event.target.closest('[data-blank-menu-trigger]');
       if(menuTrigger){
         event.preventDefault();
@@ -2746,13 +3855,18 @@ function bindBlankLibraryControls(){
       const blank=findBlankById(blankId);
       if(!blank)return;
       hideBlankRowMenu();
-      if(action==='select'){
+      if(action==='load'){
         const idx=Number(button.getAttribute('data-blank-index'));
         loadBlank(Number.isFinite(idx)?idx:blanks.findIndex((item)=>item.id===blankId));
       }
-      if(action==='rename'){openBlankEditor(blankId);}
+      if(action==='edit'){openBlankEditor(blankId);}
       if(action==='duplicate'){duplicateBlank(blankId);}
       if(action==='delete'){requestDeleteBlank(blank);}
+      if(action==='restore'){
+        blank.archived=false;
+        saveBlankLibrary();
+        renderBlanks();
+      }
     });
     host.addEventListener('keydown',(event)=>{
       const row=event.target.closest('[data-blank-row]');
@@ -2780,16 +3894,8 @@ function bindHomeActions(){
   if(enterBtn && enterBtn.getAttribute('data-home-bound')!=='true'){
     enterBtn.setAttribute('data-home-bound','true');
     enterBtn.addEventListener('click',()=>{
-      goScreen('buildsScreen');
-    });
-  }
-  const continueBtn=$('homeContinueLastBuildBtn');
-  if(continueBtn && continueBtn.getAttribute('data-home-bound')!=='true'){
-    continueBtn.setAttribute('data-home-bound','true');
-    continueBtn.addEventListener('click',()=>{
-      const latest=savedBuildEntries()[0];
-      if(!latest)return;
-      openSavedBuildRecord(latest.source,latest.index);
+      preserveWorkshopQuoteOnEntry=false;
+      goScreen('workshopScreen');
     });
   }
 }
@@ -2834,8 +3940,9 @@ function bindBuildsControls(){
   });
 }
 function onScreenChange(screenId){
+  clearLayoutFieldFocusSelection();
   if(screenId==='homeScreen'){
-    homeRodRefreshFromState();
+    homeRodRefreshFromState(true);
   }
   if(screenId==='buildsScreen'){
     const searchInput=$('buildsSearchInput');
@@ -2843,16 +3950,59 @@ function onScreenChange(screenId){
     renderBuilds();
   }
   if(screenId==='workshopScreen'){
-    renderWorkshopQuote();
-  }
-  if(screenId==='layoutScreen' && !isLayoutLocked()){
-    const canAutoFocus=window.matchMedia&&window.matchMedia('(pointer:fine)').matches;
-    if(canAutoFocus){
-      requestAnimationFrame(()=>focusLayoutField(layoutFieldOrder[0]));
+    if(preserveWorkshopQuoteOnEntry){
+      preserveWorkshopQuoteOnEntry=false;
+      renderWorkshopQuote();
+    }else{
+      beginFreshQuote({navigate:false});
     }
   }
+  if(screenId==='settingsScreen' && $('settingsTaxRate')){
+    $('settingsTaxRate').value=String(activeTaxRate());
+    if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  }
+  updateWorkshopBackToTopVisibility();
 }
 function bindSettingsControls(){
+  const taxEnabledInput=$('settingsTaxEnabled');
+  if(taxEnabledInput){
+    taxEnabledInput.checked=activeTaxEnabled();
+    const onTaxEnabledChange=()=>{
+      studioSettings.taxEnabled=taxEnabledInput.checked;
+      saveStudioSettings();
+    };
+    taxEnabledInput.addEventListener('input',onTaxEnabledChange);
+    taxEnabledInput.addEventListener('change',onTaxEnabledChange);
+  }
+  const taxRateInput=$('settingsTaxRate');
+  const taxSavedLabel=$('settingsTaxSaved');
+  let taxSavedTimer=null;
+  const showTaxSaved=()=>{
+    if(!taxSavedLabel)return;
+    taxSavedLabel.hidden=false;
+    if(taxSavedTimer){clearTimeout(taxSavedTimer);}
+    taxSavedTimer=window.setTimeout(()=>{
+      taxSavedLabel.hidden=true;
+      taxSavedTimer=null;
+    },1200);
+  };
+  if(taxRateInput){
+    taxRateInput.value=String(activeTaxRate());
+    const saveTaxRate=()=>{
+      studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
+      taxRateInput.value=String(studioSettings.taxRate);
+      saveStudioSettings();
+      showTaxSaved();
+    };
+    taxRateInput.addEventListener('change',saveTaxRate);
+    taxRateInput.addEventListener('blur',saveTaxRate);
+    taxRateInput.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      saveTaxRate();
+      taxRateInput.blur();
+    });
+  }
   const demoButton=$('loadDemoBuildBtn');
   if(!demoButton)return;
   demoButton.addEventListener('click',()=>{
@@ -2887,13 +4037,12 @@ function render(){
       <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${row.cum.toFixed(1)} millimeters. Spacing ${row.spacing.toFixed(1)} millimeters" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
           <span>Guide ${row.g}</span>
-          <small>Pos ${row.cum.toFixed(1)} mm</small>
         </div>
         <div class="guide-spacing-row__meta">
           <small>Position</small>
           <span>${row.cum.toFixed(1)} mm</span>
         </div>
-        <strong>Sp ${row.spacing.toFixed(1)} mm</strong>
+        <strong>Spacing ${row.spacing.toFixed(1)} mm</strong>
       </article>
     `).join('');
   }
@@ -2926,8 +4075,9 @@ function render(){
 });
 bindLayoutControls();
 bindWorkshopQuoteBuilder();
+bindWorkshopBackToTopControl();
 bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');}};

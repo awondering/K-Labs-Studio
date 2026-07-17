@@ -40,14 +40,36 @@
       <div class="home-premium-shell">
         <header class="home-premium-hero" aria-label="K-Labs Studio branding">
           <h1>K-Labs Studio</h1>
-          <p>Professional custom fishing rod building, quoting and workshop companion.</p>
+          <p>Precision custom fishing rod building, quoting and build companion.</p>
         </header>
         <div id="homeLivingRod" class="home-living-rod" aria-hidden="true">
-          <span class="home-living-rod__blank"></span>
+          <svg class="home-living-rod__blank" viewBox="0 0 1200 360" preserveAspectRatio="none" role="presentation" focusable="false">
+            <defs>
+              <pattern id="homeRodCarbonWeave" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <path d="M0 0H8" stroke="#ffffff" stroke-opacity="0.16" stroke-width="0.92"></path>
+              </pattern>
+              <linearGradient id="homeRodBlankBase" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1c2123"></stop>
+                <stop offset="58%" stop-color="#0d1113"></stop>
+                <stop offset="100%" stop-color="#151a1c"></stop>
+              </linearGradient>
+              <linearGradient id="homeRodCylinderShade" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.03)"></stop>
+                <stop offset="30%" stop-color="rgba(255,255,255,0.08)"></stop>
+                <stop offset="56%" stop-color="rgba(255,255,255,0.03)"></stop>
+                <stop offset="100%" stop-color="rgba(0,0,0,0.22)"></stop>
+              </linearGradient>
+              <clipPath id="homeRodBlankClip">
+                <path d="M8 124 L1148 129.3 L1148 130.7 L8 136 Z"></path>
+              </clipPath>
+            </defs>
+            <path d="M8 124 L1148 129.3 L1148 130.7 L8 136 Z" fill="url(#homeRodBlankBase)"></path>
+            <rect x="8" y="123" width="1140" height="14" fill="url(#homeRodCarbonWeave)" clip-path="url(#homeRodBlankClip)" opacity="0.8"></rect>
+            <path d="M42 126.8 L1126 130" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="1.6" stroke-linecap="round" opacity="0.5"></path>
+          </svg>
           <span class="home-living-rod__leds"></span>
         </div>
         <button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">ENTER ROD STUDIO</button>
-        <button id="homeContinueLastBuildBtn" class="home-continue-last-build" type="button" hidden>Continue last build →</button>
       </div>
     </section>
 
@@ -125,13 +147,14 @@
     <section class="screen" id="workshopScreen">
       <section class="quote-builder" aria-label="Rod Builder Quote">
         <header class="quote-builder__head">
-          <p class="eyebrow">Workshop</p>
-          <h1 id="quoteBuilderTitle">Rod Builder Quote</h1>
-          <div class="quote-mode-switch" role="tablist" aria-label="Quote mode">
-            <button class="ghost-action active" data-quote-mode="internal" type="button">Internal Quote</button>
-            <button class="ghost-action" data-quote-mode="customer" type="button">Customer Quote</button>
-          </div>
+          <p class="eyebrow">Build</p>
+          <h1 id="quoteBuilderTitle">Studio</h1>
         </header>
+
+        <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
+          <button id="newQuoteEntryBtn" class="primary-action quote-builder__new-quote" type="button">New Build</button>
+          <button id="findCustomerBtn" class="ghost-action quote-builder__find-customer" type="button">Find Customer</button>
+        </div>
 
         <article class="quote-section quote-section--collapsible">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopCustomerBody">
@@ -183,17 +206,6 @@
           <option value="Mexico"></option>
         </datalist>
 
-        <article class="quote-section quote-section--collapsible" data-internal-only>
-          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBlankDetailsBody">
-            <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">SELECTED BLANK</span>
-            </span>
-            <b class="quote-section__chevron" aria-hidden="true">▾</b>
-          </button>
-          <div id="workshopBlankDetailsBody" class="selected-blank-panel quote-section__body"></div>
-          </div>
-        </article>
-
         <article class="quote-section quote-section--collapsible" data-internal-only aria-label="Build Specifications">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildSpecsBody">
             <span class="quote-section__toggle-copy">
@@ -207,7 +219,7 @@
             <label><span>Lower Grip Length (Grip below reel seat)</span><input id="quoteSpecGripBelowReelSeatLength" type="text" placeholder="e.g. 90 mm" /></label>
             <label><span>Fore Grip Length</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
             <label><span>Hook Keeper Position</span><input id="quoteSpecHookKeeperPosition" type="text" placeholder="e.g. Above reel seat" /></label>
-            <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Workshop notes..."></textarea></label>
+            <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Build notes..."></textarea></label>
           </div>
         </article>
 
@@ -215,13 +227,17 @@
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildCostsBody">
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Costs</span>
+              <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
+                <span id="workshopBuildCostsSummaryItems"></span>
+                <span id="workshopBuildCostsSummaryTotal"></span>
+              </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
           <div id="workshopBuildCostsBody" class="quote-section__body">
             <div id="quoteComponentsList" class="quote-components"></div>
             <div class="quote-actions-row">
-            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Build Cost</button>
+            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Item</button>
             </div>
           </div>
         </article>
@@ -240,32 +256,39 @@
           </div>
         </article>
 
-        <article class="quote-section">
-          <header class="quote-section__header">
-            <h2>Quote Summary</h2>
-          </header>
-          <div class="quote-grid quote-grid--three quote-section__body">
+        <article class="quote-section quote-section--collapsible">
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopQuoteSummaryBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Build Pricing</span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--three quote-section__body">
             <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
-            <label id="quoteMarginPercentField"><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
-            <label class="quote-gst-toggle quote-grid__full"><span>Include Tax (15%)</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
-            <label id="quoteGstField"><span>Tax (15%)</span><input id="quoteGst" type="text" readonly /></label>
-            <label><span>Final Customer Price</span><input id="quoteTotal" type="text" readonly /></label>
-            <label id="quoteProfitField"><span>Profit</span><input id="quoteProfit" type="text" readonly /></label>
+            <label id="quoteMarkupPercentField"><span>Markup %</span><input id="quoteMarkupPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
+            <label id="quoteIncludeGstField" class="quote-gst-toggle"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+            <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
+            <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
+            <label><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label id="quoteProfitField"><span>Target Profit</span><input id="quoteProfit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
           </div>
         </article>
 
         <article class="quote-section">
           <header class="quote-section__header">
-            <h2>Actions</h2>
+            <h2>Build Actions</h2>
           </header>
           <div class="quote-actions-grid quote-section__body">
-            <button id="saveQuoteBtn" class="primary-action" type="button">Save Quote</button>
-            <button id="duplicateQuoteBtn" class="ghost-action" type="button">Duplicate Quote</button>
-            <button id="printQuoteBtn" class="ghost-action" type="button">Print Quote</button>
-            <button id="exportPdfBtn" class="ghost-action" type="button">Export PDF</button>
-            <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
-            <button id="convertToBuildBtn" class="ghost-action" type="button">Convert To Build</button>
+            <button id="saveQuoteBtn" class="primary-action" type="button">Save Build Job</button>
+            <details class="quote-actions-secondary" id="customerCopyActions">
+              <summary>Customer Copy</summary>
+              <div class="quote-actions-secondary__list">
+                <button id="viewCustomerCopyBtn" class="ghost-action" type="button">View Customer Copy</button>
+                <button id="emailQuoteBtn" class="ghost-action" type="button">Email Customer Copy</button>
+                <button id="printQuoteBtn" class="ghost-action" type="button">Print Customer Copy</button>
+              </div>
+            </details>
           </div>
         </article>
       </section>
@@ -285,15 +308,16 @@
         <h2>Selector Workflow</h2>
         <p>Selection is primary. Management actions are available from each row menu.</p>
         <ol>
-          <li>Select Blank</li>
-          <li>Select Reel Seat</li>
-          <li>Select Guide Set</li>
-          <li>Select Tip Top</li>
-          <li>Select Grip</li>
-          <li>Select Winding Checks</li>
-          <li>Select Hook Keeper</li>
-          <li>Select Thread &amp; Finish</li>
-          <li>Select Butt Cap</li>
+          <li>Blanks</li>
+          <li>Guides</li>
+          <li>Reel Seats</li>
+          <li>Tip Tops</li>
+          <li>EVA Grips</li>
+          <li>Cork Grips</li>
+          <li>Winding Checks</li>
+          <li>Hook Keepers</li>
+          <li>Thread</li>
+          <li>Decals</li>
         </ol>
       </article>
       <div class="blank-library-controls">
@@ -307,6 +331,8 @@
       <div class="settings-card">
         <div><span>Version</span><strong>BUILD 051.2</strong></div>
         <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
+        <div><span>Tax Enabled (Default)</span><strong><input id="settingsTaxEnabled" type="checkbox" checked /></strong></div>
+        <div><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
         <div class="settings-card__actions">
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
         </div>
@@ -331,13 +357,14 @@
 
     <p class="live-build-status" aria-label="Live build status">Live build: 051.2</p>
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
+    <button id="workshopBackToTopBtn" class="workshop-back-to-top" type="button" hidden aria-label="Back to top of Studio">↑ Top</button>
   </main>
 
   <nav class="bottom-nav">
     <button class="active" data-nav="homeScreen" type="button"><i aria-hidden="true">⌂</i><span>Home</span></button>
-    <button data-nav="buildsScreen" type="button"><i aria-hidden="true">▣</i><span>Builds</span></button>
-    <button data-nav="layoutScreen" type="button"><i aria-hidden="true">⌖</i><span>Guide Layout</span></button>
-    <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>More</span></button>
+    <button data-nav="workshopScreen" type="button"><i aria-hidden="true">▣</i><span>Studio</span></button>
+    <button data-nav="layoutScreen" type="button"><i aria-hidden="true"><svg class="guide-layout-nav-icon" viewBox="0 0 20 20" focusable="false"><circle class="guide-layout-nav-icon__ring" cx="10" cy="8.7" r="3.35" /><path class="guide-layout-nav-icon__support" d="M8.1 11.35L7 14.15" /><path class="guide-layout-nav-icon__support" d="M11.9 11.35L13 14.15" /><path class="guide-layout-nav-icon__foot" d="M5.9 14.1H14.1" /><circle class="guide-layout-nav-icon__marker" cx="14.85" cy="6.95" r="0.76" /></svg></i><span>Guide Layout</span></button>
+    <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
   <script src="js/config.js"></script>
   <script src="js/storage.js"></script>
