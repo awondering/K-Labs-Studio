@@ -36,6 +36,7 @@ let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
 let customerFinderSearch='';
 let customerFinderSelectedKey='';
+let customerFinderIntent='browse';
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
@@ -788,6 +789,56 @@ function beginFreshQuote(options){
   renderWorkshopQuote();
   collapseWorkshopSections();
   if(settings.navigate){goScreen('workshopScreen');}
+}
+function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
+  const source=record&&typeof record==='object'?record:{};
+  const target=targetQuote&&typeof targetQuote==='object'?targetQuote:{};
+  target.customerName=String(source.customerName||'').trim();
+  target.phone=String(source.phone||'').trim();
+  target.email=String(source.email||'').trim();
+  target.addressLine1=String(source.addressLine1||'').trim();
+  target.addressLine2=String(source.addressLine2||'').trim();
+  target.suburbLocality=String(source.suburbLocality||'').trim();
+  target.cityTown=String(source.cityTown||'').trim();
+  target.regionState=String(source.regionState||'').trim();
+  target.postcode=String(source.postcode||'').trim();
+  target.country=String(source.country||target.country||'').trim();
+  return target;
+}
+function startFreshQuoteForCustomer(record,options){
+  const settings={focusCustomerName:false,...(options||{})};
+  const next=newQuoteTemplate();
+  applyCustomerFieldsToQuoteFromRecord(next,record);
+  quote=normalizeQuote(next);
+  saveQuoteCurrent();
+  markQuoteSaved();
+  renderWorkshopQuote();
+  collapseWorkshopSections();
+  setWorkshopSectionCollapsed('workshopCustomerBody',false);
+  preserveWorkshopQuoteOnEntry=true;
+  goScreen('workshopScreen');
+  if(settings.focusCustomerName){
+    window.setTimeout(()=>{
+      const input=$('quoteCustomerName');
+      if(!input)return;
+      try{input.focus({preventScroll:true});}catch{input.focus();}
+      input.select();
+    },30);
+  }
+}
+function runNewBuildStartAction(startAction){
+  if(typeof startAction!=='function')return;
+  if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
+    openConfirmDialog({
+      title:'Start New Build',
+      message:'Discard the current unsaved build and start a new build?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Build',kind:'primary'}]
+    },(action)=>{
+      if(action==='start')startAction();
+    });
+    return;
+  }
+  startAction();
 }
 function startNewQuoteFlow(){
   if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
@@ -2750,6 +2801,40 @@ function customerFinderMatchesKey(customerKey,name){
   if(customerKey==='__no_customer__')return !normalized;
   return normalized===customerKey;
 }
+function customerGroupByKey(customerKey){
+  return customerSavedGroups('').find((group)=>group.key===customerKey)||null;
+}
+function customerFinderActionIntroText(){
+  return customerFinderIntent==='new-build'
+    ?'Search an existing customer or add a new customer to start a new build.'
+    :'Search customer name and open their saved jobs.';
+}
+function updateCustomerFinderIntentUi(){
+  const intro=$('customerFinderIntro');
+  if(intro)intro.textContent=customerFinderActionIntroText();
+  const addBtn=$('customerFinderAddNew');
+  if(addBtn)addBtn.hidden=customerFinderIntent!=='new-build';
+}
+function handleCustomerSelectionForNewBuild(customerKey,customerName){
+  const key=String(customerKey||'');
+  const matches=allSavedEntries().filter((entry)=>customerFinderMatchesKey(key,entry&&entry.record&&entry.record.customerName));
+  matches.sort((left,right)=>{
+    const leftDate=Date.parse(left&&left.record&&left.record.savedAt||'')||0;
+    const rightDate=Date.parse(right&&right.record&&right.record.savedAt||'')||0;
+    return rightDate-leftDate;
+  });
+  const sourceRecord=matches[0]&&matches[0].record?matches[0].record:{customerName:String(customerName||'').trim()};
+  closeCustomerFinderSheet();
+  runNewBuildStartAction(()=>{
+    startFreshQuoteForCustomer(sourceRecord);
+  });
+}
+function handleAddCustomerForNewBuild(){
+  closeCustomerFinderSheet();
+  runNewBuildStartAction(()=>{
+    startFreshQuoteForCustomer({}, {focusCustomerName:true});
+  });
+}
 function closeCustomerFinderMenus(){
   document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{menu.open=false;});
 }
@@ -2876,13 +2961,15 @@ function closeCustomerFinderSheet(){
   sheet.hidden=true;
   unlockModalLayer({restoreFocus:true});
 }
-function openCustomerFinderSheet(){
+function openCustomerFinderSheet(intent){
   ensureCustomerFinderSheet();
   const sheet=$('customerFinderSheet');
   if(!sheet)return;
+  customerFinderIntent=intent==='new-build'?'new-build':'browse';
   customerFinderSearch='';
   customerFinderSelectedKey='';
   if($('customerFinderSearch'))$('customerFinderSearch').value='';
+  updateCustomerFinderIntentUi();
   renderCustomerFinder();
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
@@ -2905,7 +2992,8 @@ function ensureCustomerFinderSheet(){
         <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">×</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
-        <p class="customer-finder__intro">Search customer name and open their saved jobs.</p>
+        <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their saved jobs.</p>
+        <button id="customerFinderAddNew" class="primary-action" type="button" data-customer-finder-action="add-new" hidden>Add New Customer</button>
         <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
         <section class="customer-finder__layout" aria-label="Customer finder layout">
           <aside class="customer-finder__list-pane" aria-label="Customers">
@@ -2926,9 +3014,16 @@ function ensureCustomerFinderSheet(){
   },true);
   sheet.addEventListener('click',(event)=>{
     const actionEl=event.target.closest('[data-customer-finder-action]');
-    if(actionEl && actionEl.getAttribute('data-customer-finder-action')==='close'){
-      closeCustomerFinderSheet();
-      return;
+    if(actionEl){
+      const action=actionEl.getAttribute('data-customer-finder-action')||'';
+      if(action==='close'){
+        closeCustomerFinderSheet();
+        return;
+      }
+      if(action==='add-new'){
+        handleAddCustomerForNewBuild();
+        return;
+      }
     }
     if(!event.target.closest('.customer-finder__menu-wrap')){
       closeCustomerFinderMenus();
@@ -2945,7 +3040,13 @@ function ensureCustomerFinderSheet(){
     }
     const customerButton=event.target.closest('[data-customer-key]');
     if(customerButton){
-      customerFinderSelectedKey=customerButton.getAttribute('data-customer-key')||'';
+      const customerKey=customerButton.getAttribute('data-customer-key')||'';
+      if(customerFinderIntent==='new-build'){
+        const customerName=((customerButton.querySelector('.customer-finder__customer-name')||{}).textContent||'').trim();
+        handleCustomerSelectionForNewBuild(customerKey,customerName);
+        return;
+      }
+      customerFinderSelectedKey=customerKey;
       renderCustomerFinder();
       return;
     }
@@ -3556,14 +3657,14 @@ function bindWorkshopQuoteBuilder(){
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
     newQuoteEntryBtn.addEventListener('click',()=>{
-      startNewQuoteFlow();
+      openCustomerFinderSheet('new-build');
     });
   }
   const findCustomerBtn=$('findCustomerBtn');
   if(findCustomerBtn && findCustomerBtn.getAttribute('data-find-customer-bound')!=='true'){
     findCustomerBtn.setAttribute('data-find-customer-bound','true');
     findCustomerBtn.addEventListener('click',()=>{
-      openCustomerFinderSheet();
+      openCustomerFinderSheet('browse');
     });
   }
   workshopInputMap().forEach(([id,key])=>{
