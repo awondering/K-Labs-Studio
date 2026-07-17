@@ -72,6 +72,7 @@ let workshopBackToTopBound=false;
 let workshopBackToTopRafId=0;
 let workshopBackToTopLastScrollY=-1;
 let preserveWorkshopQuoteOnEntry=false;
+let activeSavedBuildRef=null;
 const workshopKeyboardDismissState={
   suppressNavUntil:0,
   preservedScrollY:0,
@@ -748,6 +749,76 @@ function markQuoteSaved(){
   hasUnsavedQuoteChanges=false;
   updateQuoteActionPriority();
 }
+function setActiveSavedBuildRef(source,index,record){
+  const numericIndex=Number(index);
+  activeSavedBuildRef={
+    source:String(source||'build'),
+    index:Number.isInteger(numericIndex)?numericIndex:-1,
+    buildNumber:specificationValue(record&&record.buildNumber),
+    savedAt:specificationValue(record&&record.savedAt),
+  };
+}
+function clearActiveSavedBuildRef(){
+  activeSavedBuildRef=null;
+}
+function findCurrentSavedBuildTarget(){
+  const records=savedBuildRecords();
+  if(!records.length)return null;
+  if(activeSavedBuildRef && activeSavedBuildRef.source==='build'){
+    const indexedRecord=records[activeSavedBuildRef.index];
+    if(indexedRecord
+      && normalizeNameKey(indexedRecord&&indexedRecord.buildNumber)===normalizeNameKey(activeSavedBuildRef.buildNumber)
+      && specificationValue(indexedRecord&&indexedRecord.savedAt)===specificationValue(activeSavedBuildRef.savedAt)){
+      return {index:activeSavedBuildRef.index,record:indexedRecord};
+    }
+    const byRef=records.findIndex((record)=>{
+      return normalizeNameKey(record&&record.buildNumber)===normalizeNameKey(activeSavedBuildRef.buildNumber)
+        && specificationValue(record&&record.savedAt)===specificationValue(activeSavedBuildRef.savedAt);
+    });
+    if(byRef>=0)return {index:byRef,record:records[byRef]};
+  }
+  const currentBuildNumber=normalizeNameKey(quote&&quote.buildNumber);
+  if(!currentBuildNumber)return null;
+  const byBuildNumber=records.findIndex((record)=>normalizeNameKey(record&&record.buildNumber)===currentBuildNumber);
+  if(byBuildNumber<0)return null;
+  return {index:byBuildNumber,record:records[byBuildNumber]};
+}
+function finalizeDeletedCurrentBuild(){
+  clearActiveSavedBuildRef();
+  quote=normalizeQuote(newQuoteTemplate());
+  saveQuoteCurrent();
+  markQuoteSaved();
+  renderWorkshopQuote();
+  collapseWorkshopSections();
+  renderBuilds();
+  renderCustomerFinder();
+  renderCustomerBrowser();
+  goScreen('buildsScreen');
+}
+function requestDeleteCurrentBuild(){
+  const target=findCurrentSavedBuildTarget();
+  if(!target){
+    openConfirmDialog({
+      title:'Delete Build',
+      message:'This build is not saved yet, so there is nothing to delete.',
+      actions:[{id:'ok',label:'OK',kind:'primary'}]
+    },()=>{});
+    return;
+  }
+  const displayName=specificationValue(target.record&&target.record.buildName)||'this build';
+  openConfirmDialog({
+    title:'Delete Build',
+    message:`Delete ${displayName}? This will permanently delete this saved build only.`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete Build',kind:'danger'}]
+  },(action)=>{
+    if(action!=='delete')return;
+    const records=savedBuildRecords();
+    if(target.index<0 || target.index>=records.length)return;
+    records.splice(target.index,1);
+    Store.set('klabs-workshop-builds',records);
+    finalizeDeletedCurrentBuild();
+  });
+}
 function quoteHasMeaningfulDraft(currentQuote){
   const candidate=normalizeQuote(currentQuote||{});
   const baseline=normalizeQuote(newQuoteTemplate());
@@ -787,6 +858,7 @@ function collapseWorkshopSections(){
 }
 function beginFreshQuote(options){
   const settings={navigate:true,...(options||{})};
+  clearActiveSavedBuildRef();
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
@@ -813,6 +885,7 @@ function startFreshQuoteForCustomer(record,options){
   const settings={...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
+  clearActiveSavedBuildRef();
   quote=normalizeQuote(next);
   saveQuoteCurrent();
   markQuoteSaved();
@@ -1466,6 +1539,7 @@ function persistBuildRecord(currentQuote){
   const record={...quoteForPersistence(currentQuote),savedAt};
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
+  return {source:'build',index:0,record};
 }
 function syncMissingComponentLibraryData(currentQuote){
   const persisted=quoteForPersistence(currentQuote);
@@ -3524,8 +3598,12 @@ function requestDeleteSavedBuildRecord(source,index){
   },(action)=>{
     if(action!=='delete')return;
     if(!deleteSavedEntryBySource(source,index))return;
+    if(activeSavedBuildRef && activeSavedBuildRef.source===source && activeSavedBuildRef.index===Number(index)){
+      clearActiveSavedBuildRef();
+    }
     renderBuilds();
     renderCustomerFinder();
+    renderCustomerBrowser();
   });
 }
 function getSavedEntryBySource(source,index){
@@ -3538,6 +3616,7 @@ function getSavedEntryBySource(source,index){
 function openSavedBuildRecord(source,index){
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
+  setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
   saveQuoteCurrent();
   markQuoteSaved();
@@ -3549,6 +3628,7 @@ function openSavedBuildRecord(source,index){
 function duplicateSavedBuildRecord(source,index){
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
+  clearActiveSavedBuildRef();
   quote=normalizeQuote({
     ...selected,
     buildNumber:'',
@@ -4197,9 +4277,18 @@ function bindWorkshopQuoteBuilder(){
     saveQuoteBtn.addEventListener('click',()=>{
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
-      persistBuildRecord(quote);
+      const savedRef=persistBuildRecord(quote);
+      if(savedRef){
+        setActiveSavedBuildRef(savedRef.source,savedRef.index,savedRef.record);
+      }
       markQuoteSaved();
       alert('Build job saved.');
+    });
+  }
+  const deleteCurrentBuildBtn=$('deleteCurrentBuildBtn');
+  if(deleteCurrentBuildBtn){
+    deleteCurrentBuildBtn.addEventListener('click',()=>{
+      requestDeleteCurrentBuild();
     });
   }
   const convertToBuildBtn=$('convertToBuildBtn');
@@ -4212,7 +4301,10 @@ function bindWorkshopQuoteBuilder(){
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
       persistQuoteRecord(quote);
-      persistBuildRecord(quote);
+      const savedRef=persistBuildRecord(quote);
+      if(savedRef){
+        setActiveSavedBuildRef(savedRef.source,savedRef.index,savedRef.record);
+      }
       markQuoteSaved();
       goScreen('layoutScreen');
     });
