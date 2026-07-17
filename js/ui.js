@@ -37,6 +37,7 @@ let buildsSearch='';
 let customerFinderSearch='';
 let customerFinderSelectedKey='';
 let customerFinderIntent='browse';
+let customerFinderNewBuildStep='actions';
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
@@ -806,7 +807,7 @@ function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
   return target;
 }
 function startFreshQuoteForCustomer(record,options){
-  const settings={focusCustomerName:false,...(options||{})};
+  const settings={...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
   quote=normalizeQuote(next);
@@ -814,16 +815,10 @@ function startFreshQuoteForCustomer(record,options){
   markQuoteSaved();
   renderWorkshopQuote();
   collapseWorkshopSections();
-  setWorkshopSectionCollapsed('workshopCustomerBody',false);
   preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
-  if(settings.focusCustomerName){
-    window.setTimeout(()=>{
-      const input=$('quoteCustomerName');
-      if(!input)return;
-      try{input.focus({preventScroll:true});}catch{input.focus();}
-      input.select();
-    },30);
+  if(settings.expandCustomerSection){
+    setWorkshopSectionCollapsed('workshopCustomerBody',false);
   }
 }
 function runNewBuildStartAction(startAction){
@@ -2805,15 +2800,79 @@ function customerGroupByKey(customerKey){
   return customerSavedGroups('').find((group)=>group.key===customerKey)||null;
 }
 function customerFinderActionIntroText(){
-  return customerFinderIntent==='new-build'
-    ?'Search an existing customer or add a new customer to start a new build.'
-    :'Search customer name and open their saved jobs.';
+  if(customerFinderIntent!=='new-build'){
+    return 'Search customer name and open their saved jobs.';
+  }
+  if(customerFinderNewBuildStep==='search'){
+    return 'Search and select a customer to start a new build.';
+  }
+  if(customerFinderNewBuildStep==='add'){
+    return 'Enter customer details to start a new build.';
+  }
+  return 'Select how you want to attach a customer to this new build.';
+}
+function customerFinderDraftFromForm(){
+  return {
+    customerName:String(($('customerFinderNewCustomerName')&&$('customerFinderNewCustomerName').value)||'').trim(),
+    phone:String(($('customerFinderNewPhone')&&$('customerFinderNewPhone').value)||'').trim(),
+    email:String(($('customerFinderNewEmail')&&$('customerFinderNewEmail').value)||'').trim(),
+    addressLine1:String(($('customerFinderNewAddress1')&&$('customerFinderNewAddress1').value)||'').trim(),
+    addressLine2:String(($('customerFinderNewAddress2')&&$('customerFinderNewAddress2').value)||'').trim(),
+    suburbLocality:String(($('customerFinderNewSuburb')&&$('customerFinderNewSuburb').value)||'').trim(),
+    cityTown:String(($('customerFinderNewCity')&&$('customerFinderNewCity').value)||'').trim(),
+    regionState:String(($('customerFinderNewRegion')&&$('customerFinderNewRegion').value)||'').trim(),
+    postcode:String(($('customerFinderNewPostcode')&&$('customerFinderNewPostcode').value)||'').trim(),
+    country:String(($('customerFinderNewCountry')&&$('customerFinderNewCountry').value)||'').trim()||'New Zealand',
+  };
+}
+function resetCustomerFinderNewForm(){
+  ['customerFinderNewCustomerName','customerFinderNewPhone','customerFinderNewEmail','customerFinderNewAddress1','customerFinderNewAddress2','customerFinderNewSuburb','customerFinderNewCity','customerFinderNewRegion','customerFinderNewPostcode'].forEach((id)=>{
+    const input=$(id);
+    if(input)input.value='';
+  });
+  const country=$('customerFinderNewCountry');
+  if(country)country.value='New Zealand';
+}
+function setCustomerFinderNewBuildStep(step){
+  customerFinderNewBuildStep=(step==='search' || step==='add')?step:'actions';
+  const actions=$('customerFinderStartActions');
+  const searchBlock=$('customerFinderSearchBlock');
+  const form=$('customerFinderNewForm');
+  if(actions)actions.hidden=customerFinderNewBuildStep!=='actions';
+  if(searchBlock)searchBlock.hidden=customerFinderNewBuildStep!=='search';
+  if(form)form.hidden=customerFinderNewBuildStep!=='add';
+  updateCustomerFinderIntentUi();
+  if(customerFinderNewBuildStep==='search'){
+    const search=$('customerFinderSearch');
+    if(search){
+      try{search.focus({preventScroll:true});}catch{search.focus();}
+      search.select();
+    }
+    renderCustomerFinder();
+    return;
+  }
+  if(customerFinderNewBuildStep==='add'){
+    const nameInput=$('customerFinderNewCustomerName');
+    if(nameInput){
+      try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
+    }
+  }
 }
 function updateCustomerFinderIntentUi(){
   const intro=$('customerFinderIntro');
   if(intro)intro.textContent=customerFinderActionIntroText();
-  const addBtn=$('customerFinderAddNew');
-  if(addBtn)addBtn.hidden=customerFinderIntent!=='new-build';
+  const startActions=$('customerFinderStartActions');
+  const searchBlock=$('customerFinderSearchBlock');
+  const form=$('customerFinderNewForm');
+  if(customerFinderIntent==='new-build'){
+    if(startActions && startActions.hidden===undefined)startActions.hidden=false;
+    if(customerFinderNewBuildStep!=='search' && searchBlock)searchBlock.hidden=true;
+    if(customerFinderNewBuildStep!=='add' && form)form.hidden=true;
+    return;
+  }
+  if(startActions)startActions.hidden=true;
+  if(searchBlock)searchBlock.hidden=false;
+  if(form)form.hidden=true;
 }
 function handleCustomerSelectionForNewBuild(customerKey,customerName){
   const key=String(customerKey||'');
@@ -2830,9 +2889,28 @@ function handleCustomerSelectionForNewBuild(customerKey,customerName){
   });
 }
 function handleAddCustomerForNewBuild(){
+  if(customerFinderIntent==='new-build'){
+    setCustomerFinderNewBuildStep('add');
+    return;
+  }
   closeCustomerFinderSheet();
   runNewBuildStartAction(()=>{
-    startFreshQuoteForCustomer({}, {focusCustomerName:true});
+    startFreshQuoteForCustomer({});
+  });
+}
+function handleCreateCustomerFromNewBuildForm(){
+  const draft=customerFinderDraftFromForm();
+  if(!specificationValue(draft.customerName)){
+    alert('Customer name is required.');
+    const input=$('customerFinderNewCustomerName');
+    if(input){
+      try{input.focus({preventScroll:true});}catch{input.focus();}
+    }
+    return;
+  }
+  closeCustomerFinderSheet();
+  runNewBuildStartAction(()=>{
+    startFreshQuoteForCustomer(draft);
   });
 }
 function closeCustomerFinderMenus(){
@@ -2934,8 +3012,14 @@ function renderCustomerFinder(){
     const active=group.key===customerFinderSelectedKey;
     const totalJobs=group.quotes.length+group.builds.length;
     const summary=`${totalJobs} saved job${totalJobs===1?'':'s'}`;
-    return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button>${customerFinderCustomerMenuMarkup(group)}</div>`;
+    const menuMarkup=customerFinderIntent==='new-build'?'':customerFinderCustomerMenuMarkup(group);
+    return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button>${menuMarkup}</div>`;
   }).join('');
+  if(customerFinderIntent==='new-build'){
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    return;
+  }
   const selected=groups.find((group)=>group.key===customerFinderSelectedKey)||groups[0];
   if(!selected){
     detailHost.hidden=true;
@@ -2966,15 +3050,22 @@ function openCustomerFinderSheet(intent){
   const sheet=$('customerFinderSheet');
   if(!sheet)return;
   customerFinderIntent=intent==='new-build'?'new-build':'browse';
+  customerFinderNewBuildStep=customerFinderIntent==='new-build'?'actions':'search';
   customerFinderSearch='';
   customerFinderSelectedKey='';
   if($('customerFinderSearch'))$('customerFinderSearch').value='';
+  if(customerFinderIntent==='new-build'){
+    resetCustomerFinderNewForm();
+  }
   updateCustomerFinderIntentUi();
   renderCustomerFinder();
+  if(customerFinderIntent==='new-build'){
+    setCustomerFinderNewBuildStep('actions');
+  }
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
-  const input=$('customerFinderSearch');
-  if(input){
+  const input=customerFinderIntent==='new-build'?$('customerFinderSearchExistingAction'):$('customerFinderSearch');
+  if(input && !input.hidden){
     try{input.focus({preventScroll:true});}catch{input.focus();}
   }
 }
@@ -2993,14 +3084,36 @@ function ensureCustomerFinderSheet(){
       </header>
       <div class="component-sheet__body customer-finder__body">
         <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their saved jobs.</p>
-        <button id="customerFinderAddNew" class="primary-action" type="button" data-customer-finder-action="add-new" hidden>Add New Customer</button>
-        <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
-        <section class="customer-finder__layout" aria-label="Customer finder layout">
-          <aside class="customer-finder__list-pane" aria-label="Customers">
-            <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
-          </aside>
-          <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
-        </section>
+        <div id="customerFinderStartActions" class="customer-finder__start-actions" hidden>
+          <button id="customerFinderSearchExistingAction" class="primary-action" type="button" data-customer-finder-action="search-existing">Search Existing Customer</button>
+          <button id="customerFinderAddNewAction" class="ghost-action" type="button" data-customer-finder-action="add-new">Add New Customer</button>
+        </div>
+        <div id="customerFinderSearchBlock" hidden>
+          <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
+          <section class="customer-finder__layout" aria-label="Customer finder layout">
+            <aside class="customer-finder__list-pane" aria-label="Customers">
+              <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
+            </aside>
+            <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
+          </section>
+          <button class="ghost-action customer-finder__back" type="button" data-customer-finder-action="back-to-actions" hidden>Back</button>
+        </div>
+        <form id="customerFinderNewForm" class="customer-finder__new-form" hidden>
+          <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" placeholder="Customer name" autocomplete="name" /></label>
+          <label><span>Phone</span><input id="customerFinderNewPhone" type="text" placeholder="Phone" autocomplete="tel" /></label>
+          <label><span>Email</span><input id="customerFinderNewEmail" type="email" placeholder="Email" autocomplete="email" /></label>
+          <label class="customer-finder__new-form-full"><span>Address Line 1</span><input id="customerFinderNewAddress1" type="text" placeholder="Address line 1" autocomplete="address-line1" /></label>
+          <label class="customer-finder__new-form-full"><span>Address Line 2</span><input id="customerFinderNewAddress2" type="text" placeholder="Address line 2" autocomplete="address-line2" /></label>
+          <label><span>Suburb / Locality</span><input id="customerFinderNewSuburb" type="text" placeholder="Suburb / locality" autocomplete="address-level3" /></label>
+          <label><span>City / Town</span><input id="customerFinderNewCity" type="text" placeholder="City / town" autocomplete="address-level2" /></label>
+          <label><span>Region / State</span><input id="customerFinderNewRegion" type="text" placeholder="Region / state" autocomplete="address-level1" /></label>
+          <label><span>Postcode / ZIP</span><input id="customerFinderNewPostcode" type="text" placeholder="Postcode / ZIP" autocomplete="postal-code" /></label>
+          <label class="customer-finder__new-form-full"><span>Country</span><input id="customerFinderNewCountry" type="text" placeholder="Country" value="New Zealand" autocomplete="country-name" /></label>
+          <div class="customer-finder__new-form-actions">
+            <button class="ghost-action" type="button" data-customer-finder-action="back-to-actions">Back</button>
+            <button class="primary-action" type="button" data-customer-finder-action="submit-new">Start Build</button>
+          </div>
+        </form>
       </div>
     </section>
   `;
@@ -3022,6 +3135,20 @@ function ensureCustomerFinderSheet(){
       }
       if(action==='add-new'){
         handleAddCustomerForNewBuild();
+        return;
+      }
+      if(action==='search-existing'){
+        setCustomerFinderNewBuildStep('search');
+        return;
+      }
+      if(action==='back-to-actions'){
+        if(customerFinderIntent==='new-build'){
+          setCustomerFinderNewBuildStep('actions');
+        }
+        return;
+      }
+      if(action==='submit-new'){
+        handleCreateCustomerFromNewBuildForm();
         return;
       }
     }
@@ -3086,6 +3213,13 @@ function ensureCustomerFinderSheet(){
       customerFinderSearch=searchInput.value||'';
       customerFinderSelectedKey='';
       renderCustomerFinder();
+    });
+  }
+  const newForm=sheet.querySelector('#customerFinderNewForm');
+  if(newForm){
+    newForm.addEventListener('submit',(event)=>{
+      event.preventDefault();
+      handleCreateCustomerFromNewBuildForm();
     });
   }
   document.addEventListener('keydown',(event)=>{

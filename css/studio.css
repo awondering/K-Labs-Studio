@@ -1225,6 +1225,73 @@ body.component-sheet-open .workshop-back-to-top{
   gap:10px;
 }
 
+.customer-finder__start-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.customer-finder__start-actions .primary-action,
+.customer-finder__start-actions .ghost-action,
+.customer-finder__back{
+  width:100%;
+}
+
+#customerFinderSearchBlock{
+  display:grid;
+  gap:10px;
+}
+
+.customer-finder__back{
+  justify-self:start;
+}
+
+.customer-finder__new-form{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+
+.customer-finder__new-form label{
+  display:grid;
+  gap:5px;
+}
+
+.customer-finder__new-form label span{
+  color:#c5beaf;
+  font-size:10px;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+}
+
+.customer-finder__new-form input{
+  width:100%;
+  border:1px solid rgba(144,139,130,.34);
+  border-radius:10px;
+  padding:10px;
+  background:rgba(9,12,13,.88);
+  color:#efe8da;
+  font:500 13px/1.2 "Manrope",system-ui,sans-serif;
+}
+
+.customer-finder__new-form input:focus{
+  outline:none;
+  border-color:rgba(206,44,58,.62);
+  box-shadow:0 0 0 2px rgba(206,44,58,.18);
+}
+
+.customer-finder__new-form-full{
+  grid-column:1 / -1;
+}
+
+.customer-finder__new-form-actions{
+  grid-column:1 / -1;
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  margin-top:4px;
+}
+
 .customer-finder__layout{
   display:grid;
   grid-template-columns:minmax(240px,300px) minmax(0,1fr);
@@ -1379,6 +1446,14 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 @media (max-width:760px){
+  .customer-finder__start-actions{
+    grid-template-columns:1fr;
+  }
+
+  .customer-finder__new-form{
+    grid-template-columns:1fr;
+  }
+
   .customer-finder__layout{
     grid-template-columns:1fr;
     height:auto;
