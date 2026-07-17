@@ -16,6 +16,7 @@ const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
 const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
+const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
@@ -1410,11 +1411,35 @@ function bindSelectedBlankControls(){
   });
 }
 function persistBuildRecord(currentQuote){
+  syncMissingComponentLibraryData(currentQuote);
   const savedAt=new Date().toISOString();
   const records=Store.get('klabs-workshop-builds',[]);
   const record={...quoteForPersistence(currentQuote),savedAt};
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
+}
+function syncMissingComponentLibraryData(currentQuote){
+  const persisted=quoteForPersistence(currentQuote);
+  const customCategoryKeys=new Set(getCustomCategoryNames().map(normalizeNameKey));
+  const rows=Array.isArray(persisted&&persisted.components)?persisted.components:[];
+  rows.forEach((row)=>{
+    const category=String(row&&row.category||'').trim();
+    const categoryKey=normalizeNameKey(category);
+    if(!categoryKey || isBlankCategory(category) || !customCategoryKeys.has(categoryKey))return;
+    const existing=findComponentLibraryRecordByName(category);
+    if(!existing){
+      upsertComponentLibraryRecord(category,row);
+      return;
+    }
+    const existingHasCost=existing.cost!==undefined && numberOrZero(existing.cost)>0;
+    const rowHasCost=numberOrZero(row&&row.cost)>0;
+    const existingHasDescription=!!specificationValue(existing.description);
+    const existingHasSupplier=!!specificationValue(existing.supplier);
+    const shouldBackfill=(!existingHasCost && rowHasCost) || (!existingHasDescription && specificationValue(row&&row.description)) || (!existingHasSupplier && specificationValue(row&&row.supplier));
+    if(shouldBackfill){
+      upsertComponentLibraryRecord(category,{...existing,...row});
+    }
+  });
 }
 function saveBlankLibrarySearch(value){
   blankLibrarySearch=String(value||'');
@@ -1624,7 +1649,8 @@ function ensureChoicePicker(){
       renderChoicePickerOptions($('choicePickerSearch').value);
       return;
     }
-    addCustomChoice(name);
+    const sourceComponent=(activeChoicePicker.index>=0 && quote.components[activeChoicePicker.index])?quote.components[activeChoicePicker.index]:null;
+    addCustomChoice(name,{sourceComponent});
     applyChoiceSelection(name);
     closeComponentSheet();
   });
@@ -1663,7 +1689,7 @@ function ensureChoicePicker(){
         nextName=`${base} ${index}`;
         index+=1;
       }
-      addCustomChoice(nextName);
+      addCustomChoice(nextName,{cloneFromName:selectedName});
     }
     if($('choicePickerSheet') && !$('choicePickerSheet').hidden){
       renderChoicePickerOptions($('choicePickerSearch').value);
@@ -1687,6 +1713,138 @@ function customChoiceNames(type){
 function saveCustomChoiceNames(type,names){
   if(type==='supplier'){saveCustomSupplierNames(names);return;}
   saveCustomCategoryNames(names);
+}
+function componentLibraryCostValue(record){
+  const source=record&&typeof record==='object'?record:{};
+  if(source.cost!==undefined && source.cost!==null && source.cost!=='')return numberOrZero(source.cost);
+  if(source.unitCost!==undefined && source.unitCost!==null && source.unitCost!=='')return numberOrZero(source.unitCost);
+  if(source.unitPrice!==undefined && source.unitPrice!==null && source.unitPrice!=='')return numberOrZero(source.unitPrice);
+  if(source.price!==undefined && source.price!==null && source.price!=='')return numberOrZero(source.price);
+  return undefined;
+}
+function componentLibraryRecords(){
+  const stored=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
+  if(!Array.isArray(stored))return[];
+  return stored
+    .filter((record)=>record&&typeof record==='object')
+    .map((record)=>({
+      name:String(record.name||'').trim(),
+      category:String(record.category||'').trim(),
+      supplier:String(record.supplier||'').trim(),
+      description:String(record.description||'').trim(),
+      customerLabel:String(record.customerLabel||'').trim(),
+      unit:String(record.unit||'').trim(),
+      quantity:Number.isFinite(Number(record.quantity))?Number(record.quantity):undefined,
+      cost:componentLibraryCostValue(record),
+    }))
+    .filter((record)=>!!normalizeNameKey(record.name));
+}
+function saveComponentLibraryRecords(records){
+  const safeRecords=(Array.isArray(records)?records:[])
+    .filter((record)=>record&&typeof record==='object'&&normalizeNameKey(record.name))
+    .map((record)=>({
+      name:String(record.name||'').trim(),
+      category:String(record.category||'').trim(),
+      supplier:String(record.supplier||'').trim(),
+      description:String(record.description||'').trim(),
+      customerLabel:String(record.customerLabel||'').trim(),
+      unit:String(record.unit||'').trim(),
+      quantity:Number.isFinite(Number(record.quantity))?Number(record.quantity):undefined,
+      cost:componentLibraryCostValue(record),
+    }));
+  Store.set(COMPONENT_LIBRARY_STORAGE_KEY,safeRecords);
+}
+function findComponentLibraryRecordByName(name){
+  const nameKey=normalizeNameKey(name);
+  if(!nameKey)return null;
+  const records=componentLibraryRecords();
+  return records.find((record)=>normalizeNameKey(record.name)===nameKey)||null;
+}
+function upsertComponentLibraryRecord(name,sourceComponent){
+  const normalizedName=String(name||'').trim();
+  const normalizedKey=normalizeNameKey(normalizedName);
+  if(!normalizedKey)return;
+  const item=sourceComponent&&typeof sourceComponent==='object'?sourceComponent:{};
+  const nextRecord={
+    name:normalizedName,
+    category:normalizedName,
+    supplier:String(item.supplier||'').trim(),
+    description:String(item.description||'').trim(),
+    customerLabel:String(item.customerLabel||'').trim(),
+    unit:String(item.unit||'').trim(),
+    quantity:Number.isFinite(Number(item.quantity))?Number(item.quantity):undefined,
+    cost:componentLibraryCostValue(item),
+  };
+  const records=componentLibraryRecords();
+  const existingIndex=records.findIndex((record)=>normalizeNameKey(record.name)===normalizedKey);
+  if(existingIndex>=0){
+    records[existingIndex]=nextRecord;
+  }else{
+    records.unshift(nextRecord);
+  }
+  saveComponentLibraryRecords(records);
+}
+function renameComponentLibraryRecord(fromName,toName){
+  const fromKey=normalizeNameKey(fromName);
+  const toKey=normalizeNameKey(toName);
+  if(!fromKey || !toKey)return;
+  const records=componentLibraryRecords();
+  const targetIndex=records.findIndex((record)=>normalizeNameKey(record.name)===fromKey);
+  if(targetIndex<0)return;
+  records[targetIndex]={
+    ...records[targetIndex],
+    name:String(toName||'').trim(),
+    category:String(toName||'').trim(),
+  };
+  saveComponentLibraryRecords(records);
+}
+function duplicateComponentLibraryRecord(fromName,toName){
+  const existing=findComponentLibraryRecordByName(fromName);
+  if(!existing)return;
+  const toKey=normalizeNameKey(toName);
+  const records=componentLibraryRecords().filter((record)=>normalizeNameKey(record.name)!==toKey);
+  records.unshift({
+    ...existing,
+    name:String(toName||'').trim(),
+    category:String(toName||'').trim(),
+  });
+  saveComponentLibraryRecords(records);
+}
+function removeComponentLibraryRecord(name){
+  const targetKey=normalizeNameKey(name);
+  if(!targetKey)return;
+  const records=componentLibraryRecords().filter((record)=>normalizeNameKey(record.name)!==targetKey);
+  saveComponentLibraryRecords(records);
+}
+function applyComponentLibraryRecordToRow(index,name){
+  if(index<0 || !quote.components[index])return;
+  const record=findComponentLibraryRecordByName(name);
+  if(!record)return;
+  const row=quote.components[index];
+  if(specificationValue(record.supplier))row.supplier=record.supplier;
+  if(specificationValue(record.description))row.description=record.description;
+  if(specificationValue(record.customerLabel))row.customerLabel=record.customerLabel;
+  if(specificationValue(record.unit))row.unit=record.unit;
+  if(Number.isFinite(Number(record.quantity)))row.quantity=Number(record.quantity);
+  if(record.cost!==undefined)row.cost=numberOrZero(record.cost);
+  saveQuoteCurrent();
+  markQuoteDirty();
+}
+function syncComponentRowEditorInputs(index){
+  const row=quote.components[index];
+  if(!row)return;
+  const descriptionInput=document.querySelector(`#quoteComponentsList [data-component-key="description"][data-component-index="${index}"]`);
+  if(descriptionInput && document.activeElement!==descriptionInput){
+    descriptionInput.value=String(row.description||'');
+  }
+  const costInput=document.querySelector(`#quoteComponentsList [data-component-key="cost"][data-component-index="${index}"]`);
+  if(costInput && document.activeElement!==costInput){
+    costInput.value=String(numberOrZero(row.cost));
+  }
+  const supplierTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-supplier-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
+  if(supplierTrigger){
+    supplierTrigger.textContent=String(row.supplier||'').trim()||'Select supplier';
+  }
 }
 function defaultChoiceNameSet(type){
   const defaults=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES).map(normalizeNameKey);
@@ -1781,7 +1939,8 @@ function blankRowMenuMarkup(blank){
     :`<button class="component-picker-menu__item" data-blank-action="select" data-blank-id="${blankId}" type="button">Select</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
   return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
-function addCustomChoice(name){
+function addCustomChoice(name,options){
+  const context=options&&typeof options==='object'?options:{};
   if(activeChoicePicker.type==='blank'){
     const newBlank=normalizeBlank({id:generateId('blank'),model:name});
     blanks.unshift(newBlank);
@@ -1798,6 +1957,13 @@ function addCustomChoice(name){
     saveCustomChoiceNames(type,customNames);
     const archived=getArchivedChoiceNames(type).filter((value)=>normalizeNameKey(value)!==normalized);
     saveArchivedChoiceNames(type,archived);
+  }
+  if(type==='category'){
+    if(context.cloneFromName){
+      duplicateComponentLibraryRecord(context.cloneFromName,name);
+    }else if(context.sourceComponent && typeof context.sourceComponent==='object'){
+      upsertComponentLibraryRecord(name,context.sourceComponent);
+    }
   }
 }
 function isDefaultChoiceName(type,name){
@@ -1843,6 +2009,9 @@ function renameCustomChoice(fromName,toName,blankId){
     archived.push(fromName);
   }
   saveArchivedChoiceNames(type,archived);
+  if(type==='category'){
+    renameComponentLibraryRecord(fromName,toName);
+  }
   return true;
 }
 function removeCustomChoice(optionName){
@@ -1855,6 +2024,9 @@ function removeCustomChoice(optionName){
     archived.push(optionName);
   }
   saveArchivedChoiceNames(type,archived);
+  if(type==='category'){
+    removeComponentLibraryRecord(optionName);
+  }
 }
 function getChoiceValue(type,item){
   return type==='supplier'?(item&&item.supplier)||'':(item&&item.category)||'';
@@ -1925,6 +2097,10 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
       return;
     }
     setChoiceValue(context.type,context.index,selectedName);
+    if(context.type==='category'){
+      applyComponentLibraryRecordToRow(context.index,selectedName);
+      syncComponentRowEditorInputs(context.index);
+    }
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
     if(trigger){
@@ -2505,6 +2681,7 @@ function quoteForPersistence(currentQuote){
   return normalizeQuote({...source,components:persistedComponents});
 }
 function persistQuoteRecord(currentQuote){
+  syncMissingComponentLibraryData(currentQuote);
   const savedAt=new Date().toISOString();
   const records=Store.get('klabs-workshop-quotes',[]);
   const record={...quoteForPersistence(currentQuote),savedAt};
