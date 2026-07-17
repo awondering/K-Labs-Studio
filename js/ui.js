@@ -775,7 +775,7 @@ function setWorkshopSectionCollapsed(sectionId,collapsed){
   if(trigger){trigger.setAttribute('aria-expanded',String(!collapsed));}
 }
 function collapseWorkshopSections(){
-  ['workshopCustomerBody','workshopBuildSpecsBody','workshopBuildCostsBody','workshopLabourBody','workshopQuoteSummaryBody'].forEach((id)=>{
+  ['workshopCustomerBody','workshopBuildSpecsBody','workshopBuildCostsBody','workshopQuoteSummaryBody'].forEach((id)=>{
     setWorkshopSectionCollapsed(id,true);
   });
 }
@@ -2114,24 +2114,18 @@ function persistComponentDraftCleanup(changed){
   markQuoteDirty();
 }
 function buildCostsSummaryData(){
-  const categories=[];
-  const seen=new Set();
+  let componentCount=0;
   let total=0;
   quote.components.forEach((item)=>{
     total+=numberOrZero(item&&item.cost);
     if(!componentRowHasMeaningfulData(item))return;
-    const category=specificationValue(item&&item.category);
-    const fallback=specificationValue(item&&item.description);
-    const label=category||fallback;
-    const key=normalizeNameKey(label);
-    if(!key || seen.has(key))return;
-    seen.add(key);
-    categories.push(label);
+    componentCount+=1;
   });
-  const visible=categories.slice(0,4);
-  const overflow=Math.max(0,categories.length-visible.length);
+  const itemsText=componentCount>0
+    ?`${componentCount} component${componentCount===1?'':'s'} selected`
+    :'Select rod components';
   return {
-    itemsText:visible.length?(overflow>0?`${visible.join(' · ')} +${overflow} more`:visible.join(' · ')):'No parts added yet',
+    itemsText,
     totalText:`${currency(total)} total`
   };
 }
@@ -3612,7 +3606,7 @@ function renderWorkshopQuote(){
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=false);
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=true);
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Studio';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Build Specifications • Build Costs • Labour • Markup • Build Pricing';
+  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Rod Specification • Build Pricing';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
   if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
   if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';

@@ -206,10 +206,14 @@
           <option value="Mexico"></option>
         </datalist>
 
-        <article class="quote-section quote-section--collapsible" data-internal-only aria-label="Build Specifications">
+        <article class="quote-section quote-section--collapsible" data-internal-only aria-label="Rod Specification">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildSpecsBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Build Specifications</span>
+              <span class="quote-section__toggle-title">Rod Specification</span>
+              <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
+                <span id="workshopBuildCostsSummaryItems"></span>
+                <span id="workshopBuildCostsSummaryTotal"></span>
+              </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
@@ -220,39 +224,12 @@
             <label><span>Fore Grip Length</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
             <label><span>Hook Keeper Position</span><input id="quoteSpecHookKeeperPosition" type="text" placeholder="e.g. Above reel seat" /></label>
             <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Build notes..."></textarea></label>
-          </div>
-        </article>
-
-        <article class="quote-section quote-section--collapsible" data-internal-only>
-          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopBuildCostsBody">
-            <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Build Costs</span>
-              <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildCostsSummaryItems"></span>
-                <span id="workshopBuildCostsSummaryTotal"></span>
-              </span>
-            </span>
-            <b class="quote-section__chevron" aria-hidden="true">▾</b>
-          </button>
-          <div id="workshopBuildCostsBody" class="quote-section__body">
-            <div id="quoteComponentsList" class="quote-components"></div>
-            <div class="quote-actions-row">
-            <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Item</button>
+            <div id="workshopBuildCostsBody" class="quote-grid__full">
+              <div id="quoteComponentsList" class="quote-components"></div>
+              <div class="quote-actions-row">
+              <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Item</button>
+              </div>
             </div>
-          </div>
-        </article>
-
-        <article class="quote-section quote-section--collapsible" data-internal-only>
-          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopLabourBody">
-            <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Labour</span>
-            </span>
-            <b class="quote-section__chevron" aria-hidden="true">▾</b>
-          </button>
-          <div id="workshopLabourBody" class="quote-grid quote-grid--three quote-section__body">
-            <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-            <label id="quoteLabourCostField"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
           </div>
         </article>
 
@@ -264,13 +241,16 @@
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
           <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--three quote-section__body">
+            <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
+            <label id="quoteLabourCostField"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
             <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
             <label id="quoteMarkupPercentField"><span>Markup %</span><input id="quoteMarkupPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
+            <label id="quoteProfitField"><span>Target Profit</span><input id="quoteProfit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteIncludeGstField" class="quote-gst-toggle"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
             <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
             <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
-            <label><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            <label id="quoteProfitField"><span>Target Profit</span><input id="quoteProfit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
           </div>
         </article>
