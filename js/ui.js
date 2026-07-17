@@ -2372,7 +2372,7 @@ function componentRowItemLabel(item){
   if(description)return description;
   const category=specificationValue(item&&item.category);
   if(category && !isBlankCategory(category))return category;
-  return isBlankCategory(item&&item.category)?'Choose blank':'Draft item';
+  return isBlankCategory(item&&item.category)?'Choose blank':'New component';
 }
 function componentRowSupplierLabel(item){
   return specificationValue(item&&item.supplier);
@@ -2438,11 +2438,11 @@ function updateBuildCostsSummary(){
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
-  const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Draft':'Delete Item';
+  const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Component':'Delete Component';
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}"><button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Item / Description</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen part..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Item</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -2543,9 +2543,9 @@ function requestDeleteComponentRow(index){
   const isDraft=componentRowIsEffectivelyEmpty(item);
   hideComponentRowMenu();
   openConfirmDialog({
-    title:isDraft?'Remove Draft':'Delete Item',
-    message:isDraft?'Remove this draft item?':'Delete this item?',
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:isDraft?'Remove Draft':'Delete Item',kind:'danger'}]
+    title:isDraft?'Remove Component':'Delete Component',
+    message:isDraft?'Remove this new component?':'Delete this component?',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:isDraft?'Remove Component':'Delete Component',kind:'danger'}]
   },(action)=>{
     if(action==='delete'){
       removeComponentRow(index);
