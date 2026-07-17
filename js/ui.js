@@ -3243,6 +3243,35 @@ function customerBrowserPrimaryRecord(group){
 function customerBrowserGroups(){
   return customerSavedGroups(customerBrowserSearch);
 }
+function customerBrowserIsGenericTitle(value){
+  const normalized=normalizeNameKey(value);
+  return normalized==='untitled job' || normalized==='untitled build';
+}
+function customerBrowserDisplayTitle(record){
+  const buildName=specificationValue(record&&record.buildName);
+  if(buildName && !customerBrowserIsGenericTitle(buildName))return buildName;
+  const blankName=specificationValue(record&&record.blankName);
+  if(blankName)return blankName;
+  const maker=specificationValue(record&&record.blankMaker);
+  const series=specificationValue(record&&record.blankSeries);
+  const rodDescription=[maker,series].filter(Boolean).join(' ').trim();
+  if(rodDescription)return rodDescription;
+  return 'Saved Job';
+}
+function customerBrowserStatusLabel(entry,record){
+  const source=String(entry&&entry.source||'quote');
+  if(source==='build')return 'Saved Build';
+  const status=normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status));
+  const statusMap={
+    draft:'Draft Quote',
+    sent:'Sent Quote',
+    revised:'Revised Quote',
+    declined:'Declined Quote',
+    expired:'Expired Quote',
+    accepted:'Accepted Quote',
+  };
+  return statusMap[status]||'Saved Quote';
+}
 function renderCustomerBrowser(){
   const listHost=$('customerBrowserList');
   const detailHost=$('customerBrowserDetail');
@@ -3277,11 +3306,11 @@ function renderCustomerBrowser(){
       const source=String(entry&&entry.source||'quote');
       const index=Number(entry&&entry.index);
       const record=entry&&entry.record?entry.record:{};
-      const title=specificationValue(record.buildName)||'Untitled Job';
-      const type=source==='build'?'Build':'Quote';
-      const ref=specificationValue(record.buildNumber)||'Unnumbered';
+      const title=customerBrowserDisplayTitle(record);
+      const statusText=customerBrowserStatusLabel(entry,record);
       const savedAt=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
-      return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(type)} ${escapeHtml(ref)} • Saved ${escapeHtml(savedAt)}</small></button>`;
+      const meta=[statusText,`Saved ${savedAt}`].join(' • ');
+      return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></button>`;
     }).join('')
     : '<div class="component-sheet__empty">No saved jobs for this customer.</div>';
   detailHost.hidden=false;
