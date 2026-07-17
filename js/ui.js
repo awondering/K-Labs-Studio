@@ -607,7 +607,31 @@ function customerSpecificationRows(){
   return rows;
 }
 function customerIncludedPartLabel(item){
-  return customerSafeText(savedComponentDisplayLabel(item));
+  const supplier=specificationValue(item&&item.supplier);
+  const rawLabel=specificationValue(savedComponentDisplayLabel(item));
+  let label=rawLabel;
+  if(supplier && label){
+    const supplierKey=normalizeNameKey(supplier);
+    const labelKey=normalizeNameKey(label);
+    if(labelKey===supplierKey){
+      label='';
+    }else if(labelKey.startsWith(`${supplierKey} `)){
+      label=label.slice(supplier.length).trim();
+    }
+  }
+  if(!label){
+    label=friendlyComponentCategoryName(item&&item.category);
+  }
+  return customerSafeText(label);
+}
+function customerComponentExcludedFromCopy(item){
+  const categoryKey=normalizeNameKey(item&&item.category);
+  if(!categoryKey)return false;
+  return [
+    'freight','shipping','courier','postage',
+    'labour','labor','markup','margin','profit',
+    'gst','tax','discount','admin','overhead','internal'
+  ].some((blocked)=>categoryKey.includes(blocked));
 }
 function customerIncludedParts(){
   if(!Array.isArray(quote.components))return[];
@@ -615,6 +639,7 @@ function customerIncludedParts(){
   quote.components.forEach((item)=>{
     if(!componentRowHasMeaningfulData(item))return;
     if(pendingComponentDraftRows.has(item))return;
+    if(customerComponentExcludedFromCopy(item))return;
     const label=customerIncludedPartLabel(item);
     if(!normalizeNameKey(label))return;
     parts.push(label);
@@ -2342,8 +2367,8 @@ function requestDeleteChoice(optionName,optionId){
     return;
   }
   openConfirmDialog({
-    title:'Delete Item',
-    message:'Delete this custom item from the picker list?',
+    title:'Delete Component',
+    message:'Delete this custom component from the picker list?',
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]
   },(action)=>{
     if(action==='delete'){removeCustomChoice(optionName);}
@@ -2385,13 +2410,10 @@ function componentRowSummaryMetaParts(item){
   if(category && description && normalizeNameKey(category)!==normalizeNameKey(description)){
     parts.push(category);
   }
-  const supplier=componentRowSupplierLabel(item);
-  if(supplier)parts.push(supplier);
   return parts;
 }
 function componentRowCostLabel(item){
-  if(componentRowIsEffectivelyEmpty(item))return'';
-  return currency(item&&item.cost);
+  return '';
 }
 function pruneComponentDraftRows(preserveIndex){
   const keepIndex=Number.isInteger(preserveIndex)?preserveIndex:-1;
@@ -2414,9 +2436,7 @@ function persistComponentDraftCleanup(changed){
 }
 function buildCostsSummaryData(){
   let componentCount=0;
-  let total=0;
   quote.components.forEach((item)=>{
-    total+=numberOrZero(item&&item.cost);
     if(!componentRowHasMeaningfulData(item))return;
     componentCount+=1;
   });
@@ -2425,7 +2445,7 @@ function buildCostsSummaryData(){
     :'Select rod components';
   return {
     itemsText,
-    totalText:`${currency(total)} total`
+    totalText:''
   };
 }
 function updateBuildCostsSummary(){
