@@ -8,6 +8,7 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
+const CHOICE_FAVOURITES_STORAGE_PREFIX='klabs-workshop-favourites-';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
@@ -595,6 +596,21 @@ function favoriteBlankIds(){
   if(!Array.isArray(stored))return new Set();
   return new Set(stored.map((value)=>String(value||'').trim()).filter(Boolean));
 }
+function saveFavoriteBlankIds(ids){
+  const next=Array.from(new Set((ids||[]).map((value)=>String(value||'').trim()).filter(Boolean)));
+  Store.set('klabs-blank-favourites',next);
+}
+function toggleBlankFavourite(blankId){
+  const id=String(blankId||'').trim();
+  if(!id)return;
+  const favourites=favoriteBlankIds();
+  if(favourites.has(id)){
+    favourites.delete(id);
+  }else{
+    favourites.add(id);
+  }
+  saveFavoriteBlankIds(Array.from(favourites));
+}
 function blankIsFavourite(blank){
   if(!blank)return false;
   if(blank.favorite || blank.favourite || blank.isFavorite || blank.isFavourite)return true;
@@ -670,7 +686,7 @@ function selectedBlankSummaryMarkup(blank){
   const lines=selectedBlankSummaryLines(blank);
   const title=escapeHtml(blankModelName(blank)||'Choose Blank');
   const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">⋯</button>`:'';
-  const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Edit Blank</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
+  const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Rename</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
   return blank
     ?`<div class="selected-blank-card" data-selected-blank-state="summary"><div class="selected-blank-card__head"><strong class="selected-blank-card__name">${title}</strong></div><div class="selected-blank-card__summary">${lines.map((line)=>`<div>${escapeHtml(line)}</div>`).join('')}</div><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button>${menuButton}</div>${menu}</div>`
     :`<div class="selected-blank-card selected-blank-card--empty" data-selected-blank-state="empty"><strong class="selected-blank-card__name">Choose Blank</strong><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button></div></div>`;
@@ -680,7 +696,7 @@ function selectedBlankEditMarkup(blank){
   const numberValue=(key)=>escapeHtml(String(numberOrZero(blank&&blank[key])));
   return `
     <div class="selected-blank-card selected-blank-card--edit" data-selected-blank-state="edit">
-      <div class="selected-blank-card__head"><p class="eyebrow">SELECTED BLANK</p><strong>Edit Blank</strong></div>
+      <div class="selected-blank-card__head"><p class="eyebrow">SELECTED BLANK</p><strong>Rename Blank</strong></div>
       <div class="blank-editor-grid selected-blank-edit-grid">
         <label class="blank-editor-grid__full"><span>Blank Name</span><input data-selected-blank-field="model" type="text" value="${escapeHtml(String(blankModelName(blank)||''))}" /></label>
         <label><span>Manufacturer</span><input data-selected-blank-field="maker" type="text" value="${value('maker')}" /></label>
@@ -954,6 +970,62 @@ function saveArchivedChoiceNames(type,names){
 function normalizeNameKey(name){
   return String(name||'').trim().toLowerCase();
 }
+function choiceFavouriteStorageKey(type){
+  if(type==='blank')return 'klabs-blank-favourites';
+  return CHOICE_FAVOURITES_STORAGE_PREFIX+String(type||'category');
+}
+function choiceRecordFavouriteKey(type,record){
+  if(type==='blank')return String(record&&record.id||'').trim();
+  return normalizeNameKey(record&&record.name);
+}
+function getChoiceFavouriteSet(type){
+  if(type==='blank')return favoriteBlankIds();
+  const stored=Store.get(choiceFavouriteStorageKey(type),[]);
+  if(!Array.isArray(stored))return new Set();
+  return new Set(stored.map((value)=>normalizeNameKey(value)).filter(Boolean));
+}
+function saveChoiceFavouriteSet(type,values){
+  const next=Array.from(new Set((values||[]).map((value)=>String(value||'').trim()).filter(Boolean)));
+  if(type==='blank'){
+    saveFavoriteBlankIds(next);
+    return;
+  }
+  Store.set(choiceFavouriteStorageKey(type),next);
+}
+function choiceRecordIsFavourite(type,record){
+  if(type==='blank')return blankIsFavourite(record&&record.blank?record.blank:record);
+  const key=choiceRecordFavouriteKey(type,record);
+  if(!key)return false;
+  return getChoiceFavouriteSet(type).has(key);
+}
+function toggleChoiceRecordFavourite(type,record){
+  const key=choiceRecordFavouriteKey(type,record);
+  if(!key)return;
+  if(type==='blank'){
+    toggleBlankFavourite(key);
+    return;
+  }
+  const favourites=getChoiceFavouriteSet(type);
+  if(favourites.has(key)){
+    favourites.delete(key);
+  }else{
+    favourites.add(key);
+  }
+  saveChoiceFavouriteSet(type,Array.from(favourites));
+}
+function compareChoiceRecordNames(left,right){
+  return String(left&&left.name||'').localeCompare(String(right&&right.name||''),undefined,{sensitivity:'base'});
+}
+function sortChoiceRecords(type,records){
+  return records.slice().sort((left,right)=>{
+    const favouriteDiff=Number(choiceRecordIsFavourite(type,right))-Number(choiceRecordIsFavourite(type,left));
+    if(favouriteDiff)return favouriteDiff;
+    if(type==='blank'){
+      return compareBlankDisplayNames(left.blank||left,right.blank||right);
+    }
+    return compareChoiceRecordNames(left,right);
+  });
+}
 function allComponentNameOptions(){
   const defaults=DEFAULT_CATEGORY_NAMES.slice();
   const defaultKeys=new Set(defaults.map(normalizeNameKey));
@@ -966,7 +1038,8 @@ function componentOptionRecords(query){
   const all=defaults.concat(customNames);
   const normalized=normalizeNameKey(query);
   const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
-  return all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
+  const visible=all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
+  return sortChoiceRecords('category',visible);
 }
 function supplierOptionRecords(query){
   const defaults=DEFAULT_SUPPLIER_NAMES.map((name)=>({name,isCustom:false}));
@@ -974,19 +1047,39 @@ function supplierOptionRecords(query){
   const all=defaults.concat(customNames);
   const normalized=normalizeNameKey(query);
   const archived=new Set(getArchivedChoiceNames('supplier').map(normalizeNameKey));
-  return all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
+  const visible=all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
+  return sortChoiceRecords('supplier',visible);
 }
 function blankOptionRecords(query){
   const normalized=normalizeNameKey(query);
-  return blanks
+  return sortChoiceRecords('blank',blanks
     .filter((blank)=>!blank.archived)
     .map((blank)=>({id:blank.id,name:blankDisplayName(blank),isCustom:true,blank}))
-    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized))
-    .sort((left,right)=>{
-      const favoriteDiff=Number(blankIsFavourite(right.blank))-Number(blankIsFavourite(left.blank));
-      if(favoriteDiff)return favoriteDiff;
-      return compareBlankDisplayNames(left.blank,right.blank);
-    });
+    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized)));
+}
+function uniqueChoiceName(baseName,type){
+  const normalizedBase=String(baseName||'').trim()||'Custom Item';
+  const keySet=new Set();
+  if(type==='blank'){
+    blanks.forEach((blank)=>keySet.add(normalizeNameKey(blankDisplayName(blank))));
+  }else{
+    recordsForChoiceType(type,'').forEach((record)=>keySet.add(normalizeNameKey(record.name)));
+  }
+  let nextName=normalizedBase;
+  let suffix=2;
+  while(keySet.has(normalizeNameKey(nextName))){
+    nextName=`${normalizedBase} ${suffix}`;
+    suffix+=1;
+  }
+  return nextName;
+}
+function duplicateChoice(optionName,optionId){
+  if(activeChoicePicker.type==='blank'){
+    duplicateBlank(optionId);
+    return;
+  }
+  const duplicateName=uniqueChoiceName(`${optionName||'Custom Item'} Copy`,activeChoicePicker.type);
+  addCustomChoice(duplicateName);
 }
 function ensureChoicePicker(){
   if($('choicePickerSheet'))return;
@@ -1005,8 +1098,9 @@ function ensureChoicePicker(){
         <input id="choicePickerSearch" class="component-sheet__search" type="text" placeholder="Search" autocomplete="off" spellcheck="false" />
         <div id="choicePickerList" class="component-sheet__list"></div>
         <div id="choicePickerMenu" class="component-picker-menu" hidden>
+          <button id="choicePickerMenuSelect" class="component-picker-menu__item" type="button">Select</button>
           <button id="choicePickerMenuRename" class="component-picker-menu__item" type="button">Rename</button>
-          <button id="choicePickerMenuDuplicate" class="component-picker-menu__item" type="button" hidden>Duplicate</button>
+          <button id="choicePickerMenuDuplicate" class="component-picker-menu__item" type="button">Duplicate</button>
           <button id="choicePickerMenuDelete" class="component-picker-menu__item" type="button">Delete</button>
         </div>
         <button id="choicePickerAdd" class="component-sheet__add" type="button">+ Add Custom Item</button>
@@ -1040,6 +1134,15 @@ function ensureChoicePicker(){
       hideChoicePickerMenu();
       closeComponentSheet();
       applyChoiceSelection(selectedName,selectedId,pickerContext);
+      return;
+    }
+    const favouriteButton=event.target.closest('button[data-choice-favourite-option]');
+    if(favouriteButton){
+      const optionName=favouriteButton.getAttribute('data-choice-favourite-option')||'';
+      const optionId=favouriteButton.getAttribute('data-choice-favourite-id')||'';
+      const optionRecord={name:optionName,id:optionId,blank:findBlankById(optionId)};
+      toggleChoiceRecordFavourite(activeChoicePicker.type,optionRecord);
+      renderChoicePickerOptions($('choicePickerSearch')?$('choicePickerSearch').value:'');
       return;
     }
     const deleteButton=event.target.closest('button[data-choice-delete-option]');
@@ -1112,11 +1215,21 @@ function ensureChoicePicker(){
     startChoiceEditor('rename',activeChoiceMenu.name);
     hideChoicePickerMenu();
   });
-  $('choicePickerMenuDuplicate').addEventListener('click',()=>{
-    if(!activeChoiceMenu.open || activeChoicePicker.type!=='blank')return;
-    const blankId=activeChoiceMenu.id;
+  $('choicePickerMenuSelect').addEventListener('click',()=>{
+    if(!activeChoiceMenu.open)return;
+    const pickerContext={...activeChoicePicker};
+    const selectedName=activeChoiceMenu.name;
+    const selectedId=activeChoiceMenu.id;
     hideChoicePickerMenu();
-    duplicateBlank(blankId);
+    closeComponentSheet();
+    applyChoiceSelection(selectedName,selectedId,pickerContext);
+  });
+  $('choicePickerMenuDuplicate').addEventListener('click',()=>{
+    if(!activeChoiceMenu.open)return;
+    const optionName=activeChoiceMenu.name;
+    const optionId=activeChoiceMenu.id;
+    hideChoicePickerMenu();
+    duplicateChoice(optionName,optionId);
     if($('choicePickerSheet') && !$('choicePickerSheet').hidden){
       renderChoicePickerOptions($('choicePickerSearch').value);
     }
@@ -1191,10 +1304,10 @@ function toggleChoicePickerMenu(triggerEl,optionName,optionId){
     name:optionName,
     id:optionId,
     top:Math.max(8,triggerRect.bottom-panelRect.top+6),
-    left:Math.max(8,Math.min(panelRect.width-156,triggerRect.right-panelRect.left-144)),
+    left:Math.max(8,Math.min(panelRect.width-172,triggerRect.right-panelRect.left-164)),
     open:true,
   };
-  positionRowMenu(menu,triggerEl,panel,144);
+  positionRowMenu(menu,triggerEl,panel,164);
   menu.hidden=false;
 }
 function hideBlankRowMenu(){
@@ -1202,14 +1315,18 @@ function hideBlankRowMenu(){
   document.querySelectorAll('[data-blank-menu-trigger]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
 }
 function syncChoicePickerMenuActions(){
+  const selectButton=$('choicePickerMenuSelect');
   const renameButton=$('choicePickerMenuRename');
   const duplicateButton=$('choicePickerMenuDuplicate');
   const deleteButton=$('choicePickerMenuDelete');
-  if(!renameButton || !duplicateButton || !deleteButton)return;
+  if(!selectButton || !renameButton || !duplicateButton || !deleteButton)return;
   const isBlank=activeChoicePicker.type==='blank';
-  renameButton.textContent=isBlank?'Edit Blank':'Rename';
-  renameButton.setAttribute('aria-label',isBlank?'Edit this blank':'Rename this item');
-  duplicateButton.hidden=!isBlank;
+  selectButton.textContent='Select';
+  selectButton.setAttribute('aria-label','Select this item');
+  renameButton.textContent='Rename';
+  renameButton.setAttribute('aria-label',isBlank?'Rename this blank':'Rename this item');
+  duplicateButton.hidden=false;
+  duplicateButton.setAttribute('aria-label','Duplicate this item');
   deleteButton.textContent='Delete';
   deleteButton.setAttribute('aria-label',isBlank?'Delete this blank':'Delete this item');
 }
@@ -1226,9 +1343,7 @@ function toggleBlankRowMenu(triggerEl,blankId){
 }
 function blankRowMenuMarkup(blank){
   const blankId=escapeHtml(blank.id);
-  const actions=blank.archived
-    ?`<button class="component-picker-menu__item" data-blank-action="restore" data-blank-id="${blankId}" type="button">Restore</button><button class="component-picker-menu__item" data-blank-action="edit" data-blank-id="${blankId}" type="button">Edit Blank</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`
-    :`<button class="component-picker-menu__item" data-blank-action="edit" data-blank-id="${blankId}" type="button">Edit Blank</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
+  const actions=`<button class="component-picker-menu__item" data-blank-action="select" data-blank-id="${blankId}" type="button">Select</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
   return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
 function addCustomChoice(name){
@@ -1334,7 +1449,7 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
     if(trigger){
-      trigger.textContent=selectedName|| (context.type==='supplier'?'Select supplier':'Select category');
+      trigger.textContent=selectedName|| (context.type==='supplier'?'Select supplier':'Select component');
     }
     updateQuoteSummary();
   }
@@ -1343,6 +1458,35 @@ function recordsForChoiceType(type,query){
   if(type==='supplier')return supplierOptionRecords(query).map((record)=>({...record,id:''}));
   if(type==='blank')return blankOptionRecords(query);
   return componentOptionRecords(query).map((record)=>({...record,id:''}));
+}
+function choicePickerSecondaryText(type,item){
+  if(type==='blank'){
+    const blank=item&&item.blank;
+    if(!blank)return '';
+    const line=[blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean);
+    return line.join(' • ');
+  }
+  return item&&item.isCustom?'Custom option':'';
+}
+function choicePickerTitleForCategory(index){
+  const categoryValue=getChoiceValue('category',quote.components[index])||'';
+  const key=normalizeNameKey(categoryValue);
+  if(!key)return 'Select Component';
+  if(key.includes('blank'))return 'Select Blank';
+  if(key.includes('reel'))return 'Select Reel Seat';
+  if(key.includes('guide'))return 'Select Guide Set';
+  if(key.includes('tip'))return 'Select Tip Top';
+  if(key.includes('grip'))return 'Select Grip';
+  if(key.includes('winding'))return 'Select Winding Checks';
+  if(key.includes('hook'))return 'Select Hook Keeper';
+  if(key.includes('thread') || key.includes('finish') || key.includes('decal'))return 'Select Thread & Finish';
+  if(key.includes('butt'))return 'Select Butt Cap';
+  return 'Select Component';
+}
+function choicePickerTitle(type,index){
+  if(type==='blank')return 'Select Blank';
+  if(type==='supplier')return 'Select Supplier';
+  return choicePickerTitleForCategory(index);
 }
 function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
@@ -1361,7 +1505,12 @@ function renderChoicePickerOptions(query){
   }
   const rowsMarkup=options.map((item)=>{
     const hasMenu=choicePickerSupportsContextMenu();
-    return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
+    const isFavourite=choiceRecordIsFavourite(activeChoicePicker.type,item);
+    const secondary=choicePickerSecondaryText(activeChoicePicker.type,item);
+    const actionsMarkup=hasMenu
+      ?`<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-label="${isFavourite?'Remove from favourites':'Add to favourites'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">${isFavourite?'★':'☆'}</span></button><button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button></div>`
+      :'';
+    return `<div class="component-sheet__row"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${actionsMarkup}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup+addInlineMarkup;
 }
@@ -1452,13 +1601,13 @@ function openChoicePicker(type,index,openerEl){
   hideChoicePickerMenu();
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   if($('choicePickerSearch'))$('choicePickerSearch').value='';
-  if($('choicePickerTitle'))$('choicePickerTitle').textContent=type==='supplier'?'Select Supplier':type==='blank'?'Select Blank':'Select Category';
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(type,index);
   const addButton=$('choicePickerAdd');
   if(addButton){
-    addButton.textContent=type==='supplier'?'+ Add Custom Supplier':type==='blank'?'+ Add Blank':'+ Add Custom Category';
+    addButton.textContent=type==='supplier'?'+ Add Supplier':type==='blank'?'+ Add Blank':'+ Add Component';
     addButton.hidden=type==='blank';
   }
-  if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'New supplier name':type==='blank'?'New blank name':'New category name';
+  if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder=type==='supplier'?'Supplier name':type==='blank'?'Blank name':'Component name';
   renderChoicePickerOptions('');
   bindChoicePickerViewportHandlers();
   scheduleChoicePickerViewportSync(40);
@@ -1489,7 +1638,7 @@ function renderQuoteComponents(){
           <button class="component-row-delete" data-component-action="delete-row" data-component-index="${i}" type="button" aria-label="Delete build cost row ${i+1}">×</button>
         </div>
         <div class="quote-component-row__fields">
-          <label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label>
+          <label class="quote-component-field quote-component-field--category"><span>Component</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select component')}</span><b>▾</b></button></label>
           <label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${i}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label>
           <label class="quote-component-field quote-component-field--description"><span>Description</span><input data-component-index="${i}" data-component-key="description" type="text" placeholder="Enter description..." value="${escapeHtml(item.description||'')}" /></label>
           <label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${i}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label>
@@ -2391,7 +2540,7 @@ function openBlankEditor(blankId){
   activeBlankEditorId=blankId||'';
   const editing=findBlankById(activeBlankEditorId);
   const blank=editing?normalizeBlank(editing):normalizeBlank({id:generateId('blank')});
-  if($('blankEditorTitle'))$('blankEditorTitle').textContent=editing?'Edit Blank':'Add Blank';
+  if($('blankEditorTitle'))$('blankEditorTitle').textContent=editing?'Rename Blank':'Add Blank';
   if($('blankEditorMaker'))$('blankEditorMaker').value=blank.maker;
   if($('blankEditorSeries'))$('blankEditorSeries').value=blank.series;
   if($('blankEditorModel'))$('blankEditorModel').value=blank.model;
@@ -2545,15 +2694,22 @@ function renderBlanks(){
   const host=$('blankCards');
   if(!host)return;
   hideBlankRowMenu();
-  const filtered=blanks.filter((blank)=>blankMatchesSearch(blank,blankLibrarySearch));
+  const filtered=blanks
+    .filter((blank)=>!blank.archived)
+    .filter((blank)=>blankMatchesSearch(blank,blankLibrarySearch))
+    .sort((left,right)=>{
+      const favoriteDiff=Number(blankIsFavourite(right))-Number(blankIsFavourite(left));
+      if(favoriteDiff)return favoriteDiff;
+      return compareBlankDisplayNames(left,right);
+    });
   if(!filtered.length){
     host.innerHTML='<div class="empty-card">No blanks match your search.</div>';
     return;
   }
   host.innerHTML=filtered.map((blank)=>{
     const idx=blanks.findIndex((item)=>item.id===blank.id);
-    const archiveTag=blank.archived?'<small class="blank-card__archive">Archived</small>':'';
-    return `<article class="module-card blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" tabindex="0" role="button" aria-label="Load blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.series||'Series n/a')} • ${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em><em>First ${blank.fg} mm • Guides ${blank.gc} mm • Target ${blank.ts} mm • Cost ${currency(blank.cost)}</em>${archiveTag}<div class="blank-card__actions"><button class="ghost-action blank-card__load" data-blank-action="load" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button">Load</button>${blankRowMenuMarkup(blank)}</div></article>`;
+    const isFavourite=blankIsFavourite(blank);
+    return `<article class="module-card blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.series||'Series n/a')} • ${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em><em>First ${blank.fg} mm • Guides ${blank.gc} • Target ${blank.ts} • Cost ${currency(blank.cost)}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Remove from favourites':'Add to favourites'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">${isFavourite?'★':'☆'}</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
   }).join('');
 }
 function bindBlankLibraryControls(){
@@ -2569,6 +2725,13 @@ function bindBlankLibraryControls(){
   const host=$('blankCards');
   if(host){
     host.addEventListener('click',(event)=>{
+      const favouriteButton=event.target.closest('[data-blank-favourite-toggle]');
+      if(favouriteButton){
+        const blankId=favouriteButton.getAttribute('data-blank-id')||'';
+        toggleBlankFavourite(blankId);
+        renderBlanks();
+        return;
+      }
       const menuTrigger=event.target.closest('[data-blank-menu-trigger]');
       if(menuTrigger){
         event.preventDefault();
@@ -2583,18 +2746,13 @@ function bindBlankLibraryControls(){
       const blank=findBlankById(blankId);
       if(!blank)return;
       hideBlankRowMenu();
-      if(action==='load'){
+      if(action==='select'){
         const idx=Number(button.getAttribute('data-blank-index'));
         loadBlank(Number.isFinite(idx)?idx:blanks.findIndex((item)=>item.id===blankId));
       }
-      if(action==='edit'){openBlankEditor(blankId);}
+      if(action==='rename'){openBlankEditor(blankId);}
       if(action==='duplicate'){duplicateBlank(blankId);}
       if(action==='delete'){requestDeleteBlank(blank);}
-      if(action==='restore'){
-        blank.archived=false;
-        saveBlankLibrary();
-        renderBlanks();
-      }
     });
     host.addEventListener('keydown',(event)=>{
       const row=event.target.closest('[data-blank-row]');
