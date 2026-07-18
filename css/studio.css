@@ -471,6 +471,15 @@ body.component-sheet-open .workshop-back-to-top{
   color:#ece4d7;
 }
 
+.topbar{
+  justify-content:flex-start;
+}
+
+.topbar .brand-lockup{
+  flex:1;
+  min-width:0;
+}
+
 [hidden]{display:none!important}
 
 .screen{
@@ -527,20 +536,8 @@ body.component-sheet-open .workshop-back-to-top{
 .rod-blank-visual__head{
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-start;
   gap:10px;
-}
-
-.rod-blank-visual__badge{
-  padding:4px 8px;
-  border-radius:999px;
-  border:1px solid rgba(186,31,44,.16);
-  background:rgba(186,31,44,.08);
-  color:#d8d1c4;
-  font-size:8px;
-  font-weight:800;
-  letter-spacing:.16em;
-  text-transform:uppercase;
 }
 
 .rod-blank-visual svg{
