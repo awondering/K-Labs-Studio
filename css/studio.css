@@ -641,17 +641,19 @@ body.component-sheet-open .workshop-back-to-top{
 #settingsScreen{
   display:grid;
   align-content:start;
-  gap:8px;
+  gap:10px;
+  justify-items:start;
 }
 
 #settingsScreen .settings-card{
-  width:min(100%,456px);
+  width:min(100%,472px);
   margin-right:auto;
-  padding:14px;
+  padding:12px 14px;
+  border-radius:14px;
 }
 
 #settingsScreen .settings-card > h2{
-  margin:0 0 4px;
+  margin:0 0 6px;
   font-size:14px;
   letter-spacing:.02em;
   text-transform:none;
@@ -660,15 +662,15 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsScreen .settings-row{
   display:grid;
-  grid-template-columns:max-content minmax(0,1fr);
+  grid-template-columns:minmax(148px,max-content) minmax(0,1fr);
   align-items:center;
-  column-gap:10px;
-  padding:6px 0;
+  column-gap:12px;
+  padding:7px 0;
   border-bottom:0;
 }
 
 #settingsScreen .settings-row > span{
-  font-size:12px;
+  font-size:11px;
   letter-spacing:.08em;
   text-transform:uppercase;
   color:var(--muted);
@@ -685,16 +687,16 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsScreen .settings-card[aria-label="Preferences"]{
   display:grid;
-  grid-template-columns:max-content minmax(0,1fr);
-  column-gap:10px;
-  row-gap:8px;
-  width:min(100%,456px);
+  grid-template-columns:minmax(148px,max-content) minmax(0,1fr);
+  column-gap:12px;
+  row-gap:9px;
+  width:min(100%,472px);
   margin-right:auto;
   overflow:hidden;
 }
 
 #settingsScreen .settings-card[aria-label="Preferences"] h2{
-  margin:0;
+  margin:0 0 2px;
   grid-column:1/-1;
 }
 
@@ -706,7 +708,7 @@ body.component-sheet-open .workshop-back-to-top{
   display:block;
   margin:0;
   white-space:nowrap;
-  font-size:12px;
+  font-size:11px;
   letter-spacing:.08em;
   text-transform:uppercase;
   color:var(--muted);
@@ -716,8 +718,8 @@ body.component-sheet-open .workshop-back-to-top{
 #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-row,
 #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-column{
   display:flex;
-  flex-wrap:nowrap;
-  gap:10px;
+  flex-wrap:wrap;
+  gap:8px;
   justify-content:flex-start;
   align-items:center;
   min-width:0;
@@ -727,17 +729,19 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button{
-  min-height:32px;
-  padding:6px 12px;
+  min-height:34px;
+  padding:6px 10px;
   border-radius:10px;
   font-size:11px;
   font-weight:700;
   letter-spacing:.04em;
-  line-height:1.15;
+  line-height:1.2;
   width:auto;
-  flex:0 0 auto;
+  flex:0 1 auto;
+  min-width:124px;
   max-width:100%;
-  white-space:nowrap;
+  white-space:normal;
+  text-align:center;
 }
 
 #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-column{
@@ -746,6 +750,16 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button:not(:disabled){
   cursor:pointer;
+}
+
+#settingsScreen input[type="checkbox"]:not(:disabled){
+  cursor:pointer;
+}
+
+#settingsScreen input[type="number"],
+#settingsScreen input[type="text"],
+#settingsScreen input[type="email"]{
+  cursor:text;
 }
 
 #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button:hover:not(:disabled),
@@ -764,11 +778,12 @@ body.component-sheet-open .workshop-back-to-top{
 @media (max-width:860px){
   #settingsScreen .settings-card{
     width:100%;
+    padding:12px;
   }
 
   #settingsScreen .settings-row{
     grid-template-columns:1fr;
-    row-gap:8px;
+    row-gap:6px;
   }
 
   #settingsScreen .settings-row > strong{
@@ -779,6 +794,7 @@ body.component-sheet-open .workshop-back-to-top{
   #settingsScreen .settings-card[aria-label="Preferences"]{
     grid-template-columns:1fr;
     column-gap:0;
+    row-gap:8px;
   }
 
   #settingsScreen .settings-card[aria-label="Preferences"] .settings-preferences-group{
@@ -789,12 +805,17 @@ body.component-sheet-open .workshop-back-to-top{
   #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-column{
     flex-wrap:wrap;
   }
+
+  #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button{
+    min-width:0;
+    flex:1 1 158px;
+  }
 }
 
 #settingsTaxRate{
-  width:86px;
-  min-height:30px;
-  padding:5px 7px;
+  width:92px;
+  min-height:34px;
+  padding:6px 8px;
   border-radius:8px;
   border:1px solid rgba(214,210,200,.2);
   background:linear-gradient(180deg,#161a1c,#0e1113);
