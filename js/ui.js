@@ -20,6 +20,8 @@ const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
+const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
+const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy','yyyy-mm-dd'];
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
@@ -93,10 +95,20 @@ function save(){
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function currency(value){return '$'+numberOrZero(value).toFixed(2)}
+function normalizeMeasurementUnits(value){
+  const next=String(value||'').trim().toLowerCase();
+  return MEASUREMENT_UNIT_VALUES.includes(next)?next:'metric';
+}
+function normalizeDateFormat(value){
+  const next=String(value||'').trim().toLowerCase();
+  return DATE_FORMAT_VALUES.includes(next)?next:'dd/mm/yyyy';
+}
 function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
-  return {taxRate,taxEnabled};
+  const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
+  const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
+  return {taxRate,taxEnabled,measurementUnits,dateFormat};
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
@@ -107,8 +119,65 @@ function activeTaxRate(){
 function activeTaxEnabled(){
   return (studioSettings&&typeof studioSettings.taxEnabled==='boolean')?studioSettings.taxEnabled:true;
 }
+function activeMeasurementUnits(){
+  return normalizeMeasurementUnits(studioSettings&&studioSettings.measurementUnits);
+}
+function activeDateFormat(){
+  return normalizeDateFormat(studioSettings&&studioSettings.dateFormat);
+}
 function roundMoney(value){
   return Math.round(numberOrZero(value)*100)/100;
+}
+function mmToInches(valueMm){
+  return numberOrZero(valueMm)/25.4;
+}
+function inchesToMm(valueInches){
+  return numberOrZero(valueInches)*25.4;
+}
+function trimTrailingZeroes(text){
+  return String(text||'').replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1');
+}
+function formatDecimal(value,decimals){
+  return trimTrailingZeroes(numberOrZero(value).toFixed(Math.max(0,decimals)));
+}
+function measurementUnitSuffix(){
+  return activeMeasurementUnits()==='imperial'?'in':'mm';
+}
+function measurementUnitLabel(){
+  return activeMeasurementUnits()==='imperial'?'Imperial (in)':'Metric (mm)';
+}
+function formatMeasurementNumber(valueMm,options){
+  const settings=options&&typeof options==='object'?options:{};
+  if(activeMeasurementUnits()==='imperial'){
+    return formatDecimal(mmToInches(valueMm),settings.decimalsImperial===undefined?2:settings.decimalsImperial);
+  }
+  return formatDecimal(valueMm,settings.decimalsMetric===undefined?1:settings.decimalsMetric);
+}
+function formatMeasurementValue(valueMm,options){
+  return `${formatMeasurementNumber(valueMm,options)} ${measurementUnitSuffix()}`;
+}
+function parseMeasurementInputValue(rawValue){
+  const parsed=Number(rawValue);
+  if(!Number.isFinite(parsed))return NaN;
+  return activeMeasurementUnits()==='imperial'?inchesToMm(parsed):parsed;
+}
+function formatDateDisplay(value,options){
+  if(!value)return 'Unknown';
+  const settings=options&&typeof options==='object'?options:{};
+  const date=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(date.getTime()))return 'Unknown';
+  const day=String(date.getDate()).padStart(2,'0');
+  const month=String(date.getMonth()+1).padStart(2,'0');
+  const year=String(date.getFullYear());
+  let dateText='';
+  const format=normalizeDateFormat(settings.dateFormat||activeDateFormat());
+  if(format==='mm/dd/yyyy')dateText=`${month}/${day}/${year}`;
+  else if(format==='yyyy-mm-dd')dateText=`${year}-${month}-${day}`;
+  else dateText=`${day}/${month}/${year}`;
+  if(!settings.includeTime)return dateText;
+  const hours=String(date.getHours()).padStart(2,'0');
+  const minutes=String(date.getMinutes()).padStart(2,'0');
+  return `${dateText} ${hours}:${minutes}`;
 }
 function isBlankCategory(category){
   return normalizeNameKey(category)==='blank';
@@ -3072,7 +3141,7 @@ function customerFinderWorkRowMarkup(entry){
   const refText=isBuild
     ? (specificationValue(record.buildNumber)?`${typeLabel} ${specificationValue(record.buildNumber)}`:typeLabel)
     : typeLabel;
-  const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+  const savedAtText=record.savedAt?formatDateDisplay(record.savedAt,{includeTime:true}):'Unknown save time';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
   return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
@@ -3499,7 +3568,7 @@ function renderCustomerBrowser(){
       const record=entry&&entry.record?entry.record:{};
       const title=customerBrowserDisplayTitle(record);
       const statusText=customerBrowserStatusLabel(entry,record);
-      const savedAt=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+      const savedAt=record.savedAt?formatDateDisplay(record.savedAt,{includeTime:true}):'Unknown save time';
       const meta=[statusText,`Saved ${savedAt}`].join(' • ');
       return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></button>`;
     }).join('')
@@ -3676,7 +3745,7 @@ function savedBuildDisplayStatus(record){
   return normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status))==='accepted'?'Accepted':(normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status)).replace(/^./,(letter)=>letter.toUpperCase()));
 }
 function savedBuildDisplayDate(value){
-  return value?new Date(value).toLocaleString():'Unknown';
+  return formatDateDisplay(value,{includeTime:true});
 }
 function savedBuildRowMarkup(entry){
   const record=entry.record;
@@ -3935,7 +4004,7 @@ function setControlValue(field,rawValue,options){
   if(!cfg)return;
   const opts=options||{};
   if(isLayoutLocked() && !opts.force)return;
-  const parsed=Number(rawValue);
+  const parsed=field==='guideCount'?Number(rawValue):parseMeasurementInputValue(rawValue);
   if(!Number.isFinite(parsed))return;
   const nextValue=clampValue(parsed,cfg.min,cfg.max);
   if(state[cfg.key]===nextValue){
@@ -4024,7 +4093,8 @@ function bindLayoutControls(){
         el.blur();
         return;
       }
-      const value=String(state[controlMeta[field].key]);
+      const stateValue=state[controlMeta[field].key];
+      const value=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,{decimalsMetric:1,decimalsImperial:2});
       if(el.textContent!==value){el.textContent=value;}
       const range=document.createRange();
       range.selectNodeContents(el);
@@ -4037,7 +4107,12 @@ function bindLayoutControls(){
     });
     el.addEventListener('beforeinput',(event)=>{
       if(event.inputType==='deleteContentBackward' || event.inputType==='deleteContentForward' || event.inputType==='insertFromPaste')return;
-      if(event.data && /[^0-9]/.test(event.data)){event.preventDefault();}
+      if(!event.data)return;
+      if(field==='guideCount'){
+        if(/[^0-9]/.test(event.data)){event.preventDefault();}
+        return;
+      }
+      if(/[^0-9.]/.test(event.data)){event.preventDefault();}
     });
     el.addEventListener('keydown',(event)=>{
       if(event.key==='ArrowUp'){event.preventDefault();changeControlValue(field,1,{persist:true});return;}
@@ -4047,7 +4122,12 @@ function bindLayoutControls(){
         el.blur();
         focusLayoutField(nextLayoutField(field));
       }
-      if(event.key==='Escape'){event.preventDefault();el.textContent=String(state[controlMeta[field].key]);el.blur();}
+      if(event.key==='Escape'){
+        event.preventDefault();
+        const stateValue=state[controlMeta[field].key];
+        el.textContent=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,{decimalsMetric:1,decimalsImperial:2});
+        el.blur();
+      }
     });
   });
   document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
@@ -5003,8 +5083,21 @@ function onScreenChange(screenId){
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+    syncSettingsPreferenceControls();
   }
   updateWorkshopBackToTopVisibility();
+}
+function syncSettingsPreferenceControls(){
+  document.querySelectorAll('[data-settings-units]').forEach((button)=>{
+    const selected=button.getAttribute('data-settings-units')===activeMeasurementUnits();
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
+    const selected=button.getAttribute('data-settings-date-format')===activeDateFormat();
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
 }
 function bindSettingsControls(){
   const taxEnabledInput=$('settingsTaxEnabled');
@@ -5046,6 +5139,36 @@ function bindSettingsControls(){
       taxRateInput.blur();
     });
   }
+  document.querySelectorAll('[data-settings-units]').forEach((button)=>{
+    if(button.getAttribute('data-settings-bound')==='true')return;
+    button.setAttribute('data-settings-bound','true');
+    button.addEventListener('click',()=>{
+      const next=normalizeMeasurementUnits(button.getAttribute('data-settings-units'));
+      if(studioSettings.measurementUnits===next)return;
+      studioSettings.measurementUnits=next;
+      saveStudioSettings();
+      syncSettingsPreferenceControls();
+      render();
+      renderBlanks();
+      renderBuilds();
+      renderCustomerBrowser();
+    });
+  });
+  document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
+    if(button.getAttribute('data-settings-bound')==='true')return;
+    button.setAttribute('data-settings-bound','true');
+    button.addEventListener('click',()=>{
+      const next=normalizeDateFormat(button.getAttribute('data-settings-date-format'));
+      if(studioSettings.dateFormat===next)return;
+      studioSettings.dateFormat=next;
+      saveStudioSettings();
+      syncSettingsPreferenceControls();
+      renderBuilds();
+      renderCustomerBrowser();
+      renderCustomerFinder();
+    });
+  });
+  syncSettingsPreferenceControls();
   const demoButton=$('loadDemoBuildBtn');
   if(!demoButton)return;
   demoButton.addEventListener('click',()=>{
@@ -5066,26 +5189,34 @@ function render(){
   if(appEl){appEl.classList.toggle('locked',!!state.locked);}
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
     const field=el.getAttribute('data-field');
-    if(field && controlMeta[field] && document.activeElement!==el){el.textContent=String(state[controlMeta[field].key]);}
+    if(field && controlMeta[field] && document.activeElement!==el){
+      const value=state[controlMeta[field].key];
+      el.textContent=field==='guideCount'?String(value):formatMeasurementNumber(value,{decimalsMetric:1,decimalsImperial:2});
+    }
     const editable=!state.locked;
     el.setAttribute('contenteditable',editable?'true':'false');
     el.setAttribute('aria-readonly',editable?'false':'true');
   });
+  const units=measurementUnitSuffix();
+  if($('layoutFirstGuideTitle'))$('layoutFirstGuideTitle').textContent=`First Guide From Tip (${units})`;
+  if($('layoutTargetStripperTitle'))$('layoutTargetStripperTitle').textContent=`Target Stripper Position (${units})`;
+  if($('layoutFirstGuideMeta'))$('layoutFirstGuideMeta').textContent=units;
+  if($('layoutTargetStripperMeta'))$('layoutTargetStripperMeta').textContent=units;
   document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
     button.disabled=!!state.locked;
   });
   const guideSpacingCards=$('guideSpacingCards');
   if(guideSpacingCards){
     guideSpacingCards.innerHTML=r.rows.map((row,i)=>`
-      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${row.cum.toFixed(1)} millimeters. Spacing ${row.spacing.toFixed(1)} millimeters" aria-current="${i===state.workshopIndex?'true':'false'}">
+      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}. Spacing ${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
           <span>Guide ${row.g}</span>
         </div>
         <div class="guide-spacing-row__meta">
           <small>Position</small>
-          <span>${row.cum.toFixed(1)} mm</span>
+          <span>${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}</span>
         </div>
-        <strong>Spacing ${row.spacing.toFixed(1)} mm</strong>
+        <strong>Spacing ${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}</strong>
       </article>
     `).join('');
   }
@@ -5100,8 +5231,8 @@ function render(){
   const row=r.rows[Math.max(0,Math.min(state.workshopIndex,r.rows.length-1))]||r.rows[0];
   if($('workshopProgress'))$('workshopProgress').textContent='Guide '+row.g+' of '+state.guideCount;
   if($('workshopGuide'))$('workshopGuide').textContent='Guide '+row.g;
-  if($('workshopMeasure'))$('workshopMeasure').textContent=row.cum.toFixed(1);
-  if($('workshopSpacing'))$('workshopSpacing').textContent='Spacing from previous: '+row.spacing.toFixed(1)+' mm';
+  if($('workshopMeasure'))$('workshopMeasure').textContent=formatMeasurementNumber(row.cum,{decimalsMetric:1,decimalsImperial:2});
+  if($('workshopSpacing'))$('workshopSpacing').textContent='Spacing from previous: '+formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2});
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
   const workshopScreen=$('workshopScreen');
   if(workshopScreen && workshopScreen.classList.contains('active')){renderWorkshopQuote();}

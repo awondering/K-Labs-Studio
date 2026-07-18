@@ -67,6 +67,35 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   display:grid;
   gap:15px;
   max-width:760px;
+.settings-preferences-group{
+  display:grid;
+  gap:10px;
+}
+.settings-preferences-group>span{
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.settings-choice-row,
+.settings-choice-column{
+  display:grid;
+  gap:8px;
+}
+.settings-choice-row{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.settings-choice-button{
+  min-height:42px;
+  justify-content:center;
+  text-align:center;
+}
+.settings-choice-button.active,
+.settings-choice-button[aria-pressed="true"]{
+  background:linear-gradient(160deg,rgba(198,255,220,.2),rgba(80,210,176,.15));
+  border-color:rgba(126,244,206,.65);
+  color:#eafff6;
+}
   position:relative;
   z-index:2;
 }

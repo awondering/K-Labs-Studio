@@ -86,23 +86,23 @@
         </article>
 
         <article class="layout-control-card">
-          <div class="layout-control-card__title">First Guide From Tip (mm)</div>
+          <div id="layoutFirstGuideTitle" class="layout-control-card__title">First Guide From Tip (mm)</div>
           <div class="layout-control-card__body layout-control-card__body--compact">
             <button class="layout-control-card__button" data-action="decrement" data-target-field="firstGuide" type="button" aria-label="Decrease first guide">−</button>
             <div class="layout-control-card__value" data-field="firstGuide" contenteditable="true" spellcheck="false" role="textbox" aria-label="First guide from tip"></div>
             <button class="layout-control-card__button" data-action="increment" data-target-field="firstGuide" type="button" aria-label="Increase first guide">+</button>
           </div>
-          <div class="layout-control-card__meta">mm</div>
+          <div id="layoutFirstGuideMeta" class="layout-control-card__meta">mm</div>
         </article>
 
         <article class="layout-control-card">
-          <div class="layout-control-card__title">Target Stripper Position (mm)</div>
+          <div id="layoutTargetStripperTitle" class="layout-control-card__title">Target Stripper Position (mm)</div>
           <div class="layout-control-card__body layout-control-card__body--compact">
             <button class="layout-control-card__button" data-action="decrement" data-target-field="targetStripper" type="button" aria-label="Decrease target stripper position">−</button>
             <div class="layout-control-card__value" data-field="targetStripper" contenteditable="true" spellcheck="false" role="textbox" aria-label="Target stripper position"></div>
             <button class="layout-control-card__button" data-action="increment" data-target-field="targetStripper" type="button" aria-label="Increase target stripper position">+</button>
           </div>
-          <div class="layout-control-card__meta">mm</div>
+          <div id="layoutTargetStripperMeta" class="layout-control-card__meta">mm</div>
         </article>
 
         <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">
@@ -308,6 +308,24 @@
           <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
         </div>
       </div>
+      <article class="settings-card" aria-label="Preferences">
+        <h2>Preferences</h2>
+        <div class="settings-preferences-group">
+          <span>Measurement Units</span>
+          <div class="settings-choice-row" role="group" aria-label="Measurement Units">
+            <button id="settingsUnitsMetric" class="ghost-action settings-choice-button" type="button" data-settings-units="metric" aria-pressed="true">Metric (mm)</button>
+            <button id="settingsUnitsImperial" class="ghost-action settings-choice-button" type="button" data-settings-units="imperial" aria-pressed="false">Imperial (in)</button>
+          </div>
+        </div>
+        <div class="settings-preferences-group">
+          <span>Date Format</span>
+          <div class="settings-choice-column" role="group" aria-label="Date Format">
+            <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="dd/mm/yyyy" aria-pressed="true">DD/MM/YYYY</button>
+            <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="mm/dd/yyyy" aria-pressed="false">MM/DD/YYYY</button>
+            <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="yyyy-mm-dd" aria-pressed="false">YYYY-MM-DD</button>
+          </div>
+        </div>
+      </article>
       <article class="settings-card" aria-label="Component workflow">
         <h2>Components</h2>
         <p>Components are created directly from Build Costs while building. The picker automatically remembers saved entries for future builds.</p>
