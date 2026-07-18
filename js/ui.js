@@ -4470,14 +4470,6 @@ function bindWorkshopQuoteBuilder(){
       openCustomerFinderSheet('new-build');
     });
   }
-  const findCustomerBtn=$('findCustomerBtn');
-  if(findCustomerBtn && findCustomerBtn.getAttribute('data-find-customer-bound')!=='true'){
-    findCustomerBtn.setAttribute('data-find-customer-bound','true');
-    findCustomerBtn.addEventListener('click',()=>{
-      preserveWorkshopQuoteOnEntry=true;
-      goScreen('customersScreen');
-    });
-  }
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -4710,7 +4702,7 @@ function renderWorkshopQuote(){
   if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Rod Specification • Build Pricing';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
   if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
-  if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer name entered';
+  if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer selected';
   updateQuoteActionPriority();
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput && document.activeElement!==includeTaxInput){

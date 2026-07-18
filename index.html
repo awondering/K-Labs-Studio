@@ -153,14 +153,13 @@
 
         <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
           <button id="newQuoteEntryBtn" class="primary-action quote-builder__new-quote" type="button">New Build</button>
-          <button id="findCustomerBtn" class="ghost-action quote-builder__find-customer" type="button">Find Customer</button>
         </div>
 
         <article class="quote-section quote-section--collapsible">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="true" aria-controls="workshopCustomerBody">
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Customer</span>
-              <small id="quoteCustomerSummaryName" class="quote-section__subtle">No customer name entered</small>
+              <small id="quoteCustomerSummaryName" class="quote-section__subtle">No customer selected</small>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
@@ -260,16 +259,8 @@
             <h2>Build Actions</h2>
           </header>
           <div class="quote-actions-grid quote-section__body">
-            <button id="saveQuoteBtn" class="primary-action" type="button">Save Build Job</button>
+            <button id="saveQuoteBtn" class="primary-action" type="button">Save Build</button>
             <button id="deleteCurrentBuildBtn" class="ghost-action" type="button">Delete Build</button>
-            <details class="quote-actions-secondary" id="customerCopyActions">
-              <summary>Customer Copy</summary>
-              <div class="quote-actions-secondary__list">
-                <button id="viewCustomerCopyBtn" class="ghost-action" type="button">View Customer Copy</button>
-                <button id="emailQuoteBtn" class="ghost-action" type="button">Email Customer Copy</button>
-                <button id="printQuoteBtn" class="ghost-action" type="button">Print Customer Copy</button>
-              </div>
-            </details>
           </div>
         </article>
       </section>

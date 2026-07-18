@@ -1108,12 +1108,11 @@ body.component-sheet-open .workshop-back-to-top{
 }
 #workshopScreen .quote-builder__entry-actions{
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  grid-template-columns:1fr;
   gap:8px;
 }
 
-#workshopScreen .quote-builder__new-quote,
-#workshopScreen .quote-builder__find-customer{
+#workshopScreen .quote-builder__new-quote{
   min-height:52px;
   width:100%;
   border-radius:12px;
