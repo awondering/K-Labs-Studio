@@ -24,6 +24,7 @@ const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
 const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy','yyyy-mm-dd'];
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
+const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
@@ -1039,7 +1040,7 @@ function setWorkshopSectionCollapsed(sectionId,collapsed){
   if(trigger){trigger.setAttribute('aria-expanded',String(!collapsed));}
 }
 function collapseWorkshopSections(){
-  ['workshopCustomerBody','workshopBuildSpecsBody','workshopBuildCostsBody','workshopQuoteSummaryBody'].forEach((id)=>{
+  WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
     setWorkshopSectionCollapsed(id,true);
   });
 }
@@ -2633,7 +2634,7 @@ function buildCostsSummaryData(){
   });
   const itemsText=componentCount>0
     ?`${componentCount} component${componentCount===1?'':'s'} selected`
-    :'Select rod components';
+    :'No components selected';
   return {
     itemsText,
     totalText:''
@@ -2646,6 +2647,12 @@ function updateBuildCostsSummary(){
   const summary=buildCostsSummaryData();
   itemsEl.textContent=summary.itemsText;
   totalEl.textContent=summary.totalText;
+}
+function updateBuildPricingSummary(){
+  const summaryEl=$('workshopBuildPricingSummaryText');
+  if(!summaryEl)return;
+  const price=numberOrZero(quote&&quote.finalCustomerPrice);
+  summaryEl.textContent=price>0?`Customer Price: NZ$${price.toFixed(2)}`:'Not calculated';
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
@@ -4593,11 +4600,17 @@ function bindWorkshopCollapsibleSections(){
     trigger.addEventListener('click',()=>{
       const section=trigger.closest('.quote-section--collapsible');
       if(!section)return;
-      const isCollapsed=section.classList.toggle('quote-section--collapsed');
-      trigger.setAttribute('aria-expanded',String(!isCollapsed));
-      if(!isCollapsed){
+      const bodyId=trigger.getAttribute('aria-controls')||'';
+      const wasCollapsed=section.classList.contains('quote-section--collapsed');
+      if(!bodyId)return;
+      if(wasCollapsed){
+        WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
+          setWorkshopSectionCollapsed(id,id!==bodyId);
+        });
         window.setTimeout(()=>scrollWorkshopSectionIntoView(section),36);
+        return;
       }
+      setWorkshopSectionCollapsed(bodyId,true);
     });
   });
 }
@@ -4855,6 +4868,7 @@ function renderWorkshopQuote(){
     customerSummaryMeta.textContent=secondary;
     customerSummaryMeta.hidden=!secondary;
   }
+  updateBuildPricingSummary();
   updateQuoteActionPriority();
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput && document.activeElement!==includeTaxInput){
@@ -4874,6 +4888,7 @@ function renderWorkshopQuote(){
 function updateQuoteSummary(){
   const math=quoteMaths();
   updateBuildCostsSummary();
+  updateBuildPricingSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);

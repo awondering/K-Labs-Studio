@@ -1226,12 +1226,20 @@ body.component-sheet-open .workshop-back-to-top{
   transform:rotate(-90deg);
 }
 
-#workshopScreen .quote-section--collapsed .quote-section__body{
-  display:none;
+#workshopScreen .quote-section--collapsible .quote-section__body{
+  max-height:1600px;
+  opacity:1;
+  overflow:hidden;
+  padding:14px 15px 15px;
+  transition:max-height .24s ease,opacity .18s ease,padding-top .18s ease,padding-bottom .18s ease;
 }
 
-#workshopScreen .quote-section--collapsible .quote-section__body{
-  padding:14px 15px 15px;
+#workshopScreen .quote-section--collapsed .quote-section__body{
+  max-height:0;
+  opacity:0;
+  padding-top:0;
+  padding-bottom:0;
+  pointer-events:none;
 }
 
 #workshopScreen .quote-components,
