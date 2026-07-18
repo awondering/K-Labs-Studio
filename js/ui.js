@@ -21,6 +21,7 @@ const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
+const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy','yyyy-mm-dd'];
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const BUILD_SPEC_FIELDS=[
@@ -109,12 +110,17 @@ function normalizeDateFormat(value){
   const next=String(value||'').trim().toLowerCase();
   return DATE_FORMAT_VALUES.includes(next)?next:'dd/mm/yyyy';
 }
+function normalizeImperialDisplay(value){
+  const next=String(value||'').trim().toLowerCase();
+  return IMPERIAL_DISPLAY_VALUES.includes(next)?next:'fractional';
+}
 function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
+  const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
-  return {taxRate,taxEnabled,measurementUnits,dateFormat};
+  return {taxRate,taxEnabled,measurementUnits,imperialDisplay,dateFormat};
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
@@ -127,6 +133,9 @@ function activeTaxEnabled(){
 }
 function activeMeasurementUnits(){
   return normalizeMeasurementUnits(studioSettings&&studioSettings.measurementUnits);
+}
+function activeImperialDisplay(){
+  return normalizeImperialDisplay(studioSettings&&studioSettings.imperialDisplay);
 }
 function activeDateFormat(){
   return normalizeDateFormat(studioSettings&&studioSettings.dateFormat);
@@ -146,6 +155,68 @@ function trimTrailingZeroes(text){
 function formatDecimal(value,decimals){
   return trimTrailingZeroes(numberOrZero(value).toFixed(Math.max(0,decimals)));
 }
+function gcd(a,b){
+  let x=Math.abs(Math.round(a));
+  let y=Math.abs(Math.round(b));
+  while(y){
+    const next=x%y;
+    x=y;
+    y=next;
+  }
+  return x||1;
+}
+function formatImperialFractionInches(valueInches,maxDenominator){
+  const denominator=Math.max(2,Math.round(numberOrZero(maxDenominator)||32));
+  const value=numberOrZero(valueInches);
+  const negative=value<0;
+  const absValue=Math.abs(value);
+  let whole=Math.floor(absValue);
+  let numerator=Math.round((absValue-whole)*denominator);
+  if(numerator===denominator){
+    whole+=1;
+    numerator=0;
+  }
+  if(numerator===0){
+    return `${negative?'-':''}${whole}`;
+  }
+  const divisor=gcd(numerator,denominator);
+  const reducedNumerator=numerator/divisor;
+  const reducedDenominator=denominator/divisor;
+  if(whole===0){
+    return `${negative?'-':''}${reducedNumerator}/${reducedDenominator}`;
+  }
+  return `${negative?'-':''}${whole} ${reducedNumerator}/${reducedDenominator}`;
+}
+function parseImperialInchesInput(rawValue){
+  const compact=String(rawValue||'').replace(/inches?|in\.?/gi,' ').trim();
+  if(!compact)return NaN;
+  if(/^[+-]?\d*(?:\.\d+)?$/.test(compact.replace(/\s+/g,''))){
+    const parsed=Number(compact);
+    return Number.isFinite(parsed)?parsed:NaN;
+  }
+  const mixed=compact.match(/^([+-])?\s*(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if(mixed){
+    const sign=mixed[1]==='-'?-1:1;
+    const whole=Number(mixed[2]);
+    const numerator=Number(mixed[3]);
+    const denominator=Number(mixed[4]);
+    if(!Number.isFinite(whole) || !Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator===0){
+      return NaN;
+    }
+    return sign*(whole+(numerator/denominator));
+  }
+  const fraction=compact.match(/^([+-])?\s*(\d+)\s*\/\s*(\d+)$/);
+  if(fraction){
+    const sign=fraction[1]==='-'?-1:1;
+    const numerator=Number(fraction[2]);
+    const denominator=Number(fraction[3]);
+    if(!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator===0){
+      return NaN;
+    }
+    return sign*(numerator/denominator);
+  }
+  return NaN;
+}
 function measurementUnitSuffix(){
   return activeMeasurementUnits()==='imperial'?'in':'mm';
 }
@@ -155,7 +226,12 @@ function measurementUnitLabel(){
 function formatMeasurementNumber(valueMm,options){
   const settings=options&&typeof options==='object'?options:{};
   if(activeMeasurementUnits()==='imperial'){
-    return formatDecimal(mmToInches(valueMm),settings.decimalsImperial===undefined?2:settings.decimalsImperial);
+    const inchesValue=mmToInches(valueMm);
+    if(activeImperialDisplay()==='fractional' && settings.forceDecimal!==true){
+      return formatImperialFractionInches(inchesValue,settings.maxImperialDenominator===undefined?32:settings.maxImperialDenominator);
+    }
+    const decimals=settings.decimalsImperial===undefined?2:settings.decimalsImperial;
+    return numberOrZero(inchesValue).toFixed(Math.max(0,decimals));
   }
   return formatDecimal(valueMm,settings.decimalsMetric===undefined?1:settings.decimalsMetric);
 }
@@ -163,9 +239,13 @@ function formatMeasurementValue(valueMm,options){
   return `${formatMeasurementNumber(valueMm,options)} ${measurementUnitSuffix()}`;
 }
 function parseMeasurementInputValue(rawValue){
+  if(activeMeasurementUnits()==='imperial'){
+    const inches=parseImperialInchesInput(rawValue);
+    if(!Number.isFinite(inches))return NaN;
+    return inchesToMm(inches);
+  }
   const parsed=Number(rawValue);
-  if(!Number.isFinite(parsed))return NaN;
-  return activeMeasurementUnits()==='imperial'?inchesToMm(parsed):parsed;
+  return Number.isFinite(parsed)?parsed:NaN;
 }
 function formatDateDisplay(value,options){
   if(!value)return 'Unknown';
@@ -4274,7 +4354,7 @@ function bindLayoutControls(){
       if(selection){selection.removeAllRanges();selection.addRange(range);}
     });
     el.addEventListener('blur',()=>{
-      const raw=(el.textContent||'').replace(/[^0-9.-]/g,'');
+      const raw=(el.textContent||'').trim();
       setControlValue(field,raw,{persist:true});
     });
     el.addEventListener('beforeinput',(event)=>{
@@ -4284,7 +4364,9 @@ function bindLayoutControls(){
         if(/[^0-9]/.test(event.data)){event.preventDefault();}
         return;
       }
-      if(/[^0-9.]/.test(event.data)){event.preventDefault();}
+      const fractionalActive=activeMeasurementUnits()==='imperial' && activeImperialDisplay()==='fractional';
+      const disallowed=fractionalActive?/[^0-9./\s-]/:/[^0-9.-]/;
+      if(disallowed.test(event.data)){event.preventDefault();}
     });
     el.addEventListener('keydown',(event)=>{
       if(event.key==='ArrowUp'){event.preventDefault();changeControlValue(field,1,{persist:true});return;}
@@ -4365,6 +4447,29 @@ function workshopInputMap(){
     ['quoteBlankName','blankName'],['quoteBlankMaker','blankMaker'],['quoteBlankSeries','blankSeries'],['quoteBlankLength','blankLength'],['quoteBlankPower','blankPower'],['quoteBlankAction','blankAction'],['quoteBlankPieces','blankPieces'],
     ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours']
   ];
+}
+function measurementPlaceholderValue(valueMm){
+  if(activeMeasurementUnits()==='imperial'){
+    if(activeImperialDisplay()==='fractional'){
+      return `${formatMeasurementNumber(valueMm,{maxImperialDenominator:32})} in`;
+    }
+    return `${formatMeasurementNumber(valueMm,{decimalsImperial:2,forceDecimal:true})} in`;
+  }
+  return `${Math.round(numberOrZero(valueMm))} mm`;
+}
+function refreshMeasurementPlaceholders(){
+  const rearGrip=measurementPlaceholderValue(280);
+  const lowerGrip=measurementPlaceholderValue(90);
+  const foreGrip=measurementPlaceholderValue(70);
+  const reelSeat=measurementPlaceholderValue(350);
+  const reelSeatInput=$('quoteSpecReelSeatPosition');
+  const rearGripInput=$('quoteSpecRearGripLength');
+  const lowerGripInput=$('quoteSpecGripBelowReelSeatLength');
+  const foreGripInput=$('quoteSpecForeGripLength');
+  if(reelSeatInput)reelSeatInput.placeholder=`e.g. ${reelSeat} from butt`;
+  if(rearGripInput)rearGripInput.placeholder=`e.g. ${rearGrip}`;
+  if(lowerGripInput)lowerGripInput.placeholder=`e.g. ${lowerGrip}`;
+  if(foreGripInput)foreGripInput.placeholder=`e.g. ${foreGrip}`;
 }
 function bindBuildSpecificationInputs(){
   BUILD_SPEC_FIELDS.forEach((field)=>{
@@ -5267,6 +5372,15 @@ function syncSettingsPreferenceControls(){
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
+  const imperialDisplayGroup=$('settingsImperialDisplayGroup');
+  if(imperialDisplayGroup){
+    imperialDisplayGroup.hidden=activeMeasurementUnits()!=='imperial';
+  }
+  document.querySelectorAll('[data-settings-imperial-display]').forEach((button)=>{
+    const selected=button.getAttribute('data-settings-imperial-display')===activeImperialDisplay();
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
     const selected=button.getAttribute('data-settings-date-format')===activeDateFormat();
     button.classList.toggle('active',selected);
@@ -5323,9 +5437,24 @@ function bindSettingsControls(){
       saveStudioSettings();
       syncSettingsPreferenceControls();
       render();
+      renderWorkshopQuote();
       renderBlanks();
       renderBuilds();
       renderCustomerBrowser();
+    });
+  });
+  document.querySelectorAll('[data-settings-imperial-display]').forEach((button)=>{
+    if(button.getAttribute('data-settings-bound')==='true')return;
+    button.setAttribute('data-settings-bound','true');
+    button.addEventListener('click',()=>{
+      const next=normalizeImperialDisplay(button.getAttribute('data-settings-imperial-display'));
+      if(studioSettings.imperialDisplay===next)return;
+      studioSettings.imperialDisplay=next;
+      saveStudioSettings();
+      syncSettingsPreferenceControls();
+      render();
+      renderWorkshopQuote();
+      renderBlanks();
     });
   });
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
@@ -5363,6 +5492,7 @@ function render(){
   if($('layoutTargetStripperTitle'))$('layoutTargetStripperTitle').textContent=`Target Stripper Position (${units})`;
   if($('layoutFirstGuideMeta'))$('layoutFirstGuideMeta').textContent=units;
   if($('layoutTargetStripperMeta'))$('layoutTargetStripperMeta').textContent=units;
+  refreshMeasurementPlaceholders();
   document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
     button.disabled=!!state.locked;
   });
