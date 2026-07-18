@@ -1559,9 +1559,23 @@ function bindSelectedBlankControls(){
 }
 function persistBuildRecord(currentQuote){
   syncMissingComponentLibraryData(currentQuote);
-  const savedAt=new Date().toISOString();
   const records=Store.get('klabs-workshop-builds',[]);
-  const record={...quoteForPersistence(currentQuote),savedAt};
+  const target=findCurrentSavedBuildTarget();
+  const nowIso=new Date().toISOString();
+  if(target){
+    const createdAt=specificationValue(target.record&&target.record.createdAt)||specificationValue(target.record&&target.record.savedAt)||nowIso;
+    const updatedRecord={
+      ...quoteForPersistence(currentQuote),
+      createdAt,
+      savedAt:nowIso,
+      updatedAt:nowIso,
+    };
+    records.splice(target.index,1);
+    records.unshift(updatedRecord);
+    Store.set('klabs-workshop-builds',records);
+    return {source:'build',index:0,record:updatedRecord};
+  }
+  const record={...quoteForPersistence(currentQuote),createdAt:nowIso,savedAt:nowIso,updatedAt:nowIso};
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
   return {source:'build',index:0,record};
@@ -3650,22 +3664,30 @@ function bindCustomerBrowserControls(){
 }
 function savedBuildSearchText(entry){
   const record=entry&&entry.record?entry.record:{};
-  return [record.buildNumber,record.customerName,record.buildName,record.blankName,record.blankMaker,record.blankSeries,record.savedAt,entry&&entry.source]
+  return [record.customerName,record.buildName,record.blankName,record.blankMaker,record.blankSeries,record.savedAt,record.updatedAt,record.createdAt]
     .map((value)=>String(value||''))
     .join(' ')
     .toLowerCase();
 }
+function savedBuildDisplayCustomerName(record){
+  return specificationValue(record&&record.customerName)||'No Customer';
+}
+function savedBuildDisplayStatus(record){
+  return normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status))==='accepted'?'Accepted':(normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status)).replace(/^./,(letter)=>letter.toUpperCase()));
+}
+function savedBuildDisplayDate(value){
+  return value?new Date(value).toLocaleString():'Unknown';
+}
 function savedBuildRowMarkup(entry){
   const record=entry.record;
-  const sourceLabel=entry.source==='build'?'Saved Job':'Legacy Quote';
-  const title=specificationValue(record.buildName)||specificationValue(record.customerName)||'Untitled Build';
-  const buildRef=specificationValue(record.buildNumber)||'Unnumbered';
-  const customerRef=specificationValue(record.customerName)||'No customer';
-  const blankRef=specificationValue(record.blankName)||'No blank selected';
-  const savedAtText=record.savedAt?new Date(record.savedAt).toLocaleString():'Unknown save time';
+  const customerName=savedBuildDisplayCustomerName(record);
+  const statusText=savedBuildDisplayStatus(record);
+  const createdAtText=savedBuildDisplayDate(record.createdAt||record.savedAt);
+  const updatedAtText=savedBuildDisplayDate(record.updatedAt||record.savedAt);
+  const title=specificationValue(record.buildName)||specificationValue(record.blankName)||'Saved Build';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="module-card blank-card" data-build-row data-build-source="${source}" data-build-index="${index}"><span>${escapeHtml(sourceLabel)}</span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(buildRef)} • ${escapeHtml(customerRef)}</em><em>${escapeHtml(blankRef)} • Saved ${escapeHtml(savedAtText)}</em><div class="blank-card__actions"><button class="ghost-action blank-card__load" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,title)}</div></article>`;
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><span class="saved-build-card__eyebrow">Saved Build</span><strong>${escapeHtml(customerName)}</strong></div><p class="saved-build-card__title">${escapeHtml(title)}</p><div class="saved-build-card__meta"><span>Status</span><strong>${escapeHtml(statusText)}</strong></div><div class="saved-build-card__meta"><span>Created</span><strong>${escapeHtml(createdAtText)}</strong></div><div class="saved-build-card__meta"><span>Last Edited</span><strong>${escapeHtml(updatedAtText)}</strong></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__action" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,customerName)}</div></article>`;
 }
 function savedBuildRowMenuMarkup(entry,title){
   const source=escapeHtml(entry.source);
@@ -3759,9 +3781,22 @@ function renderBuilds(){
   if(!host)return;
   hideSavedBuildRowMenu();
   const query=String(buildsSearch||'').trim().toLowerCase();
-  const records=savedBuildEntries().filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
+  const records=savedBuildRecords()
+    .map((record,index)=>({source:'build',index,record:normalizeQuote(record)}))
+    .sort((left,right)=>{
+      const leftDate=Date.parse(left.record&&left.record.updatedAt||left.record&&left.record.savedAt||'')||0;
+      const rightDate=Date.parse(right.record&&right.record.updatedAt||right.record&&right.record.savedAt||'')||0;
+      return rightDate-leftDate;
+    })
+    .filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
   if(!records.length){
-    host.innerHTML='<div class="empty-card">No saved jobs found.</div>';
+    host.innerHTML='<section class="saved-builds-empty"><h3>No saved builds yet.</h3><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+    const emptyButton=$('savedBuildsEmptyNewBuildBtn');
+    if(emptyButton){
+      emptyButton.addEventListener('click',()=>{
+        startNewBuildFlow();
+      });
+    }
     return;
   }
   host.innerHTML=records.map(savedBuildRowMarkup).join('');
@@ -4899,6 +4934,13 @@ function bindBuildsControls(){
     searchInput.addEventListener('input',()=>{
       buildsSearch=searchInput.value||'';
       renderBuilds();
+    });
+  }
+  const newBuildBtn=$('savedBuildsNewBuildBtn');
+  if(newBuildBtn && newBuildBtn.getAttribute('data-saved-builds-new-bound')!=='true'){
+    newBuildBtn.setAttribute('data-saved-builds-new-bound','true');
+    newBuildBtn.addEventListener('click',()=>{
+      startNewBuildFlow();
     });
   }
   const host=$('buildCards');
