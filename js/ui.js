@@ -537,6 +537,75 @@ function blankComponentFromBlank(blank,currentRow){
 function firstBlankComponentIndex(components){
   return (components||[]).findIndex((item)=>isBlankCategory(item&&item.category));
 }
+function shouldMergeDuplicateComponentCategory(category){
+  const key=normalizeNameKey(category);
+  return !!(key && key!=='other');
+}
+function mergeComponentRecord(primary,secondary){
+  const next={...(primary&&typeof primary==='object'?primary:{}),...(secondary&&typeof secondary==='object'?secondary:{})};
+  const primaryDescription=specificationValue(primary&&primary.description);
+  const secondaryDescription=specificationValue(secondary&&secondary.description);
+  next.description=primaryDescription||secondaryDescription;
+  const primarySupplier=specificationValue(primary&&primary.supplier);
+  const secondarySupplier=specificationValue(secondary&&secondary.supplier);
+  next.supplier=primarySupplier||secondarySupplier;
+  const primaryLabel=specificationValue(primary&&primary.customerLabel);
+  const secondaryLabel=specificationValue(secondary&&secondary.customerLabel);
+  next.customerLabel=primaryLabel||secondaryLabel;
+  const primaryCost=numberOrZero(primary&&primary.cost);
+  const secondaryCost=numberOrZero(secondary&&secondary.cost);
+  next.cost=primaryCost>0?primaryCost:secondaryCost;
+  ['blankId','blankName','blankMaker','blankSeries','blankLength','blankPower','blankAction','blankPieces','blankSku','blankNotes'].forEach((key)=>{
+    const first=specificationValue(primary&&primary[key]);
+    const second=specificationValue(secondary&&secondary[key]);
+    next[key]=first||second;
+  });
+  return normalizeComponent(next);
+}
+function normalizeUniqueComponents(components,options){
+  const settings=options&&typeof options==='object'?options:{};
+  const keepDraftRows=settings.keepDraftRows===true;
+  const rows=Array.isArray(components)?components:[];
+  const next=[];
+  const dedupeIndexByCategory=new Map();
+  rows.forEach((row)=>{
+    const normalized=normalizeComponent(row);
+    if(!componentRowHasMeaningfulData(normalized)){
+      if(keepDraftRows)next.push(normalized);
+      return;
+    }
+    const categoryKey=normalizeNameKey(normalized.category);
+    if(shouldMergeDuplicateComponentCategory(categoryKey) && dedupeIndexByCategory.has(categoryKey)){
+      const existingIndex=dedupeIndexByCategory.get(categoryKey);
+      next[existingIndex]=mergeComponentRecord(next[existingIndex],normalized);
+      return;
+    }
+    const nextIndex=next.length;
+    next.push(normalized);
+    if(shouldMergeDuplicateComponentCategory(categoryKey)){
+      dedupeIndexByCategory.set(categoryKey,nextIndex);
+    }
+  });
+  if(keepDraftRows && !next.some((item)=>!componentRowHasMeaningfulData(item))){
+    next.push(normalizeComponent({category:'',description:'',supplier:'',cost:0}));
+  }
+  return next.length?next:[normalizeComponent({category:'',description:'',supplier:'',cost:0})];
+}
+function enforceSingleSourceComponents(){
+  const before=Array.isArray(quote.components)?quote.components:[];
+  const after=normalizeUniqueComponents(before,{keepDraftRows:true});
+  const changed=JSON.stringify(before)!==JSON.stringify(after);
+  if(!changed)return false;
+  quote.components=after;
+  if(expandedComponentRowIndex>=quote.components.length){
+    expandedComponentRowIndex=quote.components.length-1;
+  }
+  syncQuoteBlankFromComponents();
+  return true;
+}
+function componentRowsForTotals(){
+  return normalizeUniqueComponents(quote.components,{keepDraftRows:false}).filter((item)=>componentRowHasMeaningfulData(item));
+}
 function clearQuoteBlankSelection(){
   quote.blankId='';
   quote.blankName='';
@@ -625,12 +694,10 @@ function normalizePricingDriver(value){
   return 'markup';
 }
 function syncQuotePricing(driver){
+  enforceSingleSourceComponents();
   syncQuoteBlankFromComponents();
-  const buildCostTotal=quote.components.reduce((sum,item)=>{
-    if(isBlankCategory(item&&item.category))return sum;
-    return sum+numberOrZero(item&&item.cost);
-  },0);
-  const internalCost=numberOrZero(quote.blankCost)+buildCostTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
+  const componentsTotal=componentRowsForTotals().reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0);
+  const internalCost=componentsTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
   const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
   let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
   let targetProfit=numberOrZero(quote.targetProfit);
@@ -841,11 +908,12 @@ function firstSavedComponentByCategory(categoryMatchers){
   })||null;
 }
 function blankSpecificationSummary(){
+  const blankComponent=firstSavedComponentByCategory('blank')||firstComponentByCategory('blank');
   const details=[];
-  const blankName=specificationValue(quote.blankName);
-  const blankLength=specificationValue(quote.blankLength);
-  const blankPower=specificationValue(quote.blankPower);
-  const blankAction=specificationValue(quote.blankAction);
+  const blankName=specificationValue(blankComponent&&blankComponent.blankName)||specificationValue(blankComponent&&blankComponent.description)||specificationValue(quote.blankName);
+  const blankLength=specificationValue(blankComponent&&blankComponent.blankLength)||specificationValue(quote.blankLength);
+  const blankPower=specificationValue(blankComponent&&blankComponent.blankPower)||specificationValue(quote.blankPower);
+  const blankAction=specificationValue(blankComponent&&blankComponent.blankAction)||specificationValue(quote.blankAction);
   if(blankName)details.push(blankName);
   if(blankLength)details.push(blankLength);
   if(blankPower)details.push(blankPower);
@@ -1112,7 +1180,7 @@ function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
   const merged={...base,...(inputQuote||{})};
   const components=Array.isArray(inputQuote&&inputQuote.components)&&inputQuote.components.length?inputQuote.components:[{category:'',description:'',supplier:'',cost:0}];
-  merged.components=components.map(normalizeComponent);
+  merged.components=normalizeUniqueComponents(components,{keepDraftRows:true});
   const hasStoredTaxEnabled=(inputQuote&&typeof inputQuote.taxEnabled==='boolean');
   merged.taxEnabled=hasStoredTaxEnabled?inputQuote.taxEnabled:((inputQuote&&typeof inputQuote==='object')?true:activeTaxEnabled());
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
@@ -1142,7 +1210,7 @@ function normalizeQuote(inputQuote){
   migrateBlankWorkflow(merged);
   const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
   const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
-  const internalBuildCost=numberOrZero(merged.blankCost)+merged.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
+  const internalBuildCost=merged.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
   if(!hasFinal && !hasProfit){
     merged.targetProfit=internalBuildCost*(merged.markupPercent/100);
     merged.finalCustomerPrice=internalBuildCost+merged.targetProfit;
@@ -1522,13 +1590,10 @@ function unbindChoicePickerViewportHandlers(){
   clearChoicePickerViewportStyles();
 }
 function quoteMaths(){
+  enforceSingleSourceComponents();
   syncQuotePricing();
-  const blankCost=numberOrZero(quote.blankCost);
-  const buildCostTotal=quote.components.reduce((sum,item)=>{
-    if(isBlankCategory(item&&item.category))return sum;
-    return sum+numberOrZero(item.cost);
-  },0);
-  const materialCost=blankCost+buildCostTotal;
+  const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0);
+  const materialCost=componentTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const internalBuildCost=materialCost+labourCost;
   const markupAmount=numberOrZero(quote.targetProfit);
@@ -2634,6 +2699,7 @@ function setChoiceValue(type,index,value){
       syncQuoteBlankFromComponents();
     }
   }
+  enforceSingleSourceComponents();
   saveQuoteCurrent();
   markQuoteDirty();
 }
@@ -2879,8 +2945,9 @@ function persistComponentDraftCleanup(changed){
   markQuoteDirty();
 }
 function buildCostsSummaryData(){
+  enforceSingleSourceComponents();
   let componentCount=0;
-  quote.components.forEach((item)=>{
+  componentRowsForTotals().forEach((item)=>{
     if(!componentRowHasMeaningfulData(item))return;
     componentCount+=1;
   });
@@ -2904,7 +2971,9 @@ function updateBuildPricingSummary(){
   const summaryEl=$('workshopBuildPricingSummaryText');
   if(!summaryEl)return;
   const price=numberOrZero(quote&&quote.finalCustomerPrice);
-  summaryEl.textContent=price>0?`Customer Price: NZ$${price.toFixed(2)}`:'Not calculated';
+  const componentCount=componentRowsForTotals().length;
+  const componentText=`${componentCount} component${componentCount===1?'':'s'} from Rod Specification`;
+  summaryEl.textContent=price>0?`${componentText} • Customer Price: NZ$${price.toFixed(2)}`:componentText;
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
@@ -3268,7 +3337,7 @@ function bindWorkshopInputFocusStability(){
 function quoteForPersistence(currentQuote){
   const source=currentQuote&&typeof currentQuote==='object'?currentQuote:quote;
   const rawComponents=Array.isArray(source&&source.components)?source.components:[];
-  const persistedComponents=rawComponents
+  const persistedComponents=normalizeUniqueComponents(rawComponents,{keepDraftRows:false})
     .filter((component)=>componentRowHasMeaningfulData(component) && !pendingComponentDraftRows.has(component))
     .map(normalizeComponent);
   return normalizeQuote({...source,components:persistedComponents});
@@ -4968,6 +5037,7 @@ function bindWorkshopQuoteBuilder(){
       if(isBlankCategory(quote.components[i].category)){
         applyBlankComponentToQuote(quote.components[i]);
       }
+      enforceSingleSourceComponents();
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
