@@ -2851,11 +2851,25 @@ function savedBuildEntries(){
     return rightDate-leftDate;
   });
 }
-function customerSavedGroups(searchValue){
+function isValidCustomerName(name){
+  const normalized=normalizeNameKey(name).replace(/\s+/g,' ');
+  if(!normalized)return false;
+  const blockedNames=new Set([
+    'no customer name',
+    'unknown customer',
+    'untitled customer',
+    'blank customer'
+  ]);
+  return !blockedNames.has(normalized);
+}
+function customerSavedGroups(searchValue,options){
+  const settings=options&&typeof options==='object'?options:{};
+  const includeInvalidCustomers=settings.includeInvalidCustomers!==false;
   const grouped=new Map();
   allSavedEntries().forEach((entry)=>{
     const record=entry&&entry.record?entry.record:{};
     const customerName=specificationValue(record.customerName);
+    if(!includeInvalidCustomers && !isValidCustomerName(customerName))return;
     const key=normalizeNameKey(customerName)||'__no_customer__';
     if(!grouped.has(key)){
       grouped.set(key,{key,name:customerName||'No customer name',entries:[]});
@@ -2922,6 +2936,18 @@ function customerFinderDraftFromForm(){
     country:String(($('customerFinderNewCountry')&&$('customerFinderNewCountry').value)||'').trim()||'New Zealand',
   };
 }
+function setCustomerFinderNameValidation(message){
+  const feedback=$('customerFinderNewCustomerNameError');
+  const input=$('customerFinderNewCustomerName');
+  const text=String(message||'').trim();
+  if(feedback){
+    feedback.textContent=text;
+    feedback.hidden=!text;
+  }
+  if(input){
+    input.setAttribute('aria-invalid',text?'true':'false');
+  }
+}
 function resetCustomerFinderNewForm(){
   ['customerFinderNewCustomerName','customerFinderNewPhone','customerFinderNewEmail','customerFinderNewAddress1','customerFinderNewAddress2','customerFinderNewSuburb','customerFinderNewCity','customerFinderNewRegion','customerFinderNewPostcode'].forEach((id)=>{
     const input=$(id);
@@ -2929,6 +2955,7 @@ function resetCustomerFinderNewForm(){
   });
   const country=$('customerFinderNewCountry');
   if(country)country.value='New Zealand';
+  setCustomerFinderNameValidation('');
 }
 function setCustomerFinderNewBuildStep(step){
   customerFinderNewBuildStep=(step==='search' || step==='add')?step:'actions';
@@ -2998,13 +3025,14 @@ function handleAddCustomerForNewBuild(){
 function handleCreateCustomerFromNewBuildForm(){
   const draft=customerFinderDraftFromForm();
   if(!specificationValue(draft.customerName)){
-    alert('Customer name is required.');
+    setCustomerFinderNameValidation('Enter a customer name to continue.');
     const input=$('customerFinderNewCustomerName');
     if(input){
       try{input.focus({preventScroll:true});}catch{input.focus();}
     }
     return;
   }
+  setCustomerFinderNameValidation('');
   closeCustomerFinderSheet();
   runNewBuildStartAction(()=>{
     startFreshQuoteForCustomer(draft);
@@ -3197,6 +3225,7 @@ function ensureCustomerFinderSheet(){
         </div>
         <form id="customerFinderNewForm" class="customer-finder__new-form" hidden>
           <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" placeholder="Customer name" autocomplete="name" /></label>
+          <p id="customerFinderNewCustomerNameError" class="customer-finder__field-error" aria-live="polite" hidden></p>
           <label><span>Phone</span><input id="customerFinderNewPhone" type="text" placeholder="Phone" autocomplete="tel" /></label>
           <label><span>Email</span><input id="customerFinderNewEmail" type="email" placeholder="Email" autocomplete="email" /></label>
           <label class="customer-finder__new-form-full"><span>Address Line 1</span><input id="customerFinderNewAddress1" type="text" placeholder="Address line 1" autocomplete="address-line1" /></label>
@@ -3319,6 +3348,17 @@ function ensureCustomerFinderSheet(){
       handleCreateCustomerFromNewBuildForm();
     });
   }
+  const newNameInput=sheet.querySelector('#customerFinderNewCustomerName');
+  if(newNameInput){
+    newNameInput.addEventListener('input',()=>{
+      if(specificationValue(newNameInput.value)){
+        setCustomerFinderNameValidation('');
+      }
+    });
+    newNameInput.addEventListener('blur',()=>{
+      newNameInput.value=String(newNameInput.value||'').trim();
+    });
+  }
   document.addEventListener('keydown',(event)=>{
     if(event.key==='Escape' && $('customerFinderSheet') && !$('customerFinderSheet').hidden){
       closeCustomerFinderSheet();
@@ -3335,7 +3375,7 @@ function customerBrowserPrimaryRecord(group){
   return sorted[0]&&sorted[0].record?sorted[0].record:{};
 }
 function customerBrowserGroups(){
-  return customerSavedGroups(customerBrowserSearch);
+  return customerSavedGroups(customerBrowserSearch,{includeInvalidCustomers:false});
 }
 function customerBrowserIsGenericTitle(value){
   const normalized=normalizeNameKey(value);
@@ -3366,19 +3406,62 @@ function customerBrowserStatusLabel(entry,record){
   };
   return statusMap[status]||'Saved Quote';
 }
+function customerBrowserLayoutElement(){
+  return document.querySelector('#customersScreen .customers-browser__layout');
+}
+function setCustomerBrowserEmptyLayout(isEmpty){
+  const layout=customerBrowserLayoutElement();
+  if(layout)layout.classList.toggle('is-empty',isEmpty);
+}
+function customerBrowserStartNewCustomer(){
+  openCustomerFinderSheet('new-build');
+  setCustomerFinderNewBuildStep('add');
+}
+function customerBrowserClearSearch(){
+  customerBrowserSearch='';
+  customerBrowserSelectedKey='';
+  customerBrowserEditMode=false;
+  const searchInput=$('customerBrowserSearchInput');
+  if(searchInput)searchInput.value='';
+}
 function renderCustomerBrowser(){
   const listHost=$('customerBrowserList');
   const detailHost=$('customerBrowserDetail');
   if(!listHost || !detailHost)return;
   const groups=customerBrowserGroups();
+  const hasAnyCustomers=customerSavedGroups('',{includeInvalidCustomers:false}).length>0;
+  const hasSearchQuery=specificationValue(customerBrowserSearch).length>0;
   if(!groups.length){
     customerBrowserSelectedKey='';
     customerBrowserEditMode=false;
-    listHost.innerHTML='<div class="component-sheet__empty">No customers matched that search.</div>';
-    detailHost.hidden=true;
-    detailHost.innerHTML='';
+    setCustomerBrowserEmptyLayout(true);
+    listHost.innerHTML='';
+    detailHost.hidden=false;
+    if(hasSearchQuery && hasAnyCustomers){
+      detailHost.innerHTML=`
+        <section class="customers-browser__empty-state" aria-live="polite">
+          <h3>No customers matched that search.</h3>
+          <p>Try another name or clear the search to see all saved customers.</p>
+          <div class="customers-browser__empty-actions">
+            <button class="ghost-action" type="button" data-customer-browser-action="clear-search">Clear Search</button>
+            <button class="primary-action" type="button" data-customer-browser-action="add-new">Add New Customer</button>
+          </div>
+        </section>
+      `;
+      return;
+    }
+    detailHost.innerHTML=`
+      <section class="customers-browser__empty-state" aria-live="polite">
+        <h3>No customers saved yet.</h3>
+        <p>Add a new customer to start your first build record.</p>
+        <div class="customers-browser__empty-actions">
+          <button class="primary-action" type="button" data-customer-browser-action="add-new">Add New Customer</button>
+        </div>
+      </section>
+    `;
     return;
   }
+  setCustomerBrowserEmptyLayout(false);
   if(!groups.some((group)=>group.key===customerBrowserSelectedKey)){
     customerBrowserSelectedKey=groups[0].key;
     customerBrowserEditMode=false;
@@ -3516,6 +3599,15 @@ function bindCustomerBrowserControls(){
       const actionButton=event.target.closest('[data-customer-browser-action]');
       if(actionButton){
         const action=actionButton.getAttribute('data-customer-browser-action')||'';
+        if(action==='add-new'){
+          customerBrowserStartNewCustomer();
+          return;
+        }
+        if(action==='clear-search'){
+          customerBrowserClearSearch();
+          renderCustomerBrowser();
+          return;
+        }
         if(action==='start-build'){
           startNewBuildForCustomerBrowserSelection();
           return;
