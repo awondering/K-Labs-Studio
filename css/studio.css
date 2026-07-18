@@ -628,6 +628,57 @@ body.component-sheet-open .workshop-back-to-top{
   text-transform:uppercase;
 }
 
+.app-shell:has(#settingsScreen.active) .build-pill,
+.app-shell:has(#settingsScreen.active) > .live-build-status,
+.app-shell:has(#settingsScreen.active) > .offline-ready-status{
+  display:none;
+}
+
+#settingsScreen{
+  display:grid;
+  align-content:start;
+  gap:8px;
+}
+
+#settingsScreen .settings-card{
+  width:min(100%,456px);
+  margin-right:auto;
+  padding:14px;
+}
+
+#settingsScreen .settings-card > h2{
+  margin:0 0 4px;
+  font-size:14px;
+  letter-spacing:.02em;
+  text-transform:none;
+  color:#d8d0c3;
+}
+
+#settingsScreen .settings-row{
+  display:grid;
+  grid-template-columns:max-content minmax(0,1fr);
+  align-items:center;
+  column-gap:10px;
+  padding:6px 0;
+  border-bottom:0;
+}
+
+#settingsScreen .settings-row > span{
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+  white-space:nowrap;
+}
+
+#settingsScreen .settings-row > strong{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+}
+
 #settingsScreen .settings-card[aria-label="Preferences"]{
   display:grid;
   grid-template-columns:max-content minmax(0,1fr);
@@ -707,8 +758,21 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 @media (max-width:860px){
-  #settingsScreen .settings-card[aria-label="Preferences"]{
+  #settingsScreen .settings-card{
     width:100%;
+  }
+
+  #settingsScreen .settings-row{
+    grid-template-columns:1fr;
+    row-gap:8px;
+  }
+
+  #settingsScreen .settings-row > strong{
+    margin-left:0;
+    justify-content:flex-start;
+  }
+
+  #settingsScreen .settings-card[aria-label="Preferences"]{
     grid-template-columns:1fr;
     column-gap:0;
   }

@@ -299,15 +299,11 @@
 
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
-      <div class="settings-card">
-        <div><span>Version</span><strong>BUILD 051.2</strong></div>
-        <div><span>Install status</span><strong id="settingsOfflineStatus">OFFLINE READY</strong></div>
-        <div><span>Tax Enabled (Default)</span><strong><input id="settingsTaxEnabled" type="checkbox" checked /></strong></div>
-        <div><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
-        <div class="settings-card__actions">
-          <button id="loadDemoBuildBtn" class="primary-action" type="button">Load Demo Build</button>
-        </div>
-      </div>
+      <article class="settings-card" aria-label="Pricing and Tax">
+        <h2>Pricing &amp; Tax</h2>
+        <div class="settings-row"><span>Tax Enabled (Default)</span><strong><input id="settingsTaxEnabled" type="checkbox" checked /></strong></div>
+        <div class="settings-row"><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
+      </article>
       <article class="settings-card" aria-label="Preferences">
         <h2>Preferences</h2>
         <div class="settings-preferences-group">
@@ -325,19 +321,6 @@
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="yyyy-mm-dd" aria-pressed="false">YYYY-MM-DD</button>
           </div>
         </div>
-      </article>
-      <article class="settings-card" aria-label="Component workflow">
-        <h2>Components</h2>
-        <p>Components are created directly from Build Costs while building. The picker automatically remembers saved entries for future builds.</p>
-      </article>
-      <article class="settings-card settings-guide-card" aria-label="Install guide">
-        <h2>Install Guide</h2>
-        <ol>
-          <li>Open K-Labs Studio in Safari.</li>
-          <li>Tap Share.</li>
-          <li>Select Add to Home Screen.</li>
-          <li>Launch K-Labs Studio from the Home Screen.</li>
-        </ol>
       </article>
     </section>
 

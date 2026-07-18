@@ -5169,19 +5169,6 @@ function bindSettingsControls(){
     });
   });
   syncSettingsPreferenceControls();
-  const demoButton=$('loadDemoBuildBtn');
-  if(!demoButton)return;
-  demoButton.addEventListener('click',()=>{
-    openConfirmDialog({
-      title:'Load Demo Build',
-      message:'Replace the current quote fields with demo data for quick offline and workflow testing?',
-      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'load',label:'Load Demo Build',kind:'primary'}]
-    },(action)=>{
-      if(action==='load'){
-        loadDemoBuild();
-      }
-    });
-  });
 }
 function render(){
   const r=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
