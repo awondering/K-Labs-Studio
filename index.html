@@ -139,6 +139,72 @@
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
           <p id="layoutGuideNotice" class="subtle">Guide only. Confirm final placement by static testing and builder judgement.</p>
         </section>
+
+        <section id="workshopCalculatorPanel" class="guide-spacing-panel workshop-calculator-panel" aria-label="Workshop Calculators">
+          <div class="guide-spacing-panel__header">
+            <p class="eyebrow">Workshop Calculators</p>
+            <span class="guide-spacing-panel__badge">Live</span>
+          </div>
+          <article class="layout-control-card workshop-calculator-card" aria-label="Leather and grip wrap calculator">
+            <div class="workshop-calculator-head">
+              <h3>Leather &amp; Grip Wrap Calculator</h3>
+              <div class="workshop-calculator-mode" role="group" aria-label="Calculator mode">
+                <button class="ghost-action active" type="button" data-workshop-calc-mode="convert" aria-pressed="true">Convert</button>
+                <button class="ghost-action" type="button" data-workshop-calc-mode="wrap" aria-pressed="false">Wrap Length</button>
+              </div>
+            </div>
+
+            <div id="workshopCalcConvertBody" class="workshop-calculator-body" aria-live="polite">
+              <div class="workshop-calculator-fields">
+                <label><span>Diameter</span><input id="workshopCalcDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+                <label><span>Circumference</span><input id="workshopCalcCircumference" type="text" inputmode="decimal" autocomplete="off" /></label>
+              </div>
+            </div>
+
+            <div id="workshopCalcWrapBody" class="workshop-calculator-body" hidden>
+              <div class="workshop-calculator-mode workshop-calculator-mode--secondary" role="group" aria-label="Grip type">
+                <button class="ghost-action active" type="button" data-workshop-wrap-type="straight" aria-pressed="true">Straight Grip</button>
+                <button class="ghost-action" type="button" data-workshop-wrap-type="tapered" aria-pressed="false">Tapered Grip</button>
+              </div>
+
+              <div id="workshopWrapStraightFields" class="workshop-calculator-fields">
+                <label><span>Grip Diameter</span><input id="workshopWrapGripDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+              </div>
+
+              <div id="workshopWrapTaperedFields" class="workshop-calculator-fields" hidden>
+                <label><span>Start Diameter</span><input id="workshopWrapStartDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+                <label><span>End Diameter</span><input id="workshopWrapEndDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+              </div>
+
+              <div class="workshop-calculator-fields workshop-calculator-fields--shared">
+                <label><span>Grip Length</span><input id="workshopWrapGripLength" type="text" inputmode="decimal" autocomplete="off" /></label>
+                <label><span>Material Width</span><input id="workshopWrapMaterialWidth" type="text" inputmode="decimal" autocomplete="off" /></label>
+              </div>
+
+              <div class="workshop-wrap-allowance" role="group" aria-label="Allowance percentage">
+                <span>Optional Allowance</span>
+                <div class="workshop-wrap-allowance__buttons">
+                  <button class="ghost-action" type="button" data-wrap-allowance="0" aria-pressed="false">0%</button>
+                  <button class="ghost-action active" type="button" data-wrap-allowance="5" aria-pressed="true">5%</button>
+                  <button class="ghost-action" type="button" data-wrap-allowance="10" aria-pressed="false">10%</button>
+                </div>
+              </div>
+
+              <div class="workshop-wrap-result">
+                <span>Material Required</span>
+                <strong id="workshopWrapRequired">0 mm</strong>
+              </div>
+
+              <div class="workshop-wrap-details" aria-live="polite">
+                <div><span id="workshopWrapCircumferenceLabel">Circumference</span><strong id="workshopWrapCircumference">0 mm</strong></div>
+                <div><span>Number of Wraps</span><strong id="workshopWrapRevolutions">0</strong></div>
+                <div><span>Spiral Wrap Length</span><strong id="workshopWrapSpiralLength">0 mm</strong></div>
+              </div>
+
+              <p class="workshop-wrap-note">Assumes a continuous spiral wrap with no gaps or overlap.</p>
+            </div>
+          </article>
+        </section>
       </div>
     </section>
 
