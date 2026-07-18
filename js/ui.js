@@ -57,6 +57,8 @@ let activeChoicePicker={type:'category',index:-1};
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 const choicePickerSessionFavourites={category:new Set(),supplier:new Set()};
+const CHOICE_PICKER_FAVOURITES_KEY='klabs-choice-picker-favourites';
+let choicePickerCategoryFilter='all';
 let shouldAnimateComponentRows=false;
 let expandedComponentRowIndex=-1;
 let componentRowMenuPointerDown={index:-1,expiresAt:0};
@@ -125,6 +127,19 @@ function normalizeDateFormat(value){
 function normalizeImperialDisplay(value){
   const next=String(value||'').trim().toLowerCase();
   return IMPERIAL_DISPLAY_VALUES.includes(next)?next:'fractional';
+}
+function loadChoicePickerFavourites(){
+  const stored=Store.get(CHOICE_PICKER_FAVOURITES_KEY,{});
+  const categoryValues=Array.isArray(stored&&stored.category)?stored.category:[];
+  const supplierValues=Array.isArray(stored&&stored.supplier)?stored.supplier:[];
+  choicePickerSessionFavourites.category=new Set(categoryValues.map(normalizeNameKey).filter(Boolean));
+  choicePickerSessionFavourites.supplier=new Set(supplierValues.map(normalizeNameKey).filter(Boolean));
+}
+function saveChoicePickerFavourites(){
+  Store.set(CHOICE_PICKER_FAVOURITES_KEY,{
+    category:Array.from(choicePickerSessionFavourites.category||new Set()),
+    supplier:Array.from(choicePickerSessionFavourites.supplier||new Set()),
+  });
 }
 function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
@@ -1155,6 +1170,12 @@ function normalizeComponent(component){
     description:(component&&typeof component.description==='string')?component.description:'',
     customerLabel:(component&&typeof component.customerLabel==='string')?component.customerLabel:'',
     supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
+    unit:(component&&typeof component.unit==='string')?component.unit:'',
+    quantity:Number.isFinite(Number(component&&component.quantity))?Number(component.quantity):undefined,
+    unitCost:numberOrZero(component&&component.unitCost),
+    unitPrice:numberOrZero(component&&component.unitPrice),
+    notes:(component&&typeof component.notes==='string')?component.notes:'',
+    specifications:(component&&typeof component.specifications==='string')?component.specifications:'',
     cost:numberOrZero(component&&component.cost),
   };
 }
@@ -1709,6 +1730,7 @@ function toggleChoiceRecordFavourite(type,item){
   }else{
     choicePickerSessionFavourites[type].add(key);
   }
+  saveChoicePickerFavourites();
 }
 function compareChoiceNames(left,right){
   return String(left&&left.name||'').localeCompare(String(right&&right.name||''),undefined,{sensitivity:'base'});
@@ -2076,27 +2098,8 @@ function persistBuildRecord(currentQuote){
   return {source:'build',index:0,record};
 }
 function syncMissingComponentLibraryData(currentQuote){
-  const persisted=quoteForPersistence(currentQuote);
-  const customCategoryKeys=new Set(getCustomCategoryNames().map(normalizeNameKey));
-  const rows=Array.isArray(persisted&&persisted.components)?persisted.components:[];
-  rows.forEach((row)=>{
-    const category=String(row&&row.category||'').trim();
-    const categoryKey=normalizeNameKey(category);
-    if(!categoryKey || isBlankCategory(category) || !customCategoryKeys.has(categoryKey))return;
-    const existing=findComponentLibraryRecordByName(category);
-    if(!existing){
-      upsertComponentLibraryRecord(category,row);
-      return;
-    }
-    const existingHasCost=existing.cost!==undefined && numberOrZero(existing.cost)>0;
-    const rowHasCost=numberOrZero(row&&row.cost)>0;
-    const existingHasDescription=!!specificationValue(existing.description);
-    const existingHasSupplier=!!specificationValue(existing.supplier);
-    const shouldBackfill=(!existingHasCost && rowHasCost) || (!existingHasDescription && specificationValue(row&&row.description)) || (!existingHasSupplier && specificationValue(row&&row.supplier));
-    if(shouldBackfill){
-      upsertComponentLibraryRecord(category,{...existing,...row});
-    }
-  });
+  // Library updates are explicit via dedicated user actions.
+  void currentQuote;
 }
 function saveBlankLibrarySearch(value){
   blankLibrarySearch=String(value||'');
@@ -2147,11 +2150,25 @@ function allComponentNameOptions(){
 }
 function componentOptionRecords(query){
   const orderedNames=categoryOptionNameOrder(getCustomCategoryNames());
+  const recordByName=new Map(componentLibraryRecords().map((record)=>[normalizeNameKey(record.name),record]));
   const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
-  const all=orderedNames.map((name)=>({name,isCustom:!defaultKeys.has(normalizeNameKey(name))}));
+  const all=orderedNames.map((name)=>{
+    const record=recordByName.get(normalizeNameKey(name));
+    return {
+      name,
+      isCustom:!defaultKeys.has(normalizeNameKey(name)),
+      category:String(record&&record.category||name).trim(),
+      supplier:String(record&&record.supplier||'').trim(),
+      description:String(record&&record.description||'').trim(),
+    };
+  });
   const normalized=normalizeNameKey(query);
+  const filterKey=normalizeNameKey(choicePickerCategoryFilter);
   const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
-  const filtered=all.filter((item)=>!archived.has(normalizeNameKey(item.name))).filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
+  const filtered=all
+    .filter((item)=>!archived.has(normalizeNameKey(item.name)))
+    .filter((item)=>filterKey==='all' || normalizeNameKey(item.category)===filterKey)
+    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
   return sortChoiceRecords('category',filtered);
 }
 function supplierOptionRecords(query){
@@ -2188,6 +2205,9 @@ function ensureChoicePicker(){
       </header>
       <div class="component-sheet__body">
         <input id="choicePickerSearch" class="component-sheet__search" type="text" placeholder="Search components..." autocomplete="off" spellcheck="false" />
+        <select id="choicePickerCategoryFilter" class="component-sheet__search component-sheet__filter" hidden>
+          <option value="all">All Categories</option>
+        </select>
         <div id="choicePickerList" class="component-sheet__list"></div>
         <div id="choicePickerMenu" class="component-picker-menu" hidden>
           <button id="choicePickerMenuSelect" class="component-picker-menu__item" type="button">Select</button>
@@ -2281,6 +2301,11 @@ function ensureChoicePicker(){
   });
 
   $('choicePickerSearch').addEventListener('input',()=>renderChoicePickerOptions($('choicePickerSearch').value));
+  $('choicePickerCategoryFilter').addEventListener('change',()=>{
+    const filter=$('choicePickerCategoryFilter');
+    choicePickerCategoryFilter=normalizeNameKey(filter&&filter.value)||'all';
+    renderChoicePickerOptions($('choicePickerSearch').value);
+  });
   $('choicePickerAdd').addEventListener('click',startChoicePickerAddFlow);
   $('choicePickerCustomCancel').addEventListener('click',()=>{
     const customBox=$('choicePickerCustomBox');
@@ -2379,6 +2404,18 @@ function componentLibraryCostValue(record){
   if(source.price!==undefined && source.price!==null && source.price!=='')return numberOrZero(source.price);
   return undefined;
 }
+function componentLibraryUnitCostValue(record){
+  const source=record&&typeof record==='object'?record:{};
+  if(source.unitCost!==undefined && source.unitCost!==null && source.unitCost!=='')return numberOrZero(source.unitCost);
+  if(source.cost!==undefined && source.cost!==null && source.cost!=='')return numberOrZero(source.cost);
+  return undefined;
+}
+function componentLibraryUnitPriceValue(record){
+  const source=record&&typeof record==='object'?record:{};
+  if(source.unitPrice!==undefined && source.unitPrice!==null && source.unitPrice!=='')return numberOrZero(source.unitPrice);
+  if(source.price!==undefined && source.price!==null && source.price!=='')return numberOrZero(source.price);
+  return undefined;
+}
 function componentLibraryRecords(){
   const stored=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
   if(!Array.isArray(stored))return[];
@@ -2386,12 +2423,16 @@ function componentLibraryRecords(){
     .filter((record)=>record&&typeof record==='object')
     .map((record)=>({
       name:String(record.name||'').trim(),
-      category:String(record.category||'').trim(),
+      category:String(record.category||record.name||'').trim(),
       supplier:String(record.supplier||'').trim(),
       description:String(record.description||'').trim(),
       customerLabel:String(record.customerLabel||'').trim(),
       unit:String(record.unit||'').trim(),
       quantity:Number.isFinite(Number(record.quantity))?Number(record.quantity):undefined,
+      unitCost:componentLibraryUnitCostValue(record),
+      unitPrice:componentLibraryUnitPriceValue(record),
+      notes:String(record.notes||'').trim(),
+      specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
     }))
     .filter((record)=>!!normalizeNameKey(record.name));
@@ -2401,12 +2442,16 @@ function saveComponentLibraryRecords(records){
     .filter((record)=>record&&typeof record==='object'&&normalizeNameKey(record.name))
     .map((record)=>({
       name:String(record.name||'').trim(),
-      category:String(record.category||'').trim(),
+      category:String(record.category||record.name||'').trim(),
       supplier:String(record.supplier||'').trim(),
       description:String(record.description||'').trim(),
       customerLabel:String(record.customerLabel||'').trim(),
       unit:String(record.unit||'').trim(),
       quantity:Number.isFinite(Number(record.quantity))?Number(record.quantity):undefined,
+      unitCost:componentLibraryUnitCostValue(record),
+      unitPrice:componentLibraryUnitPriceValue(record),
+      notes:String(record.notes||'').trim(),
+      specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
     }));
   Store.set(COMPONENT_LIBRARY_STORAGE_KEY,safeRecords);
@@ -2422,15 +2467,25 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const normalizedKey=normalizeNameKey(normalizedName);
   if(!normalizedKey)return;
   const item=sourceComponent&&typeof sourceComponent==='object'?sourceComponent:{};
+  const rowCategory=String(item.category||'').trim();
+  const categoryValue=isBlankCategory(rowCategory)?normalizedName:(rowCategory||normalizedName);
+  const unitCost=componentLibraryUnitCostValue(item);
+  const unitPrice=componentLibraryUnitPriceValue(item);
+  const rowCost=componentLibraryCostValue(item);
+  const resolvedCost=unitCost!==undefined?unitCost:rowCost;
   const nextRecord={
     name:normalizedName,
-    category:normalizedName,
+    category:categoryValue,
     supplier:String(item.supplier||'').trim(),
     description:String(item.description||'').trim(),
     customerLabel:String(item.customerLabel||'').trim(),
     unit:String(item.unit||'').trim(),
     quantity:Number.isFinite(Number(item.quantity))?Number(item.quantity):undefined,
-    cost:componentLibraryCostValue(item),
+    unitCost,
+    unitPrice,
+    notes:String(item.notes||'').trim(),
+    specifications:String(item.specifications||'').trim(),
+    cost:resolvedCost,
   };
   const records=componentLibraryRecords();
   const existingIndex=records.findIndex((record)=>normalizeNameKey(record.name)===normalizedKey);
@@ -2473,6 +2528,31 @@ function removeComponentLibraryRecord(name){
   const records=componentLibraryRecords().filter((record)=>normalizeNameKey(record.name)!==targetKey);
   saveComponentLibraryRecords(records);
 }
+function componentPickerCategoryOptions(){
+  const categorySet=new Set();
+  componentLibraryRecords().forEach((record)=>{
+    const category=String(record&&record.category||'').trim();
+    if(category)categorySet.add(category);
+  });
+  DEFAULT_CATEGORY_NAMES.forEach((name)=>{
+    if(name)categorySet.add(name);
+  });
+  return Array.from(categorySet).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
+}
+function syncChoicePickerFilterControls(){
+  const filter=$('choicePickerCategoryFilter');
+  if(!filter)return;
+  const showFilter=activeChoicePicker.type==='category';
+  filter.hidden=!showFilter;
+  if(!showFilter)return;
+  const options=['<option value="all">All Categories</option>']
+    .concat(componentPickerCategoryOptions().map((name)=>`<option value="${escapeHtml(normalizeNameKey(name))}">${escapeHtml(name)}</option>`));
+  filter.innerHTML=options.join('');
+  if(!Array.from(filter.options).some((option)=>option.value===choicePickerCategoryFilter)){
+    choicePickerCategoryFilter='all';
+  }
+  filter.value=choicePickerCategoryFilter;
+}
 function applyComponentLibraryRecordToRow(index,name){
   if(index<0 || !quote.components[index])return;
   const record=findComponentLibraryRecordByName(name);
@@ -2483,6 +2563,10 @@ function applyComponentLibraryRecordToRow(index,name){
   if(specificationValue(record.customerLabel))row.customerLabel=record.customerLabel;
   if(specificationValue(record.unit))row.unit=record.unit;
   if(Number.isFinite(Number(record.quantity)))row.quantity=Number(record.quantity);
+  if(record.unitCost!==undefined)row.unitCost=numberOrZero(record.unitCost);
+  if(record.unitPrice!==undefined)row.unitPrice=numberOrZero(record.unitPrice);
+  if(specificationValue(record.notes))row.notes=record.notes;
+  if(specificationValue(record.specifications))row.specifications=record.specifications;
   if(record.cost!==undefined)row.cost=numberOrZero(record.cost);
   saveQuoteCurrent();
   markQuoteDirty();
@@ -2497,6 +2581,18 @@ function syncComponentRowEditorInputs(index){
   const costInput=document.querySelector(`#quoteComponentsList [data-component-key="cost"][data-component-index="${index}"]`);
   if(costInput && document.activeElement!==costInput){
     costInput.value=String(numberOrZero(row.cost));
+  }
+  const unitPriceInput=document.querySelector(`#quoteComponentsList [data-component-key="unitPrice"][data-component-index="${index}"]`);
+  if(unitPriceInput && document.activeElement!==unitPriceInput){
+    unitPriceInput.value=String(numberOrZero(row.unitPrice));
+  }
+  const specsInput=document.querySelector(`#quoteComponentsList [data-component-key="specifications"][data-component-index="${index}"]`);
+  if(specsInput && document.activeElement!==specsInput){
+    specsInput.value=String(row.specifications||'');
+  }
+  const notesInput=document.querySelector(`#quoteComponentsList [data-component-key="notes"][data-component-index="${index}"]`);
+  if(notesInput && document.activeElement!==notesInput){
+    notesInput.value=String(row.notes||'');
   }
   const supplierTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-supplier-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
   if(supplierTrigger){
@@ -2618,8 +2714,8 @@ function addCustomChoice(name,options){
   if(type==='category'){
     if(context.cloneFromName){
       duplicateComponentLibraryRecord(context.cloneFromName,name);
-    }else if(context.sourceComponent && typeof context.sourceComponent==='object'){
-      upsertComponentLibraryRecord(name,context.sourceComponent);
+    }else{
+      upsertComponentLibraryRecord(name,context.sourceComponent&&typeof context.sourceComponent==='object'?context.sourceComponent:{category:name});
     }
   }
 }
@@ -2778,6 +2874,10 @@ function choiceOptionSecondaryText(type,item){
     if(!blank)return '';
     return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
   }
+  if(type==='category'){
+    const bits=[String(item&&item.category||'').trim(),String(item&&item.supplier||'').trim()].filter(Boolean);
+    return bits.join(' • ');
+  }
   return item&&item.isCustom?'Custom':'';
 }
 function currentPickerSelectionContext(){
@@ -2819,6 +2919,7 @@ function choicePickerTitle(type,index){
 function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
   if(!list)return;
+  syncChoicePickerFilterControls();
   const records=recordsForChoiceType(activeChoicePicker.type,query);
   const options=activeChoicePicker.type==='blank'?records:records.slice(0,50);
   syncChoicePickerMenuActions();
@@ -2971,10 +3072,11 @@ function updateBuildPricingSummary(){
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
   const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Component':'Delete Component';
-  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}"><button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
+  const updateAction=componentRowIsEffectivelyEmpty(item)?'':`<button class="component-picker-menu__item" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button>`;
+  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -3084,6 +3186,24 @@ function requestDeleteComponentRow(index){
     }
   });
 }
+function requestUpdateLibraryComponentFromRow(index){
+  const row=quote.components[index];
+  if(!row)return;
+  const libraryName=specificationValue(row.category)||specificationValue(row.description);
+  if(!libraryName || isBlankCategory(row.category)){
+    alert('Select a component category before updating the library.');
+    return;
+  }
+  openConfirmDialog({
+    title:'Update Library Component',
+    message:'Update this library component for future builds? Existing saved builds will not change.',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'update',label:'Update Library Component',kind:'primary'}]
+  },(action)=>{
+    if(action!=='update')return;
+    upsertComponentLibraryRecord(libraryName,row);
+    alert('Library component updated. This build remains editable independently.');
+  });
+}
 function openComponentSheet(index){
   openChoicePicker('category',index,document.activeElement);
 }
@@ -3096,6 +3216,7 @@ function openBlankSheet(){
 function openChoicePicker(type,index,openerEl){
   ensureChoicePicker();
   activeChoicePicker={type,index};
+  choicePickerCategoryFilter='all';
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
   sheet.hidden=false;
@@ -3113,6 +3234,7 @@ function openChoicePicker(type,index,openerEl){
     addButton.hidden=false;
   }
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder='Component name';
+  syncChoicePickerFilterControls();
   renderChoicePickerOptions('');
   bindChoicePickerViewportHandlers();
   scheduleChoicePickerViewportSync(40);
@@ -5026,7 +5148,7 @@ function bindWorkshopQuoteBuilder(){
       const i=Number(input.getAttribute('data-component-index'));
       const key=input.getAttribute('data-component-key');
       if(!quote.components[i] || !key)return;
-      quote.components[i][key]=['cost'].includes(key)?numberOrZero(input.value):input.value;
+      quote.components[i][key]=['cost','unitPrice'].includes(key)?numberOrZero(input.value):input.value;
       if(isBlankCategory(quote.components[i].category)){
         applyBlankComponentToQuote(quote.components[i]);
       }
@@ -5050,6 +5172,10 @@ function bindWorkshopQuoteBuilder(){
       if(action==='open-supplier-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('supplier',i,actionButton);
+      }
+      if(action==='update-library-component'){
+        const i=Number(actionButton.getAttribute('data-component-index'));
+        requestUpdateLibraryComponentFromRow(i);
       }
       if(action==='request-delete-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
@@ -5866,6 +5992,7 @@ function render(){
     };
   }
 });
+loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();
 bindWorkshopQuoteBuilder();

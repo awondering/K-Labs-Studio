@@ -953,6 +953,14 @@ body.component-sheet-open .workshop-back-to-top{
   border-top:1px solid rgba(214,210,200,.08);
 }
 
+.quote-component-row__scope{
+  margin:2px 0 0;
+  color:#8f968e;
+  font-size:9px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
 .quote-component-row__fields{
   display:grid;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr);
@@ -1000,7 +1008,7 @@ body.component-sheet-open .workshop-back-to-top{
 
 .quote-component-row__actions{
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  grid-template-columns:repeat(3,minmax(0,1fr));
   gap:6px;
 }
 
@@ -2201,6 +2209,10 @@ body.component-sheet-open .workshop-back-to-top{
 
 .component-sheet__search::placeholder{
   color:#7f857f;
+}
+
+.component-sheet__filter{
+  margin-top:4px;
 }
 
 .component-sheet__list{
@@ -3858,5 +3870,11 @@ select:focus-visible{
   }
   .quote-component-field--cost input{
     max-width:220px;
+  }
+}
+
+@media (max-width:520px){
+  .quote-component-row__actions{
+    grid-template-columns:1fr;
   }
 }
