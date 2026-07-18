@@ -45,7 +45,10 @@
   #studioRodContainer .led{transition:none!important}
 }
 
-body.component-sheet-open{overflow:hidden}
+body.component-sheet-open{
+  overflow:hidden;
+  overscroll-behavior:none;
+}
 body.nav-menu-open{overflow:hidden}
 body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
@@ -301,6 +304,10 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 @media (max-width:720px){
+  .customer-finder__panel{
+    --component-sheet-panel-max-height:min(calc(100dvh - 12px),760px);
+  }
+
   #homeScreen .home-premium-shell{
     padding-top:34px;
     gap:26px;
@@ -1363,6 +1370,7 @@ body.component-sheet-open .workshop-back-to-top{
   justify-content:center;
   padding:calc(12px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));
   overflow-x:hidden;
+  overscroll-behavior:contain;
 }
 
 .component-sheet,
@@ -1378,10 +1386,15 @@ body.component-sheet-open .workshop-back-to-top{
 .customer-finder__panel{
   --component-sheet-panel-max-width:min(94dvw,920px);
   --component-sheet-panel-max-height:min(90dvh,760px);
+  --customer-finder-keyboard-inset:0px;
 }
 
 .customer-finder__body{
   gap:10px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px) + var(--customer-finder-keyboard-inset));
 }
 
 .customer-finder__start-actions{
@@ -1399,6 +1412,10 @@ body.component-sheet-open .workshop-back-to-top{
 #customerFinderSearchBlock{
   display:grid;
   gap:10px;
+  min-width:0;
+  min-height:0;
+  flex:1;
+  overflow:hidden;
 }
 
 .customer-finder__back{
@@ -1409,11 +1426,15 @@ body.component-sheet-open .workshop-back-to-top{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:8px;
+  min-width:0;
+  align-content:start;
+  padding-bottom:max(10px,var(--customer-finder-keyboard-inset));
 }
 
 .customer-finder__new-form label{
   display:grid;
   gap:5px;
+  min-width:0;
 }
 
 .customer-finder__new-form label span{
@@ -1456,6 +1477,8 @@ body.component-sheet-open .workshop-back-to-top{
   grid-template-columns:minmax(240px,300px) minmax(0,1fr);
   gap:10px;
   height:min(62dvh,540px);
+  min-width:0;
+  min-height:0;
 }
 
 .customer-finder__list-pane,

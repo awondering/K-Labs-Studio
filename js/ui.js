@@ -66,8 +66,11 @@ const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
 const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null};
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
+let modalLockedScrollY=0;
 let choicePickerViewportBound=false;
 let choicePickerViewportRaf=0;
+let customerFinderViewportBound=false;
+let customerFinderViewportRaf=0;
 let workshopKeyboardDismissGuardBound=false;
 let workshopInputFocusStabilityBound=false;
 let workshopBackToTopBound=false;
@@ -80,6 +83,9 @@ const workshopKeyboardDismissState={
   preservedScrollY:0,
 };
 const choicePickerViewportState={
+  keyboardActive:false,
+};
+const customerFinderViewportState={
   keyboardActive:false,
 };
 
@@ -1023,6 +1029,12 @@ function startNewBuildFlow(){
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
+    modalLockedScrollY=Math.round(window.scrollY||window.pageYOffset||0);
+    document.body.style.position='fixed';
+    document.body.style.top=`-${modalLockedScrollY}px`;
+    document.body.style.left='0';
+    document.body.style.right='0';
+    document.body.style.width='100%';
     document.body.classList.add('component-sheet-open');
     if(openerEl && typeof openerEl.focus==='function'){
       modalReturnFocusEl=openerEl;
@@ -1035,7 +1047,15 @@ function lockModalLayer(openerEl){
 function unlockModalLayer(options){
   const settings={restoreFocus:true,...(options||{})};
   const applyUnlock=(focusTarget)=>{
+    const lockedScrollY=modalLockedScrollY;
+    document.body.style.removeProperty('position');
+    document.body.style.removeProperty('top');
+    document.body.style.removeProperty('left');
+    document.body.style.removeProperty('right');
+    document.body.style.removeProperty('width');
     document.body.classList.remove('component-sheet-open');
+    window.scrollTo(0,Math.max(0,lockedScrollY));
+    modalLockedScrollY=0;
     if(settings.restoreFocus && focusTarget && focusTarget.isConnected!==false && typeof focusTarget.focus==='function'){
       try{
         focusTarget.focus({preventScroll:true});
@@ -3056,6 +3076,7 @@ function setCustomerFinderNewBuildStep(step){
       search.select();
     }
     renderCustomerFinder();
+    scheduleCustomerFinderViewportSync(40);
     return;
   }
   if(customerFinderNewBuildStep==='add'){
@@ -3063,7 +3084,10 @@ function setCustomerFinderNewBuildStep(step){
     if(nameInput){
       try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
     }
+    scheduleCustomerFinderViewportSync(40);
+    return;
   }
+  scheduleCustomerFinderViewportSync(40);
 }
 function updateCustomerFinderIntentUi(){
   const intro=$('customerFinderIntro');
@@ -3247,10 +3271,119 @@ function renderCustomerFinder(){
     </section>
   `;
 }
+function clearCustomerFinderViewportStyles(){
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  sheet.style.removeProperty('--component-sheet-vv-left');
+  sheet.style.removeProperty('--component-sheet-vv-width');
+  sheet.style.removeProperty('--component-sheet-vv-top');
+  sheet.style.removeProperty('--component-sheet-vv-height');
+  sheet.style.removeProperty('--component-sheet-panel-max-width');
+  sheet.style.removeProperty('--component-sheet-panel-max-height');
+  sheet.style.removeProperty('--component-sheet-align-items');
+  sheet.style.removeProperty('--customer-finder-keyboard-inset');
+}
+function scheduleCustomerFinderViewportSync(delayMs){
+  if(customerFinderViewportRaf){
+    cancelAnimationFrame(customerFinderViewportRaf);
+    customerFinderViewportRaf=0;
+  }
+  const runSync=()=>{syncCustomerFinderViewport();};
+  if(numberOrZero(delayMs)>0){
+    window.setTimeout(()=>{
+      customerFinderViewportRaf=requestAnimationFrame(runSync);
+    },delayMs);
+    return;
+  }
+  customerFinderViewportRaf=requestAnimationFrame(runSync);
+}
+function syncCustomerFinderViewport(){
+  const sheet=$('customerFinderSheet');
+  if(!sheet || sheet.hidden){
+    clearCustomerFinderViewportStyles();
+    customerFinderViewportState.keyboardActive=false;
+    return;
+  }
+  const vv=window.visualViewport||null;
+  const viewportWidth=Math.max(0,Math.round(vv?vv.width:window.innerWidth));
+  const viewportLeft=Math.max(0,Math.round(vv?vv.offsetLeft:0));
+  const viewportHeight=Math.max(0,Math.round(vv?vv.height:window.innerHeight));
+  const viewportTop=Math.max(0,Math.round(vv?vv.offsetTop:0));
+  const sideGap=12;
+  const panelMaxWidth=Math.min(920,Math.max(260,viewportWidth-(sideGap*2)));
+  const panelMaxHeight=Math.max(220,viewportHeight-24);
+  const activeEl=document.activeElement;
+  const activeInSheet=!!(activeEl && sheet.contains(activeEl));
+  const activeEditable=activeInSheet && !!(activeEl.matches && activeEl.matches('input, textarea, [contenteditable="true"]'));
+  const keyboardDelta=Math.max(0,Math.round(window.innerHeight-viewportHeight-viewportTop));
+  const keyboardActive=activeEditable && keyboardDelta>0;
+  const keyboardInset=keyboardActive?Math.max(0,keyboardDelta+14):0;
+  customerFinderViewportState.keyboardActive=keyboardActive;
+  sheet.style.setProperty('--component-sheet-vv-left',`${viewportLeft}px`);
+  sheet.style.setProperty('--component-sheet-vv-width',`${viewportWidth}px`);
+  sheet.style.setProperty('--component-sheet-vv-top',`${viewportTop}px`);
+  sheet.style.setProperty('--component-sheet-vv-height',`${viewportHeight}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-width',`${panelMaxWidth}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-height',`${panelMaxHeight}px`);
+  sheet.style.setProperty('--component-sheet-align-items',keyboardActive?'flex-start':'center');
+  sheet.style.setProperty('--customer-finder-keyboard-inset',`${keyboardInset}px`);
+  if(keyboardActive && activeEl && typeof activeEl.scrollIntoView==='function'){
+    activeEl.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+}
+function handleCustomerFinderFocusIn(){
+  scheduleCustomerFinderViewportSync();
+}
+function handleCustomerFinderFocusOut(){
+  scheduleCustomerFinderViewportSync(120);
+}
+function bindCustomerFinderViewportHandlers(){
+  if(customerFinderViewportBound)return;
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  customerFinderViewportBound=true;
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.addEventListener('resize',scheduleCustomerFinderViewportSync);
+    vv.addEventListener('scroll',scheduleCustomerFinderViewportSync);
+  }
+  window.addEventListener('resize',scheduleCustomerFinderViewportSync);
+  window.addEventListener('orientationchange',scheduleCustomerFinderViewportSync);
+  sheet.addEventListener('focusin',handleCustomerFinderFocusIn);
+  sheet.addEventListener('focusout',handleCustomerFinderFocusOut);
+  scheduleCustomerFinderViewportSync();
+}
+function unbindCustomerFinderViewportHandlers(){
+  if(!customerFinderViewportBound)return;
+  customerFinderViewportBound=false;
+  const sheet=$('customerFinderSheet');
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.removeEventListener('resize',scheduleCustomerFinderViewportSync);
+    vv.removeEventListener('scroll',scheduleCustomerFinderViewportSync);
+  }
+  window.removeEventListener('resize',scheduleCustomerFinderViewportSync);
+  window.removeEventListener('orientationchange',scheduleCustomerFinderViewportSync);
+  if(sheet){
+    sheet.removeEventListener('focusin',handleCustomerFinderFocusIn);
+    sheet.removeEventListener('focusout',handleCustomerFinderFocusOut);
+  }
+  if(customerFinderViewportRaf){
+    cancelAnimationFrame(customerFinderViewportRaf);
+    customerFinderViewportRaf=0;
+  }
+  customerFinderViewportState.keyboardActive=false;
+  clearCustomerFinderViewportStyles();
+}
 function closeCustomerFinderSheet(){
   const sheet=$('customerFinderSheet');
   if(!sheet)return;
+  const activeEl=document.activeElement;
+  if(activeEl && sheet.contains(activeEl) && typeof activeEl.blur==='function'){
+    activeEl.blur();
+  }
   sheet.hidden=true;
+  unbindCustomerFinderViewportHandlers();
   unlockModalLayer({restoreFocus:true});
 }
 function openCustomerFinderSheet(intent){
@@ -3272,10 +3405,12 @@ function openCustomerFinderSheet(intent){
   }
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
+  bindCustomerFinderViewportHandlers();
   const input=customerFinderIntent==='new-build'?$('customerFinderSearchExistingAction'):$('customerFinderSearch');
   if(input && !input.hidden){
     try{input.focus({preventScroll:true});}catch{input.focus();}
   }
+  scheduleCustomerFinderViewportSync(40);
 }
 function ensureCustomerFinderSheet(){
   if($('customerFinderSheet'))return;
