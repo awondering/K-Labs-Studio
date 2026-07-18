@@ -67,35 +67,6 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   display:grid;
   gap:15px;
   max-width:760px;
-.settings-preferences-group{
-  display:grid;
-  gap:10px;
-}
-.settings-preferences-group>span{
-  font-size:12px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  color:var(--muted);
-}
-.settings-choice-row,
-.settings-choice-column{
-  display:grid;
-  gap:8px;
-}
-.settings-choice-row{
-  grid-template-columns:repeat(2,minmax(0,1fr));
-}
-.settings-choice-button{
-  min-height:42px;
-  justify-content:center;
-  text-align:center;
-}
-.settings-choice-button.active,
-.settings-choice-button[aria-pressed="true"]{
-  background:linear-gradient(160deg,rgba(198,255,220,.2),rgba(80,210,176,.15));
-  border-color:rgba(126,244,206,.65);
-  color:#eafff6;
-}
   position:relative;
   z-index:2;
 }
@@ -655,6 +626,101 @@ body.component-sheet-open .workshop-back-to-top{
   font-size:12px;
   letter-spacing:.08em;
   text-transform:uppercase;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"]{
+  display:grid;
+  grid-template-columns:max-content minmax(0,1fr);
+  column-gap:10px;
+  row-gap:8px;
+  width:min(100%,456px);
+  margin-right:auto;
+  overflow:hidden;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] h2{
+  margin:0;
+  grid-column:1/-1;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-preferences-group{
+  display:contents;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-preferences-group > span{
+  display:block;
+  margin:0;
+  white-space:nowrap;
+  font-size:12px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+  align-self:center;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-row,
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-column{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:10px;
+  justify-content:flex-start;
+  align-items:center;
+  min-width:0;
+  width:100%;
+  padding:0;
+  border-bottom:0;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button{
+  min-height:32px;
+  padding:6px 12px;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  line-height:1.15;
+  width:auto;
+  flex:0 0 auto;
+  max-width:100%;
+  white-space:nowrap;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-column{
+  flex-wrap:wrap;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button:not(:disabled){
+  cursor:pointer;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button:hover:not(:disabled),
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button:focus-visible{
+  border-color:rgba(214,210,200,.34);
+  color:#cfc9bc;
+}
+
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button.active,
+#settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-button[aria-pressed="true"]{
+  background:rgba(214,210,200,.1);
+  border-color:rgba(214,210,200,.42);
+  color:#dfd7ca;
+}
+
+@media (max-width:860px){
+  #settingsScreen .settings-card[aria-label="Preferences"]{
+    width:100%;
+    grid-template-columns:1fr;
+    column-gap:0;
+  }
+
+  #settingsScreen .settings-card[aria-label="Preferences"] .settings-preferences-group{
+    display:contents;
+  }
+
+  #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-row,
+  #settingsScreen .settings-card[aria-label="Preferences"] .settings-choice-column{
+    flex-wrap:wrap;
+  }
 }
 
 #settingsTaxRate{
