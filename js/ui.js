@@ -3741,9 +3741,9 @@ function renderCustomerBrowser(){
   const detailMarkup=detailRows.length
     ? detailRows.map((row)=>`<div class="customers-browser__fact-row"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('')
     : '<div class="component-sheet__empty">No customer details available yet.</div>';
-  const jobsMarkup=selected.entries.length
-    ? selected.entries.map((entry)=>{
-      const source=String(entry&&entry.source||'quote');
+  const jobsMarkup=selected.builds.length
+    ? selected.builds.map((entry)=>{
+      const source='build';
       const index=Number(entry&&entry.index);
       const record=entry&&entry.record?entry.record:{};
       const title=customerBrowserDisplayTitle(record);
@@ -3752,7 +3752,7 @@ function renderCustomerBrowser(){
       const meta=[statusText,`Saved ${savedAt}`].join(' • ');
       return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></button>`;
     }).join('')
-    : '<div class="component-sheet__empty">No saved jobs for this customer.</div>';
+    : '<div class="component-sheet__empty">No saved builds for this customer.</div>';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customers-browser__detail-head">
@@ -3780,8 +3780,8 @@ function renderCustomerBrowser(){
         <button class="primary-action" type="button" data-customer-browser-action="save-edit">Save Details</button>
       </div>
     </form>
-    <section class="customers-browser__jobs" aria-label="Saved jobs">
-      <h4>Saved Jobs</h4>
+    <section class="customers-browser__jobs" aria-label="Saved builds">
+      <h4>Saved Builds</h4>
       <div class="customers-browser__jobs-list">${jobsMarkup}</div>
     </section>
   `;
@@ -3901,16 +3901,19 @@ function bindCustomerBrowserControls(){
 }
 function savedBuildSearchText(entry){
   const record=entry&&entry.record?entry.record:{};
-  return [record.customerName,record.buildName,record.blankName,record.blankMaker,record.blankSeries,record.savedAt,record.updatedAt,record.createdAt]
+  return [record.customerName,record.buildName]
     .map((value)=>String(value||''))
     .join(' ')
     .toLowerCase();
 }
 function savedBuildDisplayCustomerName(record){
-  return specificationValue(record&&record.customerName)||'No Customer';
+  return specificationValue(record&&record.customerName)||'Unassigned';
 }
 function savedBuildDisplayStatus(record){
-  return normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status))==='accepted'?'Accepted':(normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status)).replace(/^./,(letter)=>letter.toUpperCase()));
+  const rawStatus=specificationValue((record&&record.quoteStatus)||(record&&record.status));
+  if(!rawStatus)return '';
+  const normalized=normalizeQuoteStatus(rawStatus);
+  return normalized==='accepted'?'Accepted':normalized.replace(/^./,(letter)=>letter.toUpperCase());
 }
 function savedBuildDisplayDate(value){
   return formatDateDisplay(value,{includeTime:true});
@@ -3919,12 +3922,13 @@ function savedBuildRowMarkup(entry){
   const record=entry.record;
   const customerName=savedBuildDisplayCustomerName(record);
   const statusText=savedBuildDisplayStatus(record);
-  const createdAtText=savedBuildDisplayDate(record.createdAt||record.savedAt);
   const updatedAtText=savedBuildDisplayDate(record.updatedAt||record.savedAt);
-  const title=specificationValue(record.buildName)||specificationValue(record.blankName)||'Saved Build';
+  const buildName=specificationValue(record.buildName);
+  const buildNameMarkup=buildName?`<p class="saved-build-card__title">${escapeHtml(buildName)}</p>`:'';
+  const statusMarkup=statusText?`<div class="saved-build-card__meta"><span>Status</span><strong>${escapeHtml(statusText)}</strong></div>`:'';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><span class="saved-build-card__eyebrow">Saved Build</span><strong>${escapeHtml(customerName)}</strong></div><p class="saved-build-card__title">${escapeHtml(title)}</p><div class="saved-build-card__meta"><span>Status</span><strong>${escapeHtml(statusText)}</strong></div><div class="saved-build-card__meta"><span>Created</span><strong>${escapeHtml(createdAtText)}</strong></div><div class="saved-build-card__meta"><span>Last Edited</span><strong>${escapeHtml(updatedAtText)}</strong></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__action" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,customerName)}</div></article>`;
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div>${statusMarkup}<div class="saved-build-card__meta"><span>Last Edited</span><strong>${escapeHtml(updatedAtText)}</strong></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__action" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,customerName)}</div></article>`;
 }
 function savedBuildRowMenuMarkup(entry,title){
   const source=escapeHtml(entry.source);
