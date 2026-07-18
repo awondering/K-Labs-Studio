@@ -2946,34 +2946,27 @@ function persistComponentDraftCleanup(changed){
 }
 function buildCostsSummaryData(){
   enforceSingleSourceComponents();
-  let componentCount=0;
-  componentRowsForTotals().forEach((item)=>{
-    if(!componentRowHasMeaningfulData(item))return;
-    componentCount+=1;
-  });
-  const itemsText=componentCount>0
-    ?`${componentCount} component${componentCount===1?'':'s'} selected`
-    :'No components selected';
-  return {
-    itemsText,
-    totalText:''
-  };
+  const rows=componentRowsForTotals();
+  const componentCount=rows.length;
+  const blankComponent=firstSavedComponentByCategory('blank')||firstComponentByCategory('blank');
+  const blankName=specificationValue(blankComponent&&blankComponent.description)||specificationValue(blankComponent&&blankComponent.blankName);
+  if(blankName && componentCount>0){
+    return `${blankName} • ${componentCount} Component${componentCount===1?'':'s'}`;
+  }
+  if(blankName)return blankName;
+  if(componentCount>0)return `${componentCount} Component${componentCount===1?'':'s'} Selected`;
+  return 'No components selected';
 }
 function updateBuildCostsSummary(){
-  const itemsEl=$('workshopBuildCostsSummaryItems');
-  const totalEl=$('workshopBuildCostsSummaryTotal');
-  if(!itemsEl || !totalEl)return;
-  const summary=buildCostsSummaryData();
-  itemsEl.textContent=summary.itemsText;
-  totalEl.textContent=summary.totalText;
+  const textEl=$('workshopBuildCostsSummaryText');
+  if(!textEl)return;
+  textEl.textContent=buildCostsSummaryData();
 }
 function updateBuildPricingSummary(){
   const summaryEl=$('workshopBuildPricingSummaryText');
   if(!summaryEl)return;
   const price=numberOrZero(quote&&quote.finalCustomerPrice);
-  const componentCount=componentRowsForTotals().length;
-  const componentText=`${componentCount} component${componentCount===1?'':'s'} from Rod Specification`;
-  summaryEl.textContent=price>0?`${componentText} • Customer Price: NZ$${price.toFixed(2)}`:componentText;
+  summaryEl.textContent=price>0?`Customer Price NZ$${price.toFixed(2)}`:'Awaiting Pricing';
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
@@ -5180,16 +5173,12 @@ function renderWorkshopQuote(){
   if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Rod Specification • Build Pricing';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
   if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
-  const customerName=specificationValue(quote.customerName);
-  const customerSummaryName=$('quoteCustomerSummaryName');
-  const customerSummaryMeta=$('quoteCustomerSummaryMeta');
-  if(customerSummaryName){
-    customerSummaryName.textContent=customerName||'No customer selected';
-  }
-  if(customerSummaryMeta){
-    const secondary=customerName?customerCardSecondarySummary():'';
-    customerSummaryMeta.textContent=secondary;
-    customerSummaryMeta.hidden=!secondary;
+  const customerSummaryTextEl=$('quoteCustomerSummaryText');
+  if(customerSummaryTextEl){
+    const customerName=specificationValue(quote.customerName);
+    const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
+    const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'No customer selected';
+    customerSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   updateBuildPricingSummary();
   updateQuoteActionPriority();

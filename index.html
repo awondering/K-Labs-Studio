@@ -223,8 +223,9 @@
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopCustomerBody">
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Customer</span>
-              <small id="quoteCustomerSummaryName" class="quote-section__subtle">No customer selected</small>
-              <small id="quoteCustomerSummaryMeta" class="quote-section__meta" hidden></small>
+              <span id="quoteCustomerSummaryText" class="quote-section__toggle-summary" aria-live="polite">
+                <span>No customer selected</span>
+              </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
@@ -275,8 +276,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Rod Specification</span>
               <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildCostsSummaryItems"></span>
-                <span id="workshopBuildCostsSummaryTotal"></span>
+                <span id="workshopBuildCostsSummaryText">No components selected</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -302,7 +302,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Pricing</span>
               <span id="workshopBuildPricingSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildPricingSummaryText">Not calculated</span>
+                <span id="workshopBuildPricingSummaryText">Awaiting Pricing</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>

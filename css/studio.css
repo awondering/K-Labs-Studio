@@ -1215,18 +1215,22 @@ body.component-sheet-open .workshop-back-to-top{
 
 #workshopScreen .quote-section__toggle-summary{
   display:none;
-  gap:2px;
+  min-width:0;
 }
 
 #workshopScreen .quote-section--collapsed .quote-section__toggle-summary{
-  display:grid;
+  display:block;
 }
 
 #workshopScreen .quote-section__toggle-summary span{
+  display:block;
   color:#98a095;
   font-size:10px;
   letter-spacing:.05em;
   text-transform:none;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 #workshopScreen .quote-section__toggle-summary span:last-child{
