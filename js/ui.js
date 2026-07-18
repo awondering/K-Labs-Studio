@@ -551,6 +551,13 @@ function customerPreviewLines(){
 
   return lines;
 }
+function customerCardSecondarySummary(){
+  const company=specificationValue(quote.company);
+  const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
+  const phone=specificationValue(quote.phone);
+  const email=specificationValue(quote.email);
+  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' • ');
+}
 function customerGripConfigurationValue(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
     ? quote.buildSpecifications
@@ -4702,7 +4709,17 @@ function renderWorkshopQuote(){
   if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Rod Specification • Build Pricing';
   if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
   if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
-  if($('quoteCustomerSummaryName'))$('quoteCustomerSummaryName').textContent=specificationValue(quote.customerName)||'No customer selected';
+  const customerName=specificationValue(quote.customerName);
+  const customerSummaryName=$('quoteCustomerSummaryName');
+  const customerSummaryMeta=$('quoteCustomerSummaryMeta');
+  if(customerSummaryName){
+    customerSummaryName.textContent=customerName||'No customer selected';
+  }
+  if(customerSummaryMeta){
+    const secondary=customerName?customerCardSecondarySummary():'';
+    customerSummaryMeta.textContent=secondary;
+    customerSummaryMeta.hidden=!secondary;
+  }
   updateQuoteActionPriority();
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput && document.activeElement!==includeTaxInput){
