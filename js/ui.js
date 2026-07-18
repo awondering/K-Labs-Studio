@@ -423,7 +423,7 @@ function homeRodRefreshFromState(triggerSequence){
 function newQuoteTemplate(){
   return{
     buildNumber:'',
-    customerName:'',phone:'',email:'',buildName:'',notes:'',
+    customerName:'',company:'',phone:'',email:'',buildName:'',notes:'',
     addressLine1:'',addressLine2:'',suburbLocality:'',cityTown:'',regionState:'',postcode:'',country:'New Zealand',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
@@ -977,6 +977,7 @@ function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
   const source=record&&typeof record==='object'?record:{};
   const target=targetQuote&&typeof targetQuote==='object'?targetQuote:{};
   target.customerName=String(source.customerName||'').trim();
+  target.company=String(source.company||source.companyName||source.businessName||'').trim();
   target.phone=String(source.phone||'').trim();
   target.email=String(source.email||'').trim();
   target.addressLine1=String(source.addressLine1||'').trim();
@@ -3599,8 +3600,42 @@ function customerBrowserPrimaryRecord(group){
   });
   return sorted[0]&&sorted[0].record?sorted[0].record:{};
 }
+function customerBrowserCompanyValue(record){
+  if(!record || typeof record!=='object')return '';
+  return specificationValue(record.company||record.companyName||record.businessName||'');
+}
+function customerBrowserAddressValue(record){
+  if(!record || typeof record!=='object')return '';
+  const line1=specificationValue(record.addressLine1);
+  const line2=specificationValue(record.addressLine2);
+  const locality=[specificationValue(record.suburbLocality),specificationValue(record.cityTown),specificationValue(record.regionState),specificationValue(record.postcode)].filter(Boolean).join(', ');
+  const country=specificationValue(record.country);
+  return [line1,line2,locality,country].filter(Boolean).join(' • ');
+}
+function customerBrowserDetailRows(record){
+  const rows=[];
+  appendSpecRow(rows,'Customer Name',record&&record.customerName);
+  appendSpecRow(rows,'Company',customerBrowserCompanyValue(record));
+  appendSpecRow(rows,'Phone',record&&record.phone);
+  appendSpecRow(rows,'Email',record&&record.email);
+  appendSpecRow(rows,'Address',customerBrowserAddressValue(record));
+  return rows;
+}
 function customerBrowserGroups(){
-  return customerSavedGroups(customerBrowserSearch,{includeInvalidCustomers:false});
+  const groups=customerSavedGroups('',{includeInvalidCustomers:false}).map((group)=>{
+    const primary=customerBrowserPrimaryRecord(group);
+    return {
+      ...group,
+      company:customerBrowserCompanyValue(primary),
+    };
+  });
+  const searchKey=normalizeNameKey(customerBrowserSearch);
+  if(!searchKey)return groups;
+  return groups.filter((group)=>{
+    if(normalizeNameKey(group.name).includes(searchKey))return true;
+    if(normalizeNameKey(group.company).includes(searchKey))return true;
+    return false;
+  });
 }
 function customerBrowserIsGenericTitle(value){
   const normalized=normalizeNameKey(value);
@@ -3666,10 +3701,9 @@ function renderCustomerBrowser(){
       detailHost.innerHTML=`
         <section class="customers-browser__empty-state" aria-live="polite">
           <h3>No customers matched that search.</h3>
-          <p>Try another name or clear the search to see all saved customers.</p>
+          <p>Try another customer name or company, or clear search to see everyone.</p>
           <div class="customers-browser__empty-actions">
             <button class="ghost-action" type="button" data-customer-browser-action="clear-search">Clear Search</button>
-            <button class="primary-action" type="button" data-customer-browser-action="add-new">Add New Customer</button>
           </div>
         </section>
       `;
@@ -3677,10 +3711,10 @@ function renderCustomerBrowser(){
     }
     detailHost.innerHTML=`
       <section class="customers-browser__empty-state" aria-live="polite">
-        <h3>No customers saved yet.</h3>
-        <p>Add a new customer to start your first build record.</p>
+        <h3>No customers have been added yet.</h3>
+        <p>Start a new build to attach your first customer.</p>
         <div class="customers-browser__empty-actions">
-          <button class="primary-action" type="button" data-customer-browser-action="add-new">Add New Customer</button>
+          <button class="primary-action" type="button" data-customer-browser-action="new-build">New Build</button>
         </div>
       </section>
     `;
@@ -3693,8 +3727,8 @@ function renderCustomerBrowser(){
   }
   listHost.innerHTML=groups.map((group)=>{
     const isActive=group.key===customerBrowserSelectedKey;
-    const totalJobs=group.entries.length;
-    return `<div class="component-sheet__row customers-browser__row"><button class="component-sheet__option customers-browser__option${isActive?' is-active-customer':''}" type="button" data-customer-browser-select="${escapeHtml(group.key)}"><span class="customers-browser__name">${escapeHtml(group.name)}</span><small class="customers-browser__meta">${totalJobs} saved job${totalJobs===1?'':'s'}</small></button></div>`;
+    const companyLine=group.company?`<small class="customers-browser__company">${escapeHtml(group.company)}</small>`:'';
+    return `<div class="component-sheet__row customers-browser__row"><button class="component-sheet__option customers-browser__option${isActive?' is-active-customer':''}" type="button" data-customer-browser-select="${escapeHtml(group.key)}"><span class="customers-browser__name">${escapeHtml(group.name)}</span>${companyLine}</button></div>`;
   }).join('');
   const selected=groups.find((group)=>group.key===customerBrowserSelectedKey)||groups[0];
   if(!selected){
@@ -3703,6 +3737,10 @@ function renderCustomerBrowser(){
     return;
   }
   const primary=customerBrowserPrimaryRecord(selected);
+  const detailRows=customerBrowserDetailRows(primary);
+  const detailMarkup=detailRows.length
+    ? detailRows.map((row)=>`<div class="customers-browser__fact-row"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('')
+    : '<div class="component-sheet__empty">No customer details available yet.</div>';
   const jobsMarkup=selected.entries.length
     ? selected.entries.map((entry)=>{
       const source=String(entry&&entry.source||'quote');
@@ -3719,15 +3757,15 @@ function renderCustomerBrowser(){
   detailHost.innerHTML=`
     <header class="customers-browser__detail-head">
       <h3>${escapeHtml(selected.name)}</h3>
-      <p>${selected.entries.length} saved job${selected.entries.length===1?'':'s'}</p>
+      <p>Customer details and saved builds.</p>
     </header>
     <div class="customers-browser__detail-actions">
-      <button class="primary-action" type="button" data-customer-browser-action="start-build">Start New Build</button>
+      <button class="primary-action" type="button" data-customer-browser-action="start-build">New Build for Customer</button>
       <button class="ghost-action" type="button" data-customer-browser-action="toggle-edit">${customerBrowserEditMode?'Cancel Edit':'Edit Details'}</button>
-      <button class="ghost-action" type="button" data-customer-browser-action="rename">Rename</button>
-      <button class="ghost-action" type="button" data-customer-browser-action="delete">Delete</button>
     </div>
+    <section class="customers-browser__facts" aria-label="Customer details">${detailMarkup}</section>
     <form id="customerBrowserEditForm" class="customers-browser__edit-form" ${customerBrowserEditMode?'':'hidden'}>
+      <label class="customers-browser__edit-full"><span>Company</span><input id="customerBrowserCompany" type="text" value="${escapeHtml(customerBrowserCompanyValue(primary))}" /></label>
       <label><span>Phone</span><input id="customerBrowserPhone" type="text" value="${escapeHtml(primary.phone||'')}" /></label>
       <label><span>Email</span><input id="customerBrowserEmail" type="email" value="${escapeHtml(primary.email||'')}" /></label>
       <label class="customers-browser__edit-full"><span>Address Line 1</span><input id="customerBrowserAddress1" type="text" value="${escapeHtml(primary.addressLine1||'')}" /></label>
@@ -3764,6 +3802,7 @@ function saveCustomerBrowserDetails(){
   if(!group)return;
   const customerKey=group.key;
   const nextValues={
+    company:String(($('customerBrowserCompany')&&$('customerBrowserCompany').value)||'').trim(),
     phone:String(($('customerBrowserPhone')&&$('customerBrowserPhone').value)||'').trim(),
     email:String(($('customerBrowserEmail')&&$('customerBrowserEmail').value)||'').trim(),
     addressLine1:String(($('customerBrowserAddress1')&&$('customerBrowserAddress1').value)||'').trim(),
@@ -3828,6 +3867,10 @@ function bindCustomerBrowserControls(){
           customerBrowserStartNewCustomer();
           return;
         }
+        if(action==='new-build'){
+          openCustomerFinderSheet('new-build');
+          return;
+        }
         if(action==='clear-search'){
           customerBrowserClearSearch();
           renderCustomerBrowser();
@@ -3844,23 +3887,6 @@ function bindCustomerBrowserControls(){
         }
         if(action==='save-edit'){
           saveCustomerBrowserDetails();
-          return;
-        }
-        if(action==='rename'){
-          const group=customerBrowserCurrentGroup();
-          if(group){
-            requestRenameCustomer(group.key,group.name);
-            customerBrowserSelectedKey=normalizeNameKey(group.name)||group.key;
-            customerBrowserEditMode=false;
-            renderCustomerBrowser();
-          }
-          return;
-        }
-        if(action==='delete'){
-          const group=customerBrowserCurrentGroup();
-          if(group){
-            requestDeleteCustomerGroup(group.key,group.name);
-          }
           return;
         }
       }
