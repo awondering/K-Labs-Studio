@@ -1319,6 +1319,11 @@ body.component-sheet-open .workshop-back-to-top{
   gap:8px;
 }
 
+#workshopScreen .quote-actions-grid--build{
+  grid-template-columns:1fr;
+  gap:10px;
+}
+
 #workshopScreen .quote-actions-grid > button,
 #workshopScreen .quote-actions-secondary summary,
 #workshopScreen .quote-actions-secondary .ghost-action{
@@ -1329,6 +1334,33 @@ body.component-sheet-open .workshop-back-to-top{
   align-items:center;
   justify-content:center;
   text-align:center;
+}
+
+#workshopScreen .quote-actions-grid--build > button{
+  width:100%;
+}
+
+#workshopScreen .quote-actions-grid--build #saveQuoteBtn{
+  min-height:54px;
+}
+
+#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn{
+  border-color:rgba(214,210,200,.26);
+  color:rgba(236,230,220,.86);
+  background:rgba(255,255,255,.02);
+}
+
+#workshopScreen .quote-actions-status{
+  margin:2px 2px 0;
+  min-height:15px;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:rgba(198,193,183,.76);
+}
+
+#workshopScreen .quote-actions-status.is-pending{
+  color:rgba(223,205,163,.88);
 }
 
 #workshopScreen .quote-action-tertiary{

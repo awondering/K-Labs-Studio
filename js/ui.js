@@ -1156,9 +1156,18 @@ function canConvertToBuild(){
 }
 function updateQuoteActionPriority(){
   const saveQuoteBtn=$('saveQuoteBtn');
-  if(!saveQuoteBtn)return;
-  saveQuoteBtn.classList.add('primary-action');
-  saveQuoteBtn.classList.remove('ghost-action');
+  const statusEl=$('workshopBuildActionsStatus');
+  if(saveQuoteBtn){
+    saveQuoteBtn.classList.add('primary-action');
+    saveQuoteBtn.classList.remove('ghost-action');
+    const saveDisabled=!hasUnsavedQuoteChanges;
+    saveQuoteBtn.disabled=saveDisabled;
+    saveQuoteBtn.setAttribute('aria-disabled',String(saveDisabled));
+  }
+  if(statusEl){
+    statusEl.textContent=hasUnsavedQuoteChanges?'Unsaved changes':'All changes saved';
+    statusEl.classList.toggle('is-pending',hasUnsavedQuoteChanges);
+  }
   const customerCopyEnabled=hasSavedBuildRecordForCurrentQuote();
   const customerCopyActions=$('customerCopyActions');
   if(customerCopyActions){
@@ -5027,6 +5036,7 @@ function bindWorkshopQuoteBuilder(){
   const saveQuoteBtn=$('saveQuoteBtn');
   if(saveQuoteBtn){
     saveQuoteBtn.addEventListener('click',()=>{
+      if(saveQuoteBtn.disabled)return;
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
       saveQuoteCurrent();
       const savedRef=persistBuildRecord(quote);
