@@ -4403,15 +4403,6 @@ select:focus-visible{
   color:#e0d8ca;
 }
 
-#workshopScreen .quote-builder__new-quote.ghost-action::after{
-  content:'Optional';
-  margin-left:8px;
-  font-size:9px;
-  letter-spacing:.08em;
-  opacity:.7;
-  text-transform:uppercase;
-}
-
 #workshopScreen .quote-section[hidden]{
   display:none!important;
 }
@@ -4488,5 +4479,324 @@ select:focus-visible{
 @media (max-width:420px){
   .saved-build-card__actions{
     justify-self:end;
+  }
+}
+
+/* BUILD 063: design system consistency pass */
+:root{
+  --ds-space-1:4px;
+  --ds-space-2:6px;
+  --ds-space-3:8px;
+  --ds-space-4:10px;
+  --ds-space-5:12px;
+  --ds-space-6:14px;
+  --ds-radius-sm:9px;
+  --ds-radius-md:11px;
+  --ds-radius-lg:13px;
+  --ds-stroke:1px solid rgba(214,210,200,.14);
+  --ds-stroke-strong:1px solid rgba(214,210,200,.22);
+  --ds-surface:linear-gradient(180deg,rgba(18,22,24,.94),rgba(10,13,14,.98));
+  --ds-surface-soft:linear-gradient(180deg,rgba(17,21,23,.72),rgba(10,13,15,.82));
+  --ds-text-strong:#e7dfd1;
+  --ds-text-muted:#9aa096;
+  --ds-transition:180ms cubic-bezier(.2,.72,.25,1);
+}
+
+.screen-head,
+#layoutScreen .layout-screen-shell,
+#workshopScreen .quote-builder,
+#buildsScreen.active,
+#customersScreen,
+#settingsScreen{
+  gap:var(--ds-space-4);
+}
+
+.screen-head{
+  margin:var(--ds-space-1) var(--ds-space-1) var(--ds-space-3);
+}
+
+.screen-head h1,
+#workshopScreen .quote-builder__head h1,
+#homeScreen .home-premium-hero h1{
+  color:var(--ds-text-strong);
+}
+
+.screen-head .subtle,
+.quote-builder__head .subtle,
+.component-sheet__empty,
+.customers-browser__detail-head p,
+.saved-build-card__title,
+.saved-builds-empty p{
+  color:var(--ds-text-muted);
+}
+
+.primary-action,
+.ghost-action,
+.component-sheet__add,
+.component-picker-menu__item,
+.quote-section__toggle,
+.saved-build-card__action,
+.component-sheet__option,
+.customers-browser__job-row,
+.blank-card__select,
+.quote-component-picker__trigger,
+.component-sheet__menu-trigger,
+.component-sheet__favorite{
+  transition:background-color var(--ds-transition),border-color var(--ds-transition),color var(--ds-transition),box-shadow var(--ds-transition),transform var(--ds-transition),opacity var(--ds-transition);
+}
+
+.primary-action,
+.ghost-action,
+.component-sheet__add,
+.quote-section__toggle,
+.saved-build-card__action,
+.component-sheet__option,
+.customers-browser__job-row,
+.blank-card__select,
+.quote-component-picker__trigger,
+.quote-add-component-btn,
+.customers-browser__detail-actions .primary-action,
+.customers-browser__detail-actions .ghost-action{
+  min-height:40px;
+  border-radius:var(--ds-radius-md);
+}
+
+.primary-action{
+  font-size:11px;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  border:1px solid rgba(188,53,65,.58);
+  background:linear-gradient(180deg,rgba(173,40,52,.96),rgba(126,22,32,.96));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 6px 14px rgba(0,0,0,.22);
+}
+
+.ghost-action,
+.component-sheet__add{
+  font-size:10px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  border:var(--ds-stroke);
+  background:linear-gradient(180deg,rgba(17,21,23,.92),rgba(11,14,16,.96));
+  color:#d1cbbf;
+}
+
+.component-sheet__add{
+  text-align:center;
+  justify-content:center;
+}
+
+.primary-action:hover,
+.primary-action:focus-visible{
+  border-color:rgba(208,74,86,.74);
+  color:#f6eee2;
+}
+
+.ghost-action:hover,
+.ghost-action:focus-visible,
+.component-sheet__add:hover,
+.component-sheet__add:focus-visible{
+  border-color:rgba(214,210,200,.34);
+  background:linear-gradient(180deg,rgba(22,27,29,.95),rgba(13,17,19,.98));
+  color:#ece4d7;
+}
+
+.component-sheet__danger,
+.quote-component-row__delete,
+#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn{
+  border-color:rgba(191,63,75,.44)!important;
+  color:#f0d6d9!important;
+  background:linear-gradient(180deg,rgba(88,23,31,.5),rgba(53,14,19,.58))!important;
+}
+
+.component-sheet__danger:hover,
+.component-sheet__danger:focus-visible,
+.quote-component-row__delete:hover,
+.quote-component-row__delete:focus-visible,
+#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn:hover,
+#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn:focus-visible{
+  border-color:rgba(214,92,103,.58)!important;
+  color:#fae6e8!important;
+}
+
+.quote-grid input,
+.quote-grid textarea,
+.quote-component-row input,
+.blank-editor-grid input,
+.blank-editor-grid textarea,
+.customers-browser__edit-form input,
+.customer-finder__new-form input,
+.component-sheet__search,
+.component-sheet__custom-input,
+#settingsTaxRate,
+.workshop-tool-fields input{
+  min-height:34px;
+  border-radius:var(--ds-radius-sm);
+  border:var(--ds-stroke);
+  background:linear-gradient(180deg,#13181a,#0c1012);
+  color:#e6dece;
+  font-size:12px;
+}
+
+.quote-grid textarea,
+.blank-editor-grid textarea{
+  min-height:58px;
+}
+
+.quote-grid input:focus,
+.quote-grid textarea:focus,
+.quote-component-row input:focus,
+.blank-editor-grid input:focus,
+.blank-editor-grid textarea:focus,
+.customers-browser__edit-form input:focus,
+.customer-finder__new-form input:focus,
+.component-sheet__search:focus,
+.component-sheet__custom-input:focus,
+#settingsTaxRate:focus,
+.workshop-tool-fields input:focus{
+  border-color:rgba(189,56,68,.52);
+  box-shadow:0 0 0 1px rgba(189,56,68,.22);
+  outline:none;
+}
+
+#workshopScreen .quote-builder__head,
+#workshopScreen .quote-section,
+.saved-build-card,
+.customers-browser__detail,
+.customers-browser__facts,
+.customers-browser__empty-state,
+.component-sheet__panel,
+.quote-preview-card,
+.rod-blank-visual,
+.guide-spacing-panel,
+.layout-control-card,
+.settings-card,
+.blank-card,
+.selected-blank-card,
+.workshop-tool-list,
+.workshop-tool-card{
+  border-radius:var(--ds-radius-lg);
+  border:var(--ds-stroke);
+  background:var(--ds-surface);
+}
+
+.component-sheet__panel,
+.quote-preview-panel{
+  box-shadow:0 16px 30px rgba(0,0,0,.42);
+}
+
+.component-sheet__header,
+.component-sheet__body,
+#workshopScreen .quote-section--collapsible .quote-section__body,
+.customers-browser__detail,
+.quote-preview-card,
+.saved-build-card,
+.settings-card,
+.guide-spacing-panel,
+.layout-control-card,
+.workshop-tool-list,
+.workshop-tool-card{
+  padding:var(--ds-space-5);
+}
+
+#workshopScreen .quote-section__toggle,
+.saved-build-card__open,
+.customers-browser__job-row,
+.component-sheet__option,
+.blank-card__select{
+  padding:var(--ds-space-3) var(--ds-space-4);
+}
+
+.saved-builds-list,
+.customers-browser__jobs-list,
+.component-sheet__list,
+.quote-components,
+.guide-spacing-list,
+.blank-library-controls,
+.customer-finder__work-list,
+.customer-finder__layout,
+.customers-browser__layout,
+#workshopScreen .quote-actions-grid,
+#workshopScreen .quote-actions-secondary,
+#workshopScreen .quote-actions-secondary__list{
+  gap:var(--ds-space-3);
+}
+
+.saved-build-card__meta,
+.quote-component-row__summary-meta,
+.customers-browser__meta,
+.customers-browser__company,
+.component-sheet__option-meta{
+  font-size:10px;
+  letter-spacing:.04em;
+}
+
+.quote-section__toggle-title,
+.quote-grid span,
+.quote-component-field span,
+.guide-spacing-row__meta span,
+.customers-browser__fact-row span,
+.component-sheet__custom-title,
+.workshop-tool-fields label span,
+.workshop-tool-details span,
+.workshop-tool-result span{
+  font-size:9px;
+  letter-spacing:.1em;
+}
+
+.quote-section__toggle-summary span,
+.customers-browser__detail-head p,
+.saved-build-card__title,
+.component-sheet__empty,
+.workshop-tool-list p,
+.workshop-tool-head p,
+.workshop-tool-note{
+  font-size:10px;
+  letter-spacing:.02em;
+}
+
+.quote-component-row,
+.saved-build-card,
+.customers-browser__job-row,
+.component-sheet__option,
+.blank-card__select{
+  box-shadow:0 4px 10px rgba(0,0,0,.12);
+}
+
+.quote-component-row:hover,
+.saved-build-card:hover,
+.customers-browser__job-row:hover,
+.component-sheet__option:hover,
+.blank-card__select:hover{
+  box-shadow:0 7px 14px rgba(0,0,0,.18);
+}
+
+#workshopScreen .quote-section--collapsed .quote-section__body{
+  transition:max-height var(--ds-transition),opacity var(--ds-transition),padding-top var(--ds-transition),padding-bottom var(--ds-transition);
+}
+
+.component-sheet__panel,
+.quote-preview-panel,
+.customer-finder__detail,
+.customers-browser__detail,
+.workshop-tool-result--primary strong,
+#workshopDcPrimaryValue,
+#workshopGripMaterialRequired{
+  transition:transform var(--ds-transition),opacity var(--ds-transition),color var(--ds-transition),border-color var(--ds-transition),background-color var(--ds-transition);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .primary-action,
+  .ghost-action,
+  .component-sheet__add,
+  .component-sheet__option,
+  .customers-browser__job-row,
+  .saved-build-card,
+  .quote-component-row,
+  .component-sheet__panel,
+  .quote-preview-panel,
+  .workshop-tool-result--primary strong,
+  #workshopDcPrimaryValue,
+  #workshopGripMaterialRequired{
+    transition:none!important;
   }
 }
