@@ -30,7 +30,6 @@
         <div class="brand-copy">
           <strong>K-Labs Studio</strong>
           <small>CUSTOM ROD BUILDING SUITE</small>
-          <span>EST. 2005 • klabs.co.nz</span>
         </div>
       </div>
     </header>
@@ -268,6 +267,7 @@
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
           <h1 id="quoteBuilderTitle">Studio</h1>
+          <p class="subtle">Start with New Build, then complete each section in order.</p>
         </header>
 
         <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
@@ -279,7 +279,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Customer</span>
               <span id="quoteCustomerSummaryText" class="quote-section__toggle-summary" aria-live="polite">
-                <span>No customer selected</span>
+                <span>Add customer details</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -331,7 +331,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Rod Specification</span>
               <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildCostsSummaryText">No components selected</span>
+                <span id="workshopBuildCostsSummaryText">Select blank and components</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -346,7 +346,7 @@
             <div id="workshopBuildCostsBody" class="quote-grid__full">
               <div id="quoteComponentsList" class="quote-components"></div>
               <div class="quote-actions-row">
-              <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">+ Add Components</button>
+              <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">Add Components</button>
               </div>
             </div>
           </div>
@@ -357,7 +357,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Pricing</span>
               <span id="workshopBuildPricingSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildPricingSummaryText">Awaiting Pricing</span>
+                <span id="workshopBuildPricingSummaryText">Set customer price</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -381,6 +381,9 @@
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildActionsBody">
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Actions</span>
+              <span class="quote-section__toggle-summary" aria-live="polite">
+                <span>Save or delete this build</span>
+              </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
@@ -394,7 +397,7 @@
     </section>
 
     <section class="screen" id="buildsScreen">
-      <div class="screen-head"><p class="eyebrow">Saved Builds</p><h1>Saved Builds</h1></div>
+      <div class="screen-head"><h1>Saved Jobs</h1><p class="subtle">Open, duplicate, or continue a build.</p></div>
       <div class="blank-library-controls saved-builds-controls">
         <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search customer name or build name" autocomplete="off" />
         <button id="savedBuildsNewBuildBtn" class="primary-action" type="button">New Build</button>
@@ -403,7 +406,7 @@
     </section>
 
     <section class="screen" id="customersScreen">
-      <div class="screen-head"><p class="eyebrow">Customers</p><h1>Customer Browser</h1></div>
+      <div class="screen-head"><h1>Customers</h1><p class="subtle">Find customer details and start builds quickly.</p></div>
       <div class="blank-library-controls customers-browser__controls">
         <input id="customerBrowserSearchInput" class="component-sheet__search" type="search" placeholder="Search customer name or company" autocomplete="off" spellcheck="false" />
       </div>
@@ -416,7 +419,7 @@
     </section>
 
     <section class="screen" id="settingsScreen">
-      <div class="screen-head"><p class="eyebrow">Settings</p><h1>Studio</h1></div>
+      <div class="screen-head"><h1>Studio Settings</h1><p class="subtle">Configure pricing, units, and date format.</p></div>
       <article class="settings-card" aria-label="Pricing and Tax">
         <h2>Pricing &amp; Tax</h2>
         <div class="settings-row"><span>Tax Enabled (Default)</span><strong><input id="settingsTaxEnabled" type="checkbox" checked /></strong></div>

@@ -3451,7 +3451,7 @@ function buildCostsSummaryData(){
   }
   if(blankName)return blankName;
   if(componentCount>0)return `${componentCount} Component${componentCount===1?'':'s'} Selected`;
-  return 'No components selected';
+  return 'Select blank and components';
 }
 function updateBuildCostsSummary(){
   const textEl=$('workshopBuildCostsSummaryText');
@@ -3462,7 +3462,7 @@ function updateBuildPricingSummary(){
   const summaryEl=$('workshopBuildPricingSummaryText');
   if(!summaryEl)return;
   const price=numberOrZero(quote&&quote.finalCustomerPrice);
-  summaryEl.textContent=price>0?`Customer Price NZ$${price.toFixed(2)}`:'Awaiting Pricing';
+  summaryEl.textContent=price>0?`Customer Price NZ$${price.toFixed(2)}`:'Set customer price';
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
@@ -4618,8 +4618,7 @@ function renderCustomerBrowser(){
     if(hasSearchQuery && hasAnyCustomers){
       detailHost.innerHTML=`
         <section class="customers-browser__empty-state" aria-live="polite">
-          <h3>No customers matched that search.</h3>
-          <p>Try another customer name or company, or clear search to see everyone.</p>
+          <p>No customers matched that search. Try another name or company.</p>
           <div class="customers-browser__empty-actions">
             <button class="ghost-action" type="button" data-customer-browser-action="clear-search">Clear Search</button>
           </div>
@@ -4629,8 +4628,7 @@ function renderCustomerBrowser(){
     }
     detailHost.innerHTML=`
       <section class="customers-browser__empty-state" aria-live="polite">
-        <h3>No customers have been added yet.</h3>
-        <p>Start a new build to attach your first customer.</p>
+        <p>No customers yet. Start a new build to attach your first customer.</p>
         <div class="customers-browser__empty-actions">
           <button class="primary-action" type="button" data-customer-browser-action="new-build">New Build</button>
         </div>
@@ -4670,12 +4668,12 @@ function renderCustomerBrowser(){
       const meta=[statusText,`Saved ${savedAt}`].join(' • ');
       return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></button>`;
     }).join('')
-    : '<div class="component-sheet__empty">No saved builds for this customer.</div>';
+    : '<div class="component-sheet__empty">No saved jobs for this customer.</div>';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customers-browser__detail-head">
       <h3>${escapeHtml(selected.name)}</h3>
-      <p>Customer details and saved builds.</p>
+      <p>Customer details and active build history.</p>
     </header>
     <div class="customers-browser__detail-actions">
       <button class="primary-action" type="button" data-customer-browser-action="start-build">New Build for Customer</button>
@@ -4699,7 +4697,7 @@ function renderCustomerBrowser(){
       </div>
     </form>
     <section class="customers-browser__jobs" aria-label="Saved builds">
-      <h4>Saved Builds</h4>
+      <h4>Saved Jobs</h4>
       <div class="customers-browser__jobs-list">${jobsMarkup}</div>
     </section>
   `;
@@ -4949,7 +4947,7 @@ function renderBuilds(){
     })
     .filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
   if(!records.length){
-    host.innerHTML='<section class="saved-builds-empty"><h3>No saved builds yet.</h3><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+    host.innerHTML='<section class="saved-builds-empty"><h3>No saved jobs yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
     const emptyButton=$('savedBuildsEmptyNewBuildBtn');
     if(emptyButton){
       emptyButton.addEventListener('click',()=>{

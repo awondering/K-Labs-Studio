@@ -3996,3 +3996,396 @@ select:focus-visible{
     grid-template-columns:1fr;
   }
 }
+
+/* BUILD 062: refinement and simplification pass */
+.topbar{
+  margin-bottom:8px;
+}
+
+.icon-button{
+  width:46px;
+  height:46px;
+  border-radius:14px;
+}
+
+.brand-lockup small{
+  font-size:7px;
+  letter-spacing:.16em;
+}
+
+.screen-head{
+  display:grid;
+  gap:3px;
+  margin:4px 2px 8px;
+}
+
+.screen-head .eyebrow{
+  display:none;
+}
+
+.screen-head h1{
+  margin:0;
+  font-size:24px;
+  letter-spacing:-.015em;
+  line-height:1.04;
+}
+
+.screen-head .subtle{
+  margin:0;
+  font-size:11px;
+  color:#8d928b;
+}
+
+#layoutScreen .layout-screen-shell{
+  gap:6px;
+}
+
+#layoutScreen .layout-control-card{
+  border-radius:12px;
+  padding:6px 6px 5px;
+}
+
+#layoutScreen .layout-control-card__value{
+  min-height:34px;
+  font-size:30px;
+}
+
+#layoutScreen .guide-spacing-panel{
+  border-radius:12px;
+  padding:7px;
+}
+
+#layoutScreen .guide-spacing-row{
+  padding:4px 0;
+}
+
+#workshopScreen .quote-builder{
+  gap:9px;
+  padding-bottom:calc(188px + var(--safe-bottom));
+}
+
+#workshopScreen .quote-builder__head{
+  padding:8px 10px 7px;
+  border-radius:12px;
+}
+
+#workshopScreen .quote-builder__head h1{
+  margin:4px 0;
+  font-size:24px;
+}
+
+#workshopScreen .quote-builder__head .subtle{
+  margin:0;
+  font-size:10px;
+  letter-spacing:.03em;
+}
+
+#workshopScreen .quote-builder__entry-actions{
+  gap:6px;
+}
+
+#workshopScreen .quote-builder__new-quote{
+  min-height:46px;
+  border-radius:11px;
+  letter-spacing:.1em;
+  font-size:12px;
+}
+
+#workshopScreen .quote-section{
+  gap:7px;
+  padding:11px;
+  border-radius:14px;
+  box-shadow:0 6px 14px rgba(0,0,0,.13);
+}
+
+#workshopScreen .quote-section__toggle{
+  min-height:50px;
+  padding:10px 12px;
+  gap:8px;
+}
+
+#workshopScreen .quote-section__toggle-title{
+  font-size:10px;
+  letter-spacing:.12em;
+}
+
+#workshopScreen .quote-section__toggle-summary span{
+  font-size:9px;
+}
+
+#workshopScreen .quote-section--collapsible .quote-section__body{
+  padding:10px 12px 12px;
+}
+
+#workshopScreen .quote-grid{
+  gap:6px;
+}
+
+#workshopScreen .quote-grid span,
+#workshopScreen .quote-component-field span{
+  font-size:8px;
+  letter-spacing:.1em;
+}
+
+#workshopScreen .quote-grid input,
+#workshopScreen .quote-grid textarea,
+#workshopScreen .quote-component-row input,
+#workshopScreen .quote-component-picker__trigger{
+  min-height:32px;
+  padding:7px 8px;
+}
+
+#workshopScreen .quote-grid textarea{
+  min-height:54px;
+}
+
+#workshopScreen .quote-actions-grid,
+#workshopScreen .quote-actions-secondary,
+#workshopScreen .quote-actions-secondary__list{
+  gap:6px;
+}
+
+#workshopScreen .quote-actions-grid > button,
+#workshopScreen .quote-actions-secondary summary,
+#workshopScreen .quote-actions-secondary .ghost-action{
+  min-height:46px;
+  border-radius:11px;
+}
+
+#workshopScreen .quote-actions-grid--build #saveQuoteBtn{
+  min-height:50px;
+}
+
+#workshopScreen .quote-actions-status{
+  margin:0;
+  min-height:13px;
+  font-size:9px;
+}
+
+.quote-add-component-btn{
+  min-height:40px;
+  font-size:11px;
+}
+
+.quote-components{
+  gap:8px;
+}
+
+.quote-component-row{
+  border-radius:12px;
+}
+
+.quote-component-row__summary{
+  gap:7px;
+  padding:10px;
+}
+
+.quote-component-row__summary-item{
+  font-size:12px;
+}
+
+.quote-component-row__summary-meta{
+  gap:4px;
+  font-size:9px;
+}
+
+.quote-component-row__summary-cost{
+  font-size:12px;
+}
+
+.quote-component-row__editor{
+  gap:6px;
+  padding:0 9px 9px;
+}
+
+.quote-component-row__fields{
+  gap:6px;
+}
+
+.quote-component-row__actions{
+  gap:5px;
+}
+
+.quote-component-row__actions .ghost-action{
+  min-height:31px;
+  font-size:9px;
+}
+
+.selected-blank-card{
+  gap:10px;
+  padding:10px 0 4px;
+}
+
+.selected-blank-card__name,
+.selected-blank-card--empty strong{
+  font-size:20px;
+}
+
+.selected-blank-card__summary{
+  gap:4px;
+  font-size:11px;
+}
+
+.selected-blank-card__change,
+.selected-blank__menu-trigger{
+  min-height:36px;
+  height:36px;
+}
+
+.blank-library-controls{
+  margin:0 2px 8px;
+  gap:6px;
+}
+
+.blank-library-controls .component-sheet__search{
+  min-height:32px;
+}
+
+.blank-library-controls .primary-action{
+  min-height:34px;
+}
+
+.saved-builds-list{
+  gap:8px;
+  padding:0 0 6px;
+}
+
+.saved-build-card{
+  margin:0;
+  gap:7px;
+  padding:8px;
+  border-radius:12px;
+}
+
+.saved-build-card__head strong{
+  font-size:13px;
+}
+
+.saved-build-card__title,
+.saved-build-card__meta strong{
+  font-size:10px;
+}
+
+.saved-build-card__meta{
+  grid-template-columns:82px minmax(0,1fr);
+  gap:6px;
+}
+
+.saved-build-card__action{
+  min-height:31px;
+  min-width:68px;
+  font-size:10px;
+}
+
+.saved-builds-empty{
+  gap:8px;
+  margin:0;
+  padding:9px 2px;
+  border:none;
+  border-radius:0;
+  background:transparent;
+}
+
+.saved-builds-empty h3{
+  font-size:14px;
+}
+
+.saved-builds-empty p{
+  margin:0;
+  color:#9ba096;
+  font-size:11px;
+  line-height:1.4;
+}
+
+.saved-builds-empty .primary-action{
+  min-height:38px;
+  padding:0 14px;
+  font-size:11px;
+}
+
+.customers-browser__layout{
+  gap:10px;
+}
+
+.customers-browser__detail{
+  gap:10px;
+  border-radius:11px;
+  padding:10px;
+}
+
+.customers-browser__detail-head h3{
+  font-size:13px;
+  letter-spacing:.04em;
+}
+
+.customers-browser__detail-head p{
+  margin-top:4px;
+  font-size:10px;
+}
+
+.customers-browser__detail-actions{
+  gap:6px;
+}
+
+.customers-browser__detail-actions .primary-action,
+.customers-browser__detail-actions .ghost-action{
+  min-height:40px;
+  border-radius:9px;
+  font-size:10px;
+}
+
+.customers-browser__facts{
+  gap:6px;
+  padding:8px;
+}
+
+.customers-browser__fact-row span,
+.customers-browser__jobs h4,
+.customers-browser__meta{
+  font-size:9px;
+}
+
+.customers-browser__fact-row strong,
+.customers-browser__job-row strong{
+  font-size:11px;
+}
+
+.customers-browser__job-row{
+  gap:3px;
+  padding:9px;
+}
+
+.customers-browser__job-row small,
+.customers-browser__company,
+.customers-browser__empty-state p{
+  font-size:10px;
+}
+
+.customers-browser__empty-state{
+  gap:8px;
+  padding:12px;
+  border-style:dashed;
+  background:rgba(255,255,255,.012);
+}
+
+.customers-browser__empty-state h3{
+  font-size:13px;
+}
+
+.customers-browser__empty-actions .primary-action,
+.customers-browser__empty-actions .ghost-action{
+  min-height:38px;
+  border-radius:9px;
+  font-size:10px;
+}
+
+.component-sheet__empty{
+  font-size:10px;
+  color:#8e938b;
+}
+
+.component-sheet__empty-state{
+  min-height:110px;
+  gap:6px;
+  padding:8px;
+}
