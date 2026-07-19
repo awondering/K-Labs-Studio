@@ -1102,14 +1102,14 @@ function syncQuotePricing(driver){
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
   return[
-    {x:8,y:36.1},
-    {x:18,y:36.1},
-    {x:30,y:36.1},
-    {x:43,y:36.1},
-    {x:57,y:36.1},
-    {x:71,y:36.1},
-    {x:84,y:36.1},
-    {x:94,y:36.1}
+    {x:8,y:53.5},
+    {x:18,y:53.5},
+    {x:30,y:53.5},
+    {x:43,y:53.5},
+    {x:57,y:53.5},
+    {x:71,y:53.5},
+    {x:84,y:53.5},
+    {x:94,y:53.5}
   ];
 }
 function homeRodClearSequenceTimer(){

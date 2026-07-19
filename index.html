@@ -37,37 +37,37 @@
 
     <section class="screen active" id="homeScreen">
       <div class="home-premium-shell">
-        <header class="home-premium-hero" aria-label="K-Labs Studio branding">
-          <h1>K-Labs Studio</h1>
-          <p>Precision custom fishing rod building, quoting and build companion.</p>
-        </header>
         <div id="homeLivingRod" class="home-living-rod" aria-hidden="true">
-          <svg class="home-living-rod__blank" viewBox="0 0 1200 360" preserveAspectRatio="none" role="presentation" focusable="false">
+          <svg class="home-living-rod__blank" viewBox="0 0 1200 64" preserveAspectRatio="none" role="presentation" focusable="false">
             <defs>
               <pattern id="homeRodCarbonWeave" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                 <path d="M0 0H8" stroke="#ffffff" stroke-opacity="0.16" stroke-width="0.92"></path>
               </pattern>
               <linearGradient id="homeRodBlankBase" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#1c2123"></stop>
-                <stop offset="58%" stop-color="#0d1113"></stop>
-                <stop offset="100%" stop-color="#151a1c"></stop>
+                <stop offset="0%" stop-color="#1c2022"></stop>
+                <stop offset="58%" stop-color="#0c1011"></stop>
+                <stop offset="100%" stop-color="#161a1c"></stop>
               </linearGradient>
               <linearGradient id="homeRodCylinderShade" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stop-color="rgba(255,255,255,0.03)"></stop>
-                <stop offset="30%" stop-color="rgba(255,255,255,0.08)"></stop>
+                <stop offset="30%" stop-color="rgba(255,255,255,0.07)"></stop>
                 <stop offset="56%" stop-color="rgba(255,255,255,0.03)"></stop>
-                <stop offset="100%" stop-color="rgba(0,0,0,0.22)"></stop>
+                <stop offset="100%" stop-color="rgba(0,0,0,0.26)"></stop>
               </linearGradient>
               <clipPath id="homeRodBlankClip">
-                <path d="M8 124 L1148 129.3 L1148 130.7 L8 136 Z"></path>
+                <path d="M18 28.8 L1150 27.5 L1150 35.2 L18 36.6 Z"></path>
               </clipPath>
             </defs>
-            <path d="M8 124 L1148 129.3 L1148 130.7 L8 136 Z" fill="url(#homeRodBlankBase)"></path>
-            <rect x="8" y="123" width="1140" height="14" fill="url(#homeRodCarbonWeave)" clip-path="url(#homeRodBlankClip)" opacity="0.8"></rect>
-            <path d="M42 126.8 L1126 130" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="1.6" stroke-linecap="round" opacity="0.5"></path>
+            <path d="M18 28.8 L1150 27.5 L1150 35.2 L18 36.6 Z" fill="url(#homeRodBlankBase)"></path>
+            <rect x="18" y="26" width="1132" height="12" fill="url(#homeRodCarbonWeave)" clip-path="url(#homeRodBlankClip)" opacity="0.72"></rect>
+            <path d="M34 29.9 L1136 28.6" fill="none" stroke="url(#homeRodCylinderShade)" stroke-width="1.4" stroke-linecap="round" opacity="0.48"></path>
           </svg>
           <span class="home-living-rod__leds"></span>
         </div>
+        <header class="home-premium-hero" aria-label="K-Labs Studio branding">
+          <h1>K-Labs Studio</h1>
+          <p>Precision custom fishing rod building, quoting and build companion.</p>
+        </header>
         <button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">ENTER ROD STUDIO</button>
       </div>
     </section>
