@@ -43,6 +43,7 @@
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce){
   #studioRodContainer .led{transition:none!important}
+  #homeScreen .home-living-rod__led{transition:none!important}
 }
 
 body.component-sheet-open{
@@ -155,11 +156,11 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   width:2.6px;
   height:2.6px;
   border-radius:999px;
-  background:radial-gradient(circle at 34% 30%,#b04a56 0%,#8d2631 44%,#55161f 100%);
-  box-shadow:inset 0 0 .72px rgba(241,182,191,.18),0 0 0 .66px rgba(31,8,12,.98);
-  opacity:.98;
+  background:radial-gradient(circle at 34% 30%,#8d323d 0%,#6d202a 46%,#44141b 100%);
+  box-shadow:inset 0 0 .58px rgba(216,145,156,.14),0 0 0 .6px rgba(27,8,12,.92);
+  opacity:0;
   transform:translate(-50%,-50%);
-  transition:opacity 520ms ease-out,box-shadow 520ms ease-out,background-image 520ms ease-out;
+  transition:opacity 360ms cubic-bezier(.2,.75,.24,1),box-shadow 360ms cubic-bezier(.2,.75,.24,1),background-image 360ms cubic-bezier(.2,.75,.24,1);
   will-change:opacity;
 }
 
@@ -177,7 +178,7 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 #homeScreen .home-living-rod__led::before{
   width:1.2px;
   height:1.2px;
-  background:radial-gradient(circle,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 72%);
+  background:radial-gradient(circle,rgba(255,255,255,.15) 0%,rgba(255,255,255,0) 72%);
   box-shadow:none;
 }
 
@@ -190,9 +191,15 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 }
 
 #homeScreen .home-living-rod__led.is-lit{
-  opacity:1;
-  background:radial-gradient(circle at 34% 30%,#bf515d 0%,#982b37 45%,#5b1822 100%);
-  box-shadow:inset 0 0 .78px rgba(250,195,203,.22),0 0 0 .72px rgba(36,9,14,.99);
+  opacity:.94;
+  background:radial-gradient(circle at 34% 30%,#b44854 0%,#8a2732 45%,#52161f 100%);
+  box-shadow:inset 0 0 .72px rgba(246,186,195,.2),0 0 0 .66px rgba(34,9,13,.96),0 0 2.8px rgba(139,38,50,.26);
+}
+
+#homeScreen .home-living-rod__led.is-resting{
+  opacity:.52;
+  background:radial-gradient(circle at 34% 30%,#9a3944 0%,#74212b 45%,#46151d 100%);
+  box-shadow:inset 0 0 .6px rgba(229,169,178,.15),0 0 0 .62px rgba(29,8,12,.94),0 0 1.5px rgba(121,33,43,.18);
 }
 
 #homeScreen .home-enter-rod-button{

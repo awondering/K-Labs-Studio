@@ -67,7 +67,7 @@ let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
 const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
-const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null};
+const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null,sequenceAnimating:false,sequenceCompleted:false};
 let modalLockDepth=0;
 let modalReturnFocusEl=null;
 let modalLockedScrollY=0;
@@ -1118,6 +1118,20 @@ function homeRodClearSequenceTimer(){
     homeRodState.sequenceTimer=null;
   }
 }
+function homePrefersReducedMotion(){
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function homeRodApplyRestingState(){
+  const rod=homeRodEnsureLeds();
+  if(!rod)return;
+  const leds=rod.querySelectorAll('.home-living-rod__led');
+  leds.forEach((led)=>{
+    led.classList.remove('is-lit');
+    led.classList.add('is-resting');
+  });
+  homeRodState.litCount=homeRodState.ledCount;
+  homeRodState.ready=homeRodState.ledCount>0;
+}
 function homeRodEnsureLeds(){
   const rod=homeRodElement();
   if(!rod)return null;
@@ -1140,7 +1154,9 @@ function homeRodSetLitCount(count){
   const leds=rod.querySelectorAll('.home-living-rod__led');
   const threshold=Math.max(0,homeRodState.ledCount-nextCount);
   leds.forEach((led,index)=>{
-    led.classList.toggle('is-lit',index>=threshold);
+    const isLit=index>=threshold;
+    led.classList.toggle('is-lit',isLit);
+    led.classList.toggle('is-resting',false);
   });
   homeRodState.ready=nextCount>0;
 }
@@ -1160,19 +1176,35 @@ function homeRodRunStartupSequence(){
   const rod=homeRodEnsureLeds();
   if(!rod)return;
   homeRodClearSequenceTimer();
+  homeRodState.sequenceAnimating=true;
+  homeRodState.sequenceCompleted=false;
+  if(homePrefersReducedMotion()){
+    homeRodApplyRestingState();
+    homeRodState.sequenceAnimating=false;
+    homeRodState.sequenceCompleted=true;
+    return;
+  }
   const total=Math.max(1,homeRodState.ledCount);
   homeRodSetLitCount(0);
+  const startupDelay=360;
+  const staggerDelay=120;
+  const settleDelay=220;
   let nextLit=1;
   const tick=()=>{
     homeRodSetLitCount(nextLit);
     if(nextLit<total){
       nextLit+=1;
-      homeRodState.sequenceTimer=setTimeout(tick,210);
+      homeRodState.sequenceTimer=setTimeout(tick,staggerDelay);
       return;
     }
-    homeRodState.sequenceTimer=null;
+    homeRodState.sequenceTimer=setTimeout(()=>{
+      homeRodApplyRestingState();
+      homeRodState.sequenceAnimating=false;
+      homeRodState.sequenceCompleted=true;
+      homeRodState.sequenceTimer=null;
+    },settleDelay);
   };
-  tick();
+  homeRodState.sequenceTimer=setTimeout(tick,startupDelay);
 }
 function homeRodRefreshFromState(triggerSequence){
   const rod=homeRodEnsureLeds();
@@ -1184,7 +1216,9 @@ function homeRodRefreshFromState(triggerSequence){
     homeRodState.homeFirstOpen=false;
     homeRodRunStartupSequence();
   }else{
-    homeRodSetLitCount(homeRodState.ledCount);
+    if(homeRodState.sequenceCompleted){
+      homeRodApplyRestingState();
+    }
   }
 }
 function newQuoteTemplate(){
@@ -6152,6 +6186,9 @@ function onScreenChange(screenId){
   clearLayoutFieldFocusSelection();
   if(screenId==='homeScreen'){
     homeRodRefreshFromState(true);
+  }else{
+    homeRodClearSequenceTimer();
+    homeRodState.sequenceAnimating=false;
   }
   if(screenId==='buildsScreen'){
     const searchInput=$('buildsSearchInput');
