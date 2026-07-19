@@ -730,12 +730,17 @@ function bindWorkshopCalculatorControls(){
       const nextTool=button.getAttribute('data-workshop-tool-open');
       workshopToolsState.activeTool=nextTool==='grip'?'grip':'diameter';
       renderWorkshopCalculator();
+      focusWorkshopToolPrimaryInput(workshopToolsState.activeTool);
     });
   });
   panel.querySelectorAll('[data-workshop-tool-back]').forEach((button)=>{
     button.addEventListener('click',()=>{
       workshopToolsState.activeTool='list';
       renderWorkshopCalculator();
+      const launcher=panel.querySelector('[data-workshop-tool-open]');
+      if(launcher){
+        try{launcher.focus({preventScroll:true});}catch{launcher.focus();}
+      }
     });
   });
 
@@ -865,6 +870,9 @@ function bindWorkshopCalculatorControls(){
       openGripCutTemplatePrint();
     });
   }
+
+  bindWorkshopToolEnterFlow(['workshopDcDiameter','workshopDcCircumference']);
+  bindWorkshopToolEnterFlow(['workshopGripDiameter','workshopGripStartDiameter','workshopGripEndDiameter','workshopGripLength','workshopGripCoverWidth','workshopGripAllowance']);
 
   renderWorkshopCalculator();
 }
@@ -4885,6 +4893,36 @@ function persistLayoutControlState(){
   pendingControlPersist=false;
   save();
 }
+function focusWorkshopToolPrimaryInput(tool){
+  const targetId=tool==='grip'?'workshopGripDiameter':'workshopDcDiameter';
+  const input=$(targetId);
+  if(!input || input.disabled || input.hidden)return;
+  window.requestAnimationFrame(()=>{
+    try{input.focus({preventScroll:true});}catch{input.focus();}
+    if(typeof input.select==='function')input.select();
+  });
+}
+function bindWorkshopToolEnterFlow(inputIds){
+  const inputs=inputIds
+    .map((id)=>$(id))
+    .filter((el)=>el && !el.disabled);
+  inputs.forEach((input,index)=>{
+    if(input.getAttribute('data-workshop-enter-flow-bound')==='true')return;
+    input.setAttribute('data-workshop-enter-flow-bound','true');
+    input.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      for(let next=index+1;next<inputs.length;next+=1){
+        const target=inputs[next];
+        if(!target || target.disabled || target.hidden)continue;
+        try{target.focus({preventScroll:true});}catch{target.focus();}
+        if(typeof target.select==='function')target.select();
+        return;
+      }
+      input.blur();
+    });
+  });
+}
 function focusLayoutField(field){
   const target=document.querySelector(`.layout-control-card__value[data-field="${field}"]`);
   if(!target || !target.isContentEditable)return;
@@ -4975,6 +5013,8 @@ function bindLayoutControls(){
       state.workshopIndex=index;
       save();
       render();
+      const selected=guideSpacingCards.querySelector(`[data-guide-index="${index}"]`);
+      if(selected && typeof selected.scrollIntoView==='function')selected.scrollIntoView({block:'nearest'});
     });
     guideSpacingCards.addEventListener('keydown',(event)=>{
       if(event.key!=='Enter' && event.key!==' ')return;
@@ -4986,6 +5026,8 @@ function bindLayoutControls(){
       state.workshopIndex=index;
       save();
       render();
+      const selected=guideSpacingCards.querySelector(`[data-guide-index="${index}"]`);
+      if(selected && typeof selected.scrollIntoView==='function')selected.scrollIntoView({block:'nearest'});
     });
   }
 
@@ -6063,11 +6105,11 @@ function render(){
     guideSpacingCards.innerHTML=r.rows.map((row,i)=>`
       <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}. Spacing ${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
-          <span>Guide ${row.g}</span>
+          <span class="guide-spacing-row__guide-name">Guide ${row.g}</span>
         </div>
         <div class="guide-spacing-row__meta">
           <small>Position</small>
-          <span>${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}</span>
+          <span class="guide-spacing-row__position-value">${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}</span>
         </div>
         <div class="guide-spacing-row__spacing">
           <span class="guide-spacing-row__spacing-label">Spacing</span>
@@ -6083,7 +6125,7 @@ function render(){
     statusBadge.setAttribute('title',state.locked?'Locked. Tap to unlock controls.':'Live. Tap to lock controls.');
   }
   const guideNotice=$('layoutGuideNotice');
-  if(guideNotice){guideNotice.textContent='Guide only. Confirm final placement by static testing and builder judgement.';}
+  if(guideNotice){guideNotice.textContent='Tap a row to inspect spacing quickly. Guide only. Confirm final placement by static testing and builder judgement.';}
   const row=r.rows[Math.max(0,Math.min(state.workshopIndex,r.rows.length-1))]||r.rows[0];
   if($('workshopProgress'))$('workshopProgress').textContent='Guide '+row.g+' of '+state.guideCount;
   if($('workshopGuide'))$('workshopGuide').textContent='Guide '+row.g;
