@@ -3185,6 +3185,52 @@ body.component-sheet-open .workshop-back-to-top{
   color:#9aa097;
 }
 
+.guide-spacing-list .guide-spacing-row{
+  grid-template-columns:minmax(0,.72fr) minmax(0,1fr) minmax(132px,148px);
+  align-items:center;
+  min-width:0;
+}
+
+.guide-spacing-row__spacing{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:baseline;
+  gap:10px;
+  min-width:0;
+}
+
+.guide-spacing-row__spacing-label{
+  text-align:left;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#9aa097;
+  white-space:nowrap;
+}
+
+.guide-spacing-row__spacing-value{
+  justify-self:end;
+  text-align:right;
+  white-space:nowrap;
+  color:#c7c0b3;
+  font-size:10px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1;
+}
+
+@media (max-width:520px){
+  .guide-spacing-list .guide-spacing-row{
+    grid-template-columns:minmax(0,.7fr) minmax(0,1fr) minmax(118px,136px);
+    gap:7px;
+  }
+
+  .guide-spacing-row__spacing{
+    gap:8px;
+  }
+}
+
 #layoutGuideNotice{
   margin:7px 2px 0;
   font-size:10px;

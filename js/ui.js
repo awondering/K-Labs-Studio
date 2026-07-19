@@ -6140,7 +6140,10 @@ function render(){
           <small>Position</small>
           <span>${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}</span>
         </div>
-        <strong>Spacing ${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}</strong>
+        <div class="guide-spacing-row__spacing">
+          <span class="guide-spacing-row__spacing-label">Spacing</span>
+          <strong class="guide-spacing-row__spacing-value">${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}</strong>
+        </div>
       </article>
     `).join('');
   }
