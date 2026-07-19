@@ -92,16 +92,25 @@ const choicePickerViewportState={
 const customerFinderViewportState={
   keyboardActive:false,
 };
-const workshopCalculatorState={
-  mode:'convert',
-  wrapType:'straight',
-  converterDiameterMm:28,
-  straightGripDiameterMm:28,
-  taperedStartDiameterMm:30,
-  taperedEndDiameterMm:24,
-  gripLengthMm:280,
-  materialWidthMm:25,
-  allowancePercent:5,
+const workshopToolsState={
+  activeTool:'list',
+  diameter:{
+    unit:'metric',
+    imperialDisplay:'fractional',
+    diameterMm:28,
+    lastEdited:'diameter',
+  },
+  grip:{
+    unit:'metric',
+    imperialDisplay:'fractional',
+    profile:'straight',
+    straightDiameterMm:28,
+    startDiameterMm:30,
+    endDiameterMm:24,
+    lengthMm:280,
+    coverWidthMm:25,
+    allowancePercent:5,
+  },
 };
 
 function save(){
@@ -274,13 +283,52 @@ function parseMeasurementInputValue(rawValue){
   const parsed=Number(rawValue);
   return Number.isFinite(parsed)?parsed:NaN;
 }
-function workshopCalculatorParsedMm(rawValue,fallbackMm){
-  const parsed=parseMeasurementInputValue(rawValue);
-  if(!Number.isFinite(parsed) || parsed<=0)return fallbackMm;
+function normalizeWorkshopUnit(value){
+  return String(value||'').trim().toLowerCase()==='imperial'?'imperial':'metric';
+}
+function normalizeWorkshopImperialDisplay(value){
+  return String(value||'').trim().toLowerCase()==='decimal'?'decimal':'fractional';
+}
+function workshopUnitSuffix(unit){
+  return normalizeWorkshopUnit(unit)==='imperial'?'in':'mm';
+}
+function parseWorkshopMeasurementMm(rawValue,unit,fallbackMm,allowZero){
+  const normalizedUnit=normalizeWorkshopUnit(unit);
+  let parsed=NaN;
+  if(normalizedUnit==='imperial'){
+    const inches=parseImperialInchesInput(rawValue);
+    if(Number.isFinite(inches))parsed=inchesToMm(inches);
+  }else{
+    const numeric=Number(rawValue);
+    if(Number.isFinite(numeric))parsed=numeric;
+  }
+  if(!Number.isFinite(parsed))return fallbackMm;
+  if(allowZero){
+    if(parsed<0)return fallbackMm;
+  }else if(parsed<=0){
+    return fallbackMm;
+  }
   return parsed;
 }
-function workshopMeasurementInputText(valueMm){
-  return formatMeasurementNumber(valueMm,{decimalsMetric:2,decimalsImperial:2,maxImperialDenominator:32});
+function formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options){
+  const settings=options&&typeof options==='object'?options:{};
+  const normalizedUnit=normalizeWorkshopUnit(unit);
+  const normalizedImperialDisplay=normalizeWorkshopImperialDisplay(imperialDisplay);
+  if(normalizedUnit==='imperial'){
+    const inchesValue=mmToInches(valueMm);
+    if(normalizedImperialDisplay==='fractional' && settings.forceDecimal!==true){
+      return formatImperialFractionInches(inchesValue,settings.maxImperialDenominator===undefined?32:settings.maxImperialDenominator);
+    }
+    const decimals=settings.decimalsImperial===undefined?2:settings.decimalsImperial;
+    return formatDecimal(inchesValue,decimals);
+  }
+  return formatDecimal(valueMm,settings.decimalsMetric===undefined?1:settings.decimalsMetric);
+}
+function formatWorkshopMeasurementValue(valueMm,unit,imperialDisplay,options){
+  return `${formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options)} ${workshopUnitSuffix(unit)}`;
+}
+function workshopMeasurementInputText(valueMm,unit,imperialDisplay){
+  return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:2,maxImperialDenominator:32});
 }
 function taperSpiralWrapLengthMm(startDiameterMm,endDiameterMm,gripLengthMm,materialWidthMm){
   const length=Math.max(0,numberOrZero(gripLengthMm));
@@ -299,149 +347,229 @@ function taperSpiralWrapLengthMm(startDiameterMm,endDiameterMm,gripLengthMm,mate
   }
   return Math.max(0,total);
 }
-function renderWorkshopCalculator(){
-  const panel=$('workshopCalculatorPanel');
-  if(!panel)return;
-  const diameterInput=$('workshopCalcDiameter');
-  const circumferenceInput=$('workshopCalcCircumference');
-  const gripDiameterInput=$('workshopWrapGripDiameter');
-  const startDiameterInput=$('workshopWrapStartDiameter');
-  const endDiameterInput=$('workshopWrapEndDiameter');
-  const gripLengthInput=$('workshopWrapGripLength');
-  const wrapWidthInput=$('workshopWrapMaterialWidth');
-
-  const mode=workshopCalculatorState.mode==='wrap'?'wrap':'convert';
-  const wrapType=workshopCalculatorState.wrapType==='tapered'?'tapered':'straight';
-  const convertBody=$('workshopCalcConvertBody');
-  const wrapBody=$('workshopCalcWrapBody');
-  if(convertBody)convertBody.hidden=mode!=='convert';
-  if(wrapBody)wrapBody.hidden=mode!=='wrap';
-
-  panel.querySelectorAll('[data-workshop-calc-mode]').forEach((button)=>{
-    const selected=button.getAttribute('data-workshop-calc-mode')===mode;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
-
-  panel.querySelectorAll('[data-workshop-wrap-type]').forEach((button)=>{
-    const selected=button.getAttribute('data-workshop-wrap-type')===wrapType;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
-
-  const straightFields=$('workshopWrapStraightFields');
-  const taperedFields=$('workshopWrapTaperedFields');
-  if(straightFields)straightFields.hidden=wrapType!=='straight';
-  if(taperedFields)taperedFields.hidden=wrapType!=='tapered';
-
+function gripCutAngleDegrees(circumferenceMm,coverWidthMm){
+  const circumference=Math.max(0.01,numberOrZero(circumferenceMm));
+  const width=Math.max(0.01,numberOrZero(coverWidthMm));
+  return (Math.atan2(width,circumference)*180)/Math.PI;
+}
+function renderWorkshopToolVisibility(){
+  const list=$('workshopToolsList');
+  const diameterCard=$('workshopToolDiameter');
+  const gripCard=$('workshopToolGrip');
+  const activeTool=workshopToolsState.activeTool;
+  if(list)list.hidden=activeTool!=='list';
+  if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
+  if(gripCard)gripCard.hidden=activeTool!=='grip';
+}
+function renderDiameterCircumferenceTool(){
+  const diameterInput=$('workshopDcDiameter');
+  const circumferenceInput=$('workshopDcCircumference');
   if(!diameterInput || !circumferenceInput)return;
 
-  const converterDiameterMm=Math.max(0.01,numberOrZero(workshopCalculatorState.converterDiameterMm));
-  const converterCircumferenceMm=converterDiameterMm*Math.PI;
+  const state=workshopToolsState.diameter;
+  state.unit=normalizeWorkshopUnit(state.unit);
+  state.imperialDisplay=normalizeWorkshopImperialDisplay(state.imperialDisplay);
+  state.diameterMm=Math.max(0.01,numberOrZero(state.diameterMm));
+
+  const circumferenceMm=state.diameterMm*Math.PI;
 
   if(document.activeElement!==diameterInput){
-    diameterInput.value=workshopMeasurementInputText(converterDiameterMm);
+    diameterInput.value=workshopMeasurementInputText(state.diameterMm,state.unit,state.imperialDisplay);
   }
   if(document.activeElement!==circumferenceInput){
-    circumferenceInput.value=workshopMeasurementInputText(converterCircumferenceMm);
+    circumferenceInput.value=workshopMeasurementInputText(circumferenceMm,state.unit,state.imperialDisplay);
   }
 
-  const gripDiameterMm=Math.max(0.01,numberOrZero(workshopCalculatorState.straightGripDiameterMm));
-  const taperedStartMm=Math.max(0.01,numberOrZero(workshopCalculatorState.taperedStartDiameterMm));
-  const taperedEndMm=Math.max(0.01,numberOrZero(workshopCalculatorState.taperedEndDiameterMm));
-  const gripLengthMm=Math.max(0,numberOrZero(workshopCalculatorState.gripLengthMm));
-  const wrapWidthMm=Math.max(0.01,numberOrZero(workshopCalculatorState.materialWidthMm));
+  const diameterPlaceholder=workshopMeasurementInputText(28,state.unit,state.imperialDisplay);
+  const circumferencePlaceholder=workshopMeasurementInputText(28*Math.PI,state.unit,state.imperialDisplay);
+  diameterInput.placeholder=diameterPlaceholder;
+  circumferenceInput.placeholder=circumferencePlaceholder;
 
-  if(gripDiameterInput && document.activeElement!==gripDiameterInput){
-    gripDiameterInput.value=workshopMeasurementInputText(gripDiameterMm);
-  }
-  if(startDiameterInput && document.activeElement!==startDiameterInput){
-    startDiameterInput.value=workshopMeasurementInputText(taperedStartMm);
-  }
-  if(endDiameterInput && document.activeElement!==endDiameterInput){
-    endDiameterInput.value=workshopMeasurementInputText(taperedEndMm);
-  }
-  if(gripLengthInput && document.activeElement!==gripLengthInput){
-    gripLengthInput.value=workshopMeasurementInputText(gripLengthMm);
-  }
-  if(wrapWidthInput && document.activeElement!==wrapWidthInput){
-    wrapWidthInput.value=workshopMeasurementInputText(wrapWidthMm);
+  const primaryLabel=$('workshopDcPrimaryLabel');
+  const primaryValue=$('workshopDcPrimaryValue');
+  const showingDiameter=state.lastEdited==='circumference';
+  if(primaryLabel)primaryLabel.textContent=showingDiameter?'Diameter':'Circumference';
+  if(primaryValue){
+    primaryValue.textContent=showingDiameter
+      ? formatWorkshopMeasurementValue(state.diameterMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32})
+      : formatWorkshopMeasurementValue(circumferenceMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32});
   }
 
-  diameterInput.placeholder=measurementPlaceholderValue(28);
-  circumferenceInput.placeholder=measurementPlaceholderValue(28*Math.PI);
-  if(gripDiameterInput)gripDiameterInput.placeholder=measurementPlaceholderValue(28);
-  if(startDiameterInput)startDiameterInput.placeholder=measurementPlaceholderValue(30);
-  if(endDiameterInput)endDiameterInput.placeholder=measurementPlaceholderValue(24);
-  if(gripLengthInput)gripLengthInput.placeholder=measurementPlaceholderValue(280);
-  if(wrapWidthInput)wrapWidthInput.placeholder=measurementPlaceholderValue(25);
-
-  let circumferenceMm=gripDiameterMm*Math.PI;
-  let revolutions=wrapWidthMm>0?(gripLengthMm/wrapWidthMm):0;
-  let spiralWrapLengthMm=0;
-  let circumferenceLabel='Circumference';
-  if(wrapType==='tapered'){
-    circumferenceMm=Math.PI*((taperedStartMm+taperedEndMm)/2);
-    spiralWrapLengthMm=taperSpiralWrapLengthMm(taperedStartMm,taperedEndMm,gripLengthMm,wrapWidthMm);
-    circumferenceLabel='Average Circumference';
-  }else{
-    const helixPerRevolutionMm=Math.sqrt((circumferenceMm*circumferenceMm)+(wrapWidthMm*wrapWidthMm));
-    spiralWrapLengthMm=Math.max(0,revolutions*helixPerRevolutionMm);
+  const metricLine=$('workshopDcMetricLine');
+  const imperialDecimalLine=$('workshopDcImperialDecimalLine');
+  const imperialFractionalLine=$('workshopDcImperialFractionalLine');
+  if(metricLine){
+    metricLine.textContent=`D ${formatDecimal(state.diameterMm,2)} mm • C ${formatDecimal(circumferenceMm,2)} mm`;
   }
-  const allowance=Math.max(0,numberOrZero(workshopCalculatorState.allowancePercent));
-  const requiredLengthMm=spiralWrapLengthMm*(1+(allowance/100));
+  if(imperialDecimalLine){
+    imperialDecimalLine.textContent=`D ${formatDecimal(mmToInches(state.diameterMm),3)} in • C ${formatDecimal(mmToInches(circumferenceMm),3)} in`;
+  }
+  if(imperialFractionalLine){
+    imperialFractionalLine.textContent=`D ${formatImperialFractionInches(mmToInches(state.diameterMm),32)} in • C ${formatImperialFractionInches(mmToInches(circumferenceMm),32)} in`;
+  }
 
-  const requiredEl=$('workshopWrapRequired');
-  const circumferenceLabelEl=$('workshopWrapCircumferenceLabel');
-  const circumferenceEl=$('workshopWrapCircumference');
-  const revolutionsEl=$('workshopWrapRevolutions');
-  const spiralEl=$('workshopWrapSpiralLength');
-  if(requiredEl)requiredEl.textContent=formatMeasurementValue(requiredLengthMm,{decimalsMetric:0,decimalsImperial:2,maxImperialDenominator:32});
-  if(circumferenceLabelEl)circumferenceLabelEl.textContent=circumferenceLabel;
-  if(circumferenceEl)circumferenceEl.textContent=formatMeasurementValue(circumferenceMm,{decimalsMetric:1,decimalsImperial:2,maxImperialDenominator:32});
-  if(revolutionsEl)revolutionsEl.textContent=formatDecimal(revolutions,2);
-  if(spiralEl)spiralEl.textContent=formatMeasurementValue(spiralWrapLengthMm,{decimalsMetric:0,decimalsImperial:2,maxImperialDenominator:32});
+  const imperialDisplayRow=$('workshopDcImperialDisplay');
+  if(imperialDisplayRow)imperialDisplayRow.hidden=state.unit!=='imperial';
 
-  panel.querySelectorAll('[data-wrap-allowance]').forEach((button)=>{
-    const value=Number(button.getAttribute('data-wrap-allowance'));
-    const selected=value===allowance;
+  const panel=$('workshopToolsPanel');
+  if(!panel)return;
+  panel.querySelectorAll('[data-dc-unit]').forEach((button)=>{
+    const selected=button.getAttribute('data-dc-unit')===state.unit;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  panel.querySelectorAll('[data-dc-imperial-display]').forEach((button)=>{
+    const selected=button.getAttribute('data-dc-imperial-display')===state.imperialDisplay;
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
 }
+function renderGripCoveringTool(){
+  const panel=$('workshopToolsPanel');
+  if(!panel)return;
+  const state=workshopToolsState.grip;
+  state.unit=normalizeWorkshopUnit(state.unit);
+  state.imperialDisplay=normalizeWorkshopImperialDisplay(state.imperialDisplay);
+  state.profile=state.profile==='tapered'?'tapered':'straight';
+  state.straightDiameterMm=Math.max(0.01,numberOrZero(state.straightDiameterMm));
+  state.startDiameterMm=Math.max(0.01,numberOrZero(state.startDiameterMm));
+  state.endDiameterMm=Math.max(0.01,numberOrZero(state.endDiameterMm));
+  state.lengthMm=Math.max(0,numberOrZero(state.lengthMm));
+  state.coverWidthMm=Math.max(0.01,numberOrZero(state.coverWidthMm));
+  state.allowancePercent=Math.max(0,numberOrZero(state.allowancePercent));
+
+  const straightFields=$('workshopGripStraightFields');
+  const taperedFields=$('workshopGripTaperedFields');
+  if(straightFields)straightFields.hidden=state.profile!=='straight';
+  if(taperedFields)taperedFields.hidden=state.profile!=='tapered';
+
+  const imperialDisplayRow=$('workshopGripImperialDisplay');
+  if(imperialDisplayRow)imperialDisplayRow.hidden=state.unit!=='imperial';
+
+  const gripDiameterInput=$('workshopGripDiameter');
+  const startDiameterInput=$('workshopGripStartDiameter');
+  const endDiameterInput=$('workshopGripEndDiameter');
+  const gripLengthInput=$('workshopGripLength');
+  const coverWidthInput=$('workshopGripCoverWidth');
+  const allowanceInput=$('workshopGripAllowance');
+
+  if(gripDiameterInput && document.activeElement!==gripDiameterInput){
+    gripDiameterInput.value=workshopMeasurementInputText(state.straightDiameterMm,state.unit,state.imperialDisplay);
+  }
+  if(startDiameterInput && document.activeElement!==startDiameterInput){
+    startDiameterInput.value=workshopMeasurementInputText(state.startDiameterMm,state.unit,state.imperialDisplay);
+  }
+  if(endDiameterInput && document.activeElement!==endDiameterInput){
+    endDiameterInput.value=workshopMeasurementInputText(state.endDiameterMm,state.unit,state.imperialDisplay);
+  }
+  if(gripLengthInput && document.activeElement!==gripLengthInput){
+    gripLengthInput.value=workshopMeasurementInputText(state.lengthMm,state.unit,state.imperialDisplay);
+  }
+  if(coverWidthInput && document.activeElement!==coverWidthInput){
+    coverWidthInput.value=workshopMeasurementInputText(state.coverWidthMm,state.unit,state.imperialDisplay);
+  }
+  if(allowanceInput && document.activeElement!==allowanceInput){
+    allowanceInput.value=formatDecimal(state.allowancePercent,1);
+  }
+
+  if(gripDiameterInput)gripDiameterInput.placeholder=workshopMeasurementInputText(28,state.unit,state.imperialDisplay);
+  if(startDiameterInput)startDiameterInput.placeholder=workshopMeasurementInputText(30,state.unit,state.imperialDisplay);
+  if(endDiameterInput)endDiameterInput.placeholder=workshopMeasurementInputText(24,state.unit,state.imperialDisplay);
+  if(gripLengthInput)gripLengthInput.placeholder=workshopMeasurementInputText(280,state.unit,state.imperialDisplay);
+  if(coverWidthInput)coverWidthInput.placeholder=workshopMeasurementInputText(25,state.unit,state.imperialDisplay);
+  if(allowanceInput)allowanceInput.placeholder='5';
+
+  const revolutions=state.coverWidthMm>0?(state.lengthMm/state.coverWidthMm):0;
+  let spiralWrapLengthMm=0;
+  let startCutAngle=0;
+  let finishCutAngle=0;
+  let showFinishCutAngle=false;
+
+  if(state.profile==='tapered'){
+    spiralWrapLengthMm=taperSpiralWrapLengthMm(state.startDiameterMm,state.endDiameterMm,state.lengthMm,state.coverWidthMm);
+    const startCircumferenceMm=Math.PI*state.startDiameterMm;
+    const endCircumferenceMm=Math.PI*state.endDiameterMm;
+    startCutAngle=gripCutAngleDegrees(startCircumferenceMm,state.coverWidthMm);
+    finishCutAngle=gripCutAngleDegrees(endCircumferenceMm,state.coverWidthMm);
+    showFinishCutAngle=true;
+  }else{
+    const circumferenceMm=Math.PI*state.straightDiameterMm;
+    const perRevolutionLength=Math.sqrt((circumferenceMm*circumferenceMm)+(state.coverWidthMm*state.coverWidthMm));
+    spiralWrapLengthMm=Math.max(0,revolutions*perRevolutionLength);
+    startCutAngle=gripCutAngleDegrees(circumferenceMm,state.coverWidthMm);
+    finishCutAngle=startCutAngle;
+  }
+
+  const requiredMm=spiralWrapLengthMm*(1+(state.allowancePercent/100));
+  const averageCutAngle=(startCutAngle+finishCutAngle)/2;
+
+  const requiredEl=$('workshopGripMaterialRequired');
+  const revolutionsEl=$('workshopGripRevolutions');
+  const spiralEl=$('workshopGripSpiralLength');
+  const startCutEl=$('workshopGripStartCutAngle');
+  const finishCutEl=$('workshopGripFinishCutAngle');
+  const finishCutRow=$('workshopGripFinishCutAngleRow');
+  const averageCutEl=$('workshopGripAverageCutAngle');
+  const averageCutRow=$('workshopGripAverageCutAngleRow');
+
+  if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32});
+  if(revolutionsEl)revolutionsEl.textContent=formatDecimal(revolutions,2);
+  if(spiralEl)spiralEl.textContent=formatWorkshopMeasurementValue(spiralWrapLengthMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32});
+  if(startCutEl)startCutEl.textContent=`${formatDecimal(startCutAngle,1)} deg`;
+
+  if(finishCutRow)finishCutRow.hidden=!showFinishCutAngle;
+  if(finishCutEl)finishCutEl.textContent=`${formatDecimal(finishCutAngle,1)} deg`;
+
+  if(averageCutRow)averageCutRow.hidden=!showFinishCutAngle;
+  if(averageCutEl)averageCutEl.textContent=`${formatDecimal(averageCutAngle,1)} deg`;
+
+  panel.querySelectorAll('[data-grip-unit]').forEach((button)=>{
+    const selected=button.getAttribute('data-grip-unit')===state.unit;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  panel.querySelectorAll('[data-grip-imperial-display]').forEach((button)=>{
+    const selected=button.getAttribute('data-grip-imperial-display')===state.imperialDisplay;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  panel.querySelectorAll('[data-grip-profile]').forEach((button)=>{
+    const selected=button.getAttribute('data-grip-profile')===state.profile;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+}
+function renderWorkshopCalculator(){
+  renderWorkshopToolVisibility();
+  renderDiameterCircumferenceTool();
+  renderGripCoveringTool();
+}
 function bindWorkshopCalculatorControls(){
-  const panel=$('workshopCalculatorPanel');
+  const panel=$('workshopToolsPanel');
   if(!panel || panel.getAttribute('data-workshop-calculator-bound')==='true')return;
   panel.setAttribute('data-workshop-calculator-bound','true');
 
-  const diameterInput=$('workshopCalcDiameter');
-  const circumferenceInput=$('workshopCalcCircumference');
-  const gripDiameterInput=$('workshopWrapGripDiameter');
-  const startDiameterInput=$('workshopWrapStartDiameter');
-  const endDiameterInput=$('workshopWrapEndDiameter');
-  const gripLengthInput=$('workshopWrapGripLength');
-  const wrapWidthInput=$('workshopWrapMaterialWidth');
-
-  panel.querySelectorAll('[data-workshop-calc-mode]').forEach((button)=>{
+  panel.querySelectorAll('[data-workshop-tool-open]').forEach((button)=>{
     button.addEventListener('click',()=>{
-      const next=button.getAttribute('data-workshop-calc-mode')==='wrap'?'wrap':'convert';
-      if(workshopCalculatorState.mode===next)return;
-      workshopCalculatorState.mode=next;
+      const nextTool=button.getAttribute('data-workshop-tool-open');
+      workshopToolsState.activeTool=nextTool==='grip'?'grip':'diameter';
       renderWorkshopCalculator();
     });
   });
-  panel.querySelectorAll('[data-workshop-wrap-type]').forEach((button)=>{
+  panel.querySelectorAll('[data-workshop-tool-back]').forEach((button)=>{
     button.addEventListener('click',()=>{
-      const next=button.getAttribute('data-workshop-wrap-type')==='tapered'?'tapered':'straight';
-      if(workshopCalculatorState.wrapType===next)return;
-      workshopCalculatorState.wrapType=next;
+      workshopToolsState.activeTool='list';
       renderWorkshopCalculator();
     });
   });
 
+  const diameterInput=$('workshopDcDiameter');
+  const circumferenceInput=$('workshopDcCircumference');
   if(diameterInput){
     const onDiameterChange=()=>{
-      workshopCalculatorState.converterDiameterMm=workshopCalculatorParsedMm(diameterInput.value,workshopCalculatorState.converterDiameterMm);
+      const state=workshopToolsState.diameter;
+      state.diameterMm=parseWorkshopMeasurementMm(diameterInput.value,state.unit,state.diameterMm,false);
+      state.lastEdited='diameter';
       renderWorkshopCalculator();
     };
     diameterInput.addEventListener('input',onDiameterChange);
@@ -449,61 +577,112 @@ function bindWorkshopCalculatorControls(){
   }
   if(circumferenceInput){
     const onCircumferenceChange=()=>{
-      const circumferenceMm=workshopCalculatorParsedMm(circumferenceInput.value,workshopCalculatorState.converterDiameterMm*Math.PI);
-      workshopCalculatorState.converterDiameterMm=Math.max(0.01,circumferenceMm/Math.PI);
+      const state=workshopToolsState.diameter;
+      const circumferenceMm=parseWorkshopMeasurementMm(circumferenceInput.value,state.unit,state.diameterMm*Math.PI,false);
+      state.diameterMm=Math.max(0.01,circumferenceMm/Math.PI);
+      state.lastEdited='circumference';
       renderWorkshopCalculator();
     };
     circumferenceInput.addEventListener('input',onCircumferenceChange);
     circumferenceInput.addEventListener('change',onCircumferenceChange);
   }
-  if(gripDiameterInput){
-    const onGripDiameterChange=()=>{
-      workshopCalculatorState.straightGripDiameterMm=workshopCalculatorParsedMm(gripDiameterInput.value,workshopCalculatorState.straightGripDiameterMm);
-      renderWorkshopCalculator();
-    };
-    gripDiameterInput.addEventListener('input',onGripDiameterChange);
-    gripDiameterInput.addEventListener('change',onGripDiameterChange);
-  }
-  if(startDiameterInput){
-    const onStartDiameterChange=()=>{
-      workshopCalculatorState.taperedStartDiameterMm=workshopCalculatorParsedMm(startDiameterInput.value,workshopCalculatorState.taperedStartDiameterMm);
-      renderWorkshopCalculator();
-    };
-    startDiameterInput.addEventListener('input',onStartDiameterChange);
-    startDiameterInput.addEventListener('change',onStartDiameterChange);
-  }
-  if(endDiameterInput){
-    const onEndDiameterChange=()=>{
-      workshopCalculatorState.taperedEndDiameterMm=workshopCalculatorParsedMm(endDiameterInput.value,workshopCalculatorState.taperedEndDiameterMm);
-      renderWorkshopCalculator();
-    };
-    endDiameterInput.addEventListener('input',onEndDiameterChange);
-    endDiameterInput.addEventListener('change',onEndDiameterChange);
-  }
-  if(gripLengthInput){
-    const onGripLengthChange=()=>{
-      workshopCalculatorState.gripLengthMm=workshopCalculatorParsedMm(gripLengthInput.value,workshopCalculatorState.gripLengthMm);
-      renderWorkshopCalculator();
-    };
-    gripLengthInput.addEventListener('input',onGripLengthChange);
-    gripLengthInput.addEventListener('change',onGripLengthChange);
-  }
-  if(wrapWidthInput){
-    const onWrapWidthChange=()=>{
-      workshopCalculatorState.materialWidthMm=workshopCalculatorParsedMm(wrapWidthInput.value,workshopCalculatorState.materialWidthMm);
-      renderWorkshopCalculator();
-    };
-    wrapWidthInput.addEventListener('input',onWrapWidthChange);
-    wrapWidthInput.addEventListener('change',onWrapWidthChange);
-  }
-  panel.querySelectorAll('[data-wrap-allowance]').forEach((button)=>{
+  panel.querySelectorAll('[data-dc-unit]').forEach((button)=>{
     button.addEventListener('click',()=>{
-      const next=Number(button.getAttribute('data-wrap-allowance'));
-      if(!Number.isFinite(next))return;
-      workshopCalculatorState.allowancePercent=next;
+      workshopToolsState.diameter.unit=normalizeWorkshopUnit(button.getAttribute('data-dc-unit'));
       renderWorkshopCalculator();
     });
   });
+  panel.querySelectorAll('[data-dc-imperial-display]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      workshopToolsState.diameter.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-dc-imperial-display'));
+      renderWorkshopCalculator();
+    });
+  });
+
+  const gripDiameterInput=$('workshopGripDiameter');
+  const gripStartDiameterInput=$('workshopGripStartDiameter');
+  const gripEndDiameterInput=$('workshopGripEndDiameter');
+  const gripLengthInput=$('workshopGripLength');
+  const coverWidthInput=$('workshopGripCoverWidth');
+  const allowanceInput=$('workshopGripAllowance');
+
+  if(gripDiameterInput){
+    const onChange=()=>{
+      const state=workshopToolsState.grip;
+      state.straightDiameterMm=parseWorkshopMeasurementMm(gripDiameterInput.value,state.unit,state.straightDiameterMm,false);
+      renderWorkshopCalculator();
+    };
+    gripDiameterInput.addEventListener('input',onChange);
+    gripDiameterInput.addEventListener('change',onChange);
+  }
+  if(gripStartDiameterInput){
+    const onChange=()=>{
+      const state=workshopToolsState.grip;
+      state.startDiameterMm=parseWorkshopMeasurementMm(gripStartDiameterInput.value,state.unit,state.startDiameterMm,false);
+      renderWorkshopCalculator();
+    };
+    gripStartDiameterInput.addEventListener('input',onChange);
+    gripStartDiameterInput.addEventListener('change',onChange);
+  }
+  if(gripEndDiameterInput){
+    const onChange=()=>{
+      const state=workshopToolsState.grip;
+      state.endDiameterMm=parseWorkshopMeasurementMm(gripEndDiameterInput.value,state.unit,state.endDiameterMm,false);
+      renderWorkshopCalculator();
+    };
+    gripEndDiameterInput.addEventListener('input',onChange);
+    gripEndDiameterInput.addEventListener('change',onChange);
+  }
+  if(gripLengthInput){
+    const onChange=()=>{
+      const state=workshopToolsState.grip;
+      state.lengthMm=parseWorkshopMeasurementMm(gripLengthInput.value,state.unit,state.lengthMm,true);
+      renderWorkshopCalculator();
+    };
+    gripLengthInput.addEventListener('input',onChange);
+    gripLengthInput.addEventListener('change',onChange);
+  }
+  if(coverWidthInput){
+    const onChange=()=>{
+      const state=workshopToolsState.grip;
+      state.coverWidthMm=parseWorkshopMeasurementMm(coverWidthInput.value,state.unit,state.coverWidthMm,false);
+      renderWorkshopCalculator();
+    };
+    coverWidthInput.addEventListener('input',onChange);
+    coverWidthInput.addEventListener('change',onChange);
+  }
+  if(allowanceInput){
+    const onChange=()=>{
+      const state=workshopToolsState.grip;
+      const next=Number(allowanceInput.value);
+      if(Number.isFinite(next) && next>=0){
+        state.allowancePercent=next;
+      }
+      renderWorkshopCalculator();
+    };
+    allowanceInput.addEventListener('input',onChange);
+    allowanceInput.addEventListener('change',onChange);
+  }
+
+  panel.querySelectorAll('[data-grip-unit]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      workshopToolsState.grip.unit=normalizeWorkshopUnit(button.getAttribute('data-grip-unit'));
+      renderWorkshopCalculator();
+    });
+  });
+  panel.querySelectorAll('[data-grip-imperial-display]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      workshopToolsState.grip.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-grip-imperial-display'));
+      renderWorkshopCalculator();
+    });
+  });
+  panel.querySelectorAll('[data-grip-profile]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      workshopToolsState.grip.profile=button.getAttribute('data-grip-profile')==='tapered'?'tapered':'straight';
+      renderWorkshopCalculator();
+    });
+  });
+
   renderWorkshopCalculator();
 }
 function formatDateDisplay(value,options){

@@ -3533,22 +3533,27 @@ body.component-sheet-open .workshop-back-to-top{
   padding:0 6px;
 }
 
-.workshop-calculator-panel{
+.workshop-tools-panel{
   gap:16px;
 }
 
-.workshop-calculator-card{
+.workshop-tool-list,
+.workshop-tool-card{
   display:grid;
   gap:14px;
-  background:linear-gradient(165deg,rgba(18,20,23,.98),rgba(10,11,14,.96));
+  background:
+    radial-gradient(130% 120% at 100% 0,rgba(167,31,42,.18),rgba(167,31,42,0) 52%),
+    linear-gradient(165deg,rgba(18,20,23,.98),rgba(10,11,14,.96));
 }
 
-.workshop-calculator-head{
+.workshop-tool-list__head,
+.workshop-tool-head{
   display:grid;
-  gap:10px;
+  gap:8px;
 }
 
-.workshop-calculator-card h3{
+.workshop-tool-list h3,
+.workshop-tool-head h3{
   margin:0;
   font-size:13px;
   letter-spacing:.08em;
@@ -3556,14 +3561,50 @@ body.component-sheet-open .workshop-back-to-top{
   color:#f2ede4;
 }
 
-.workshop-calculator-mode{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:8px;
+.workshop-tool-list p,
+.workshop-tool-head p,
+.workshop-tool-note{
+  margin:0;
+  font-size:10px;
+  line-height:1.45;
+  letter-spacing:.05em;
+  color:rgba(214,210,200,.76);
 }
 
-.workshop-calculator-mode .ghost-action{
+.workshop-tool-launch{
+  display:grid;
+  gap:6px;
+  width:100%;
+  text-align:left;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid rgba(216,210,197,.22);
+  background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
+  color:#f1ece3;
+  cursor:pointer;
+}
+
+.workshop-tool-launch:hover,
+.workshop-tool-launch:focus-visible{
+  border-color:rgba(186,31,44,.72);
+  background:linear-gradient(160deg,rgba(186,31,44,.17),rgba(255,255,255,.03));
+}
+
+.workshop-tool-launch__title{
+  font-size:13px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  color:#f8f3ea;
+}
+
+.workshop-tool-launch__meta{
+  font-size:10px;
+  line-height:1.4;
+  color:rgba(223,216,205,.85);
+}
+
+.workshop-tool-back{
+  justify-self:start;
   min-height:34px;
   padding:0 12px;
   border-radius:999px;
@@ -3571,113 +3612,109 @@ body.component-sheet-open .workshop-back-to-top{
   letter-spacing:.08em;
 }
 
-.workshop-calculator-mode .ghost-action.active,
-.workshop-wrap-allowance__buttons .ghost-action.active{
+.workshop-tool-unit-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+}
+
+.workshop-tool-unit-row .ghost-action{
+  min-height:34px;
+  padding:0 12px;
+  border-radius:999px;
+  font-size:10px;
+  letter-spacing:.08em;
+}
+
+.workshop-tool-unit-row .ghost-action.active{
   border-color:rgba(186,31,44,.75);
   background:rgba(186,31,44,.18);
   color:#fff0eb;
 }
 
-.workshop-calculator-body{
-  display:grid;
-  gap:12px;
-}
-
-.workshop-calculator-fields--shared{
-  grid-template-columns:repeat(2,minmax(0,1fr));
-}
-
-.workshop-calculator-fields{
-  display:grid;
-  gap:9px;
-}
-
-.workshop-calculator-fields label{
-  display:grid;
-  gap:5px;
-}
-
-.workshop-calculator-fields label span,
-.workshop-wrap-allowance span,
-.workshop-wrap-details span{
+.workshop-tool-unit-row--compact .ghost-action{
+  min-height:31px;
   font-size:9px;
-  letter-spacing:.12em;
-  text-transform:uppercase;
-  color:rgba(214,210,200,.7);
 }
 
-.workshop-calculator-fields input{
-  width:100%;
-  min-height:38px;
-  border-radius:10px;
-  border:1px solid rgba(214,210,200,.22);
-  background:rgba(7,8,10,.94);
-  color:#f5efe5;
-  padding:8px 10px;
-}
-
-.workshop-wrap-allowance{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
+.workshop-tool-fields{
+  display:grid;
   gap:10px;
 }
 
-.workshop-wrap-allowance__buttons{
-  display:flex;
-  align-items:center;
-  gap:7px;
+.workshop-tool-fields--two{
+  grid-template-columns:repeat(2,minmax(0,1fr));
 }
 
-.workshop-wrap-allowance__buttons .ghost-action{
-  min-height:32px;
-  padding:0 11px;
-  font-size:10px;
-  letter-spacing:.08em;
-  border-radius:999px;
-}
-
-.workshop-wrap-result{
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
-  gap:8px;
-  border:1px solid rgba(214,210,200,.2);
-  border-radius:12px;
-  padding:10px 12px;
-  background:rgba(255,255,255,.02);
-}
-
-.workshop-wrap-result strong{
-  font-size:22px;
-  line-height:1;
-  letter-spacing:-.02em;
-  color:#f7f2ea;
-}
-
-.workshop-wrap-details{
+.workshop-tool-fields label{
   display:grid;
   gap:6px;
 }
 
-.workshop-wrap-details div{
+.workshop-tool-fields label span,
+.workshop-tool-details span,
+.workshop-tool-result span{
+  font-size:9px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(214,210,200,.72);
+}
+
+.workshop-tool-fields input{
+  width:100%;
+  min-height:44px;
+  border-radius:12px;
+  border:1px solid rgba(214,210,200,.22);
+  background:rgba(7,8,10,.94);
+  color:#f5efe5;
+  padding:9px 11px;
+  font-size:16px;
+  letter-spacing:.01em;
+}
+
+.workshop-tool-result{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:10px;
+  border:1px solid rgba(214,210,200,.2);
+  border-radius:12px;
+  padding:12px 13px;
+  background:rgba(255,255,255,.03);
+}
+
+.workshop-tool-result--primary strong{
+  font-size:30px;
+  line-height:1;
+  letter-spacing:-.025em;
+  color:#f7f2ea;
+}
+
+.workshop-tool-details{
+  display:grid;
+  gap:7px;
+}
+
+.workshop-tool-details div{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:8px;
 }
 
-.workshop-wrap-details strong{
+.workshop-tool-details strong{
   font-size:12px;
   color:#ece6dc;
 }
 
-.workshop-wrap-note{
-  margin:0;
-  font-size:10px;
-  line-height:1.45;
-  letter-spacing:.05em;
-  color:rgba(214,210,200,.68);
+@media (max-width:640px){
+  .workshop-tool-fields--two{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .workshop-tool-result--primary strong{
+    font-size:24px;
+  }
 }
 
 .screen-head h1,
@@ -3773,18 +3810,6 @@ select:focus-visible{
     min-height:52px;
   }
 
-  .workshop-calculator-fields--shared{
-    grid-template-columns:1fr;
-  }
-
-  .workshop-wrap-allowance{
-    align-items:flex-start;
-    flex-direction:column;
-  }
-
-  .workshop-wrap-result strong{
-    font-size:17px;
-  }
 }
 
 @media (max-width:420px){
