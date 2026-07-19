@@ -4844,7 +4844,7 @@ function savedBuildRowMarkup(entry){
   const statusMarkup=statusText?`<div class="saved-build-card__meta"><span>Status</span><strong>${escapeHtml(statusText)}</strong></div>`:'';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div>${statusMarkup}<div class="saved-build-card__meta"><span>Last Edited</span><strong>${escapeHtml(updatedAtText)}</strong></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__action" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}">Open</button>${savedBuildRowMenuMarkup(entry,customerName)}</div></article>`;
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div>${statusMarkup}<div class="saved-build-card__meta"><span>Last Edited</span><strong>${escapeHtml(updatedAtText)}</strong></div></button><div class="saved-build-card__actions">${savedBuildRowMenuMarkup(entry,customerName)}</div></article>`;
 }
 function savedBuildRowMenuMarkup(entry,title){
   const source=escapeHtml(entry.source);
@@ -5696,7 +5696,7 @@ function renderWorkshopQuote(){
   if(customerSummaryTextEl){
     const customerName=specificationValue(quote.customerName);
     const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
-    const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'No customer selected';
+    const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'Add customer details';
     customerSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   updateBuildPricingSummary();
@@ -5710,11 +5710,30 @@ function renderWorkshopQuote(){
     quoteTaxRateInput.value=numberOrZero(quote.gstRate).toFixed(1);
   }
   renderBuildSpecificationInputs();
+  updateWorkshopSectionVisibility();
   const activeElement=document.activeElement;
   const isEditingComponent=!!(activeElement&&activeElement.closest&&activeElement.closest('#quoteComponentsList'));
   if(!isEditingComponent){renderQuoteComponents();}
   updateQuoteSummary();
   homeRodRefreshFromState();
+}
+function updateWorkshopSectionVisibility(){
+  const pricingSection=$('workshopPricingSection');
+  const actionsSection=$('workshopActionsSection');
+  if(!pricingSection || !actionsSection)return;
+  const hasComponents=componentRowsForTotals().length>0;
+  const hasPricingValues=numberOrZero(quote&&quote.finalCustomerPrice)>0 || numberOrZero(quote&&quote.targetProfit)>0 || numberOrZero(quote&&quote.markupPercent)>0 || numberOrZero(quote&&quote.labourRate)>0 || numberOrZero(quote&&quote.labourHours)>0;
+  const hasIdentity=!!(specificationValue(quote&&quote.customerName) || specificationValue(quote&&quote.buildName));
+  const showPricing=hasComponents || hasPricingValues;
+  const showActions=showPricing || hasIdentity;
+  pricingSection.hidden=!showPricing;
+  actionsSection.hidden=!showActions;
+  if(!showPricing){
+    setWorkshopSectionCollapsed('workshopQuoteSummaryBody',true);
+  }
+  if(!showActions){
+    setWorkshopSectionCollapsed('workshopBuildActionsBody',true);
+  }
 }
 function updateQuoteSummary(){
   const math=quoteMaths();
@@ -5740,6 +5759,7 @@ function updateQuoteSummary(){
   if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
   if(gstStatus){gstStatus.textContent='';}
   ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
+  updateWorkshopSectionVisibility();
 }
 
 function ensureQuotePreviewSheet(){
