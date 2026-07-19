@@ -271,6 +271,9 @@
 
         <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
           <button id="newQuoteEntryBtn" class="ghost-action quote-builder__new-quote" type="button">New Build</button>
+          <button id="findCustomerEntryBtn" class="ghost-action quote-builder__new-quote" type="button">Find Customer</button>
+          <button class="ghost-action quote-builder__new-quote" data-nav="buildsScreen" type="button">Saved Jobs</button>
+          <button class="ghost-action quote-builder__new-quote" data-nav="layoutScreen" type="button">Guide Layout &amp; Tools</button>
         </div>
 
         <article id="workshopCustomerSection" class="quote-section quote-section--collapsible quote-section--collapsed">
@@ -404,19 +407,6 @@
       <div id="buildCards" class="saved-builds-list" aria-live="polite"></div>
     </section>
 
-    <section class="screen" id="customersScreen">
-      <div class="screen-head"><h1>Customers</h1><p class="subtle">Find customer details and start builds quickly.</p></div>
-      <div class="blank-library-controls customers-browser__controls">
-        <input id="customerBrowserSearchInput" class="component-sheet__search" type="search" placeholder="Search customer name or company" autocomplete="off" spellcheck="false" />
-      </div>
-      <section class="customers-browser__layout" aria-label="Customer browser layout">
-        <aside class="customers-browser__list-pane" aria-label="Customers">
-          <div id="customerBrowserList" class="component-sheet__list customers-browser__list" aria-live="polite"></div>
-        </aside>
-        <section id="customerBrowserDetail" class="customers-browser__detail" aria-live="polite" hidden></section>
-      </section>
-    </section>
-
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><h1>Studio Settings</h1><p class="subtle">Configure pricing, units, and date format.</p></div>
       <article class="settings-card" aria-label="Pricing and Tax">
@@ -458,7 +448,7 @@
   <nav class="bottom-nav">
     <button class="active" data-nav="homeScreen" type="button"><i aria-hidden="true">⌂</i><span>Home</span></button>
     <button data-nav="workshopScreen" type="button"><i aria-hidden="true">▣</i><span>Studio</span></button>
-    <button data-nav="layoutScreen" type="button"><i aria-hidden="true"><svg class="guide-layout-nav-icon" viewBox="0 0 20 20" focusable="false"><circle class="guide-layout-nav-icon__ring" cx="10" cy="8.7" r="3.35" /><path class="guide-layout-nav-icon__support" d="M8.1 11.35L7 14.15" /><path class="guide-layout-nav-icon__support" d="M11.9 11.35L13 14.15" /><path class="guide-layout-nav-icon__foot" d="M5.9 14.1H14.1" /><circle class="guide-layout-nav-icon__marker" cx="14.85" cy="6.95" r="0.76" /></svg></i><span>Workshop</span></button>
+    <button data-nav="buildsScreen" type="button"><i aria-hidden="true">☰</i><span>Saved Jobs</span></button>
     <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
   <script src="js/config.js"></script>

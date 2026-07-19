@@ -35,8 +35,8 @@ function ensureNavMenu(){
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="homeScreen">Home</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Studio</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="buildsScreen">Saved Jobs</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="customersScreen">Customers</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="layoutScreen">Workshop</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="layoutScreen">Guide Layout &amp; Tools</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav-menu-action="find-customer">Find Customer</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">Settings</button></div>
 				</div>
 			</div>
@@ -45,8 +45,18 @@ function ensureNavMenu(){
 	document.body.appendChild(sheet);
 	sheet.addEventListener('click',(event)=>{
 		const actionButton=event.target.closest('[data-nav-menu-action]');
-		if(actionButton && actionButton.getAttribute('data-nav-menu-action')==='close'){
-			closeNavMenu();
+		if(actionButton){
+			const action=actionButton.getAttribute('data-nav-menu-action')||'';
+			if(action==='close'){
+				closeNavMenu();
+				return;
+			}
+			if(action==='find-customer'){
+				closeNavMenu();
+				if(window.KLABS_UI && typeof window.KLABS_UI.openCustomerFinder==='function'){
+					window.KLABS_UI.openCustomerFinder('browse');
+				}
+			}
 		}
 	});
 }

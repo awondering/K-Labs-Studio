@@ -1835,11 +1835,6 @@ body.component-sheet-open .workshop-back-to-top{
   line-height:1.1;
 }
 
-#customersScreen .customers-browser__detail-actions .primary-action,
-#customersScreen .customers-browser__detail-actions .ghost-action{
-  min-height:46px;
-}
-
 .customers-browser__detail-actions [data-customer-browser-action="start-build"]{
   grid-column:1 / -1;
 }
@@ -2000,11 +1995,6 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 @media (max-width:760px){
-  .app-shell:has(#customersScreen.active){
-    --app-max-width:488px;
-    --app-gutter:14px;
-  }
-
   .customers-browser__layout{
     grid-template-columns:1fr;
     height:auto;
@@ -2040,11 +2030,6 @@ body.component-sheet-open .workshop-back-to-top{
     white-space:normal;
   }
 
-  #customersScreen .customers-browser__detail-actions .primary-action,
-  #customersScreen .customers-browser__detail-actions .ghost-action{
-    min-height:48px;
-  }
-
   .customers-browser__detail-actions [data-customer-browser-action="start-build"]{
     grid-column:auto;
   }
@@ -2055,10 +2040,6 @@ body.component-sheet-open .workshop-back-to-top{
 
   .customers-browser__job-row{
     padding:10px;
-  }
-
-  #customersScreen{
-    padding-bottom:calc(108px + env(safe-area-inset-bottom,0px));
   }
 
   .customers-browser__empty-state{
@@ -3259,44 +3240,6 @@ body.component-sheet-open .workshop-back-to-top{
   padding-left:var(--app-gutter);
   padding-right:var(--app-gutter);
   padding-bottom:calc(122px + var(--safe-bottom));
-}
-
-.app-shell:has(#customersScreen.active) .build-pill,
-.app-shell:has(#customersScreen.active) > .live-build-status{
-  display:none;
-}
-
-@media (min-width:761px){
-  #customersScreen.active{
-    display:grid;
-    grid-template-rows:auto auto minmax(0,1fr);
-    align-content:start;
-    gap:10px;
-    min-height:calc(100dvh - 222px);
-    padding-bottom:calc(138px + var(--safe-bottom));
-  }
-
-  #customersScreen .customers-browser__layout{
-    grid-template-columns:minmax(0,32%) minmax(0,68%);
-    gap:14px;
-    min-height:0;
-    align-items:stretch;
-  }
-
-  #customersScreen .customers-browser__list-pane{
-    display:grid;
-    min-height:0;
-  }
-
-  #customersScreen .customers-browser__list{
-    overflow:auto;
-    max-height:none;
-  }
-
-  #customersScreen .customers-browser__detail{
-    min-height:100%;
-    align-content:start;
-  }
 }
 
 .app-shell:has(#homeScreen.active) .topbar{
@@ -4506,7 +4449,6 @@ select:focus-visible{
 #layoutScreen .layout-screen-shell,
 #workshopScreen .quote-builder,
 #buildsScreen.active,
-#customersScreen,
 #settingsScreen{
   gap:var(--ds-space-4);
 }

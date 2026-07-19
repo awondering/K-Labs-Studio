@@ -4760,7 +4760,7 @@ function customerBrowserStatusLabel(entry,record){
   return statusMap[status]||'Saved Quote';
 }
 function customerBrowserLayoutElement(){
-  return document.querySelector('#customersScreen .customers-browser__layout');
+  return document.querySelector('.customers-browser__layout');
 }
 function setCustomerBrowserEmptyLayout(isEmpty){
   const layout=customerBrowserLayoutElement();
@@ -5631,6 +5631,13 @@ function bindWorkshopQuoteBuilder(){
       openCustomerFinderSheet('new-build');
     });
   }
+  const findCustomerEntryBtn=$('findCustomerEntryBtn');
+  if(findCustomerEntryBtn && findCustomerEntryBtn.getAttribute('data-find-customer-bound')!=='true'){
+    findCustomerEntryBtn.setAttribute('data-find-customer-bound','true');
+    findCustomerEntryBtn.addEventListener('click',()=>{
+      openCustomerFinderSheet('browse');
+    });
+  }
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -6400,13 +6407,6 @@ function onScreenChange(screenId){
     if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
     renderBuilds();
   }
-  if(screenId==='customersScreen'){
-    const searchInput=$('customerBrowserSearchInput');
-    if(searchInput && searchInput.value!==customerBrowserSearch){
-      searchInput.value=customerBrowserSearch;
-    }
-    renderCustomerBrowser();
-  }
   if(screenId==='workshopScreen'){
     if(preserveWorkshopQuoteOnEntry){
       preserveWorkshopQuoteOnEntry=false;
@@ -6608,4 +6608,4 @@ bindBuildsControls();
 bindCustomerBrowserControls();
 bindBlankLibraryControls();
 bindSettingsControls();
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');}};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');}};
