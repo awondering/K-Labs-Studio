@@ -3779,6 +3779,17 @@ body.component-sheet-open .workshop-back-to-top{
   color:#ece6dc;
 }
 
+.workshop-tool-print-actions{
+  display:grid;
+}
+
+.workshop-tool-print-actions .ghost-action{
+  min-height:40px;
+  font-size:10px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
 @media (max-width:640px){
   .workshop-tool-nav-back{
     min-height:46px;

@@ -112,6 +112,7 @@ const workshopToolsState={
     allowancePercent:5,
   },
 };
+let gripCutTemplateSnapshot=null;
 
 function save(){
   Store.set('klabs-studio-state',{
@@ -424,6 +425,166 @@ function renderDiameterCircumferenceTool(){
     button.setAttribute('aria-pressed',String(selected));
   });
 }
+function buildGripCutTemplateSvg(template){
+  const width=760;
+  const height=980;
+  const originX=Math.round(width*0.32);
+  const originY=170;
+  const bottomY=890;
+  const topY=90;
+  const leftLimit=64;
+  const rightLimit=width-64;
+  const angleRadius=54;
+  const labels=[];
+  const lines=[];
+  const arcs=[];
+
+  const vertical=`<line x1="${originX}" y1="${topY}" x2="${originX}" y2="${bottomY}" class="vertical"/><text x="${originX+16}" y="${topY+22}" class="label">Vertical Reference</text>`;
+  const linesToRender=[];
+  const startAngle=Math.max(0,numberOrZero(template.startCutAngle));
+  linesToRender.push({name:'Start Cut Angle',angle:startAngle,side:1});
+  if(template.profile==='tapered'){
+    const finishAngle=Math.max(0,numberOrZero(template.finishCutAngle));
+    linesToRender.push({name:'Finish Cut Angle',angle:finishAngle,side:-1});
+  }
+
+  const polar=(cx,cy,r,deg)=>{
+    const radians=(Math.PI/180)*deg;
+    return {
+      x:cx+(r*Math.cos(radians)),
+      y:cy+(r*Math.sin(radians)),
+    };
+  };
+
+  const arcPath=(cx,cy,r,startDeg,endDeg)=>{
+    const start=polar(cx,cy,r,startDeg);
+    const end=polar(cx,cy,r,endDeg);
+    const largeArc=Math.abs(endDeg-startDeg)>180?1:0;
+    const sweep=endDeg>startDeg?1:0;
+    return `M ${formatDecimal(start.x,2)} ${formatDecimal(start.y,2)} A ${r} ${r} 0 ${largeArc} ${sweep} ${formatDecimal(end.x,2)} ${formatDecimal(end.y,2)}`;
+  };
+
+  linesToRender.forEach((item)=>{
+    const safeAngle=Math.max(0,Math.min(85,item.angle));
+    const deltaY=bottomY-originY;
+    const deltaX=Math.tan((safeAngle*Math.PI)/180)*deltaY;
+    const endX=Math.max(leftLimit,Math.min(rightLimit,originX+(item.side*deltaX)));
+    const lineClass=item.name==='Finish Cut Angle'?'cut-line cut-line--secondary':'cut-line';
+    lines.push(`<line x1="${originX}" y1="${originY}" x2="${formatDecimal(endX,2)}" y2="${bottomY}" class="${lineClass}"/>`);
+
+    const labelX=originX+(endX-originX)*0.62+(item.side>0?14:-14);
+    const labelY=originY+(bottomY-originY)*0.62;
+    labels.push(`<text x="${formatDecimal(labelX,2)}" y="${formatDecimal(labelY,2)}" class="label" text-anchor="${item.side>0?'start':'end'}">${escapeHtml(item.name)}: ${escapeHtml(formatDecimal(item.angle,1))}&deg; off square</text>`);
+
+    const cutDeg=90-(item.side*safeAngle);
+    const startDeg=item.side>0?cutDeg:90;
+    const endDeg=item.side>0?90:cutDeg;
+    arcs.push(`<path d="${arcPath(originX,originY,angleRadius,startDeg,endDeg)}" class="angle-arc"/>`);
+  });
+
+  const angleNote=template.profile==='tapered'
+    ?`${formatDecimal(template.startCutAngle,1)} and ${formatDecimal(template.finishCutAngle,1)} deg off square`
+    :`${formatDecimal(template.startCutAngle,1)} deg off square`;
+
+  return `
+    <svg class="template-visual" viewBox="0 0 ${width} ${height}" role="img" aria-label="Cut angle guide">
+      <rect x="1" y="1" width="${width-2}" height="${height-2}" class="frame"/>
+      ${vertical}
+      <circle cx="${originX}" cy="${originY}" r="2.8" class="origin"/>
+      ${lines.join('')}
+      ${arcs.join('')}
+      ${labels.join('')}
+      <text x="${originX+16}" y="${originY-16}" class="label label--muted">Angle shown from the vertical square reference</text>
+      <text x="${originX+16}" y="${originY+28}" class="label label--muted">Cut lines originate at the same starting point</text>
+      <text x="${Math.round(width*0.5)}" y="${height-36}" text-anchor="middle" class="label">Template reference: ${escapeHtml(angleNote)}</text>
+    </svg>
+  `;
+}
+function openGripCutTemplatePrint(){
+  if(!gripCutTemplateSnapshot){
+    alert('Run Grip Covering values first to generate a cut template.');
+    return;
+  }
+  const template=gripCutTemplateSnapshot;
+  const summaryRows=[
+    {label:'Grip Type',value:template.gripTypeLabel},
+    {label:'Start Cut Angle',value:`${formatDecimal(template.startCutAngle,1)} deg off square`},
+  ];
+  if(template.profile==='tapered'){
+    summaryRows.push({label:'Finish Cut Angle',value:`${formatDecimal(template.finishCutAngle,1)} deg off square`});
+    summaryRows.push({label:'Average Cut Angle',value:`${formatDecimal(template.averageCutAngle,1)} deg off square`});
+  }
+  summaryRows.push({label:'Covering Width / Cord Diameter',value:template.coveringWidthText});
+  summaryRows.push({label:'Grip Length',value:template.gripLengthText});
+  summaryRows.push({label:'Date',value:template.dateText});
+
+  const summaryHtml=summaryRows.map((row)=>`<div class="summary-row"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('');
+  const visualSvg=buildGripCutTemplateSvg(template);
+  const printWindow=window.open('','_blank','noopener,noreferrer,width=980,height=1240');
+  if(!printWindow || !printWindow.document){
+    alert('Unable to open print view. Please allow pop-ups for this site and try again.');
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grip Covering Cut Template</title>
+  <style>
+    @page { size: A4 portrait; margin: 14mm; }
+    html,body{ margin:0; padding:0; background:#fff; color:#000; font-family: "Segoe UI", Arial, sans-serif; }
+    body{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sheet{ width:100%; max-width:180mm; margin:0 auto; display:grid; gap:10mm; }
+    h1{ margin:0; font-size:20pt; letter-spacing:.02em; }
+    .meta{ font-size:10pt; color:#111; }
+    .summary{ border:1.4pt solid #000; padding:4mm; display:grid; gap:2.6mm; }
+    .summary-row{ display:flex; justify-content:space-between; align-items:baseline; gap:8mm; border-bottom:.5pt solid #bbb; padding-bottom:1.6mm; }
+    .summary-row:last-child{ border-bottom:none; padding-bottom:0; }
+    .summary-row span{ font-size:8.5pt; text-transform:uppercase; letter-spacing:.08em; }
+    .summary-row strong{ font-size:10.5pt; text-align:right; }
+    .visual{ border:1.6pt solid #000; padding:4mm; }
+    .template-visual{ width:100%; height:auto; display:block; }
+    .frame{ fill:none; stroke:#ddd; stroke-width:1; }
+    .vertical{ stroke:#000; stroke-width:4; }
+    .cut-line{ stroke:#000; stroke-width:3; }
+    .cut-line--secondary{ stroke:#000; stroke-width:2.5; stroke-dasharray:10 7; }
+    .angle-arc{ fill:none; stroke:#000; stroke-width:1.8; }
+    .origin{ fill:#000; }
+    .label{ font-size:20px; fill:#000; }
+    .label--muted{ font-size:16px; }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <header>
+      <h1>Grip Covering Cut Template</h1>
+      <div class="meta">Use this guide to mark first cuts on leather, cork tape, cord, or similar covering materials.</div>
+    </header>
+    <section class="summary" aria-label="Measurement summary">
+      ${summaryHtml}
+    </section>
+    <section class="visual" aria-label="Visual angle guide">
+      ${visualSvg}
+    </section>
+  </main>
+</body>
+</html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.onafterprint=()=>{
+    printWindow.close();
+  };
+  window.setTimeout(()=>{
+    try{
+      printWindow.print();
+    }catch(_error){
+      // Allow manual printing if automatic print is blocked.
+    }
+  },120);
+}
 function renderGripCoveringTool(){
   const panel=$('workshopToolsPanel');
   if(!panel)return;
@@ -511,6 +672,7 @@ function renderGripCoveringTool(){
   const finishCutRow=$('workshopGripFinishCutAngleRow');
   const averageCutEl=$('workshopGripAverageCutAngle');
   const averageCutRow=$('workshopGripAverageCutAngleRow');
+  const printActions=$('workshopGripPrintActions');
 
   if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32});
   if(revolutionsEl)revolutionsEl.textContent=formatDecimal(revolutions,2);
@@ -522,6 +684,19 @@ function renderGripCoveringTool(){
 
   if(averageCutRow)averageCutRow.hidden=!showFinishCutAngle;
   if(averageCutEl)averageCutEl.textContent=`${formatDecimal(averageCutAngle,1)} deg`;
+
+  const hasAngleOutput=state.lengthMm>0 && state.coverWidthMm>0 && Number.isFinite(startCutAngle) && startCutAngle>0;
+  if(printActions)printActions.hidden=!hasAngleOutput;
+  gripCutTemplateSnapshot=hasAngleOutput?{
+    profile:state.profile,
+    gripTypeLabel:state.profile==='tapered'?'Tapered Grip':'Straight Grip',
+    startCutAngle,
+    finishCutAngle,
+    averageCutAngle,
+    coveringWidthText:formatWorkshopMeasurementValue(state.coverWidthMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
+    gripLengthText:formatWorkshopMeasurementValue(state.lengthMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
+    dateText:formatDateDisplay(new Date(),{includeTime:false}),
+  }:null;
 
   panel.querySelectorAll('[data-grip-unit]').forEach((button)=>{
     const selected=button.getAttribute('data-grip-unit')===state.unit;
@@ -682,6 +857,13 @@ function bindWorkshopCalculatorControls(){
       renderWorkshopCalculator();
     });
   });
+
+  const gripPrintTemplateBtn=$('workshopGripPrintTemplateBtn');
+  if(gripPrintTemplateBtn){
+    gripPrintTemplateBtn.addEventListener('click',()=>{
+      openGripCutTemplatePrint();
+    });
+  }
 
   renderWorkshopCalculator();
 }
