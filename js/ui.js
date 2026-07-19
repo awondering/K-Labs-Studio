@@ -80,6 +80,10 @@ let workshopInputFocusStabilityBound=false;
 let workshopBackToTopBound=false;
 let workshopBackToTopRafId=0;
 let workshopBackToTopLastScrollY=-1;
+let workshopStatusFlashText='';
+let workshopStatusFlashPending=false;
+let workshopStatusFlashUntil=0;
+let workshopStatusFlashTimer=null;
 let preserveWorkshopQuoteOnEntry=false;
 let activeSavedBuildRef=null;
 const workshopKeyboardDismissState={
@@ -1649,8 +1653,14 @@ function updateQuoteActionPriority(){
     saveQuoteBtn.setAttribute('aria-disabled',String(saveDisabled));
   }
   if(statusEl){
-    statusEl.textContent=hasUnsavedQuoteChanges?'Unsaved changes':'All changes saved';
-    statusEl.classList.toggle('is-pending',hasUnsavedQuoteChanges);
+    const hasFlash=workshopStatusFlashText && Date.now()<workshopStatusFlashUntil;
+    if(hasFlash){
+      statusEl.textContent=workshopStatusFlashText;
+      statusEl.classList.toggle('is-pending',workshopStatusFlashPending);
+    }else{
+      statusEl.textContent=hasUnsavedQuoteChanges?'Unsaved changes':'All changes saved';
+      statusEl.classList.toggle('is-pending',hasUnsavedQuoteChanges);
+    }
   }
   const customerCopyEnabled=hasSavedBuildRecordForCurrentQuote();
   const customerCopyActions=$('customerCopyActions');
@@ -1672,6 +1682,24 @@ function markQuoteDirty(){
 function markQuoteSaved(){
   hasUnsavedQuoteChanges=false;
   updateQuoteActionPriority();
+}
+function flashWorkshopStatus(message,options){
+  const settings={pending:false,duration:1700,...(options||{})};
+  workshopStatusFlashText=String(message||'').trim();
+  workshopStatusFlashPending=!!settings.pending;
+  workshopStatusFlashUntil=Date.now()+Math.max(350,numberOrZero(settings.duration));
+  if(workshopStatusFlashTimer){
+    clearTimeout(workshopStatusFlashTimer);
+    workshopStatusFlashTimer=null;
+  }
+  updateQuoteActionPriority();
+  workshopStatusFlashTimer=window.setTimeout(()=>{
+    workshopStatusFlashText='';
+    workshopStatusFlashPending=false;
+    workshopStatusFlashUntil=0;
+    workshopStatusFlashTimer=null;
+    updateQuoteActionPriority();
+  },Math.max(350,numberOrZero(settings.duration))+40);
 }
 function setActiveSavedBuildRef(source,index,record){
   const numericIndex=Number(index);
@@ -1780,6 +1808,39 @@ function collapseWorkshopSections(){
     setWorkshopSectionCollapsed(id,true);
   });
 }
+function workshopHasCustomerData(){
+  return !!(
+    specificationValue(quote&&quote.customerName)
+    || specificationValue(quote&&quote.phone)
+    || specificationValue(quote&&quote.email)
+  );
+}
+function workshopHasPricingData(){
+  return numberOrZero(quote&&quote.finalCustomerPrice)>0
+    || numberOrZero(quote&&quote.targetProfit)>0
+    || numberOrZero(quote&&quote.markupPercent)>0
+    || numberOrZero(quote&&quote.labourRate)>0
+    || numberOrZero(quote&&quote.labourHours)>0;
+}
+function nextWorkshopSectionId(){
+  if(!workshopHasCustomerData())return 'workshopCustomerBody';
+  if(componentRowsForTotals().length===0)return 'workshopBuildSpecsBody';
+  if(!workshopHasPricingData())return 'workshopQuoteSummaryBody';
+  return 'workshopBuildActionsBody';
+}
+function focusWorkshopSection(bodyId,options){
+  const targetId=WORKSHOP_COLLAPSIBLE_SECTION_IDS.includes(bodyId)?bodyId:nextWorkshopSectionId();
+  WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
+    setWorkshopSectionCollapsed(id,id!==targetId);
+  });
+  const settings={scroll:true,...(options||{})};
+  if(settings.scroll===false)return;
+  const section=$(targetId);
+  const panel=section&&section.closest('.quote-section--collapsible');
+  if(panel){
+    window.setTimeout(()=>scrollWorkshopSectionIntoView(panel),36);
+  }
+}
 function beginFreshQuote(options){
   const settings={navigate:true,...(options||{})};
   clearActiveSavedBuildRef();
@@ -1788,6 +1849,7 @@ function beginFreshQuote(options){
   markQuoteSaved();
   renderWorkshopQuote();
   collapseWorkshopSections();
+  focusWorkshopSection('workshopCustomerBody',{scroll:false});
   if(settings.navigate){goScreen('workshopScreen');}
 }
 function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
@@ -1818,9 +1880,8 @@ function startFreshQuoteForCustomer(record,options){
   collapseWorkshopSections();
   preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
-  if(settings.expandCustomerSection){
-    setWorkshopSectionCollapsed('workshopCustomerBody',false);
-  }
+  const targetSection=settings.expandCustomerSection?'workshopCustomerBody':nextWorkshopSectionId();
+  window.setTimeout(()=>focusWorkshopSection(targetSection),36);
 }
 function runNewBuildStartAction(startAction){
   if(typeof startAction!=='function')return;
@@ -3991,9 +4052,11 @@ function setCustomerFinderNewBuildStep(step){
   const actions=$('customerFinderStartActions');
   const searchBlock=$('customerFinderSearchBlock');
   const form=$('customerFinderNewForm');
+  const back=$('customerFinderSearchBlock')&&$('customerFinderSearchBlock').querySelector('[data-customer-finder-action="back-to-actions"]');
   if(actions)actions.hidden=customerFinderNewBuildStep!=='actions';
   if(searchBlock)searchBlock.hidden=customerFinderNewBuildStep!=='search';
   if(form)form.hidden=customerFinderNewBuildStep!=='add';
+  if(back)back.hidden=!(customerFinderIntent==='new-build' && customerFinderNewBuildStep!=='actions');
   updateCustomerFinderIntentUi();
   if(customerFinderNewBuildStep==='search'){
     const search=$('customerFinderSearch');
@@ -4021,15 +4084,18 @@ function updateCustomerFinderIntentUi(){
   const startActions=$('customerFinderStartActions');
   const searchBlock=$('customerFinderSearchBlock');
   const form=$('customerFinderNewForm');
+  const back=searchBlock?searchBlock.querySelector('[data-customer-finder-action="back-to-actions"]'):null;
   if(customerFinderIntent==='new-build'){
-    if(startActions && startActions.hidden===undefined)startActions.hidden=false;
-    if(customerFinderNewBuildStep!=='search' && searchBlock)searchBlock.hidden=true;
-    if(customerFinderNewBuildStep!=='add' && form)form.hidden=true;
+    if(startActions)startActions.hidden=customerFinderNewBuildStep!=='actions';
+    if(searchBlock)searchBlock.hidden=customerFinderNewBuildStep!=='search';
+    if(form)form.hidden=customerFinderNewBuildStep!=='add';
+    if(back)back.hidden=customerFinderNewBuildStep==='actions';
     return;
   }
   if(startActions)startActions.hidden=true;
   if(searchBlock)searchBlock.hidden=false;
   if(form)form.hidden=true;
+  if(back)back.hidden=true;
 }
 function handleCustomerSelectionForNewBuild(customerKey,customerName){
   const key=String(customerKey||'');
@@ -4317,7 +4383,8 @@ function openCustomerFinderSheet(intent){
   const sheet=$('customerFinderSheet');
   if(!sheet)return;
   customerFinderIntent=intent==='new-build'?'new-build':'browse';
-  customerFinderNewBuildStep=customerFinderIntent==='new-build'?'actions':'search';
+  const hasCustomerHistory=customerSavedGroups('',{includeInvalidCustomers:false}).length>0;
+  customerFinderNewBuildStep=customerFinderIntent==='new-build'?(hasCustomerHistory?'search':'add'):'search';
   customerFinderSearch='';
   customerFinderSelectedKey='';
   if($('customerFinderSearch'))$('customerFinderSearch').value='';
@@ -4327,12 +4394,12 @@ function openCustomerFinderSheet(intent){
   updateCustomerFinderIntentUi();
   renderCustomerFinder();
   if(customerFinderIntent==='new-build'){
-    setCustomerFinderNewBuildStep('actions');
+    setCustomerFinderNewBuildStep(customerFinderNewBuildStep);
   }
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   bindCustomerFinderViewportHandlers();
-  const input=customerFinderIntent==='new-build'?$('customerFinderSearchExistingAction'):$('customerFinderSearch');
+  const input=(customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add')?$('customerFinderNewCustomerName'):$('customerFinderSearch');
   if(input && !input.hidden){
     try{input.focus({preventScroll:true});}catch{input.focus();}
   }
@@ -4915,6 +4982,7 @@ function openSavedBuildRecord(source,index){
   collapseWorkshopSections();
   preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
+  window.setTimeout(()=>focusWorkshopSection(nextWorkshopSectionId()),36);
 }
 function duplicateSavedBuildRecord(source,index){
   const selected=getSavedEntryBySource(source,index);
@@ -4932,6 +5000,7 @@ function duplicateSavedBuildRecord(source,index){
   collapseWorkshopSections();
   preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
+  window.setTimeout(()=>focusWorkshopSection(nextWorkshopSectionId()),36);
 }
 function renderBuilds(){
   const host=$('buildCards');
@@ -5626,7 +5695,8 @@ function bindWorkshopQuoteBuilder(){
         setActiveSavedBuildRef(savedRef.source,savedRef.index,savedRef.record);
       }
       markQuoteSaved();
-      alert('Build job saved.');
+      flashWorkshopStatus('Build saved');
+      focusWorkshopSection('workshopBuildActionsBody',{scroll:false});
     });
   }
   const deleteCurrentBuildBtn=$('deleteCurrentBuildBtn');
@@ -5802,7 +5872,7 @@ function ensureQuotePreviewSheet(){
   $('quotePreviewBackBtn').addEventListener('click',closeQuotePreviewSheet);
   $('quotePreviewApproveBtn').addEventListener('click',()=>{
     closeQuotePreviewSheet();
-    alert('Customer copy ready to send.');
+    flashWorkshopStatus('Customer copy ready');
   });
 }
 function renderQuotePreviewSheet(){
