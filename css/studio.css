@@ -3603,13 +3603,38 @@ body.component-sheet-open .workshop-back-to-top{
   color:rgba(223,216,205,.85);
 }
 
-.workshop-tool-back{
+.workshop-tool-nav-back{
   justify-self:start;
-  min-height:34px;
-  padding:0 12px;
-  border-radius:999px;
-  font-size:10px;
-  letter-spacing:.08em;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:42px;
+  padding:7px 2px 7px 0;
+  border:none;
+  background:transparent;
+  color:rgba(222,215,203,.84);
+  font-size:11px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  cursor:pointer;
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+
+.workshop-tool-nav-back__arrow{
+  font-size:18px;
+  line-height:1;
+  transform:translateY(-.5px);
+  color:rgba(236,229,217,.92);
+}
+
+.workshop-tool-nav-back:hover,
+.workshop-tool-nav-back:focus-visible{
+  color:#f1ebe1;
+  text-decoration:underline;
+  text-decoration-thickness:1px;
+  text-underline-offset:3px;
 }
 
 .workshop-tool-unit-row{
@@ -3709,6 +3734,13 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 @media (max-width:640px){
+  .workshop-tool-nav-back{
+    min-height:46px;
+    width:100%;
+    max-width:100%;
+    overflow:hidden;
+    white-space:nowrap;
+  }
   .workshop-tool-fields--two{
     grid-template-columns:minmax(0,1fr);
   }
