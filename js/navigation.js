@@ -89,7 +89,7 @@ document.addEventListener('click',(event)=>{
 	const menuNav=event.target.closest('#navMenuSheet [data-nav]');
 	if(menuNav){
 		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
-			window.KLABS_UI.prepareWorkshopEntry('fresh');
+			window.KLABS_UI.prepareWorkshopEntry('preserve');
 		}
 		goScreen(menuNav.dataset.nav);
 		return;
@@ -97,7 +97,7 @@ document.addEventListener('click',(event)=>{
 	const nav=event.target.closest('[data-nav]');
 	if(nav){
 		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
-			window.KLABS_UI.prepareWorkshopEntry('fresh');
+			window.KLABS_UI.prepareWorkshopEntry('preserve');
 		}
 		goScreen(nav.dataset.nav);
 	}

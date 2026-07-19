@@ -43,13 +43,9 @@ let customerFinderSelectedKey='';
 let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
 let activeCustomerRenameContext={key:'',existingName:''};
-let customerBrowserSearch='';
-let customerBrowserSelectedKey='';
-let customerBrowserEditMode=false;
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
-let quotePreviewIntent='view';
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 let holdTimer=null;
 let holdDelayTimer=null;
@@ -1586,17 +1582,6 @@ function normalizeQuoteStatus(value){
   const normalized=String(value||'').trim().toLowerCase();
   return QUOTE_STATUS_VALUES.includes(normalized)?normalized:'draft';
 }
-function isAcceptedQuoteStatus(value){
-  return normalizeQuoteStatus(value)==='accepted';
-}
-function hasSavedBuildRecordForCurrentQuote(){
-  const buildNumber=specificationValue(quote&&quote.buildNumber);
-  if(!buildNumber)return false;
-  const records=Store.get('klabs-workshop-builds',[]);
-  if(!Array.isArray(records))return false;
-  const buildKey=normalizeNameKey(buildNumber);
-  return records.some((record)=>normalizeNameKey(record&&record.buildNumber)===buildKey);
-}
 function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
   const merged={...base,...(inputQuote||{})};
@@ -1640,9 +1625,6 @@ function normalizeQuote(inputQuote){
   merged.marginPercent=merged.markupPercent;
   return merged;
 }
-function canConvertToBuild(){
-  return isAcceptedQuoteStatus(quote.quoteStatus) && !hasUnsavedQuoteChanges;
-}
 function updateQuoteActionPriority(){
   const saveQuoteBtn=$('saveQuoteBtn');
   const statusEl=$('workshopBuildActionsStatus');
@@ -1663,18 +1645,6 @@ function updateQuoteActionPriority(){
       statusEl.classList.toggle('is-pending',hasUnsavedQuoteChanges);
     }
   }
-  const customerCopyEnabled=hasSavedBuildRecordForCurrentQuote();
-  const customerCopyActions=$('customerCopyActions');
-  if(customerCopyActions){
-    customerCopyActions.hidden=!customerCopyEnabled;
-    if(!customerCopyEnabled)customerCopyActions.removeAttribute('open');
-  }
-  ['viewCustomerCopyBtn','emailQuoteBtn','printQuoteBtn'].forEach((id)=>{
-    const button=$(id);
-    if(!button)return;
-    button.disabled=!customerCopyEnabled;
-    button.setAttribute('aria-disabled',String(!customerCopyEnabled));
-  });
 }
 function markQuoteDirty(){
   hasUnsavedQuoteChanges=true;
@@ -1752,7 +1722,6 @@ function finalizeDeletedCurrentBuild(){
   collapseWorkshopSections();
   renderBuilds();
   renderCustomerFinder();
-  renderCustomerBrowser();
   goScreen('buildsScreen');
 }
 function requestDeleteCurrentBuild(){
@@ -1788,15 +1757,6 @@ function quoteHasMeaningfulDraft(currentQuote){
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
   return hasIdentity || hasCountryOverride || hasBuildSpecs || hasBlank || hasCosts || hasComponentData;
-}
-function ensureCustomerSectionExpanded(){
-  const body=$('workshopCustomerBody');
-  if(!body)return;
-  const section=body.closest('.quote-section--collapsible');
-  if(!section)return;
-  section.classList.remove('quote-section--collapsed');
-  const trigger=section.querySelector('[data-collapsible-trigger]');
-  if(trigger){trigger.setAttribute('aria-expanded','true');}
 }
 function setWorkshopSectionCollapsed(sectionId,collapsed){
   const body=$(sectionId);
@@ -3876,7 +3836,7 @@ function markKeyboardDismissWindow(){
 function isWorkshopEditableTarget(target){
   if(!target || typeof target.closest!=='function')return false;
   const inWorkshopScreen=!!target.closest('#workshopScreen');
-  const inComponentSheet=!!target.closest('#choicePickerSheet,#confirmSheet,#quotePreviewSheet,#blankEditorSheet');
+  const inComponentSheet=!!target.closest('#choicePickerSheet,#confirmSheet,#blankEditorSheet');
   if(!inWorkshopScreen && !inComponentSheet)return false;
   if(target.matches && target.matches('input, textarea'))return true;
   return !!(target.closest('[contenteditable="true"]'));
@@ -3923,14 +3883,6 @@ function quoteForPersistence(currentQuote){
     .filter((component)=>componentRowHasMeaningfulData(component) && !pendingComponentDraftRows.has(component))
     .map(normalizeComponent);
   return normalizeQuote({...source,components:persistedComponents});
-}
-function persistQuoteRecord(currentQuote){
-  syncMissingComponentLibraryData(currentQuote);
-  const savedAt=new Date().toISOString();
-  const records=Store.get('klabs-workshop-quotes',[]);
-  const record={...quoteForPersistence(currentQuote),savedAt};
-  records.unshift(record);
-  Store.set('klabs-workshop-quotes',records);
 }
 function savedQuoteRecords(){
   const records=Store.get('klabs-workshop-quotes',[]);
@@ -4150,17 +4102,15 @@ function handleCreateCustomerFromNewBuildForm(){
     flashWorkshopStatus('Customer linked');
   });
 }
-function closeCustomerFinderMenus(){
-  document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{menu.open=false;});
-}
-function customerFinderCustomerMenuMarkup(group){
-  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Customer actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-list-action="rename" data-customer-key="${escapeHtml(group.key)}" data-customer-name="${escapeHtml(group.name)}">Rename Customer</button><button class="component-picker-menu__item" type="button" data-customer-list-action="delete" data-customer-key="${escapeHtml(group.key)}" data-customer-name="${escapeHtml(group.name)}">Delete Customer</button></div></details>`;
-}
-function customerFinderWorkMenuMarkup(entry){
-  const source=escapeHtml(entry.source);
-  const index=Number(entry.index);
-  const deleteLabel='Delete Job';
-  return `<details class="customer-finder__menu-wrap"><summary class="component-sheet__menu-trigger customer-finder__menu-trigger" aria-label="Saved job actions">⋯</summary><div class="component-picker-menu customer-finder__menu"><button class="component-picker-menu__item" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">${deleteLabel}</button></div></details>`;
+function customerFinderPrimaryRecord(group){
+  const selected=(group && Array.isArray(group.entries))?group.entries:[];
+  if(!selected.length)return {};
+  const sorted=[...selected].sort((left,right)=>{
+    const leftDate=Date.parse(left&&left.record&&left.record.savedAt||'')||0;
+    const rightDate=Date.parse(right&&right.record&&right.record.savedAt||'')||0;
+    return rightDate-leftDate;
+  });
+  return sorted[0]&&sorted[0].record?sorted[0].record:{};
 }
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
@@ -4173,7 +4123,7 @@ function customerFinderWorkRowMarkup(entry){
   const savedAtText=record.savedAt?formatDateDisplay(record.savedAt,{includeTime:true}):'Unknown save time';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
+  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div><button class="customer-finder__work-delete ghost-action" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-label="Delete saved job ${escapeHtml(title)}">Delete</button></div>`;
 }
 function setCustomerRenameValidation(message){
   const error=$('customerRenameNameError');
@@ -4307,7 +4257,7 @@ function requestDeleteCustomerGroup(customerKey,customerName){
   if(refs>0){
     openConfirmDialog({
       title:'Delete Customer',
-      message:'This customer has saved jobs. Delete those records first.',
+      message:`This customer has ${refs} saved job${refs===1?'':'s'}. Delete those records first.`,
       actions:[{id:'ok',label:'OK',kind:'primary'}]
     },()=>{});
     return;
@@ -4334,13 +4284,11 @@ function renderCustomerFinder(){
   if(!hasSelected){
     customerFinderSelectedKey=groups[0].key;
   }
-  closeCustomerFinderMenus();
   resultHost.innerHTML=groups.map((group)=>{
     const active=group.key===customerFinderSelectedKey;
     const totalJobs=group.quotes.length+group.builds.length;
     const summary=`${totalJobs} saved job${totalJobs===1?'':'s'}`;
-    const menuMarkup=customerFinderIntent==='new-build'?'':customerFinderCustomerMenuMarkup(group);
-    return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button>${menuMarkup}</div>`;
+    return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button></div>`;
   }).join('');
   if(customerFinderIntent==='new-build'){
     detailHost.hidden=true;
@@ -4353,12 +4301,31 @@ function renderCustomerFinder(){
     detailHost.innerHTML='';
     return;
   }
+  const customerRecord=customerFinderPrimaryRecord(selected);
+  const phone=specificationValue(customerRecord.phone);
+  const email=specificationValue(customerRecord.email);
+  const company=specificationValue(customerRecord.company||customerRecord.companyName||customerRecord.businessName);
+  const latestSavedAt=selected.latestSavedAt?formatDateDisplay(selected.latestSavedAt,{includeTime:true}):'';
+  const detailMeta=[
+    `${selected.entries.length} saved job${selected.entries.length===1?'':'s'}`,
+    latestSavedAt?`Latest ${latestSavedAt}`:''
+  ].filter(Boolean).join(' • ');
+  const facts=[
+    company?`<small>Company: ${escapeHtml(company)}</small>`:'',
+    phone?`<small>Phone: ${escapeHtml(phone)}</small>`:'',
+    email?`<small>Email: ${escapeHtml(email)}</small>`:''
+  ].filter(Boolean).join('');
   const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved jobs for this customer.</div>';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customer-finder__detail-head">
       <h3>${escapeHtml(selected.name)}</h3>
-      <p>Saved jobs for this customer.</p>
+      <p>${escapeHtml(detailMeta||'Saved jobs for this customer.')}</p>
+      ${facts?`<div class="customer-finder__detail-facts">${facts}</div>`:''}
+      <div class="customer-finder__detail-actions">
+        <button class="ghost-action" type="button" data-customer-detail-action="rename" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Rename Customer</button>
+        <button class="ghost-action" type="button" data-customer-detail-action="delete" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Delete Customer</button>
+      </div>
     </header>
     <section class="customer-finder__work-section" aria-label="Saved Jobs">
       <h4>Saved Jobs</h4>
@@ -4558,13 +4525,6 @@ function ensureCustomerFinderSheet(){
     </section>
   `;
   document.body.appendChild(sheet);
-  sheet.addEventListener('toggle',(event)=>{
-    const opened=event.target.closest('.customer-finder__menu-wrap');
-    if(!opened || !opened.open)return;
-    document.querySelectorAll('#customerFinderSheet .customer-finder__menu-wrap[open]').forEach((menu)=>{
-      if(menu!==opened)menu.open=false;
-    });
-  },true);
   sheet.addEventListener('click',(event)=>{
     const actionEl=event.target.closest('[data-customer-finder-action]');
     if(actionEl){
@@ -4592,15 +4552,11 @@ function ensureCustomerFinderSheet(){
         return;
       }
     }
-    if(!event.target.closest('.customer-finder__menu-wrap')){
-      closeCustomerFinderMenus();
-    }
-    const customerMenuAction=event.target.closest('[data-customer-list-action]');
-    if(customerMenuAction){
-      const action=customerMenuAction.getAttribute('data-customer-list-action')||'';
-      const customerKey=customerMenuAction.getAttribute('data-customer-key')||'';
-      const customerName=customerMenuAction.getAttribute('data-customer-name')||'';
-      closeCustomerFinderMenus();
+    const customerDetailAction=event.target.closest('[data-customer-detail-action]');
+    if(customerDetailAction){
+      const action=customerDetailAction.getAttribute('data-customer-detail-action')||'';
+      const customerKey=customerDetailAction.getAttribute('data-customer-key')||'';
+      const customerName=customerDetailAction.getAttribute('data-customer-name')||'';
       if(action==='rename'){requestRenameCustomer(customerKey,customerName);}
       if(action==='delete'){requestDeleteCustomerGroup(customerKey,customerName);}
       return;
@@ -4622,14 +4578,13 @@ function ensureCustomerFinderSheet(){
       const action=rowAction.getAttribute('data-customer-row-action')||'';
       const source=rowAction.getAttribute('data-customer-open-source')||'quote';
       const index=Number(rowAction.getAttribute('data-customer-open-index'));
-      closeCustomerFinderMenus();
       if(action==='delete'){
         requestDeleteSavedBuildRecord(source,index);
       }
       return;
     }
     const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
-    if(openRow && !event.target.closest('.customer-finder__menu-wrap')){
+    if(openRow && !event.target.closest('[data-customer-row-action]')){
       const source=openRow.getAttribute('data-customer-open-source')||'quote';
       const index=Number(openRow.getAttribute('data-customer-open-index'));
       closeCustomerFinderSheet();
@@ -4640,7 +4595,7 @@ function ensureCustomerFinderSheet(){
   sheet.addEventListener('keydown',(event)=>{
     if(event.key!=='Enter' && event.key!==' ')return;
     const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
-    if(!openRow || event.target.closest('.customer-finder__menu-wrap'))return;
+    if(!openRow || event.target.closest('[data-customer-row-action]'))return;
     event.preventDefault();
     const source=openRow.getAttribute('data-customer-open-source')||'quote';
     const index=Number(openRow.getAttribute('data-customer-open-index'));
@@ -4684,318 +4639,29 @@ function ensureCustomerFinderSheet(){
     }
   });
 }
-function customerBrowserPrimaryRecord(group){
-  if(!group || !Array.isArray(group.entries) || !group.entries.length)return {};
-  const sorted=[...group.entries].sort((left,right)=>{
-    const leftDate=Date.parse(left&&left.record&&left.record.savedAt||'')||0;
-    const rightDate=Date.parse(right&&right.record&&right.record.savedAt||'')||0;
-    return rightDate-leftDate;
-  });
-  return sorted[0]&&sorted[0].record?sorted[0].record:{};
-}
-function customerBrowserCompanyValue(record){
-  if(!record || typeof record!=='object')return '';
-  return specificationValue(record.company||record.companyName||record.businessName||'');
-}
-function customerBrowserAddressValue(record){
-  if(!record || typeof record!=='object')return '';
-  const line1=specificationValue(record.addressLine1);
-  const line2=specificationValue(record.addressLine2);
-  const locality=[specificationValue(record.suburbLocality),specificationValue(record.cityTown),specificationValue(record.regionState),specificationValue(record.postcode)].filter(Boolean).join(', ');
-  const country=specificationValue(record.country);
-  return [line1,line2,locality,country].filter(Boolean).join(' • ');
-}
-function customerBrowserDetailRows(record){
-  const rows=[];
-  appendSpecRow(rows,'Customer Name',record&&record.customerName);
-  appendSpecRow(rows,'Company',customerBrowserCompanyValue(record));
-  appendSpecRow(rows,'Phone',record&&record.phone);
-  appendSpecRow(rows,'Email',record&&record.email);
-  appendSpecRow(rows,'Address',customerBrowserAddressValue(record));
-  return rows;
-}
-function customerBrowserGroups(){
-  const groups=customerSavedGroups('',{includeInvalidCustomers:false}).map((group)=>{
-    const primary=customerBrowserPrimaryRecord(group);
-    return {
-      ...group,
-      company:customerBrowserCompanyValue(primary),
-    };
-  });
-  const searchKey=normalizeNameKey(customerBrowserSearch);
-  if(!searchKey)return groups;
-  return groups.filter((group)=>{
-    if(normalizeNameKey(group.name).includes(searchKey))return true;
-    if(normalizeNameKey(group.company).includes(searchKey))return true;
-    return false;
-  });
-}
-function customerBrowserIsGenericTitle(value){
-  const normalized=normalizeNameKey(value);
-  return normalized==='untitled job' || normalized==='untitled build';
-}
-function customerBrowserDisplayTitle(record){
-  const buildName=specificationValue(record&&record.buildName);
-  if(buildName && !customerBrowserIsGenericTitle(buildName))return buildName;
-  const blankName=specificationValue(record&&record.blankName);
-  if(blankName)return blankName;
-  const maker=specificationValue(record&&record.blankMaker);
-  const series=specificationValue(record&&record.blankSeries);
-  const rodDescription=[maker,series].filter(Boolean).join(' ').trim();
-  if(rodDescription)return rodDescription;
-  return 'Saved Job';
-}
-function customerBrowserStatusLabel(entry,record){
-  const source=String(entry&&entry.source||'quote');
-  if(source==='build')return 'Saved Build';
-  const status=normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status));
-  const statusMap={
-    draft:'Draft Quote',
-    sent:'Sent Quote',
-    revised:'Revised Quote',
-    declined:'Declined Quote',
-    expired:'Expired Quote',
-    accepted:'Accepted Quote',
-  };
-  return statusMap[status]||'Saved Quote';
-}
-function customerBrowserLayoutElement(){
-  return document.querySelector('.customers-browser__layout');
-}
-function setCustomerBrowserEmptyLayout(isEmpty){
-  const layout=customerBrowserLayoutElement();
-  if(layout)layout.classList.toggle('is-empty',isEmpty);
-}
-function customerBrowserStartNewCustomer(){
-  openCustomerFinderSheet('new-build');
-  setCustomerFinderNewBuildStep('add');
-}
-function customerBrowserClearSearch(){
-  customerBrowserSearch='';
-  customerBrowserSelectedKey='';
-  customerBrowserEditMode=false;
-  const searchInput=$('customerBrowserSearchInput');
-  if(searchInput)searchInput.value='';
-}
-function renderCustomerBrowser(){
-  const listHost=$('customerBrowserList');
-  const detailHost=$('customerBrowserDetail');
-  if(!listHost || !detailHost)return;
-  const groups=customerBrowserGroups();
-  const hasAnyCustomers=customerSavedGroups('',{includeInvalidCustomers:false}).length>0;
-  const hasSearchQuery=specificationValue(customerBrowserSearch).length>0;
-  if(!groups.length){
-    customerBrowserSelectedKey='';
-    customerBrowserEditMode=false;
-    setCustomerBrowserEmptyLayout(true);
-    listHost.innerHTML='';
-    detailHost.hidden=false;
-    if(hasSearchQuery && hasAnyCustomers){
-      detailHost.innerHTML=`
-        <section class="customers-browser__empty-state" aria-live="polite">
-          <p>No customers matched that search. Try another name or company.</p>
-          <div class="customers-browser__empty-actions">
-            <button class="ghost-action" type="button" data-customer-browser-action="clear-search">Clear Search</button>
-          </div>
-        </section>
-      `;
-      return;
-    }
-    detailHost.innerHTML=`
-      <section class="customers-browser__empty-state" aria-live="polite">
-        <p>No customers yet. Start a new build to attach your first customer.</p>
-        <div class="customers-browser__empty-actions">
-          <button class="primary-action" type="button" data-customer-browser-action="new-build">New Build</button>
-        </div>
-      </section>
-    `;
-    return;
-  }
-  setCustomerBrowserEmptyLayout(false);
-  if(!groups.some((group)=>group.key===customerBrowserSelectedKey)){
-    customerBrowserSelectedKey=groups[0].key;
-    customerBrowserEditMode=false;
-  }
-  listHost.innerHTML=groups.map((group)=>{
-    const isActive=group.key===customerBrowserSelectedKey;
-    const companyLine=group.company?`<small class="customers-browser__company">${escapeHtml(group.company)}</small>`:'';
-    return `<div class="component-sheet__row customers-browser__row"><button class="component-sheet__option customers-browser__option${isActive?' is-active-customer':''}" type="button" data-customer-browser-select="${escapeHtml(group.key)}"><span class="customers-browser__name">${escapeHtml(group.name)}</span>${companyLine}</button></div>`;
-  }).join('');
-  const selected=groups.find((group)=>group.key===customerBrowserSelectedKey)||groups[0];
-  if(!selected){
-    detailHost.hidden=true;
-    detailHost.innerHTML='';
-    return;
-  }
-  const primary=customerBrowserPrimaryRecord(selected);
-  const detailRows=customerBrowserDetailRows(primary);
-  const detailMarkup=detailRows.length
-    ? detailRows.map((row)=>`<div class="customers-browser__fact-row"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong></div>`).join('')
-    : '<div class="component-sheet__empty">No customer details available yet.</div>';
-  const jobsMarkup=selected.builds.length
-    ? selected.builds.map((entry)=>{
-      const source='build';
-      const index=Number(entry&&entry.index);
-      const record=entry&&entry.record?entry.record:{};
-      const title=customerBrowserDisplayTitle(record);
-      const statusText=customerBrowserStatusLabel(entry,record);
-      const savedAt=record.savedAt?formatDateDisplay(record.savedAt,{includeTime:true}):'Unknown save time';
-      const meta=[statusText,`Saved ${savedAt}`].join(' • ');
-      return `<button class="customers-browser__job-row" type="button" data-customer-browser-open-source="${escapeHtml(source)}" data-customer-browser-open-index="${index}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></button>`;
-    }).join('')
-    : '<div class="component-sheet__empty">No saved jobs for this customer.</div>';
-  detailHost.hidden=false;
-  detailHost.innerHTML=`
-    <header class="customers-browser__detail-head">
-      <h3>${escapeHtml(selected.name)}</h3>
-      <p>Customer details and active build history.</p>
-    </header>
-    <div class="customers-browser__detail-actions">
-      <button class="primary-action" type="button" data-customer-browser-action="start-build">New Build for Customer</button>
-      <button class="ghost-action" type="button" data-customer-browser-action="toggle-edit">${customerBrowserEditMode?'Cancel Edit':'Edit Details'}</button>
-    </div>
-    <section class="customers-browser__facts" aria-label="Customer details">${detailMarkup}</section>
-    <form id="customerBrowserEditForm" class="customers-browser__edit-form" ${customerBrowserEditMode?'':'hidden'}>
-      <label class="customers-browser__edit-full"><span>Company</span><input id="customerBrowserCompany" type="text" value="${escapeHtml(customerBrowserCompanyValue(primary))}" /></label>
-      <label><span>Phone</span><input id="customerBrowserPhone" type="text" value="${escapeHtml(primary.phone||'')}" /></label>
-      <label><span>Email</span><input id="customerBrowserEmail" type="email" value="${escapeHtml(primary.email||'')}" /></label>
-      <label class="customers-browser__edit-full"><span>Address Line 1</span><input id="customerBrowserAddress1" type="text" value="${escapeHtml(primary.addressLine1||'')}" /></label>
-      <label class="customers-browser__edit-full"><span>Address Line 2</span><input id="customerBrowserAddress2" type="text" value="${escapeHtml(primary.addressLine2||'')}" /></label>
-      <label><span>Suburb / Locality</span><input id="customerBrowserSuburb" type="text" value="${escapeHtml(primary.suburbLocality||'')}" /></label>
-      <label><span>City / Town</span><input id="customerBrowserCity" type="text" value="${escapeHtml(primary.cityTown||'')}" /></label>
-      <label><span>Region / State</span><input id="customerBrowserRegion" type="text" value="${escapeHtml(primary.regionState||'')}" /></label>
-      <label><span>Postcode / ZIP</span><input id="customerBrowserPostcode" type="text" value="${escapeHtml(primary.postcode||'')}" /></label>
-      <label class="customers-browser__edit-full"><span>Country</span><input id="customerBrowserCountry" type="text" value="${escapeHtml(primary.country||'New Zealand')}" /></label>
-      <div class="customers-browser__edit-actions">
-        <button class="ghost-action" type="button" data-customer-browser-action="toggle-edit">Cancel</button>
-        <button class="primary-action" type="button" data-customer-browser-action="save-edit">Save Details</button>
-      </div>
-    </form>
-    <section class="customers-browser__jobs" aria-label="Saved builds">
-      <h4>Saved Jobs</h4>
-      <div class="customers-browser__jobs-list">${jobsMarkup}</div>
-    </section>
-  `;
-}
-function customerBrowserCurrentGroup(){
-  return customerBrowserGroups().find((group)=>group.key===customerBrowserSelectedKey)||null;
-}
-function startNewBuildForCustomerBrowserSelection(){
-  const group=customerBrowserCurrentGroup();
-  if(!group)return;
-  const source=customerBrowserPrimaryRecord(group);
-  runNewBuildStartAction(()=>{
-    startFreshQuoteForCustomer(source);
-  });
-}
-function saveCustomerBrowserDetails(){
-  const group=customerBrowserCurrentGroup();
-  if(!group)return;
-  const customerKey=group.key;
-  const nextValues={
-    company:String(($('customerBrowserCompany')&&$('customerBrowserCompany').value)||'').trim(),
-    phone:String(($('customerBrowserPhone')&&$('customerBrowserPhone').value)||'').trim(),
-    email:String(($('customerBrowserEmail')&&$('customerBrowserEmail').value)||'').trim(),
-    addressLine1:String(($('customerBrowserAddress1')&&$('customerBrowserAddress1').value)||'').trim(),
-    addressLine2:String(($('customerBrowserAddress2')&&$('customerBrowserAddress2').value)||'').trim(),
-    suburbLocality:String(($('customerBrowserSuburb')&&$('customerBrowserSuburb').value)||'').trim(),
-    cityTown:String(($('customerBrowserCity')&&$('customerBrowserCity').value)||'').trim(),
-    regionState:String(($('customerBrowserRegion')&&$('customerBrowserRegion').value)||'').trim(),
-    postcode:String(($('customerBrowserPostcode')&&$('customerBrowserPostcode').value)||'').trim(),
-    country:String(($('customerBrowserCountry')&&$('customerBrowserCountry').value)||'').trim()||'New Zealand',
-  };
-  const quoteRecords=savedQuoteRecords();
-  const buildRecords=savedBuildRecords();
-  let quoteChanged=false;
-  let buildChanged=false;
-  quoteRecords.forEach((record)=>{
-    if(!customerFinderMatchesKey(customerKey,record&&record.customerName))return;
-    Object.assign(record,nextValues);
-    quoteChanged=true;
-  });
-  buildRecords.forEach((record)=>{
-    if(!customerFinderMatchesKey(customerKey,record&&record.customerName))return;
-    Object.assign(record,nextValues);
-    buildChanged=true;
-  });
-  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
-  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
-  if(customerFinderMatchesKey(customerKey,quote.customerName)){
-    Object.assign(quote,nextValues);
-    saveQuoteCurrent();
-    renderWorkshopQuote();
-  }
-  customerBrowserEditMode=false;
-  renderCustomerBrowser();
-}
-function bindCustomerBrowserControls(){
-  const searchInput=$('customerBrowserSearchInput');
-  if(searchInput){
-    searchInput.addEventListener('input',()=>{
-      customerBrowserSearch=searchInput.value||'';
-      customerBrowserSelectedKey='';
-      customerBrowserEditMode=false;
-      renderCustomerBrowser();
-    });
-  }
-  const listHost=$('customerBrowserList');
-  if(listHost){
-    listHost.addEventListener('click',(event)=>{
-      const button=event.target.closest('[data-customer-browser-select]');
-      if(!button)return;
-      customerBrowserSelectedKey=button.getAttribute('data-customer-browser-select')||'';
-      customerBrowserEditMode=false;
-      renderCustomerBrowser();
-    });
-  }
-  const detailHost=$('customerBrowserDetail');
-  if(detailHost){
-    detailHost.addEventListener('click',(event)=>{
-      const actionButton=event.target.closest('[data-customer-browser-action]');
-      if(actionButton){
-        const action=actionButton.getAttribute('data-customer-browser-action')||'';
-        if(action==='add-new'){
-          customerBrowserStartNewCustomer();
-          return;
-        }
-        if(action==='new-build'){
-          openCustomerFinderSheet('new-build');
-          return;
-        }
-        if(action==='clear-search'){
-          customerBrowserClearSearch();
-          renderCustomerBrowser();
-          return;
-        }
-        if(action==='start-build'){
-          startNewBuildForCustomerBrowserSelection();
-          return;
-        }
-        if(action==='toggle-edit'){
-          customerBrowserEditMode=!customerBrowserEditMode;
-          renderCustomerBrowser();
-          return;
-        }
-        if(action==='save-edit'){
-          saveCustomerBrowserDetails();
-          return;
-        }
-      }
-      const openButton=event.target.closest('[data-customer-browser-open-source][data-customer-browser-open-index]');
-      if(openButton){
-        const source=openButton.getAttribute('data-customer-browser-open-source')||'quote';
-        const index=Number(openButton.getAttribute('data-customer-browser-open-index'));
-        openSavedBuildRecord(source,index);
-      }
-    });
-  }
-}
 function savedBuildSearchText(entry){
   const record=entry&&entry.record?entry.record:{};
-  return [record.customerName,record.buildName]
+  return [
+    record.customerName,
+    record.buildName,
+    record.buildNumber,
+    savedBuildDisplayStatus(record),
+  ]
     .map((value)=>String(value||''))
     .join(' ')
     .toLowerCase();
+}
+function savedBuildSearchTerms(value){
+  return String(value||'')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+function savedBuildMatchesSearch(entry,terms){
+  if(!Array.isArray(terms) || !terms.length)return true;
+  const haystack=savedBuildSearchText(entry);
+  return terms.every((term)=>haystack.includes(term));
 }
 function savedBuildDisplayCustomerName(record){
   return specificationValue(record&&record.customerName)||'Unassigned';
@@ -5013,36 +4679,15 @@ function savedBuildRowMarkup(entry){
   const record=entry.record;
   const customerName=savedBuildDisplayCustomerName(record);
   const statusText=savedBuildDisplayStatus(record);
+  const statusKey=normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status));
+  const statusClass=statusKey?` saved-build-card__status--${escapeHtml(statusKey)}`:'';
   const updatedAtText=savedBuildDisplayDate(record.updatedAt||record.savedAt);
   const buildName=specificationValue(record.buildName);
   const buildNameMarkup=buildName?`<p class="saved-build-card__title">${escapeHtml(buildName)}</p>`:'';
-  const statusMarkup=statusText?`<div class="saved-build-card__meta"><span>Status</span><strong>${escapeHtml(statusText)}</strong></div>`:'';
+  const statusMarkup=statusText?`<span class="saved-build-card__status${statusClass}">${escapeHtml(statusText)}</span>`:'';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div>${statusMarkup}<div class="saved-build-card__meta"><span>Last Edited</span><strong>${escapeHtml(updatedAtText)}</strong></div></button><div class="saved-build-card__actions">${savedBuildRowMenuMarkup(entry,customerName)}</div></article>`;
-}
-function savedBuildRowMenuMarkup(entry,title){
-  const source=escapeHtml(entry.source);
-  const index=Number(entry.index);
-  const sourceLabel=entry.source==='build'?'build':'quote';
-  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-build-menu-trigger data-build-source="${source}" data-build-index="${index}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(title||sourceLabel)}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-build-menu data-build-source="${source}" data-build-index="${index}"><button class="component-picker-menu__item" data-build-action="delete" data-build-source="${source}" data-build-index="${index}" type="button">Delete</button></div>`;
-}
-function hideSavedBuildRowMenu(){
-  document.querySelectorAll('[data-build-menu]').forEach((menu)=>{menu.hidden=true;});
-  document.querySelectorAll('[data-build-menu-trigger]').forEach((trigger)=>{trigger.setAttribute('aria-expanded','false');});
-}
-function toggleSavedBuildRowMenu(triggerEl,source,index){
-  const card=triggerEl && triggerEl.closest('[data-build-row]');
-  const menu=card && card.querySelector('[data-build-menu]');
-  if(!card || !menu)return;
-  const activeSource=menu.getAttribute('data-build-source')||'';
-  const activeIndex=Number(menu.getAttribute('data-build-index'));
-  const alreadyOpen=!menu.hidden && activeSource===String(source||'') && activeIndex===Number(index);
-  hideSavedBuildRowMenu();
-  if(alreadyOpen)return;
-  positionRowMenu(menu,triggerEl,card,164);
-  menu.hidden=false;
-  triggerEl.setAttribute('aria-expanded','true');
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__delete" data-build-action="delete" data-build-source="${source}" data-build-index="${index}" type="button" aria-label="Delete saved build for ${escapeHtml(customerName)}">Delete</button></div></article>`;
 }
 function deleteSavedEntryBySource(source,index){
   const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
@@ -5056,9 +4701,8 @@ function deleteSavedEntryBySource(source,index){
 function requestDeleteSavedBuildRecord(source,index){
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
-  const label=source==='build'?'build':'quote';
   openConfirmDialog({
-    title:`Delete this ${label}?`,
+    title:'Delete this build?',
     message:'This action cannot be undone.',
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]
   },(action)=>{
@@ -5069,7 +4713,6 @@ function requestDeleteSavedBuildRecord(source,index){
     }
     renderBuilds();
     renderCustomerFinder();
-    renderCustomerBrowser();
   });
 }
 function getSavedEntryBySource(source,index){
@@ -5092,29 +4735,11 @@ function openSavedBuildRecord(source,index){
   goScreen('workshopScreen');
   window.setTimeout(()=>focusWorkshopSection(nextWorkshopSectionId()),36);
 }
-function duplicateSavedBuildRecord(source,index){
-  const selected=getSavedEntryBySource(source,index);
-  if(!selected)return;
-  clearActiveSavedBuildRef();
-  quote=normalizeQuote({
-    ...selected,
-    buildNumber:'',
-    quoteStatus:'draft',
-    savedAt:'',
-  });
-  saveQuoteCurrent();
-  markQuoteDirty();
-  renderWorkshopQuote();
-  collapseWorkshopSections();
-  preserveWorkshopQuoteOnEntry=true;
-  goScreen('workshopScreen');
-  window.setTimeout(()=>focusWorkshopSection(nextWorkshopSectionId()),36);
-}
 function renderBuilds(){
   const host=$('buildCards');
   if(!host)return;
-  hideSavedBuildRowMenu();
-  const query=String(buildsSearch||'').trim().toLowerCase();
+  const query=String(buildsSearch||'').trim();
+  const terms=savedBuildSearchTerms(query);
   const records=savedBuildRecords()
     .map((record,index)=>({source:'build',index,record:normalizeQuote(record)}))
     .sort((left,right)=>{
@@ -5122,9 +4747,25 @@ function renderBuilds(){
       const rightDate=Date.parse(right.record&&right.record.updatedAt||right.record&&right.record.savedAt||'')||0;
       return rightDate-leftDate;
     })
-    .filter((entry)=>!query || savedBuildSearchText(entry).includes(query));
+    .filter((entry)=>savedBuildMatchesSearch(entry,terms));
   if(!records.length){
-    host.innerHTML='<section class="saved-builds-empty"><h3>No saved jobs yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+    if(query){
+      host.innerHTML='<section class="saved-builds-empty"><h3>No saved jobs found.</h3><p>Try another customer, build name, or status.</p><div class="saved-builds-empty__actions"><button id="savedBuildsClearSearchBtn" class="ghost-action" type="button">Clear Search</button><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></div></section>';
+      const clearButton=$('savedBuildsClearSearchBtn');
+      if(clearButton){
+        clearButton.addEventListener('click',()=>{
+          buildsSearch='';
+          const input=$('buildsSearchInput');
+          if(input){
+            input.value='';
+            try{input.focus({preventScroll:true});}catch{input.focus();}
+          }
+          renderBuilds();
+        });
+      }
+    }else{
+      host.innerHTML='<section class="saved-builds-empty"><h3>No saved jobs yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+    }
     const emptyButton=$('savedBuildsEmptyNewBuildBtn');
     if(emptyButton){
       emptyButton.addEventListener('click',()=>{
@@ -5699,14 +5340,6 @@ function bindWorkshopQuoteBuilder(){
       quoteTaxRateInput.blur();
     });
   }
-  document.querySelectorAll('[data-quote-mode]').forEach((button)=>{
-    button.addEventListener('click',()=>{
-      quote.quoteMode=normalizeQuoteMode(button.getAttribute('data-quote-mode'));
-      saveQuoteCurrent();
-      markQuoteDirty();
-      renderWorkshopQuote();
-    });
-  });
   bindBuildSpecificationInputs();
   const componentsList=$('quoteComponentsList');
   if(componentsList){
@@ -5824,42 +5457,6 @@ function bindWorkshopQuoteBuilder(){
       requestDeleteCurrentBuild();
     });
   }
-  const convertToBuildBtn=$('convertToBuildBtn');
-  if(convertToBuildBtn){
-    convertToBuildBtn.addEventListener('click',()=>{
-      if(!canConvertToBuild()){
-        flashWorkshopStatus('Save and mark the quote Accepted before converting',{pending:true,duration:2200});
-        return;
-      }
-      if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
-      saveQuoteCurrent();
-      persistQuoteRecord(quote);
-      const savedRef=persistBuildRecord(quote);
-      if(savedRef){
-        setActiveSavedBuildRef(savedRef.source,savedRef.index,savedRef.record);
-      }
-      markQuoteSaved();
-      goScreen('layoutScreen');
-    });
-  }
-  ['printQuoteBtn','emailQuoteBtn','viewCustomerCopyBtn'].forEach((id)=>{
-    const btn=$(id);
-    if(!btn)return;
-    btn.addEventListener('click',()=>{
-      if(id==='emailQuoteBtn'){
-        openQuotePreviewSheet('email');
-        return;
-      }
-      if(id==='viewCustomerCopyBtn'){
-        openQuotePreviewSheet('view');
-        return;
-      }
-      if(id==='printQuoteBtn'){
-        openQuotePreviewSheet('view');
-        return;
-      }
-    });
-  });
   updateQuoteActionPriority();
 }
 function renderWorkshopQuote(){
@@ -5878,9 +5475,6 @@ function renderWorkshopQuote(){
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=false);
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=true);
   if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Studio';
-  if($('quoteBuilderSubhead'))$('quoteBuilderSubhead').textContent='Customer • Rod Specification • Build Pricing';
-  if($('emailQuoteBtn'))$('emailQuoteBtn').textContent='Email Customer Copy';
-  if($('viewCustomerCopyBtn'))$('viewCustomerCopyBtn').textContent='View Customer Copy';
   const customerSummaryTextEl=$('quoteCustomerSummaryText');
   if(customerSummaryTextEl){
     const customerName=specificationValue(quote.customerName);
@@ -5930,7 +5524,6 @@ function updateQuoteSummary(){
   updateBuildPricingSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
-  if($('quoteSubtotal'))$('quoteSubtotal').value=currency(math.subtotal);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
   if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
@@ -5942,95 +5535,12 @@ function updateQuoteSummary(){
   if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
   if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
   if($('quoteGstField'))$('quoteGstField').hidden=!showTaxDetails;
-  if($('quoteModeLabel'))$('quoteModeLabel').textContent='Builder view';
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');
   if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
   if(gstStatus){gstStatus.textContent='';}
   ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
   updateWorkshopSectionVisibility();
-}
-
-function ensureQuotePreviewSheet(){
-  if($('quotePreviewSheet'))return;
-  const sheet=document.createElement('div');
-  sheet.id='quotePreviewSheet';
-  sheet.className='component-sheet';
-  sheet.hidden=true;
-  sheet.innerHTML=`
-    <div class="component-sheet__scrim" data-quote-preview-action="close"></div>
-    <section class="component-sheet__panel quote-preview-panel" role="dialog" aria-modal="true" aria-label="Preview customer copy">
-      <header class="component-sheet__header">
-        <h2>Preview Customer Copy</h2>
-        <button class="component-sheet__close" type="button" data-quote-preview-action="close" aria-label="Close preview">×</button>
-      </header>
-      <div class="component-sheet__body quote-preview-body">
-        <div class="quote-preview-card">
-          <div class="quote-preview-card__head">
-            <strong id="quotePreviewName">Customer Copy</strong>
-            <span id="quotePreviewBuild"></span>
-          </div>
-          <p id="quotePreviewCustomer"></p>
-          <p id="quotePreviewBuildName"></p>
-          <div id="quotePreviewSpecs" class="quote-preview-summary"></div>
-          <div id="quotePreviewIncluded" class="quote-preview-summary quote-preview-summary--parts"></div>
-          <div id="quotePreviewSummary" class="quote-preview-summary"></div>
-        </div>
-        <div class="quote-preview-actions">
-          <button id="quotePreviewBackBtn" class="ghost-action" type="button">Back</button>
-          <button id="quotePreviewApproveBtn" class="primary-action" type="button">Send Customer Copy</button>
-        </div>
-      </div>
-    </section>
-  `;
-  document.body.appendChild(sheet);
-  sheet.addEventListener('click',(event)=>{
-    const actionEl=event.target.closest('[data-quote-preview-action]');
-    if(actionEl && actionEl.getAttribute('data-quote-preview-action')==='close'){closeQuotePreviewSheet();}
-  });
-  $('quotePreviewBackBtn').addEventListener('click',closeQuotePreviewSheet);
-  $('quotePreviewApproveBtn').addEventListener('click',()=>{
-    closeQuotePreviewSheet();
-    flashWorkshopStatus('Customer copy ready');
-  });
-}
-function renderQuotePreviewSheet(){
-  const math=quoteMaths();
-  const specificationViews=buildSpecificationViews();
-  const includedParts=customerIncludedParts();
-  const customerLines=customerPreviewLines();
-  const isEmailIntent=quotePreviewIntent==='email';
-  const previewTitle=($('quotePreviewSheet')||document).querySelector('.component-sheet__header h2');
-  if(previewTitle){previewTitle.textContent=isEmailIntent?'Email Customer Copy':'View Customer Copy';}
-  if($('quotePreviewName'))$('quotePreviewName').textContent=customerRodIdentity();
-  if($('quotePreviewBuild'))$('quotePreviewBuild').textContent=quote.buildNumber?`Build ${quote.buildNumber}`:'Build confirmation';
-  if($('quotePreviewCustomer'))$('quotePreviewCustomer').innerHTML=customerLines.length?customerLines.map(escapeHtml).join('<br>'):'No customer details entered';
-  if($('quotePreviewBuildName'))$('quotePreviewBuildName').textContent='';
-  if($('quotePreviewSpecs'))$('quotePreviewSpecs').innerHTML=specificationRowsMarkup(specificationViews.customer);
-  if($('quotePreviewIncluded'))$('quotePreviewIncluded').innerHTML=customerIncludedPartsMarkup(includedParts);
-  if($('quotePreviewApproveBtn')){
-    $('quotePreviewApproveBtn').hidden=!isEmailIntent;
-    $('quotePreviewApproveBtn').textContent='Send Customer Copy';
-  }
-  if($('quotePreviewSummary'))$('quotePreviewSummary').innerHTML=`
-    <div><span>Total Customer Price</span><strong>${currency(math.total)}</strong></div>
-    ${numberOrZero(math.gst)>0?`<div><span>Tax</span><strong>${currency(math.gst)}</strong></div>`:''}
-  `;
-}
-function openQuotePreviewSheet(action){
-  quotePreviewIntent=action==='email'?'email':'view';
-  ensureQuotePreviewSheet();
-  renderQuotePreviewSheet();
-  const sheet=$('quotePreviewSheet');
-  if(!sheet)return;
-  sheet.hidden=false;
-  lockModalLayer(document.activeElement);
-}
-function closeQuotePreviewSheet(){
-  const sheet=$('quotePreviewSheet');
-  if(!sheet)return;
-  sheet.hidden=true;
-  unlockModalLayer({restoreFocus:true});
 }
 function ensureBlankEditorSheet(){
   if($('blankEditorSheet'))return;
@@ -6354,6 +5864,21 @@ function bindBuildsControls(){
       buildsSearch=searchInput.value||'';
       renderBuilds();
     });
+    searchInput.addEventListener('keydown',(event)=>{
+      if(event.key!=='Escape')return;
+      if(!specificationValue(buildsSearch))return;
+      event.preventDefault();
+      buildsSearch='';
+      searchInput.value='';
+      renderBuilds();
+    });
+    searchInput.addEventListener('blur',()=>{
+      const normalized=String(searchInput.value||'').trim().replace(/\s+/g,' ');
+      if(normalized===String(buildsSearch||'').trim())return;
+      searchInput.value=normalized;
+      buildsSearch=normalized;
+      renderBuilds();
+    });
   }
   const newBuildBtn=$('savedBuildsNewBuildBtn');
   if(newBuildBtn && newBuildBtn.getAttribute('data-saved-builds-new-bound')!=='true'){
@@ -6365,34 +5890,15 @@ function bindBuildsControls(){
   const host=$('buildCards');
   if(host){
     host.addEventListener('click',(event)=>{
-      const menuTrigger=event.target.closest('[data-build-menu-trigger]');
-      if(menuTrigger){
-        event.preventDefault();
-        event.stopPropagation();
-        toggleSavedBuildRowMenu(menuTrigger,menuTrigger.getAttribute('data-build-source')||'',menuTrigger.getAttribute('data-build-index'));
-        return;
-      }
       const button=event.target.closest('[data-build-action]');
       if(!button)return;
       const action=button.getAttribute('data-build-action')||'';
       const source=button.getAttribute('data-build-source')||'quote';
       const index=Number(button.getAttribute('data-build-index'));
-      hideSavedBuildRowMenu();
       if(action==='open'){openSavedBuildRecord(source,index);}
-      if(action==='duplicate'){duplicateSavedBuildRecord(source,index);}
       if(action==='delete'){requestDeleteSavedBuildRecord(source,index);}
     });
   }
-  document.addEventListener('click',(event)=>{
-    const openMenu=document.querySelector('[data-build-menu]:not([hidden])');
-    if(!openMenu)return;
-    if(event.target.closest('[data-build-menu]'))return;
-    if(event.target.closest('[data-build-menu-trigger]'))return;
-    hideSavedBuildRowMenu();
-  });
-  document.addEventListener('keydown',(event)=>{
-    if(event.key==='Escape'){hideSavedBuildRowMenu();}
-  });
 }
 function onScreenChange(screenId){
   clearLayoutFieldFocusSelection();
@@ -6411,6 +5917,7 @@ function onScreenChange(screenId){
     if(preserveWorkshopQuoteOnEntry){
       preserveWorkshopQuoteOnEntry=false;
       renderWorkshopQuote();
+      focusWorkshopSection(nextWorkshopSectionId(),{scroll:false});
     }else{
       beginFreshQuote({navigate:false});
     }
@@ -6496,7 +6003,6 @@ function bindSettingsControls(){
       renderWorkshopQuote();
       renderBlanks();
       renderBuilds();
-      renderCustomerBrowser();
     });
   });
   document.querySelectorAll('[data-settings-imperial-display]').forEach((button)=>{
@@ -6523,7 +6029,6 @@ function bindSettingsControls(){
       saveStudioSettings();
       syncSettingsPreferenceControls();
       renderBuilds();
-      renderCustomerBrowser();
       renderCustomerFinder();
     });
   });
@@ -6605,7 +6110,6 @@ bindWorkshopQuoteBuilder();
 bindWorkshopBackToTopControl();
 bindHomeActions();
 bindBuildsControls();
-bindCustomerBrowserControls();
 bindBlankLibraryControls();
 bindSettingsControls();
 window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');}};

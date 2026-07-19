@@ -266,14 +266,12 @@
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
           <h1 id="quoteBuilderTitle">Studio</h1>
-          <p class="subtle">Start with New Build, then complete each section in order.</p>
+          <p class="subtle">Start a build, then complete each section in order.</p>
         </header>
 
         <div class="quote-builder__entry-actions" aria-label="Studio entry actions">
           <button id="newQuoteEntryBtn" class="ghost-action quote-builder__new-quote" type="button">New Build</button>
           <button id="findCustomerEntryBtn" class="ghost-action quote-builder__new-quote" type="button">Find Customer</button>
-          <button class="ghost-action quote-builder__new-quote" data-nav="buildsScreen" type="button">Saved Jobs</button>
-          <button class="ghost-action quote-builder__new-quote" data-nav="layoutScreen" type="button">Guide Layout &amp; Tools</button>
         </div>
 
         <article id="workshopCustomerSection" class="quote-section quote-section--collapsible quote-section--collapsed">
@@ -333,7 +331,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Rod Specification</span>
               <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildCostsSummaryText">Select blank and components</span>
+                <span id="workshopBuildCostsSummaryText">Add blank and components</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -359,7 +357,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Pricing</span>
               <span id="workshopBuildPricingSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildPricingSummaryText">Set customer price</span>
+                <span id="workshopBuildPricingSummaryText">Add pricing details</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -384,7 +382,7 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Actions</span>
               <span class="quote-section__toggle-summary" aria-live="polite">
-                <span>Save or delete this build</span>
+                <span>Save when build details are complete</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -399,9 +397,9 @@
     </section>
 
     <section class="screen" id="buildsScreen">
-      <div class="screen-head"><h1>Saved Jobs</h1><p class="subtle">Open, duplicate, or continue a build.</p></div>
+      <div class="screen-head"><h1>Saved Jobs</h1><p class="subtle">Tap a row to open. Use search to find builds fast.</p></div>
       <div class="blank-library-controls saved-builds-controls">
-        <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search customer name or build name" autocomplete="off" />
+        <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search customer, build, or status" autocomplete="off" />
         <button id="savedBuildsNewBuildBtn" class="primary-action" type="button">New Build</button>
       </div>
       <div id="buildCards" class="saved-builds-list" aria-live="polite"></div>
