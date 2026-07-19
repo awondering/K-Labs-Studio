@@ -2,6 +2,14 @@ function syncHomeScreenClass(activeScreenId){
 	document.body.classList.toggle('home-screen-active',activeScreenId==='homeScreen');
 }
 
+function hasScreen(id){
+	return !!document.getElementById(id);
+}
+
+function safeGoScreen(id){
+	goScreen(hasScreen(id)?id:'homeScreen');
+}
+
 function goScreen(id){
 	document.querySelectorAll('.screen').forEach((screen)=>screen.classList.toggle('active',screen.id===id));
 	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===id));
@@ -91,7 +99,7 @@ document.addEventListener('click',(event)=>{
 		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
 			window.KLABS_UI.prepareWorkshopEntry('preserve');
 		}
-		goScreen(menuNav.dataset.nav);
+		safeGoScreen(menuNav.dataset.nav);
 		return;
 	}
 	const nav=event.target.closest('[data-nav]');
@@ -99,7 +107,7 @@ document.addEventListener('click',(event)=>{
 		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
 			window.KLABS_UI.prepareWorkshopEntry('preserve');
 		}
-		goScreen(nav.dataset.nav);
+		safeGoScreen(nav.dataset.nav);
 	}
 });
 

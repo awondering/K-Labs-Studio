@@ -332,6 +332,37 @@ function formatWorkshopMeasurementValue(valueMm,unit,imperialDisplay,options){
 function workshopMeasurementInputText(valueMm,unit,imperialDisplay){
   return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:2,maxImperialDenominator:32});
 }
+function syncWorkshopToggleButtons(panel,selector,attribute,selectedValue){
+  if(!panel)return;
+  panel.querySelectorAll(selector).forEach((button)=>{
+    const selected=button.getAttribute(attribute)===selectedValue;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+}
+function bindWorkshopToggleButtons(panel,selector,handler){
+  if(!panel)return;
+  panel.querySelectorAll(selector).forEach((button)=>{
+    if(button.getAttribute('data-workshop-toggle-bound')==='true')return;
+    button.setAttribute('data-workshop-toggle-bound','true');
+    button.addEventListener('click',()=>handler(button));
+  });
+}
+function bindWorkshopCalculatorInput(input,onChange){
+  if(!input || input.getAttribute('data-workshop-input-bound')==='true')return;
+  input.setAttribute('data-workshop-input-bound','true');
+  input.addEventListener('input',onChange);
+  input.addEventListener('change',onChange);
+}
+function syncWorkshopMeasurementInput(input,valueMm,unit,imperialDisplay,placeholderMm){
+  if(!input)return;
+  if(document.activeElement!==input){
+    input.value=workshopMeasurementInputText(valueMm,unit,imperialDisplay);
+  }
+  if(Number.isFinite(placeholderMm)){
+    input.placeholder=workshopMeasurementInputText(placeholderMm,unit,imperialDisplay);
+  }
+}
 function taperSpiralWrapLengthMm(startDiameterMm,endDiameterMm,gripLengthMm,materialWidthMm){
   const length=Math.max(0,numberOrZero(gripLengthMm));
   const width=Math.max(0.01,numberOrZero(materialWidthMm));
@@ -375,17 +406,8 @@ function renderDiameterCircumferenceTool(){
 
   const circumferenceMm=state.diameterMm*Math.PI;
 
-  if(document.activeElement!==diameterInput){
-    diameterInput.value=workshopMeasurementInputText(state.diameterMm,state.unit,state.imperialDisplay);
-  }
-  if(document.activeElement!==circumferenceInput){
-    circumferenceInput.value=workshopMeasurementInputText(circumferenceMm,state.unit,state.imperialDisplay);
-  }
-
-  const diameterPlaceholder=workshopMeasurementInputText(28,state.unit,state.imperialDisplay);
-  const circumferencePlaceholder=workshopMeasurementInputText(28*Math.PI,state.unit,state.imperialDisplay);
-  diameterInput.placeholder=diameterPlaceholder;
-  circumferenceInput.placeholder=circumferencePlaceholder;
+  syncWorkshopMeasurementInput(diameterInput,state.diameterMm,state.unit,state.imperialDisplay,28);
+  syncWorkshopMeasurementInput(circumferenceInput,circumferenceMm,state.unit,state.imperialDisplay,28*Math.PI);
 
   const primaryLabel=$('workshopDcPrimaryLabel');
   const primaryValue=$('workshopDcPrimaryValue');
@@ -415,16 +437,8 @@ function renderDiameterCircumferenceTool(){
 
   const panel=$('workshopToolsPanel');
   if(!panel)return;
-  panel.querySelectorAll('[data-dc-unit]').forEach((button)=>{
-    const selected=button.getAttribute('data-dc-unit')===state.unit;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
-  panel.querySelectorAll('[data-dc-imperial-display]').forEach((button)=>{
-    const selected=button.getAttribute('data-dc-imperial-display')===state.imperialDisplay;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
+  syncWorkshopToggleButtons(panel,'[data-dc-unit]','data-dc-unit',state.unit);
+  syncWorkshopToggleButtons(panel,'[data-dc-imperial-display]','data-dc-imperial-display',state.imperialDisplay);
 }
 function buildGripCutTemplateSvg(template){
   const width=760;
@@ -615,30 +629,14 @@ function renderGripCoveringTool(){
   const coverWidthInput=$('workshopGripCoverWidth');
   const allowanceInput=$('workshopGripAllowance');
 
-  if(gripDiameterInput && document.activeElement!==gripDiameterInput){
-    gripDiameterInput.value=workshopMeasurementInputText(state.straightDiameterMm,state.unit,state.imperialDisplay);
-  }
-  if(startDiameterInput && document.activeElement!==startDiameterInput){
-    startDiameterInput.value=workshopMeasurementInputText(state.startDiameterMm,state.unit,state.imperialDisplay);
-  }
-  if(endDiameterInput && document.activeElement!==endDiameterInput){
-    endDiameterInput.value=workshopMeasurementInputText(state.endDiameterMm,state.unit,state.imperialDisplay);
-  }
-  if(gripLengthInput && document.activeElement!==gripLengthInput){
-    gripLengthInput.value=workshopMeasurementInputText(state.lengthMm,state.unit,state.imperialDisplay);
-  }
-  if(coverWidthInput && document.activeElement!==coverWidthInput){
-    coverWidthInput.value=workshopMeasurementInputText(state.coverWidthMm,state.unit,state.imperialDisplay);
-  }
+  syncWorkshopMeasurementInput(gripDiameterInput,state.straightDiameterMm,state.unit,state.imperialDisplay,28);
+  syncWorkshopMeasurementInput(startDiameterInput,state.startDiameterMm,state.unit,state.imperialDisplay,30);
+  syncWorkshopMeasurementInput(endDiameterInput,state.endDiameterMm,state.unit,state.imperialDisplay,24);
+  syncWorkshopMeasurementInput(gripLengthInput,state.lengthMm,state.unit,state.imperialDisplay,280);
+  syncWorkshopMeasurementInput(coverWidthInput,state.coverWidthMm,state.unit,state.imperialDisplay,25);
   if(allowanceInput && document.activeElement!==allowanceInput){
     allowanceInput.value=formatDecimal(state.allowancePercent,1);
   }
-
-  if(gripDiameterInput)gripDiameterInput.placeholder=workshopMeasurementInputText(28,state.unit,state.imperialDisplay);
-  if(startDiameterInput)startDiameterInput.placeholder=workshopMeasurementInputText(30,state.unit,state.imperialDisplay);
-  if(endDiameterInput)endDiameterInput.placeholder=workshopMeasurementInputText(24,state.unit,state.imperialDisplay);
-  if(gripLengthInput)gripLengthInput.placeholder=workshopMeasurementInputText(280,state.unit,state.imperialDisplay);
-  if(coverWidthInput)coverWidthInput.placeholder=workshopMeasurementInputText(25,state.unit,state.imperialDisplay);
   if(allowanceInput)allowanceInput.placeholder='5';
 
   const revolutions=state.coverWidthMm>0?(state.lengthMm/state.coverWidthMm):0;
@@ -699,21 +697,9 @@ function renderGripCoveringTool(){
     dateText:formatDateDisplay(new Date(),{includeTime:false}),
   }:null;
 
-  panel.querySelectorAll('[data-grip-unit]').forEach((button)=>{
-    const selected=button.getAttribute('data-grip-unit')===state.unit;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
-  panel.querySelectorAll('[data-grip-imperial-display]').forEach((button)=>{
-    const selected=button.getAttribute('data-grip-imperial-display')===state.imperialDisplay;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
-  panel.querySelectorAll('[data-grip-profile]').forEach((button)=>{
-    const selected=button.getAttribute('data-grip-profile')===state.profile;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
+  syncWorkshopToggleButtons(panel,'[data-grip-unit]','data-grip-unit',state.unit);
+  syncWorkshopToggleButtons(panel,'[data-grip-imperial-display]','data-grip-imperial-display',state.imperialDisplay);
+  syncWorkshopToggleButtons(panel,'[data-grip-profile]','data-grip-profile',state.profile);
 }
 function renderWorkshopCalculator(){
   renderWorkshopToolVisibility();
@@ -746,38 +732,26 @@ function bindWorkshopCalculatorControls(){
 
   const diameterInput=$('workshopDcDiameter');
   const circumferenceInput=$('workshopDcCircumference');
-  if(diameterInput){
-    const onDiameterChange=()=>{
-      const state=workshopToolsState.diameter;
-      state.diameterMm=parseWorkshopMeasurementMm(diameterInput.value,state.unit,state.diameterMm,false);
-      state.lastEdited='diameter';
-      renderWorkshopCalculator();
-    };
-    diameterInput.addEventListener('input',onDiameterChange);
-    diameterInput.addEventListener('change',onDiameterChange);
-  }
-  if(circumferenceInput){
-    const onCircumferenceChange=()=>{
-      const state=workshopToolsState.diameter;
-      const circumferenceMm=parseWorkshopMeasurementMm(circumferenceInput.value,state.unit,state.diameterMm*Math.PI,false);
-      state.diameterMm=Math.max(0.01,circumferenceMm/Math.PI);
-      state.lastEdited='circumference';
-      renderWorkshopCalculator();
-    };
-    circumferenceInput.addEventListener('input',onCircumferenceChange);
-    circumferenceInput.addEventListener('change',onCircumferenceChange);
-  }
-  panel.querySelectorAll('[data-dc-unit]').forEach((button)=>{
-    button.addEventListener('click',()=>{
-      workshopToolsState.diameter.unit=normalizeWorkshopUnit(button.getAttribute('data-dc-unit'));
-      renderWorkshopCalculator();
-    });
+  bindWorkshopCalculatorInput(diameterInput,()=>{
+    const state=workshopToolsState.diameter;
+    state.diameterMm=parseWorkshopMeasurementMm(diameterInput.value,state.unit,state.diameterMm,false);
+    state.lastEdited='diameter';
+    renderWorkshopCalculator();
   });
-  panel.querySelectorAll('[data-dc-imperial-display]').forEach((button)=>{
-    button.addEventListener('click',()=>{
-      workshopToolsState.diameter.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-dc-imperial-display'));
-      renderWorkshopCalculator();
-    });
+  bindWorkshopCalculatorInput(circumferenceInput,()=>{
+    const state=workshopToolsState.diameter;
+    const circumferenceMm=parseWorkshopMeasurementMm(circumferenceInput.value,state.unit,state.diameterMm*Math.PI,false);
+    state.diameterMm=Math.max(0.01,circumferenceMm/Math.PI);
+    state.lastEdited='circumference';
+    renderWorkshopCalculator();
+  });
+  bindWorkshopToggleButtons(panel,'[data-dc-unit]',(button)=>{
+    workshopToolsState.diameter.unit=normalizeWorkshopUnit(button.getAttribute('data-dc-unit'));
+    renderWorkshopCalculator();
+  });
+  bindWorkshopToggleButtons(panel,'[data-dc-imperial-display]',(button)=>{
+    workshopToolsState.diameter.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-dc-imperial-display'));
+    renderWorkshopCalculator();
   });
 
   const gripDiameterInput=$('workshopGripDiameter');
@@ -787,81 +761,51 @@ function bindWorkshopCalculatorControls(){
   const coverWidthInput=$('workshopGripCoverWidth');
   const allowanceInput=$('workshopGripAllowance');
 
-  if(gripDiameterInput){
-    const onChange=()=>{
-      const state=workshopToolsState.grip;
-      state.straightDiameterMm=parseWorkshopMeasurementMm(gripDiameterInput.value,state.unit,state.straightDiameterMm,false);
-      renderWorkshopCalculator();
-    };
-    gripDiameterInput.addEventListener('input',onChange);
-    gripDiameterInput.addEventListener('change',onChange);
-  }
-  if(gripStartDiameterInput){
-    const onChange=()=>{
-      const state=workshopToolsState.grip;
-      state.startDiameterMm=parseWorkshopMeasurementMm(gripStartDiameterInput.value,state.unit,state.startDiameterMm,false);
-      renderWorkshopCalculator();
-    };
-    gripStartDiameterInput.addEventListener('input',onChange);
-    gripStartDiameterInput.addEventListener('change',onChange);
-  }
-  if(gripEndDiameterInput){
-    const onChange=()=>{
-      const state=workshopToolsState.grip;
-      state.endDiameterMm=parseWorkshopMeasurementMm(gripEndDiameterInput.value,state.unit,state.endDiameterMm,false);
-      renderWorkshopCalculator();
-    };
-    gripEndDiameterInput.addEventListener('input',onChange);
-    gripEndDiameterInput.addEventListener('change',onChange);
-  }
-  if(gripLengthInput){
-    const onChange=()=>{
-      const state=workshopToolsState.grip;
-      state.lengthMm=parseWorkshopMeasurementMm(gripLengthInput.value,state.unit,state.lengthMm,true);
-      renderWorkshopCalculator();
-    };
-    gripLengthInput.addEventListener('input',onChange);
-    gripLengthInput.addEventListener('change',onChange);
-  }
-  if(coverWidthInput){
-    const onChange=()=>{
-      const state=workshopToolsState.grip;
-      state.coverWidthMm=parseWorkshopMeasurementMm(coverWidthInput.value,state.unit,state.coverWidthMm,false);
-      renderWorkshopCalculator();
-    };
-    coverWidthInput.addEventListener('input',onChange);
-    coverWidthInput.addEventListener('change',onChange);
-  }
-  if(allowanceInput){
-    const onChange=()=>{
-      const state=workshopToolsState.grip;
-      const next=Number(allowanceInput.value);
-      if(Number.isFinite(next) && next>=0){
-        state.allowancePercent=next;
-      }
-      renderWorkshopCalculator();
-    };
-    allowanceInput.addEventListener('input',onChange);
-    allowanceInput.addEventListener('change',onChange);
-  }
+  bindWorkshopCalculatorInput(gripDiameterInput,()=>{
+    const state=workshopToolsState.grip;
+    state.straightDiameterMm=parseWorkshopMeasurementMm(gripDiameterInput.value,state.unit,state.straightDiameterMm,false);
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(gripStartDiameterInput,()=>{
+    const state=workshopToolsState.grip;
+    state.startDiameterMm=parseWorkshopMeasurementMm(gripStartDiameterInput.value,state.unit,state.startDiameterMm,false);
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(gripEndDiameterInput,()=>{
+    const state=workshopToolsState.grip;
+    state.endDiameterMm=parseWorkshopMeasurementMm(gripEndDiameterInput.value,state.unit,state.endDiameterMm,false);
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(gripLengthInput,()=>{
+    const state=workshopToolsState.grip;
+    state.lengthMm=parseWorkshopMeasurementMm(gripLengthInput.value,state.unit,state.lengthMm,true);
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(coverWidthInput,()=>{
+    const state=workshopToolsState.grip;
+    state.coverWidthMm=parseWorkshopMeasurementMm(coverWidthInput.value,state.unit,state.coverWidthMm,false);
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(allowanceInput,()=>{
+    const state=workshopToolsState.grip;
+    const next=Number(allowanceInput.value);
+    if(Number.isFinite(next) && next>=0){
+      state.allowancePercent=next;
+    }
+    renderWorkshopCalculator();
+  });
 
-  panel.querySelectorAll('[data-grip-unit]').forEach((button)=>{
-    button.addEventListener('click',()=>{
-      workshopToolsState.grip.unit=normalizeWorkshopUnit(button.getAttribute('data-grip-unit'));
-      renderWorkshopCalculator();
-    });
+  bindWorkshopToggleButtons(panel,'[data-grip-unit]',(button)=>{
+    workshopToolsState.grip.unit=normalizeWorkshopUnit(button.getAttribute('data-grip-unit'));
+    renderWorkshopCalculator();
   });
-  panel.querySelectorAll('[data-grip-imperial-display]').forEach((button)=>{
-    button.addEventListener('click',()=>{
-      workshopToolsState.grip.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-grip-imperial-display'));
-      renderWorkshopCalculator();
-    });
+  bindWorkshopToggleButtons(panel,'[data-grip-imperial-display]',(button)=>{
+    workshopToolsState.grip.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-grip-imperial-display'));
+    renderWorkshopCalculator();
   });
-  panel.querySelectorAll('[data-grip-profile]').forEach((button)=>{
-    button.addEventListener('click',()=>{
-      workshopToolsState.grip.profile=button.getAttribute('data-grip-profile')==='tapered'?'tapered':'straight';
-      renderWorkshopCalculator();
-    });
+  bindWorkshopToggleButtons(panel,'[data-grip-profile]',(button)=>{
+    workshopToolsState.grip.profile=button.getAttribute('data-grip-profile')==='tapered'?'tapered':'straight';
+    renderWorkshopCalculator();
   });
 
   const gripPrintTemplateBtn=$('workshopGripPrintTemplateBtn');
@@ -4124,7 +4068,7 @@ function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
   const isBuild=entry.source==='build';
   const title=specificationValue(record.buildName)||'Untitled Job';
-  const typeLabel=isBuild?'Build job':'Legacy quote';
+  const typeLabel=isBuild?'Build job':'Saved quote';
   const refText=isBuild
     ? (specificationValue(record.buildNumber)?`${typeLabel} ${specificationValue(record.buildNumber)}`:typeLabel)
     : typeLabel;
@@ -6126,25 +6070,11 @@ function render(){
   }
   const guideNotice=$('layoutGuideNotice');
   if(guideNotice){guideNotice.textContent='Tap a row to inspect spacing quickly. Guide only. Confirm final placement by static testing and builder judgement.';}
-  const row=r.rows[Math.max(0,Math.min(state.workshopIndex,r.rows.length-1))]||r.rows[0];
-  if($('workshopProgress'))$('workshopProgress').textContent='Guide '+row.g+' of '+state.guideCount;
-  if($('workshopGuide'))$('workshopGuide').textContent='Guide '+row.g;
-  if($('workshopMeasure'))$('workshopMeasure').textContent=formatMeasurementNumber(row.cum,{decimalsMetric:1,decimalsImperial:2});
-  if($('workshopSpacing'))$('workshopSpacing').textContent='Spacing from previous: '+formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2});
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
   const workshopScreen=$('workshopScreen');
   if(workshopScreen && workshopScreen.classList.contains('active')){renderWorkshopQuote();}
   if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
 }
-['nextGuide','prevGuide'].forEach((id)=>{
-  const el=$(id);
-  if(el){
-    el.onclick=()=>{
-      if(id==='nextGuide'){state.workshopIndex=Math.min(state.workshopIndex+1,state.guideCount-1);}else{state.workshopIndex=Math.max(state.workshopIndex-1,0);} 
-      save();render();
-    };
-  }
-});
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();
