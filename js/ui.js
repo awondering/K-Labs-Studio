@@ -42,6 +42,7 @@ let customerFinderSearch='';
 let customerFinderSelectedKey='';
 let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
+let activeCustomerRenameContext={key:'',existingName:''};
 let customerBrowserSearch='';
 let customerBrowserSelectedKey='';
 let customerBrowserEditMode=false;
@@ -506,7 +507,7 @@ function buildGripCutTemplateSvg(template){
 }
 function openGripCutTemplatePrint(){
   if(!gripCutTemplateSnapshot){
-    alert('Run Grip Covering values first to generate a cut template.');
+    openInfoDialog('Template Unavailable','Enter grip values first to generate a cut template.');
     return;
   }
   const template=gripCutTemplateSnapshot;
@@ -526,7 +527,7 @@ function openGripCutTemplatePrint(){
   const visualSvg=buildGripCutTemplateSvg(template);
   const printWindow=window.open('','_blank','noopener,noreferrer,width=980,height=1240');
   if(!printWindow || !printWindow.document){
-    alert('Unable to open print view. Please allow pop-ups for this site and try again.');
+    openInfoDialog('Print Blocked','Allow pop-ups for this site, then try Print Cut Template again.');
     return;
   }
 
@@ -1701,6 +1702,13 @@ function flashWorkshopStatus(message,options){
     updateQuoteActionPriority();
   },Math.max(350,numberOrZero(settings.duration))+40);
 }
+function openInfoDialog(title,message){
+  openConfirmDialog({
+    title:title||'Notice',
+    message:message||'Please review this information.',
+    actions:[{id:'ok',label:'OK',kind:'primary'}]
+  },()=>{});
+}
 function setActiveSavedBuildRef(source,index,record){
   const numericIndex=Number(index);
   activeSavedBuildRef={
@@ -1750,11 +1758,7 @@ function finalizeDeletedCurrentBuild(){
 function requestDeleteCurrentBuild(){
   const target=findCurrentSavedBuildTarget();
   if(!target){
-    openConfirmDialog({
-      title:'Delete Build',
-      message:'This build is not saved yet, so there is nothing to delete.',
-      actions:[{id:'ok',label:'OK',kind:'primary'}]
-    },()=>{});
+    flashWorkshopStatus('Save the build before deleting',{pending:true,duration:2000});
     return;
   }
   const displayName=specificationValue(target.record&&target.record.buildName)||'this build';
@@ -2447,7 +2451,13 @@ function saveSelectedBlankEdit(){
     id:existing?existing.id:currentId||generateId('blank'),
   });
   if(!draft.model){
-    alert('Blank name is required.');
+    openInfoDialog('Blank Name Required','Enter a blank name before saving.');
+    waitForDomRender(()=>{
+      const firstField=$('[data-selected-blank-field="model"]');
+      if(firstField){
+        try{firstField.focus({preventScroll:true});}catch{firstField.focus();}
+      }
+    });
     return;
   }
   if(existing){
@@ -2461,6 +2471,7 @@ function saveSelectedBlankEdit(){
   hideSelectedBlankEditState();
   renderBlanks();
   renderWorkshopQuote();
+  flashWorkshopStatus('Blank updated');
 }
 function renderSelectedBlankPanel(){
   const host=$('workshopBlankDetailsBody');
@@ -3647,7 +3658,7 @@ function requestUpdateLibraryComponentFromRow(index){
   if(!row)return;
   const libraryName=specificationValue(row.category)||specificationValue(row.description);
   if(!libraryName || isBlankCategory(row.category)){
-    alert('Select a component category before updating the library.');
+    flashWorkshopStatus('Select a component category first',{pending:true,duration:2000});
     return;
   }
   openConfirmDialog({
@@ -3657,7 +3668,7 @@ function requestUpdateLibraryComponentFromRow(index){
   },(action)=>{
     if(action!=='update')return;
     upsertComponentLibraryRecord(libraryName,row);
-    alert('Library component updated. This build remains editable independently.');
+    flashWorkshopStatus('Library component updated');
   });
 }
 function openComponentSheet(index){
@@ -4109,6 +4120,7 @@ function handleCustomerSelectionForNewBuild(customerKey,customerName){
   closeCustomerFinderSheet();
   runNewBuildStartAction(()=>{
     startFreshQuoteForCustomer(sourceRecord);
+    flashWorkshopStatus('Customer linked');
   });
 }
 function handleAddCustomerForNewBuild(){
@@ -4135,6 +4147,7 @@ function handleCreateCustomerFromNewBuildForm(){
   closeCustomerFinderSheet();
   runNewBuildStartAction(()=>{
     startFreshQuoteForCustomer(draft);
+    flashWorkshopStatus('Customer linked');
   });
 }
 function closeCustomerFinderMenus(){
@@ -4162,15 +4175,22 @@ function customerFinderWorkRowMarkup(entry){
   const index=Number(entry.index);
   return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div>${customerFinderWorkMenuMarkup(entry)}</div>`;
 }
-function requestRenameCustomer(customerKey,currentName){
-  const existing=currentName==='No customer name'?'':String(currentName||'');
-  const proposed=window.prompt('Rename customer',existing);
-  if(proposed===null)return;
-  const nextName=String(proposed||'').trim();
-  if(!nextName){
-    alert('Customer name is required.');
-    return;
-  }
+function setCustomerRenameValidation(message){
+  const error=$('customerRenameNameError');
+  if(!error)return;
+  const text=String(message||'').trim();
+  error.hidden=!text;
+  error.textContent=text;
+}
+function closeCustomerRenameSheet(){
+  const sheet=$('customerRenameSheet');
+  if(!sheet)return;
+  sheet.hidden=true;
+  setCustomerRenameValidation('');
+  activeCustomerRenameContext={key:'',existingName:''};
+  unlockModalLayer({restoreFocus:true});
+}
+function applyCustomerRename(customerKey,nextName){
   const quoteRecords=savedQuoteRecords();
   const buildRecords=savedBuildRecords();
   let quoteChanged=false;
@@ -4197,6 +4217,89 @@ function requestRenameCustomer(customerKey,currentName){
   customerFinderSelectedKey=normalizeNameKey(nextName)||'__no_customer__';
   renderBuilds();
   renderCustomerFinder();
+  flashWorkshopStatus('Customer renamed');
+}
+function submitCustomerRename(){
+  const input=$('customerRenameName');
+  if(!input)return;
+  const nextName=String(input.value||'').trim();
+  if(!nextName){
+    setCustomerRenameValidation('Enter a customer name to continue.');
+    try{input.focus({preventScroll:true});}catch{input.focus();}
+    return;
+  }
+  const existing=String(activeCustomerRenameContext.existingName||'').trim();
+  if(normalizeNameKey(nextName)===normalizeNameKey(existing)){
+    closeCustomerRenameSheet();
+    return;
+  }
+  const key=String(activeCustomerRenameContext.key||'');
+  closeCustomerRenameSheet();
+  applyCustomerRename(key,nextName);
+}
+function openCustomerRenameSheet(customerKey,currentName){
+  ensureCustomerRenameSheet();
+  const sheet=$('customerRenameSheet');
+  const input=$('customerRenameName');
+  if(!sheet || !input)return;
+  const existing=currentName==='No customer name'?'':String(currentName||'').trim();
+  activeCustomerRenameContext={key:String(customerKey||''),existingName:existing};
+  setCustomerRenameValidation('');
+  input.value=existing;
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
+  try{input.focus({preventScroll:true});}catch{input.focus();}
+  if(typeof input.select==='function')input.select();
+}
+function ensureCustomerRenameSheet(){
+  if($('customerRenameSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='customerRenameSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-customer-rename-action="close"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Rename Customer">
+      <header class="component-sheet__header">
+        <h2>Rename Customer</h2>
+        <button class="component-sheet__close" type="button" data-customer-rename-action="close" aria-label="Close rename customer">×</button>
+      </header>
+      <div class="component-sheet__body">
+        <label><span>Customer Name</span><input id="customerRenameName" type="text" placeholder="Customer name" autocomplete="name" /></label>
+        <p id="customerRenameNameError" class="customer-finder__field-error" aria-live="polite" hidden></p>
+        <div class="quote-preview-actions">
+          <button class="ghost-action" type="button" data-customer-rename-action="close">Cancel</button>
+          <button class="primary-action" type="button" data-customer-rename-action="save">Save</button>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    const actionEl=event.target.closest('[data-customer-rename-action]');
+    if(!actionEl)return;
+    const action=actionEl.getAttribute('data-customer-rename-action')||'';
+    if(action==='save'){
+      submitCustomerRename();
+      return;
+    }
+    closeCustomerRenameSheet();
+  });
+  const input=sheet.querySelector('#customerRenameName');
+  if(input){
+    input.addEventListener('input',()=>{
+      if(specificationValue(input.value))setCustomerRenameValidation('');
+    });
+    input.addEventListener('keydown',(event)=>{
+      if(event.key==='Enter'){
+        event.preventDefault();
+        submitCustomerRename();
+      }
+    });
+  }
+}
+function requestRenameCustomer(customerKey,currentName){
+  openCustomerRenameSheet(customerKey,currentName);
 }
 function requestDeleteCustomerGroup(customerKey,customerName){
   const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
@@ -4571,7 +4674,12 @@ function ensureCustomerFinderSheet(){
     });
   }
   document.addEventListener('keydown',(event)=>{
-    if(event.key==='Escape' && $('customerFinderSheet') && !$('customerFinderSheet').hidden){
+    if(event.key!=='Escape')return;
+    if($('customerRenameSheet') && !$('customerRenameSheet').hidden){
+      closeCustomerRenameSheet();
+      return;
+    }
+    if($('customerFinderSheet') && !$('customerFinderSheet').hidden){
       closeCustomerFinderSheet();
     }
   });
@@ -5682,6 +5790,10 @@ function bindWorkshopQuoteBuilder(){
         scrollNewComponentRowIntoView(draftIndex);
         focusNewComponentWithRetry(draftIndex,6);
       });
+      flashWorkshopStatus('Component added',{
+        pending:true,
+        duration:1200,
+      });
     });
   }
   const saveQuoteBtn=$('saveQuoteBtn');
@@ -5709,7 +5821,7 @@ function bindWorkshopQuoteBuilder(){
   if(convertToBuildBtn){
     convertToBuildBtn.addEventListener('click',()=>{
       if(!canConvertToBuild()){
-        alert('Only saved Accepted quotes can be converted to a build.');
+        flashWorkshopStatus('Save and mark the quote Accepted before converting',{pending:true,duration:2200});
         return;
       }
       if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
@@ -6006,7 +6118,11 @@ function saveBlankEditor(){
     archived:existing?existing.archived:false,
   });
   if(!blank.model){
-    alert('Blank name is required.');
+    openInfoDialog('Blank Name Required','Enter a blank name before saving.');
+    const field=$('blankEditorModel');
+    if(field){
+      try{field.focus({preventScroll:true});}catch{field.focus();}
+    }
     return;
   }
   if(existing){
@@ -6025,6 +6141,7 @@ function saveBlankEditor(){
     renderWorkshopQuote();
   }
   closeBlankEditor();
+  flashWorkshopStatus(existing?'Blank updated':'Blank saved');
 }
 function duplicateBlank(blankId){
   const source=findBlankById(blankId);
