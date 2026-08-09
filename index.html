@@ -84,7 +84,7 @@
               <span class="workshop-tool-launch__meta">Set and tune guide positions.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="grip">
-              <span class="workshop-tool-launch__title">Grip Wrap</span>
+              <span class="workshop-tool-launch__title">Grip Wrap Calculator</span>
               <span class="workshop-tool-launch__meta">Calculate wrap length and cut angles.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="diameter">
@@ -136,7 +136,7 @@
                 <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
                 <span>Workshop</span>
               </button>
-              <h3>Grip Wrap</h3>
+              <h3>Grip Wrap Calculator</h3>
               <p>Spiral-wrap utility for leather, cork tape, cord, and flexible wrap materials.</p>
             </div>
 
@@ -271,7 +271,62 @@
     </section>
 
     <section class="screen" id="workshopScreen">
-      <section class="quote-builder" aria-label="Rod Builder Quote">
+      <section id="studioLandingPanel" class="studio-landing-shell" aria-label="Studio landing">
+        <div class="studio-landing-shell__intro">
+          <h1>Studio</h1>
+          <p>Build, manage and specify custom rods.</p>
+        </div>
+        <div id="studioLandingActions" class="studio-landing-actions" aria-label="Studio entry points">
+          <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="new-build">
+            <span class="workshop-tool-launch__title">New Build</span>
+            <span class="workshop-tool-launch__meta">Start a new custom rod build.</span>
+          </button>
+          <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="open-builds">
+            <span class="workshop-tool-launch__title">Open Builds</span>
+            <span class="workshop-tool-launch__meta">Open and continue saved rod builds.</span>
+          </button>
+          <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="customers">
+            <span class="workshop-tool-launch__title">Customers</span>
+            <span class="workshop-tool-launch__meta">Find, add and manage customers.</span>
+          </button>
+          <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="components">
+            <span class="workshop-tool-launch__title">Components</span>
+            <span class="workshop-tool-launch__meta">View, add, edit and manage rod components.</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="studioComponentsPanel" class="studio-components-shell" aria-label="Components library" hidden>
+        <header class="studio-components-shell__head">
+          <button id="studioComponentsBackBtn" class="workshop-tool-nav-back" type="button" aria-label="Back to Studio landing">
+            <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+            <span>Back to Studio</span>
+          </button>
+          <div class="studio-components-shell__intro">
+            <h1>Components</h1>
+            <p>Manage the parts used in your builds.</p>
+          </div>
+        </header>
+
+        <div class="studio-components-shell__controls" aria-label="Components actions">
+          <input id="studioComponentsSearch" class="studio-components-shell__search" type="search" placeholder="Search Components" autocomplete="off" spellcheck="false" />
+          <button id="studioComponentsAddBtn" class="ghost-action studio-components-shell__add" type="button">Add Component</button>
+          <button id="studioComponentsManageBtn" class="ghost-action studio-components-shell__manage" type="button" aria-expanded="false" aria-controls="studioComponentsTaxonomy" title="Manage Categories, Subcategories and Suppliers">Manage Categories & Suppliers</button>
+        </div>
+
+        <section id="studioComponentsTaxonomy" class="studio-components-taxonomy" aria-label="Component taxonomy manager" hidden>
+          <div id="studioComponentsTaxonomyBody" class="studio-components-taxonomy__body"></div>
+        </section>
+
+        <div class="studio-components-shell__content">
+          <section class="studio-components-shell__list-card" aria-label="Component list">
+            <div id="studioComponentsList" class="studio-components-list" role="listbox" aria-label="Components"></div>
+          </section>
+          <section id="studioComponentDetails" class="studio-component-details" aria-live="polite" aria-label="Component Details"></section>
+        </div>
+      </section>
+
+      <section id="studioWorkflowPanel" class="quote-builder" aria-label="Rod Builder Quote" hidden>
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
           <h1 id="quoteBuilderTitle">Studio</h1>
@@ -297,7 +352,7 @@
             <label><span>Customer Name</span><input id="quoteCustomerName" type="text" placeholder="Customer name" /></label>
             <label><span>Phone</span><input id="quoteCustomerPhone" type="text" placeholder="Phone" /></label>
             <label><span>Email</span><input id="quoteCustomerEmail" type="email" placeholder="Email" /></label>
-            <label class="quote-grid__full"><span>Address Line 1</span><input id="quoteAddressLine1" type="text" placeholder="104 Back Miranda Road" /></label>
+            <label class="quote-grid__full"><span>Address Line 1</span><input id="quoteAddressLine1" type="text" placeholder="Address line 1" /></label>
             <label class="quote-grid__full"><span>Address Line 2</span><input id="quoteAddressLine2" type="text" placeholder="Unit, apartment, building or RD" /></label>
             <label><span>Suburb / Locality</span><input id="quoteSuburbLocality" type="text" placeholder="Suburb or locality" /></label>
             <label><span>City / Town</span><input id="quoteCityTown" type="text" placeholder="City or town" /></label>

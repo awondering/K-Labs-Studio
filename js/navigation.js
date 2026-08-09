@@ -95,6 +95,9 @@ document.addEventListener('click',(event)=>{
 	}
 	const menuNav=event.target.closest('#navMenuSheet [data-nav]');
 	if(menuNav){
+		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareStudioLanding==='function'){
+			window.KLABS_UI.prepareStudioLanding();
+		}
 		if(menuNav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
 		}
@@ -103,6 +106,9 @@ document.addEventListener('click',(event)=>{
 	}
 	const nav=event.target.closest('[data-nav]');
 	if(nav){
+		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareStudioLanding==='function'){
+			window.KLABS_UI.prepareStudioLanding();
+		}
 		if(nav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
 		}

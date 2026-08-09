@@ -17,6 +17,7 @@ const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
 const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
+const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
@@ -82,6 +83,14 @@ let workshopStatusFlashPending=false;
 let workshopStatusFlashUntil=0;
 let workshopStatusFlashTimer=null;
 let preserveWorkshopQuoteOnEntry=false;
+let studioScreenView='landing';
+let studioComponentsSearch='';
+let studioSelectedComponentKey='';
+let studioComponentDraft=null;
+let studioComponentTaxonomyManagerOpen=false;
+let studioComponentTaxonomyState=null;
+let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
+let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
 let activeSavedBuildRef=null;
 const workshopKeyboardDismissState={
   suppressNavUntil:0,
@@ -391,7 +400,7 @@ function renderWorkshopToolVisibility(){
   const diameterCard=$('workshopToolDiameter');
   const gripCard=$('workshopToolGrip');
   const activeTool=workshopToolsState.activeTool;
-  if(list)list.hidden=false;
+  if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
 }
@@ -1644,6 +1653,847 @@ function flashWorkshopStatus(message,options){
     updateQuoteActionPriority();
   },Math.max(350,numberOrZero(settings.duration))+40);
 }
+function renderStudioScreenMode(){
+  const landing=$('studioLandingPanel');
+  const workflow=$('studioWorkflowPanel');
+  const components=$('studioComponentsPanel');
+  const showWorkflow=studioScreenView==='workflow';
+  const showComponents=studioScreenView==='components';
+  if(landing)landing.hidden=showWorkflow||showComponents;
+  if(workflow)workflow.hidden=!showWorkflow;
+  if(components)components.hidden=!showComponents;
+}
+function showStudioLanding(){
+  studioScreenView='landing';
+  renderStudioScreenMode();
+}
+function showStudioWorkflow(){
+  studioScreenView='workflow';
+  renderStudioScreenMode();
+}
+function showStudioComponents(){
+  studioScreenView='components';
+  renderStudioScreenMode();
+  renderStudioComponentsLibrary();
+}
+function prepareStudioLandingEntry(){
+  showStudioLanding();
+}
+function studioTaxonomyId(prefix){
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+}
+function normalizeStudioComponentTaxonomy(input){
+  const raw=input&&typeof input==='object'?input:{};
+  const seenCategoryIds=new Set();
+  const seenCategoryNames=new Set();
+  const categories=(Array.isArray(raw.categories)?raw.categories:[])
+    .map((category)=>{
+      const item=category&&typeof category==='object'?category:{};
+      const name=String(item.name||'').trim();
+      if(!name)return null;
+      const normalizedName=normalizeNameKey(name);
+      if(seenCategoryNames.has(normalizedName))return null;
+      seenCategoryNames.add(normalizedName);
+      let id=String(item.id||'').trim();
+      if(!id || seenCategoryIds.has(id)){id=studioTaxonomyId('cat');}
+      seenCategoryIds.add(id);
+      const seenSubNames=new Set();
+      const subcategories=(Array.isArray(item.subcategories)?item.subcategories:[])
+        .map((subcategory)=>{
+          const row=subcategory&&typeof subcategory==='object'?subcategory:{};
+          const subName=String(row.name||'').trim();
+          if(!subName)return null;
+          const subKey=normalizeNameKey(subName);
+          if(seenSubNames.has(subKey))return null;
+          seenSubNames.add(subKey);
+          const subId=String(row.id||'').trim()||studioTaxonomyId('sub');
+          return {id:subId,name:subName};
+        })
+        .filter(Boolean);
+      return {id,name,subcategories};
+    })
+    .filter(Boolean);
+  const seenSupplierIds=new Set();
+  const seenSupplierNames=new Set();
+  const suppliers=(Array.isArray(raw.suppliers)?raw.suppliers:[])
+    .map((supplier)=>{
+      const item=supplier&&typeof supplier==='object'?supplier:{};
+      const name=String(item.name||'').trim();
+      if(!name)return null;
+      const normalized=normalizeNameKey(name);
+      if(seenSupplierNames.has(normalized))return null;
+      seenSupplierNames.add(normalized);
+      let id=String(item.id||'').trim();
+      if(!id || seenSupplierIds.has(id)){id=studioTaxonomyId('sup');}
+      seenSupplierIds.add(id);
+      return {id,name};
+    })
+    .filter(Boolean);
+  return {categories,suppliers};
+}
+function allStudioCategoryNames(taxonomy){
+  const values=(taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[]).map((item)=>String(item.name||'').trim()).filter(Boolean);
+  return Array.from(new Set(values.map((name)=>name))).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
+}
+function allStudioSupplierNames(taxonomy){
+  const values=(taxonomy&&Array.isArray(taxonomy.suppliers)?taxonomy.suppliers:[]).map((item)=>String(item.name||'').trim()).filter(Boolean);
+  return Array.from(new Set(values.map((name)=>name))).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
+}
+function ensureStudioComponentTaxonomyLoaded(){
+  if(studioComponentTaxonomyState)return studioComponentTaxonomyState;
+  const stored=Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null);
+  const taxonomy=normalizeStudioComponentTaxonomy(stored);
+  const categoryMap=new Map(taxonomy.categories.map((item)=>[normalizeNameKey(item.name),item]));
+  const supplierMap=new Map(taxonomy.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
+  componentLibraryRecords().forEach((record)=>{
+    const categoryName=String(record&&record.category||'').trim();
+    const categoryKey=normalizeNameKey(categoryName);
+    if(categoryKey){
+      if(!categoryMap.has(categoryKey)){
+        const created={id:studioTaxonomyId('cat'),name:categoryName,subcategories:[]};
+        categoryMap.set(categoryKey,created);
+      }
+      const subName=String(record&&record.subcategory||'').trim();
+      const subKey=normalizeNameKey(subName);
+      if(subKey){
+        const category=categoryMap.get(categoryKey);
+        if(category && !category.subcategories.some((row)=>normalizeNameKey(row.name)===subKey)){
+          category.subcategories.push({id:studioTaxonomyId('sub'),name:subName});
+        }
+      }
+    }
+    const supplierName=String(record&&record.supplier||'').trim();
+    const supplierKey=normalizeNameKey(supplierName);
+    if(supplierKey && !supplierMap.has(supplierKey)){
+      supplierMap.set(supplierKey,{id:studioTaxonomyId('sup'),name:supplierName});
+    }
+  });
+  getCustomCategoryNames().forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(!key || categoryMap.has(key))return;
+    categoryMap.set(key,{id:studioTaxonomyId('cat'),name:String(name).trim(),subcategories:[]});
+  });
+  getCustomSupplierNames().forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(!key || supplierMap.has(key))return;
+    supplierMap.set(key,{id:studioTaxonomyId('sup'),name:String(name).trim()});
+  });
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
+  Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
+  return studioComponentTaxonomyState;
+}
+function saveStudioComponentTaxonomy(){
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(studioComponentTaxonomyState);
+  Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
+  saveCustomCategoryNames(allStudioCategoryNames(studioComponentTaxonomyState));
+  saveCustomSupplierNames(allStudioSupplierNames(studioComponentTaxonomyState));
+}
+function studioCategoryById(id){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  return taxonomy.categories.find((item)=>item.id===id)||null;
+}
+function studioSupplierById(id){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  return taxonomy.suppliers.find((item)=>item.id===id)||null;
+}
+function studioCategoryByName(name){
+  const key=normalizeNameKey(name);
+  if(!key)return null;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  return taxonomy.categories.find((item)=>normalizeNameKey(item.name)===key)||null;
+}
+function studioSupplierByName(name){
+  const key=normalizeNameKey(name);
+  if(!key)return null;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  return taxonomy.suppliers.find((item)=>normalizeNameKey(item.name)===key)||null;
+}
+function syncStudioTaxonomySelection(){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  if(!taxonomy.categories.length){
+    studioComponentTaxonomySelection.category='';
+    studioComponentTaxonomySelection.subcategory='';
+  }else if(!taxonomy.categories.some((item)=>item.id===studioComponentTaxonomySelection.category)){
+    studioComponentTaxonomySelection.category=taxonomy.categories[0].id;
+    studioComponentTaxonomySelection.subcategory='';
+  }
+  const currentCategory=studioCategoryById(studioComponentTaxonomySelection.category);
+  if(!currentCategory || !currentCategory.subcategories.length){
+    studioComponentTaxonomySelection.subcategory='';
+  }else if(!currentCategory.subcategories.some((item)=>item.id===studioComponentTaxonomySelection.subcategory)){
+    studioComponentTaxonomySelection.subcategory=currentCategory.subcategories[0].id;
+  }
+  if(!taxonomy.suppliers.length){
+    studioComponentTaxonomySelection.supplier='';
+  }else if(!taxonomy.suppliers.some((item)=>item.id===studioComponentTaxonomySelection.supplier)){
+    studioComponentTaxonomySelection.supplier=taxonomy.suppliers[0].id;
+  }
+}
+function escapeAttributeValue(value){
+  return escapeHtml(String(value||''));
+}
+function categorySubcategoryOptionsMarkup(selectedCategoryName,selectedSubcategoryName){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const selectedCategory=studioCategoryByName(selectedCategoryName);
+  const categoryOptions=['<option value="">Unassigned</option>']
+    .concat(taxonomy.categories.map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(selectedCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`));
+  const sourceSubcategories=selectedCategory&&Array.isArray(selectedCategory.subcategories)?selectedCategory.subcategories:[];
+  const subcategoryOptions=['<option value="">Unassigned</option>']
+    .concat(sourceSubcategories.map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.name)}"${normalizeNameKey(subcategory.name)===normalizeNameKey(selectedSubcategoryName)?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
+  return {categoryOptions:categoryOptions.join(''),subcategoryOptions:subcategoryOptions.join('')};
+}
+function supplierOptionsMarkup(selectedSupplierName){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const options=['<option value="">Unassigned</option>']
+    .concat(taxonomy.suppliers.map((supplier)=>`<option value="${escapeAttributeValue(supplier.name)}"${normalizeNameKey(supplier.name)===normalizeNameKey(selectedSupplierName)?' selected':''}>${escapeHtml(supplier.name)}</option>`));
+  return options.join('');
+}
+function studioComponentDetailPayloadFromDom(){
+  return {
+    name:String(($('studioComponentName')&&$('studioComponentName').value)||'').trim(),
+    description:String(($('studioComponentDescription')&&$('studioComponentDescription').value)||'').trim(),
+    category:String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim(),
+    subcategory:String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim(),
+    supplier:String(($('studioComponentSupplier')&&$('studioComponentSupplier').value)||'').trim(),
+    specifications:String(($('studioComponentSpecifications')&&$('studioComponentSpecifications').value)||'').trim(),
+    cost:studioComponentCurrencyFieldValue('studioComponentCost'),
+    unitPrice:studioComponentCurrencyFieldValue('studioComponentUnitPrice'),
+  };
+}
+function studioComponentPayloadSignature(payload){
+  return JSON.stringify(payload||{});
+}
+function clearStudioComponentSavedTimer(){
+  if(studioComponentDetailContext.savedTimer){
+    clearTimeout(studioComponentDetailContext.savedTimer);
+    studioComponentDetailContext.savedTimer=0;
+  }
+}
+function syncStudioComponentSaveButtonState(){
+  const button=$('studioComponentSaveBtn');
+  if(!button)return;
+  if(studioComponentDetailContext.isAddMode){
+    button.disabled=false;
+    button.textContent='Add Component';
+    button.classList.remove('is-saved');
+    return;
+  }
+  const payload=studioComponentDetailPayloadFromDom();
+  const dirty=studioComponentPayloadSignature(payload)!==studioComponentDetailContext.baseline;
+  if(dirty){
+    studioComponentDetailContext.savedFlash=false;
+    clearStudioComponentSavedTimer();
+  }
+  if(studioComponentDetailContext.savedFlash && !dirty){
+    button.disabled=true;
+    button.textContent='Saved ✓';
+    button.classList.add('is-saved');
+    return;
+  }
+  button.disabled=!dirty;
+  button.textContent='Save Changes';
+  button.classList.remove('is-saved');
+}
+function studioComponentListMeta(record){
+  const parts=[String(record&&record.category||'').trim(),String(record&&record.subcategory||'').trim(),String(record&&record.supplier||'').trim()].filter(Boolean);
+  return parts.length?parts.join(' • '):'No category or supplier';
+}
+function studioComponentMatchesSearch(record,queryKey){
+  if(!queryKey)return true;
+  const haystack=[
+    record&&record.name,
+    record&&record.category,
+    record&&record.subcategory,
+    record&&record.supplier,
+    record&&record.description,
+    record&&record.specifications,
+  ].map((value)=>String(value||'').toLowerCase()).join(' ');
+  return haystack.includes(queryKey);
+}
+function studioComponentCurrencyFieldValue(id){
+  const input=$(id);
+  const raw=String(input&&input.value||'').trim();
+  if(raw==='')return undefined;
+  return numberOrZero(raw);
+}
+function renderStudioComponentDetails(record,options){
+  const details=$('studioComponentDetails');
+  if(!details)return;
+  const isAddMode=!!(options&&options.addMode);
+  if(!record){
+    studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
+    details.innerHTML='<p class="studio-component-details__empty">Select a component to view details.</p>';
+    return;
+  }
+  const name=String(record.name||'').trim();
+  const category=String(record.category||'').trim();
+  const subcategory=String(record.subcategory||'').trim();
+  const supplier=String(record.supplier||'').trim();
+  const optionMarkup=categorySubcategoryOptionsMarkup(category,subcategory);
+  const supplierMarkup=supplierOptionsMarkup(supplier);
+  details.innerHTML=`
+    <div class="studio-component-details__head">
+      <h2>${isAddMode?'Add Component':'Component Details'}</h2>
+      <p>${isAddMode?'Enter details and save to add this component to your library.':'Update this component and save your changes.'}</p>
+    </div>
+    <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
+    <div class="studio-component-details__fields">
+      <label><span>Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
+      <label><span>Description</span><textarea id="studioComponentDescription" rows="2" placeholder="Description">${escapeHtml(String(record.description||''))}</textarea></label>
+      <label><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
+      <label><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
+      <label><span>Supplier</span><select id="studioComponentSupplier">${supplierMarkup}</select></label>
+      <label><span>Specifications</span><textarea id="studioComponentSpecifications" rows="2" placeholder="Specifications">${escapeHtml(String(record.specifications||''))}</textarea></label>
+      <label><span>Cost</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
+      <label><span>Customer Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
+    </div>
+    <div class="studio-component-details__actions">
+      <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
+    </div>
+  `;
+  studioComponentDetailContext={
+    isAddMode,
+    baseline:studioComponentPayloadSignature({
+      name,
+      description:String(record.description||'').trim(),
+      category,
+      subcategory,
+      supplier,
+      specifications:String(record.specifications||'').trim(),
+      cost:record.cost===undefined?undefined:numberOrZero(record.cost),
+      unitPrice:record.unitPrice===undefined?undefined:numberOrZero(record.unitPrice),
+    }),
+    savedTimer:0,
+    savedFlash:false,
+  };
+  syncStudioComponentSaveButtonState();
+}
+function saveStudioComponentDetails(){
+  const nameInput=$('studioComponentName');
+  if(!nameInput)return;
+  const nextName=String(nameInput.value||'').trim();
+  if(!nextName){
+    openInfoDialog('Component Name Required','Enter a component name before saving.');
+    nameInput.focus();
+    return;
+  }
+  const originalName=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'').trim();
+  const payload=studioComponentDetailPayloadFromDom();
+  const payloadSignature=studioComponentPayloadSignature(payload);
+  if(!studioComponentDetailContext.isAddMode && payloadSignature===studioComponentDetailContext.baseline){
+    return;
+  }
+  const sourceRecord={
+    category:payload.category,
+    subcategory:payload.subcategory,
+    supplier:payload.supplier,
+    description:payload.description,
+    specifications:payload.specifications,
+    cost:payload.cost,
+    unitPrice:payload.unitPrice,
+  };
+  if(normalizeNameKey(originalName) && normalizeNameKey(originalName)!==normalizeNameKey(nextName)){
+    removeComponentLibraryRecord(originalName);
+  }
+  upsertComponentLibraryRecord(nextName,sourceRecord);
+  ensureStudioComponentTaxonomyLoaded();
+  const nextCategoryKey=normalizeNameKey(sourceRecord.category);
+  if(nextCategoryKey && !studioCategoryByName(sourceRecord.category)){
+    studioComponentTaxonomyState.categories.push({id:studioTaxonomyId('cat'),name:sourceRecord.category,subcategories:[]});
+  }
+  const targetCategory=studioCategoryByName(sourceRecord.category);
+  const subcategoryName=String(sourceRecord.subcategory||'').trim();
+  const subcategoryKey=normalizeNameKey(subcategoryName);
+  if(targetCategory && subcategoryKey && !targetCategory.subcategories.some((row)=>normalizeNameKey(row.name)===subcategoryKey)){
+    targetCategory.subcategories.push({id:studioTaxonomyId('sub'),name:subcategoryName});
+  }
+  const supplierName=String(sourceRecord.supplier||'').trim();
+  const supplierKey=normalizeNameKey(supplierName);
+  if(supplierKey && !studioSupplierByName(supplierName)){
+    studioComponentTaxonomyState.suppliers.push({id:studioTaxonomyId('sup'),name:supplierName});
+  }
+  saveStudioComponentTaxonomy();
+  studioComponentDraft=null;
+  studioSelectedComponentKey=normalizeNameKey(nextName);
+  renderStudioComponentsLibrary();
+  studioComponentDetailContext.savedFlash=true;
+  clearStudioComponentSavedTimer();
+  syncStudioComponentSaveButtonState();
+  studioComponentDetailContext.savedTimer=window.setTimeout(()=>{
+    studioComponentDetailContext.savedFlash=false;
+    studioComponentDetailContext.savedTimer=0;
+    syncStudioComponentSaveButtonState();
+  },1700);
+}
+function renderStudioComponentsTaxonomyManager(){
+  const host=$('studioComponentsTaxonomyBody');
+  const panel=$('studioComponentsTaxonomy');
+  const trigger=$('studioComponentsManageBtn');
+  if(panel)panel.hidden=!studioComponentTaxonomyManagerOpen;
+  if(trigger)trigger.setAttribute('aria-expanded',studioComponentTaxonomyManagerOpen?'true':'false');
+  if(!host)return;
+  if(!studioComponentTaxonomyManagerOpen){
+    host.innerHTML='';
+    return;
+  }
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  syncStudioTaxonomySelection();
+  const selectedCategory=studioCategoryById(studioComponentTaxonomySelection.category);
+  const selectedSubcategory=selectedCategory && selectedCategory.subcategories.find((row)=>row.id===studioComponentTaxonomySelection.subcategory);
+  const selectedSupplier=studioSupplierById(studioComponentTaxonomySelection.supplier);
+  const categoryOptions=['<option value="">Select category</option>']
+    .concat(taxonomy.categories.map((category)=>`<option value="${escapeAttributeValue(category.id)}"${category.id===studioComponentTaxonomySelection.category?' selected':''}>${escapeHtml(category.name)}</option>`));
+  const subcategoryOptions=['<option value="">Select subcategory</option>']
+    .concat((selectedCategory&&selectedCategory.subcategories||[]).map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.id)}"${subcategory.id===studioComponentTaxonomySelection.subcategory?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
+  const supplierOptions=['<option value="">Select supplier</option>']
+    .concat(taxonomy.suppliers.map((supplier)=>`<option value="${escapeAttributeValue(supplier.id)}"${supplier.id===studioComponentTaxonomySelection.supplier?' selected':''}>${escapeHtml(supplier.name)}</option>`));
+  host.innerHTML=`
+    <div class="studio-components-taxonomy__grid">
+      <article class="studio-components-taxonomy__card" aria-label="Category management">
+        <h3>Categories</h3>
+        <p>User-managed component groups.</p>
+        <label class="studio-components-taxonomy__field"><span>Category</span><select id="studioTaxonomyCategorySelect">${categoryOptions.join('')}</select></label>
+        <div class="studio-components-taxonomy__row">
+          <input id="studioTaxonomyCategoryName" type="text" value="${escapeHtml(selectedCategory?selectedCategory.name:'')}" placeholder="Category name" />
+          <button class="ghost-action" type="button" data-taxonomy-action="category-add">Add</button>
+        </div>
+        <div class="studio-components-taxonomy__actions">
+          <button class="ghost-action" type="button" data-taxonomy-action="category-rename">Rename</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="category-up">Move Up</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="category-down">Move Down</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="category-delete">Delete</button>
+        </div>
+      </article>
+      <article class="studio-components-taxonomy__card" aria-label="Subcategory management">
+        <h3>Subcategories</h3>
+        <p>Child groups under the selected category.</p>
+        <label class="studio-components-taxonomy__field"><span>Parent Category</span><select id="studioTaxonomySubParentSelect">${categoryOptions.join('')}</select></label>
+        <label class="studio-components-taxonomy__field"><span>Subcategory</span><select id="studioTaxonomySubcategorySelect">${subcategoryOptions.join('')}</select></label>
+        <div class="studio-components-taxonomy__row">
+          <input id="studioTaxonomySubcategoryName" type="text" value="${escapeHtml(selectedSubcategory?selectedSubcategory.name:'')}" placeholder="Subcategory name" />
+          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-add">Add</button>
+        </div>
+        <div class="studio-components-taxonomy__actions">
+          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-rename">Rename</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-up">Move Up</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-down">Move Down</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-delete">Delete</button>
+        </div>
+      </article>
+      <article class="studio-components-taxonomy__card" aria-label="Supplier management">
+        <h3>Suppliers</h3>
+        <p>User-managed supplier options.</p>
+        <label class="studio-components-taxonomy__field"><span>Supplier</span><select id="studioTaxonomySupplierSelect">${supplierOptions.join('')}</select></label>
+        <div class="studio-components-taxonomy__row">
+          <input id="studioTaxonomySupplierName" type="text" value="${escapeHtml(selectedSupplier?selectedSupplier.name:'')}" placeholder="Supplier name" />
+          <button class="ghost-action" type="button" data-taxonomy-action="supplier-add">Add</button>
+        </div>
+        <div class="studio-components-taxonomy__actions">
+          <button class="ghost-action" type="button" data-taxonomy-action="supplier-rename">Rename</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="supplier-up">Move Up</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="supplier-down">Move Down</button>
+          <button class="ghost-action" type="button" data-taxonomy-action="supplier-delete">Delete</button>
+        </div>
+      </article>
+    </div>
+    <p class="studio-components-taxonomy__warn">Deleting a used category, subcategory, or supplier requires explicit unassignment confirmation and never deletes components.</p>
+  `;
+}
+function studioUpdateComponents(mutator){
+  const records=componentLibraryRecords();
+  mutator(records);
+  saveComponentLibraryRecords(records);
+}
+function studioReassignUsedCategoryToUnassigned(categoryName){
+  const categoryKey=normalizeNameKey(categoryName);
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.category)!==categoryKey)return;
+      record.category='';
+      record.subcategory='';
+    });
+  });
+}
+function studioReassignUsedSubcategoryToUnassigned(categoryName,subcategoryName){
+  const categoryKey=normalizeNameKey(categoryName);
+  const subKey=normalizeNameKey(subcategoryName);
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.category)!==categoryKey)return;
+      if(normalizeNameKey(record.subcategory)!==subKey)return;
+      record.subcategory='';
+    });
+  });
+}
+function studioReassignUsedSupplierToUnassigned(supplierName){
+  const supplierKey=normalizeNameKey(supplierName);
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.supplier)!==supplierKey)return;
+      record.supplier='';
+    });
+  });
+}
+function studioCountCategoryUsage(categoryName){
+  const key=normalizeNameKey(categoryName);
+  return componentLibraryRecords().filter((record)=>normalizeNameKey(record.category)===key).length;
+}
+function studioCountSubcategoryUsage(categoryName,subcategoryName){
+  const categoryKey=normalizeNameKey(categoryName);
+  const subKey=normalizeNameKey(subcategoryName);
+  return componentLibraryRecords().filter((record)=>normalizeNameKey(record.category)===categoryKey && normalizeNameKey(record.subcategory)===subKey).length;
+}
+function studioCountSupplierUsage(supplierName){
+  const key=normalizeNameKey(supplierName);
+  return componentLibraryRecords().filter((record)=>normalizeNameKey(record.supplier)===key).length;
+}
+function studioRenameCategory(oldName,newName){
+  const oldKey=normalizeNameKey(oldName);
+  const next=String(newName||'').trim();
+  const nextKey=normalizeNameKey(next);
+  if(!oldKey || !nextKey || oldKey===nextKey)return false;
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.category)===oldKey){
+        record.category=next;
+      }
+    });
+  });
+  return true;
+}
+function studioRenameSubcategory(categoryName,oldSubcategory,newSubcategory){
+  const categoryKey=normalizeNameKey(categoryName);
+  const oldKey=normalizeNameKey(oldSubcategory);
+  const next=String(newSubcategory||'').trim();
+  const nextKey=normalizeNameKey(next);
+  if(!categoryKey || !oldKey || !nextKey || oldKey===nextKey)return false;
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.category)!==categoryKey)return;
+      if(normalizeNameKey(record.subcategory)!==oldKey)return;
+      record.subcategory=next;
+    });
+  });
+  return true;
+}
+function studioRenameSupplier(oldName,newName){
+  const oldKey=normalizeNameKey(oldName);
+  const next=String(newName||'').trim();
+  const nextKey=normalizeNameKey(next);
+  if(!oldKey || !nextKey || oldKey===nextKey)return false;
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.supplier)===oldKey){
+        record.supplier=next;
+      }
+    });
+  });
+  return true;
+}
+function studioMoveArrayRow(rows,index,direction){
+  const target=index+direction;
+  if(index<0 || index>=rows.length)return false;
+  if(target<0 || target>=rows.length)return false;
+  const swapped=rows[target];
+  rows[target]=rows[index];
+  rows[index]=swapped;
+  return true;
+}
+function handleStudioTaxonomyAction(action){
+  ensureStudioComponentTaxonomyLoaded();
+  syncStudioTaxonomySelection();
+  const category=studioCategoryById(studioComponentTaxonomySelection.category);
+  const categoryNameInput=$('studioTaxonomyCategoryName');
+  const nextCategoryName=String(categoryNameInput&&categoryNameInput.value||'').trim();
+  const subcategoryNameInput=$('studioTaxonomySubcategoryName');
+  const nextSubcategoryName=String(subcategoryNameInput&&subcategoryNameInput.value||'').trim();
+  const supplier=studioSupplierById(studioComponentTaxonomySelection.supplier);
+  const supplierNameInput=$('studioTaxonomySupplierName');
+  const nextSupplierName=String(supplierNameInput&&supplierNameInput.value||'').trim();
+  if(action==='category-add'){
+    if(!nextCategoryName){openInfoDialog('Category Name Required','Enter a category name to add.');return;}
+    if(studioCategoryByName(nextCategoryName)){openInfoDialog('Category Exists','A category with this name already exists.');return;}
+    studioComponentTaxonomyState.categories.push({id:studioTaxonomyId('cat'),name:nextCategoryName,subcategories:[]});
+    saveStudioComponentTaxonomy();
+  }
+  if(action==='category-rename'){
+    if(!category){openInfoDialog('Select Category','Choose a category to rename.');return;}
+    if(!nextCategoryName){openInfoDialog('Category Name Required','Enter a new category name.');return;}
+    const existing=studioCategoryByName(nextCategoryName);
+    if(existing && existing.id!==category.id){openInfoDialog('Category Exists','Another category already uses this name.');return;}
+    const oldName=category.name;
+    category.name=nextCategoryName;
+    studioRenameCategory(oldName,nextCategoryName);
+    saveStudioComponentTaxonomy();
+  }
+  if(action==='category-delete'){
+    if(!category){openInfoDialog('Select Category','Choose a category to delete.');return;}
+    const usage=studioCountCategoryUsage(category.name);
+    const deleteNow=()=>{
+      studioComponentTaxonomyState.categories=studioComponentTaxonomyState.categories.filter((item)=>item.id!==category.id);
+      saveStudioComponentTaxonomy();
+      renderStudioComponentsLibrary();
+    };
+    openConfirmDialog({
+      title:usage>0?'Category In Use':'Delete Category',
+      message:usage>0
+        ?`${usage} component(s) use this category. Continue and set affected components to Unassigned?`
+        :'Delete this category?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:usage>0?'Unassign & Delete':'Delete',kind:'danger'}]
+    },(choice)=>{
+      if(choice!=='delete')return;
+      if(usage>0){
+        studioReassignUsedCategoryToUnassigned(category.name);
+      }
+      deleteNow();
+    });
+    return;
+  }
+  if(action==='category-up' || action==='category-down'){
+    if(!category)return;
+    const index=studioComponentTaxonomyState.categories.findIndex((item)=>item.id===category.id);
+    const moved=studioMoveArrayRow(studioComponentTaxonomyState.categories,index,action==='category-up'?-1:1);
+    if(moved)saveStudioComponentTaxonomy();
+  }
+  if(action==='subcategory-add'){
+    if(!category){openInfoDialog('Select Category','Choose a parent category first.');return;}
+    if(!nextSubcategoryName){openInfoDialog('Subcategory Name Required','Enter a subcategory name to add.');return;}
+    const exists=category.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextSubcategoryName));
+    if(exists){openInfoDialog('Subcategory Exists','This subcategory already exists for the selected category.');return;}
+    category.subcategories.push({id:studioTaxonomyId('sub'),name:nextSubcategoryName});
+    saveStudioComponentTaxonomy();
+  }
+  if(action==='subcategory-rename'){
+    if(!category){openInfoDialog('Select Category','Choose a parent category first.');return;}
+    const subcategory=category.subcategories.find((item)=>item.id===studioComponentTaxonomySelection.subcategory);
+    if(!subcategory){openInfoDialog('Select Subcategory','Choose a subcategory to rename.');return;}
+    if(!nextSubcategoryName){openInfoDialog('Subcategory Name Required','Enter a new subcategory name.');return;}
+    const duplicate=category.subcategories.some((item)=>item.id!==subcategory.id && normalizeNameKey(item.name)===normalizeNameKey(nextSubcategoryName));
+    if(duplicate){openInfoDialog('Subcategory Exists','Another subcategory already uses this name.');return;}
+    const oldName=subcategory.name;
+    subcategory.name=nextSubcategoryName;
+    studioRenameSubcategory(category.name,oldName,nextSubcategoryName);
+    saveStudioComponentTaxonomy();
+  }
+  if(action==='subcategory-delete'){
+    if(!category){openInfoDialog('Select Category','Choose a parent category first.');return;}
+    const subcategory=category.subcategories.find((item)=>item.id===studioComponentTaxonomySelection.subcategory);
+    if(!subcategory){openInfoDialog('Select Subcategory','Choose a subcategory to delete.');return;}
+    const usage=studioCountSubcategoryUsage(category.name,subcategory.name);
+    const deleteNow=()=>{
+      category.subcategories=category.subcategories.filter((item)=>item.id!==subcategory.id);
+      saveStudioComponentTaxonomy();
+      renderStudioComponentsLibrary();
+    };
+    openConfirmDialog({
+      title:usage>0?'Subcategory In Use':'Delete Subcategory',
+      message:usage>0
+        ?`${usage} component(s) use this subcategory. Continue and set affected components to Unassigned?`
+        :'Delete this subcategory?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:usage>0?'Unassign & Delete':'Delete',kind:'danger'}]
+    },(choice)=>{
+      if(choice!=='delete')return;
+      if(usage>0){
+        studioReassignUsedSubcategoryToUnassigned(category.name,subcategory.name);
+      }
+      deleteNow();
+    });
+    return;
+  }
+  if(action==='subcategory-up' || action==='subcategory-down'){
+    if(!category)return;
+    const subIndex=category.subcategories.findIndex((item)=>item.id===studioComponentTaxonomySelection.subcategory);
+    const moved=studioMoveArrayRow(category.subcategories,subIndex,action==='subcategory-up'?-1:1);
+    if(moved)saveStudioComponentTaxonomy();
+  }
+  if(action==='supplier-add'){
+    if(!nextSupplierName){openInfoDialog('Supplier Name Required','Enter a supplier name to add.');return;}
+    if(studioSupplierByName(nextSupplierName)){openInfoDialog('Supplier Exists','A supplier with this name already exists.');return;}
+    studioComponentTaxonomyState.suppliers.push({id:studioTaxonomyId('sup'),name:nextSupplierName});
+    saveStudioComponentTaxonomy();
+  }
+  if(action==='supplier-rename'){
+    if(!supplier){openInfoDialog('Select Supplier','Choose a supplier to rename.');return;}
+    if(!nextSupplierName){openInfoDialog('Supplier Name Required','Enter a new supplier name.');return;}
+    const existing=studioSupplierByName(nextSupplierName);
+    if(existing && existing.id!==supplier.id){openInfoDialog('Supplier Exists','Another supplier already uses this name.');return;}
+    const oldName=supplier.name;
+    supplier.name=nextSupplierName;
+    studioRenameSupplier(oldName,nextSupplierName);
+    saveStudioComponentTaxonomy();
+  }
+  if(action==='supplier-delete'){
+    if(!supplier){openInfoDialog('Select Supplier','Choose a supplier to delete.');return;}
+    const usage=studioCountSupplierUsage(supplier.name);
+    const deleteNow=()=>{
+      studioComponentTaxonomyState.suppliers=studioComponentTaxonomyState.suppliers.filter((item)=>item.id!==supplier.id);
+      saveStudioComponentTaxonomy();
+      renderStudioComponentsLibrary();
+    };
+    openConfirmDialog({
+      title:usage>0?'Supplier In Use':'Delete Supplier',
+      message:usage>0
+        ?`${usage} component(s) use this supplier. Continue and set affected components to Unassigned?`
+        :'Delete this supplier?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:usage>0?'Unassign & Delete':'Delete',kind:'danger'}]
+    },(choice)=>{
+      if(choice!=='delete')return;
+      if(usage>0){
+        studioReassignUsedSupplierToUnassigned(supplier.name);
+      }
+      deleteNow();
+    });
+    return;
+  }
+  if(action==='supplier-up' || action==='supplier-down'){
+    if(!supplier)return;
+    const index=studioComponentTaxonomyState.suppliers.findIndex((item)=>item.id===supplier.id);
+    const moved=studioMoveArrayRow(studioComponentTaxonomyState.suppliers,index,action==='supplier-up'?-1:1);
+    if(moved)saveStudioComponentTaxonomy();
+  }
+  renderStudioComponentsLibrary();
+}
+function renderStudioComponentsLibrary(){
+  const list=$('studioComponentsList');
+  const searchInput=$('studioComponentsSearch');
+  if(!list)return;
+  ensureStudioComponentTaxonomyLoaded();
+  renderStudioComponentsTaxonomyManager();
+  const queryRaw=String(studioComponentsSearch||'').trim();
+  const queryKey=queryRaw.toLowerCase();
+  if(searchInput && searchInput.value!==queryRaw){searchInput.value=queryRaw;}
+  const records=componentLibraryRecords();
+  const visible=records.filter((record)=>studioComponentMatchesSearch(record,queryKey));
+  const selectedVisible=visible.some((record)=>normalizeNameKey(record.name)===studioSelectedComponentKey);
+  if(!studioComponentDraft && !selectedVisible){
+    studioSelectedComponentKey=visible.length?normalizeNameKey(visible[0].name):'';
+  }
+  if(!visible.length){
+    list.innerHTML='<p class="studio-components-list__empty">No components found.</p>';
+  }else{
+    list.innerHTML=visible.map((record)=>{
+      const name=String(record&&record.name||'').trim();
+      const key=normalizeNameKey(name);
+      const isActive=!studioComponentDraft && key===studioSelectedComponentKey;
+      return `<button class="studio-components-list__item${isActive?' is-active':''}" type="button" data-studio-component-open="${escapeHtml(name)}" role="option" aria-selected="${isActive?'true':'false'}"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(studioComponentListMeta(record))}</span></button>`;
+    }).join('');
+  }
+  if(studioComponentDraft){
+    renderStudioComponentDetails(studioComponentDraft,{addMode:true});
+    return;
+  }
+  const selectedRecord=visible.find((record)=>normalizeNameKey(record.name)===studioSelectedComponentKey)||null;
+  renderStudioComponentDetails(selectedRecord,{addMode:false});
+}
+function bindStudioComponentsPanel(){
+  const panel=$('studioComponentsPanel');
+  if(!panel || panel.getAttribute('data-studio-components-bound')==='true')return;
+  panel.setAttribute('data-studio-components-bound','true');
+  ensureStudioComponentTaxonomyLoaded();
+  const backBtn=$('studioComponentsBackBtn');
+  if(backBtn){
+    backBtn.addEventListener('click',()=>{
+      clearStudioComponentSavedTimer();
+      studioComponentDraft=null;
+      showStudioLanding();
+    });
+  }
+  const searchInput=$('studioComponentsSearch');
+  if(searchInput){
+    searchInput.addEventListener('input',()=>{
+      studioComponentsSearch=searchInput.value||'';
+      renderStudioComponentsLibrary();
+    });
+  }
+  const addBtn=$('studioComponentsAddBtn');
+  if(addBtn){
+    addBtn.addEventListener('click',()=>{
+      studioComponentDraft={
+        name:'',
+        category:'',
+        subcategory:'',
+        supplier:'',
+        description:'',
+        specifications:'',
+        cost:undefined,
+        unitPrice:undefined,
+      };
+      renderStudioComponentsLibrary();
+      const nameInput=$('studioComponentName');
+      if(nameInput)nameInput.focus();
+    });
+  }
+  const manageBtn=$('studioComponentsManageBtn');
+  if(manageBtn){
+    manageBtn.addEventListener('click',()=>{
+      studioComponentTaxonomyManagerOpen=!studioComponentTaxonomyManagerOpen;
+      renderStudioComponentsTaxonomyManager();
+    });
+  }
+  const taxonomyBody=$('studioComponentsTaxonomyBody');
+  if(taxonomyBody){
+    taxonomyBody.addEventListener('change',(event)=>{
+      const target=event.target;
+      if(!target)return;
+      if(target.id==='studioTaxonomyCategorySelect'){
+        studioComponentTaxonomySelection.category=String(target.value||'');
+        studioComponentTaxonomySelection.subcategory='';
+        renderStudioComponentsTaxonomyManager();
+      }
+      if(target.id==='studioTaxonomySubParentSelect'){
+        studioComponentTaxonomySelection.category=String(target.value||'');
+        studioComponentTaxonomySelection.subcategory='';
+        renderStudioComponentsTaxonomyManager();
+      }
+      if(target.id==='studioTaxonomySubcategorySelect'){
+        studioComponentTaxonomySelection.subcategory=String(target.value||'');
+        renderStudioComponentsTaxonomyManager();
+      }
+      if(target.id==='studioTaxonomySupplierSelect'){
+        studioComponentTaxonomySelection.supplier=String(target.value||'');
+        renderStudioComponentsTaxonomyManager();
+      }
+    });
+    taxonomyBody.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-taxonomy-action]');
+      if(!button)return;
+      handleStudioTaxonomyAction(button.getAttribute('data-taxonomy-action')||'');
+    });
+  }
+  const list=$('studioComponentsList');
+  if(list){
+    list.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-studio-component-open]');
+      if(!button)return;
+      studioComponentDraft=null;
+      studioSelectedComponentKey=normalizeNameKey(button.getAttribute('data-studio-component-open')||'');
+      renderStudioComponentsLibrary();
+    });
+  }
+  const details=$('studioComponentDetails');
+  if(details){
+    details.addEventListener('input',()=>{
+      syncStudioComponentSaveButtonState();
+    });
+    details.addEventListener('change',(event)=>{
+      const target=event.target;
+      if(target && target.id==='studioComponentCategory'){
+        const subcategorySelect=$('studioComponentSubcategory');
+        const selectedCategory=String(target.value||'').trim();
+        const options=categorySubcategoryOptionsMarkup(selectedCategory,'');
+        if(subcategorySelect){
+          subcategorySelect.innerHTML=options.subcategoryOptions;
+        }
+      }
+      syncStudioComponentSaveButtonState();
+    });
+    details.addEventListener('click',(event)=>{
+      const saveButton=event.target.closest('#studioComponentSaveBtn');
+      if(!saveButton)return;
+      saveStudioComponentDetails();
+    });
+  }
+}
 function openInfoDialog(title,message){
   openConfirmDialog({
     title:title||'Notice',
@@ -1783,9 +2633,10 @@ function beginFreshQuote(options){
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
+  showStudioWorkflow();
   renderWorkshopQuote();
   collapseWorkshopSections();
-  focusWorkshopSection('workshopCustomerBody',{scroll:false});
+  focusWorkshopSection(settings.focusSection||'workshopCustomerBody',{scroll:false});
   if(settings.navigate){goScreen('workshopScreen');}
 }
 function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
@@ -1812,6 +2663,7 @@ function startFreshQuoteForCustomer(record,options){
   quote=normalizeQuote(next);
   saveQuoteCurrent();
   markQuoteSaved();
+  showStudioWorkflow();
   renderWorkshopQuote();
   collapseWorkshopSections();
   preserveWorkshopQuoteOnEntry=true;
@@ -1834,17 +2686,9 @@ function runNewBuildStartAction(startAction){
   startAction();
 }
 function startNewQuoteFlow(){
-  if(hasUnsavedQuoteChanges && quoteHasMeaningfulDraft(quote)){
-    openConfirmDialog({
-      title:'Start New Build',
-      message:'Discard the current unsaved build and start a new build?',
-      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'start',label:'Start New Build',kind:'primary'}]
-    },(action)=>{
-      if(action==='start'){beginFreshQuote();}
-    });
-    return;
-  }
-  beginFreshQuote();
+  runNewBuildStartAction(()=>{
+    openCustomerFinderSheet('new-build');
+  });
 }
 function startNewBuildFlow(){
   startNewQuoteFlow();
@@ -2823,6 +3667,7 @@ function componentLibraryRecords(){
     .map((record)=>({
       name:String(record.name||'').trim(),
       category:String(record.category||record.name||'').trim(),
+      subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
       description:String(record.description||'').trim(),
       customerLabel:String(record.customerLabel||'').trim(),
@@ -2842,6 +3687,7 @@ function saveComponentLibraryRecords(records){
     .map((record)=>({
       name:String(record.name||'').trim(),
       category:String(record.category||record.name||'').trim(),
+      subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
       description:String(record.description||'').trim(),
       customerLabel:String(record.customerLabel||'').trim(),
@@ -2867,7 +3713,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   if(!normalizedKey)return;
   const item=sourceComponent&&typeof sourceComponent==='object'?sourceComponent:{};
   const rowCategory=String(item.category||'').trim();
-  const categoryValue=isBlankCategory(rowCategory)?normalizedName:(rowCategory||normalizedName);
+  const categoryValue=rowCategory;
   const unitCost=componentLibraryUnitCostValue(item);
   const unitPrice=componentLibraryUnitPriceValue(item);
   const rowCost=componentLibraryCostValue(item);
@@ -2875,6 +3721,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const nextRecord={
     name:normalizedName,
     category:categoryValue,
+    subcategory:String(item.subcategory||'').trim(),
     supplier:String(item.supplier||'').trim(),
     description:String(item.description||'').trim(),
     customerLabel:String(item.customerLabel||'').trim(),
@@ -4425,8 +5272,7 @@ function openCustomerFinderSheet(intent){
   const sheet=$('customerFinderSheet');
   if(!sheet)return;
   customerFinderIntent=intent==='new-build'?'new-build':'browse';
-  const hasCustomerHistory=customerSavedGroups('',{includeInvalidCustomers:false}).length>0;
-  customerFinderNewBuildStep=customerFinderIntent==='new-build'?(hasCustomerHistory?'search':'add'):'search';
+  customerFinderNewBuildStep=customerFinderIntent==='new-build'?'actions':'search';
   customerFinderSearch='';
   customerFinderSelectedKey='';
   if($('customerFinderSearch'))$('customerFinderSearch').value='';
@@ -4701,6 +5547,7 @@ function openSavedBuildRecord(source,index){
   quote=normalizeQuote(selected);
   saveQuoteCurrent();
   markQuoteSaved();
+  showStudioWorkflow();
   renderWorkshopQuote();
   collapseWorkshopSections();
   preserveWorkshopQuoteOnEntry=true;
@@ -5271,6 +6118,33 @@ function bindWorkshopQuoteBuilder(){
   bindWorkshopCollapsibleSections();
   bindWorkshopKeyboardDismissGuard();
   bindWorkshopInputFocusStability();
+  const landingActions=$('studioLandingActions');
+  if(landingActions && landingActions.getAttribute('data-studio-landing-bound')!=='true'){
+    landingActions.setAttribute('data-studio-landing-bound','true');
+    landingActions.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-studio-action]');
+      if(!button)return;
+      const action=button.getAttribute('data-studio-action')||'';
+      if(action==='new-build'){
+        startNewBuildFlow();
+        return;
+      }
+      if(action==='open-builds'){
+        goScreen('buildsScreen');
+        return;
+      }
+      if(action==='customers'){
+        openCustomerFinderSheet('browse');
+        return;
+      }
+      if(action==='components'){
+        studioComponentDraft=null;
+        showStudioComponents();
+        goScreen('workshopScreen');
+      }
+    });
+  }
+  bindStudioComponentsPanel();
   const newQuoteEntryBtn=$('newQuoteEntryBtn');
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
@@ -5859,6 +6733,7 @@ function bindHomeActions(){
     enterBtn.setAttribute('data-home-bound','true');
     enterBtn.addEventListener('click',()=>{
       preserveWorkshopQuoteOnEntry=false;
+      showStudioLanding();
       goScreen('workshopScreen');
     });
   }
@@ -5920,12 +6795,17 @@ function onScreenChange(screenId){
     renderBuilds();
   }
   if(screenId==='workshopScreen'){
+    renderStudioScreenMode();
     if(preserveWorkshopQuoteOnEntry){
       preserveWorkshopQuoteOnEntry=false;
       renderWorkshopQuote();
       focusWorkshopSection(nextWorkshopSectionId(),{scroll:false});
     }else{
-      beginFreshQuote({navigate:false});
+      if(studioScreenView==='components'){
+        renderStudioComponentsLibrary();
+      }else if(studioScreenView!=='workflow'){
+        showStudioLanding();
+      }
     }
   }
   if(screenId==='workshopLandingScreen'){
@@ -6107,7 +6987,14 @@ function render(){
   if(guideNotice){guideNotice.textContent='Tap a row to inspect spacing quickly. Guide only. Confirm final placement by static testing and builder judgement.';}
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
   const workshopScreen=$('workshopScreen');
-  if(workshopScreen && workshopScreen.classList.contains('active')){renderWorkshopQuote();}
+  if(workshopScreen && workshopScreen.classList.contains('active')){
+    renderStudioScreenMode();
+    if(studioScreenView==='workflow'){
+      renderWorkshopQuote();
+    }else if(studioScreenView==='components'){
+      renderStudioComponentsLibrary();
+    }
+  }
   const workshopLandingScreen=$('workshopLandingScreen');
   if(workshopLandingScreen && workshopLandingScreen.classList.contains('active')){renderWorkshopCalculator();}
   if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
@@ -6121,4 +7008,4 @@ bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,prepareStudioLanding:prepareStudioLandingEntry};
