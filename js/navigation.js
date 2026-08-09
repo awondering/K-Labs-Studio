@@ -10,9 +10,16 @@ function safeGoScreen(id){
 	goScreen(hasScreen(id)?id:'homeScreen');
 }
 
+function activeNavTargetForScreen(screenId){
+	if(screenId==='layoutScreen')return 'workshopLandingScreen';
+	if(screenId==='buildsScreen')return 'workshopScreen';
+	return screenId;
+}
+
 function goScreen(id){
+	const activeNavId=activeNavTargetForScreen(id);
 	document.querySelectorAll('.screen').forEach((screen)=>screen.classList.toggle('active',screen.id===id));
-	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===id));
+	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===activeNavId));
 	syncHomeScreenClass(id);
 	if(window.KLABS_UI && typeof window.KLABS_UI.onScreenChange==='function'){
 		window.KLABS_UI.onScreenChange(id);
@@ -42,9 +49,7 @@ function ensureNavMenu(){
 					<div class="component-sheet__list nav-menu-list">
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="homeScreen">Home</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Studio</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="buildsScreen">Saved Jobs</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="layoutScreen">Guide Layout &amp; Tools</button></div>
-						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav-menu-action="find-customer">Find Customer</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopLandingScreen">Workshop</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">Settings</button></div>
 				</div>
 			</div>
@@ -58,12 +63,6 @@ function ensureNavMenu(){
 			if(action==='close'){
 				closeNavMenu();
 				return;
-			}
-			if(action==='find-customer'){
-				closeNavMenu();
-				if(window.KLABS_UI && typeof window.KLABS_UI.openCustomerFinder==='function'){
-					window.KLABS_UI.openCustomerFinder('browse');
-				}
 			}
 		}
 	});
@@ -96,16 +95,16 @@ document.addEventListener('click',(event)=>{
 	}
 	const menuNav=event.target.closest('#navMenuSheet [data-nav]');
 	if(menuNav){
-		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
-			window.KLABS_UI.prepareWorkshopEntry('preserve');
+		if(menuNav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
+			window.KLABS_UI.prepareWorkshopLanding();
 		}
 		safeGoScreen(menuNav.dataset.nav);
 		return;
 	}
 	const nav=event.target.closest('[data-nav]');
 	if(nav){
-		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopEntry==='function'){
-			window.KLABS_UI.prepareWorkshopEntry('preserve');
+		if(nav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
+			window.KLABS_UI.prepareWorkshopLanding();
 		}
 		safeGoScreen(nav.dataset.nav);
 	}

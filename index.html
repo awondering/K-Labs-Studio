@@ -71,6 +71,131 @@
       </div>
     </section>
 
+    <section class="screen" id="workshopLandingScreen" aria-label="Workshop landing screen">
+      <div class="layout-screen-shell workshop-landing-shell">
+        <section id="workshopToolsPanel" class="guide-spacing-panel workshop-tools-panel workshop-landing-panel" aria-label="Workshop Tools">
+          <div class="workshop-landing-panel__intro">
+            <h1>Workshop</h1>
+            <p>Precision tools for the rod-building bench.</p>
+          </div>
+          <div id="workshopToolsList" class="workshop-landing-tools" aria-label="Workshop tool list">
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="guide-spacing">
+              <span class="workshop-tool-launch__title">Guide Spacing</span>
+              <span class="workshop-tool-launch__meta">Set and tune guide positions.</span>
+            </button>
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="grip">
+              <span class="workshop-tool-launch__title">Grip Wrap</span>
+              <span class="workshop-tool-launch__meta">Calculate wrap length and cut angles.</span>
+            </button>
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="diameter">
+              <span class="workshop-tool-launch__title">Diameter &amp; Circumference</span>
+              <span class="workshop-tool-launch__meta">Quick measurement conversion.</span>
+            </button>
+          </div>
+
+          <article id="workshopToolDiameter" class="layout-control-card workshop-tool-card" aria-label="Diameter and circumference tool" hidden>
+            <div class="workshop-tool-head">
+              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
+              </button>
+              <h3>Diameter &amp; Circumference</h3>
+              <p>Enter either value and the paired value updates live.</p>
+            </div>
+
+            <div class="workshop-tool-unit-row" role="group" aria-label="Measurement unit">
+              <button class="ghost-action active" type="button" data-dc-unit="metric" aria-pressed="true">Metric</button>
+              <button class="ghost-action" type="button" data-dc-unit="imperial" aria-pressed="false">Imperial</button>
+            </div>
+
+            <div id="workshopDcImperialDisplay" class="workshop-tool-unit-row workshop-tool-unit-row--compact" role="group" aria-label="Imperial display" hidden>
+              <button class="ghost-action" type="button" data-dc-imperial-display="decimal" aria-pressed="false">Decimal Inches</button>
+              <button class="ghost-action active" type="button" data-dc-imperial-display="fractional" aria-pressed="true">Fractional Inches</button>
+            </div>
+
+            <div class="workshop-tool-fields workshop-tool-fields--two">
+              <label><span>Diameter</span><input id="workshopDcDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+              <label><span>Circumference</span><input id="workshopDcCircumference" type="text" inputmode="decimal" autocomplete="off" /></label>
+            </div>
+
+            <div class="workshop-tool-result workshop-tool-result--primary">
+              <span id="workshopDcPrimaryLabel">Circumference</span>
+              <strong id="workshopDcPrimaryValue">0 mm</strong>
+            </div>
+
+            <div class="workshop-tool-details" aria-live="polite">
+              <div><span>Metric (mm)</span><strong id="workshopDcMetricLine">D 0 mm • C 0 mm</strong></div>
+              <div><span>Imperial (Decimal)</span><strong id="workshopDcImperialDecimalLine">D 0 in • C 0 in</strong></div>
+              <div><span>Imperial (Fractional)</span><strong id="workshopDcImperialFractionalLine">D 0 in • C 0 in</strong></div>
+            </div>
+          </article>
+
+          <article id="workshopToolGrip" class="layout-control-card workshop-tool-card" aria-label="Grip wrap tool" hidden>
+            <div class="workshop-tool-head">
+              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
+              </button>
+              <h3>Grip Wrap</h3>
+              <p>Spiral-wrap utility for leather, cork tape, cord, and flexible wrap materials.</p>
+            </div>
+
+            <div class="workshop-tool-unit-row" role="group" aria-label="Measurement unit">
+              <button class="ghost-action active" type="button" data-grip-unit="metric" aria-pressed="true">Metric</button>
+              <button class="ghost-action" type="button" data-grip-unit="imperial" aria-pressed="false">Imperial</button>
+            </div>
+
+            <div id="workshopGripImperialDisplay" class="workshop-tool-unit-row workshop-tool-unit-row--compact" role="group" aria-label="Imperial display" hidden>
+              <button class="ghost-action" type="button" data-grip-imperial-display="decimal" aria-pressed="false">Decimal Inches</button>
+              <button class="ghost-action active" type="button" data-grip-imperial-display="fractional" aria-pressed="true">Fractional Inches</button>
+            </div>
+
+            <div class="workshop-tool-unit-row" role="group" aria-label="Grip profile">
+              <button class="ghost-action active" type="button" data-grip-profile="straight" aria-pressed="true">Straight Grip</button>
+              <button class="ghost-action" type="button" data-grip-profile="tapered" aria-pressed="false">Tapered Grip</button>
+            </div>
+
+            <div id="workshopGripStraightFields" class="workshop-tool-fields">
+              <label><span>Grip Diameter</span><input id="workshopGripDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+            </div>
+
+            <div id="workshopGripTaperedFields" class="workshop-tool-fields workshop-tool-fields--two" hidden>
+              <label><span>Start Diameter</span><input id="workshopGripStartDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+              <label><span>End Diameter</span><input id="workshopGripEndDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
+            </div>
+
+            <div class="workshop-tool-fields workshop-tool-fields--two">
+              <label><span>Grip Length</span><input id="workshopGripLength" type="text" inputmode="decimal" autocomplete="off" /></label>
+              <label><span>Covering Width / Cord Diameter</span><input id="workshopGripCoverWidth" type="text" inputmode="decimal" autocomplete="off" /></label>
+            </div>
+
+            <div class="workshop-tool-fields">
+              <label><span>Optional Material Allowance (%)</span><input id="workshopGripAllowance" type="number" inputmode="decimal" min="0" step="0.1" /></label>
+            </div>
+
+            <div class="workshop-tool-result workshop-tool-result--primary">
+              <span>Material Required</span>
+              <strong id="workshopGripMaterialRequired">0 mm</strong>
+            </div>
+
+            <div class="workshop-tool-details" aria-live="polite">
+              <div><span>Number of Revolutions</span><strong id="workshopGripRevolutions">0</strong></div>
+              <div><span>Spiral Wrap Length</span><strong id="workshopGripSpiralLength">0 mm</strong></div>
+              <div><span>Start Cut Angle</span><strong id="workshopGripStartCutAngle">0 deg</strong></div>
+              <div id="workshopGripFinishCutAngleRow" hidden><span>Finish Cut Angle</span><strong id="workshopGripFinishCutAngle">0 deg</strong></div>
+              <div id="workshopGripAverageCutAngleRow" hidden><span>Average Cut Angle</span><strong id="workshopGripAverageCutAngle">0 deg</strong></div>
+            </div>
+
+            <div id="workshopGripPrintActions" class="workshop-tool-print-actions" hidden>
+              <button id="workshopGripPrintTemplateBtn" class="ghost-action full" type="button">Print Cut Template</button>
+            </div>
+
+            <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
+          </article>
+        </section>
+      </div>
+    </section>
+
     <section class="screen" id="layoutScreen">
       <div class="layout-screen-shell">
         <article class="layout-control-card">
@@ -131,132 +256,16 @@
         </section>
 
         <section class="guide-spacing-panel" aria-live="polite">
-          <div class="guide-spacing-panel__header">
+          <div class="guide-spacing-panel__header workshop-guide-spacing-panel__header">
+            <button class="workshop-tool-nav-back workshop-tool-nav-back--compact" type="button" data-workshop-return-landing aria-label="Return to Workshop landing screen">
+              <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+              <span>Workshop</span>
+            </button>
             <p class="eyebrow">Guide Spacing</p>
             <span class="guide-spacing-panel__badge" id="layoutStatusBadge">Live</span>
           </div>
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
           <p id="layoutGuideNotice" class="subtle">Guide only. Confirm final placement by static testing and builder judgement.</p>
-        </section>
-
-        <section id="workshopToolsPanel" class="guide-spacing-panel workshop-tools-panel" aria-label="Workshop Tools">
-          <div class="guide-spacing-panel__header">
-            <p class="eyebrow">Workshop Tools</p>
-          </div>
-          <article id="workshopToolsList" class="layout-control-card workshop-tool-list" aria-label="Workshop tool list">
-            <div class="workshop-tool-list__head">
-              <h3>Select Tool</h3>
-              <p>Dedicated utilities for precision rod-building calculations.</p>
-            </div>
-            <button class="workshop-tool-launch" type="button" data-workshop-tool-open="diameter">
-              <span class="workshop-tool-launch__title">Diameter &amp; Circumference</span>
-              <span class="workshop-tool-launch__meta">Convert instantly between diameter and circumference in metric or imperial units.</span>
-            </button>
-            <button class="workshop-tool-launch" type="button" data-workshop-tool-open="grip">
-              <span class="workshop-tool-launch__title">Grip Covering</span>
-              <span class="workshop-tool-launch__meta">Calculate material required for straight or tapered spiral grip wraps.</span>
-            </button>
-          </article>
-
-          <article id="workshopToolDiameter" class="layout-control-card workshop-tool-card" aria-label="Diameter and circumference tool" hidden>
-            <div class="workshop-tool-head">
-              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop Tools list">
-                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-                <span>Workshop Tools</span>
-              </button>
-              <h3>Diameter &amp; Circumference</h3>
-              <p>Enter either value and the paired value updates live.</p>
-            </div>
-
-            <div class="workshop-tool-unit-row" role="group" aria-label="Measurement unit">
-              <button class="ghost-action active" type="button" data-dc-unit="metric" aria-pressed="true">Metric</button>
-              <button class="ghost-action" type="button" data-dc-unit="imperial" aria-pressed="false">Imperial</button>
-            </div>
-
-            <div id="workshopDcImperialDisplay" class="workshop-tool-unit-row workshop-tool-unit-row--compact" role="group" aria-label="Imperial display" hidden>
-              <button class="ghost-action" type="button" data-dc-imperial-display="decimal" aria-pressed="false">Decimal Inches</button>
-              <button class="ghost-action active" type="button" data-dc-imperial-display="fractional" aria-pressed="true">Fractional Inches</button>
-            </div>
-
-            <div class="workshop-tool-fields workshop-tool-fields--two">
-              <label><span>Diameter</span><input id="workshopDcDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
-              <label><span>Circumference</span><input id="workshopDcCircumference" type="text" inputmode="decimal" autocomplete="off" /></label>
-            </div>
-
-            <div class="workshop-tool-result workshop-tool-result--primary">
-              <span id="workshopDcPrimaryLabel">Circumference</span>
-              <strong id="workshopDcPrimaryValue">0 mm</strong>
-            </div>
-
-            <div class="workshop-tool-details" aria-live="polite">
-              <div><span>Metric (mm)</span><strong id="workshopDcMetricLine">D 0 mm • C 0 mm</strong></div>
-              <div><span>Imperial (Decimal)</span><strong id="workshopDcImperialDecimalLine">D 0 in • C 0 in</strong></div>
-              <div><span>Imperial (Fractional)</span><strong id="workshopDcImperialFractionalLine">D 0 in • C 0 in</strong></div>
-            </div>
-          </article>
-
-          <article id="workshopToolGrip" class="layout-control-card workshop-tool-card" aria-label="Grip covering tool" hidden>
-            <div class="workshop-tool-head">
-              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop Tools list">
-                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-                <span>Workshop Tools</span>
-              </button>
-              <h3>Grip Covering</h3>
-              <p>Spiral-covering utility for leather, cork tape, cord, and flexible wrap materials.</p>
-            </div>
-
-            <div class="workshop-tool-unit-row" role="group" aria-label="Measurement unit">
-              <button class="ghost-action active" type="button" data-grip-unit="metric" aria-pressed="true">Metric</button>
-              <button class="ghost-action" type="button" data-grip-unit="imperial" aria-pressed="false">Imperial</button>
-            </div>
-
-            <div id="workshopGripImperialDisplay" class="workshop-tool-unit-row workshop-tool-unit-row--compact" role="group" aria-label="Imperial display" hidden>
-              <button class="ghost-action" type="button" data-grip-imperial-display="decimal" aria-pressed="false">Decimal Inches</button>
-              <button class="ghost-action active" type="button" data-grip-imperial-display="fractional" aria-pressed="true">Fractional Inches</button>
-            </div>
-
-            <div class="workshop-tool-unit-row" role="group" aria-label="Grip profile">
-              <button class="ghost-action active" type="button" data-grip-profile="straight" aria-pressed="true">Straight Grip</button>
-              <button class="ghost-action" type="button" data-grip-profile="tapered" aria-pressed="false">Tapered Grip</button>
-            </div>
-
-            <div id="workshopGripStraightFields" class="workshop-tool-fields">
-              <label><span>Grip Diameter</span><input id="workshopGripDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
-            </div>
-
-            <div id="workshopGripTaperedFields" class="workshop-tool-fields workshop-tool-fields--two" hidden>
-              <label><span>Start Diameter</span><input id="workshopGripStartDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
-              <label><span>End Diameter</span><input id="workshopGripEndDiameter" type="text" inputmode="decimal" autocomplete="off" /></label>
-            </div>
-
-            <div class="workshop-tool-fields workshop-tool-fields--two">
-              <label><span>Grip Length</span><input id="workshopGripLength" type="text" inputmode="decimal" autocomplete="off" /></label>
-              <label><span>Covering Width / Cord Diameter</span><input id="workshopGripCoverWidth" type="text" inputmode="decimal" autocomplete="off" /></label>
-            </div>
-
-            <div class="workshop-tool-fields">
-              <label><span>Optional Material Allowance (%)</span><input id="workshopGripAllowance" type="number" inputmode="decimal" min="0" step="0.1" /></label>
-            </div>
-
-            <div class="workshop-tool-result workshop-tool-result--primary">
-              <span>Material Required</span>
-              <strong id="workshopGripMaterialRequired">0 mm</strong>
-            </div>
-
-            <div class="workshop-tool-details" aria-live="polite">
-              <div><span>Number of Revolutions</span><strong id="workshopGripRevolutions">0</strong></div>
-              <div><span>Spiral Wrap Length</span><strong id="workshopGripSpiralLength">0 mm</strong></div>
-              <div><span>Start Cut Angle</span><strong id="workshopGripStartCutAngle">0 deg</strong></div>
-              <div id="workshopGripFinishCutAngleRow" hidden><span>Finish Cut Angle</span><strong id="workshopGripFinishCutAngle">0 deg</strong></div>
-              <div id="workshopGripAverageCutAngleRow" hidden><span>Average Cut Angle</span><strong id="workshopGripAverageCutAngle">0 deg</strong></div>
-            </div>
-
-            <div id="workshopGripPrintActions" class="workshop-tool-print-actions" hidden>
-              <button id="workshopGripPrintTemplateBtn" class="ghost-action full" type="button">Print Cut Template</button>
-            </div>
-
-            <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
-          </article>
         </section>
       </div>
     </section>
@@ -446,7 +455,7 @@
   <nav class="bottom-nav">
     <button class="active" data-nav="homeScreen" type="button"><i aria-hidden="true">⌂</i><span>Home</span></button>
     <button data-nav="workshopScreen" type="button"><i aria-hidden="true">▣</i><span>Studio</span></button>
-    <button data-nav="buildsScreen" type="button"><i aria-hidden="true">☰</i><span>Saved Jobs</span></button>
+    <button data-nav="workshopLandingScreen" type="button"><i aria-hidden="true">◫</i><span>Workshop</span></button>
     <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
   <script src="js/config.js"></script>

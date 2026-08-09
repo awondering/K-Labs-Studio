@@ -3210,6 +3210,70 @@ body.component-sheet-open .workshop-back-to-top{
   cursor:pointer;
 }
 
+.workshop-landing-shell{
+  gap:14px;
+}
+
+.workshop-landing-panel{
+  gap:14px;
+}
+
+.workshop-landing-panel__intro{
+  display:grid;
+  gap:6px;
+}
+
+.workshop-landing-panel__intro h1{
+  margin:0;
+  font-size:19px;
+  line-height:1.05;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:#f4efe6;
+}
+
+.workshop-landing-panel__intro p{
+  margin:0;
+  font-size:11px;
+  line-height:1.45;
+  letter-spacing:.06em;
+  color:rgba(214,210,200,.78);
+}
+
+#workshopLandingScreen #workshopToolsList{
+  display:grid;
+  gap:12px;
+}
+
+.workshop-landing-tools{
+  display:grid;
+  gap:12px;
+}
+
+.workshop-tool-launch--landing{
+  min-height:74px;
+  padding:15px 16px;
+  border-radius:16px;
+  border-color:rgba(216,210,197,.2);
+  background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.012));
+}
+
+#workshopLandingScreen .workshop-tool-launch__title{
+  font-size:12px;
+  letter-spacing:.09em;
+}
+
+#workshopLandingScreen .workshop-tool-launch__meta{
+  font-size:11px;
+  line-height:1.4;
+  color:rgba(223,216,205,.86);
+}
+
+#workshopLandingScreen .workshop-tool-launch:hover,
+#workshopLandingScreen .workshop-tool-launch:focus-visible{
+  transform:translateY(-1px);
+}
+
 .workshop-tool-launch:hover,
 .workshop-tool-launch:focus-visible{
   border-color:rgba(186,31,44,.72);

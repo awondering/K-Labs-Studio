@@ -114,6 +114,7 @@ const workshopToolsState={
   },
 };
 let gripCutTemplateSnapshot=null;
+let workshopLandingReturnFocusTool='';
 
 function save(){
   Store.set('klabs-studio-state',{
@@ -390,9 +391,35 @@ function renderWorkshopToolVisibility(){
   const diameterCard=$('workshopToolDiameter');
   const gripCard=$('workshopToolGrip');
   const activeTool=workshopToolsState.activeTool;
-  if(list)list.hidden=activeTool!=='list';
+  if(list)list.hidden=false;
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
+}
+function isWorkshopLandingScreenActive(){
+  const workshopLandingScreen=$('workshopLandingScreen');
+  return !!(workshopLandingScreen && workshopLandingScreen.classList.contains('active'));
+}
+function goToWorkshopLandingScreen(){
+  workshopLandingReturnFocusTool=workshopToolsState.activeTool;
+  workshopToolsState.activeTool='list';
+  goScreen('workshopLandingScreen');
+}
+function prepareWorkshopLandingEntry(){
+  workshopLandingReturnFocusTool='';
+  workshopToolsState.activeTool='list';
+}
+function openWorkshopTool(tool){
+  if(tool==='guide-spacing'){
+    goScreen('layoutScreen');
+    return;
+  }
+  workshopToolsState.activeTool=tool==='grip'?'grip':'diameter';
+  workshopLandingReturnFocusTool=workshopToolsState.activeTool;
+  goScreen('workshopLandingScreen');
+  window.setTimeout(()=>{
+    renderWorkshopCalculator();
+    focusWorkshopToolPrimaryInput(workshopToolsState.activeTool);
+  },0);
 }
 function renderDiameterCircumferenceTool(){
   const diameterInput=$('workshopDcDiameter');
@@ -714,19 +741,12 @@ function bindWorkshopCalculatorControls(){
   panel.querySelectorAll('[data-workshop-tool-open]').forEach((button)=>{
     button.addEventListener('click',()=>{
       const nextTool=button.getAttribute('data-workshop-tool-open');
-      workshopToolsState.activeTool=nextTool==='grip'?'grip':'diameter';
-      renderWorkshopCalculator();
-      focusWorkshopToolPrimaryInput(workshopToolsState.activeTool);
+      openWorkshopTool(nextTool||'diameter');
     });
   });
   panel.querySelectorAll('[data-workshop-tool-back]').forEach((button)=>{
     button.addEventListener('click',()=>{
-      workshopToolsState.activeTool='list';
-      renderWorkshopCalculator();
-      const launcher=panel.querySelector('[data-workshop-tool-open]');
-      if(launcher){
-        try{launcher.focus({preventScroll:true});}catch{launcher.focus();}
-      }
+      goToWorkshopLandingScreen();
     });
   });
 
@@ -5908,6 +5928,21 @@ function onScreenChange(screenId){
       beginFreshQuote({navigate:false});
     }
   }
+  if(screenId==='workshopLandingScreen'){
+    renderWorkshopCalculator();
+    const selector=workshopLandingReturnFocusTool==='grip'
+      ?'[data-workshop-tool-open="grip"]'
+      :workshopLandingReturnFocusTool==='guide-spacing'
+        ?'[data-workshop-tool-open="guide-spacing"]'
+        :'[data-workshop-tool-open="diameter"]';
+    workshopLandingReturnFocusTool='';
+    const target=$('workshopToolsList')&&$('workshopToolsList').querySelector(selector);
+    if(target){
+      window.setTimeout(()=>{
+        try{target.focus({preventScroll:true});}catch{target.focus();}
+      },0);
+    }
+  }
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
@@ -6073,6 +6108,8 @@ function render(){
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
   const workshopScreen=$('workshopScreen');
   if(workshopScreen && workshopScreen.classList.contains('active')){renderWorkshopQuote();}
+  const workshopLandingScreen=$('workshopLandingScreen');
+  if(workshopLandingScreen && workshopLandingScreen.classList.contains('active')){renderWorkshopCalculator();}
   if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
 }
 loadChoicePickerFavourites();
@@ -6084,4 +6121,4 @@ bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');}};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
