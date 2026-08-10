@@ -7,8 +7,16 @@
   --text:#ddd6c9;
   --muted:#6f736d;
   --titanium:#ada99d;
-  --red:#861820;
-  --red2:#ad2531;
+  --kl-red-base:#b42736;
+  --kl-red-active:#e14a58;
+  --kl-red-deep:#731b26;
+  --kl-red-rgb:180,39,54;
+  --kl-red-active-rgb:225,74,88;
+  --kl-red-glow:rgba(225,74,88,.32);
+  --kl-red-edge:rgba(180,39,54,.58);
+  --kl-red-soft:rgba(180,39,54,.18);
+  --red:#8f1f2b;
+  --red2:var(--kl-red-base);
   --shadow:0 16px 38px rgba(0,0,0,.34);
   --radius:22px;
   --safe-bottom:env(safe-area-inset-bottom,0px);
