@@ -87,7 +87,14 @@ let studioScreenView='landing';
 let studioComponentsSearch='';
 let studioSelectedComponentKey='';
 let studioComponentDraft=null;
-let studioComponentTaxonomyManagerOpen=false;
+let studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+let studioLibraryEditor={type:'',mode:'',targetName:''};
+let studioTaxonomyManagerSection='categories';
+let studioTaxonomyUiState={
+  categories:{mode:'browse'},
+  subcategories:{mode:'browse'},
+  suppliers:{mode:'browse'},
+};
 let studioComponentTaxonomyState=null;
 let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
 let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
@@ -1544,6 +1551,7 @@ function normalizeComponent(component){
   const category=categoryKey==='tip'?'Tip Top':categoryKey==='thread'?'Thread & Finish':rawCategory;
   return{
     category,
+    subcategory:(component&&typeof component.subcategory==='string')?component.subcategory:'',
     description:(component&&typeof component.description==='string')?component.description:'',
     customerLabel:(component&&typeof component.customerLabel==='string')?component.customerLabel:'',
     supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
@@ -1657,11 +1665,14 @@ function renderStudioScreenMode(){
   const landing=$('studioLandingPanel');
   const workflow=$('studioWorkflowPanel');
   const components=$('studioComponentsPanel');
+  const taxonomy=$('studioTaxonomyPanel');
   const showWorkflow=studioScreenView==='workflow';
   const showComponents=studioScreenView==='components';
-  if(landing)landing.hidden=showWorkflow||showComponents;
+  const showTaxonomy=studioScreenView==='taxonomy';
+  if(landing)landing.hidden=showWorkflow||showComponents||showTaxonomy;
   if(workflow)workflow.hidden=!showWorkflow;
   if(components)components.hidden=!showComponents;
+  if(taxonomy)taxonomy.hidden=!showTaxonomy;
 }
 function showStudioLanding(){
   studioScreenView='landing';
@@ -1673,8 +1684,18 @@ function showStudioWorkflow(){
 }
 function showStudioComponents(){
   studioScreenView='components';
+  studioComponentsSearch='';
+  studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  studioComponentDraft=null;
+  studioSelectedComponentKey='';
   renderStudioScreenMode();
   renderStudioComponentsLibrary();
+}
+function showStudioTaxonomyManager(){
+  studioScreenView='taxonomy';
+  renderStudioScreenMode();
+  renderStudioTaxonomyManager();
 }
 function prepareStudioLandingEntry(){
   showStudioLanding();
@@ -2014,6 +2035,14 @@ function saveStudioComponentDetails(){
   }
   saveStudioComponentTaxonomy();
   studioComponentDraft=null;
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  if(sourceRecord.category && sourceRecord.subcategory){
+    studioLibraryPath={level:'subcategory',categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
+  }else if(sourceRecord.category){
+    studioLibraryPath={level:'category',categoryId:sourceRecord.category,subcategoryId:''};
+  }else{
+    studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+  }
   studioSelectedComponentKey=normalizeNameKey(nextName);
   renderStudioComponentsLibrary();
   studioComponentDetailContext.savedFlash=true;
@@ -2025,79 +2054,188 @@ function saveStudioComponentDetails(){
     syncStudioComponentSaveButtonState();
   },1700);
 }
-function renderStudioComponentsTaxonomyManager(){
-  const host=$('studioComponentsTaxonomyBody');
-  const panel=$('studioComponentsTaxonomy');
-  const trigger=$('studioComponentsManageBtn');
-  if(panel)panel.hidden=!studioComponentTaxonomyManagerOpen;
-  if(trigger)trigger.setAttribute('aria-expanded',studioComponentTaxonomyManagerOpen?'true':'false');
-  if(!host)return;
-  if(!studioComponentTaxonomyManagerOpen){
-    host.innerHTML='';
-    return;
-  }
-  const taxonomy=ensureStudioComponentTaxonomyLoaded();
-  syncStudioTaxonomySelection();
+function studioTaxonomySectionMode(section){
+  const scope=studioTaxonomyUiState&&studioTaxonomyUiState[section]?studioTaxonomyUiState[section]:null;
+  const mode=scope&&scope.mode;
+  return (mode==='add' || mode==='edit')?mode:'browse';
+}
+function setStudioTaxonomySectionMode(section,mode){
+  if(!studioTaxonomyUiState || !studioTaxonomyUiState[section])return;
+  studioTaxonomyUiState[section].mode=(mode==='add' || mode==='edit')?mode:'browse';
+}
+function studioTaxonomySectionMarkupCategories(taxonomy){
   const selectedCategory=studioCategoryById(studioComponentTaxonomySelection.category);
-  const selectedSubcategory=selectedCategory && selectedCategory.subcategories.find((row)=>row.id===studioComponentTaxonomySelection.subcategory);
-  const selectedSupplier=studioSupplierById(studioComponentTaxonomySelection.supplier);
+  const selectedIndex=taxonomy.categories.findIndex((item)=>item.id===studioComponentTaxonomySelection.category);
+  const mode=studioTaxonomySectionMode('categories');
+  const recordsMarkup=taxonomy.categories.length
+    ?taxonomy.categories.map((category)=>{
+      const active=category.id===studioComponentTaxonomySelection.category;
+      return `<button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-select="category" data-taxonomy-id="${escapeAttributeValue(category.id)}" aria-pressed="${active?'true':'false'}"><strong>${escapeHtml(category.name)}</strong></button>`;
+    }).join('')
+    :'<p class="studio-taxonomy-list__empty">No categories yet.</p>';
+  const addMarkup=mode==='add'?`
+    <section class="studio-taxonomy-editor" aria-label="Add category">
+      <h3>ADD CATEGORY</h3>
+      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomyCategoryName" type="text" placeholder="Category name" /></label>
+      <div class="studio-taxonomy-editor__actions">
+        <button class="primary-action" type="button" data-taxonomy-action="category-add">ADD CATEGORY</button>
+        <button class="ghost-action" type="button" data-taxonomy-ui-action="category-cancel">Cancel</button>
+      </div>
+    </section>
+  `:'';
+  const editMarkup=mode==='edit' && selectedCategory?`
+    <section class="studio-taxonomy-editor" aria-label="Edit category">
+      <h3>${escapeHtml(String(selectedCategory.name||'').toUpperCase())}</h3>
+      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomyCategoryName" type="text" value="${escapeHtml(selectedCategory.name)}" /></label>
+      <div class="studio-taxonomy-editor__actions">
+        <button class="primary-action" type="button" data-taxonomy-action="category-rename">SAVE</button>
+      </div>
+      <div class="studio-taxonomy-editor__actions studio-taxonomy-editor__actions--secondary">
+        <button class="ghost-action" type="button" data-taxonomy-action="category-up"${selectedIndex<=0?' disabled':''}>Move Up</button>
+        <button class="ghost-action" type="button" data-taxonomy-action="category-down"${selectedIndex<0 || selectedIndex>=taxonomy.categories.length-1?' disabled':''}>Move Down</button>
+        <button class="ghost-action studio-taxonomy-editor__danger" type="button" data-taxonomy-action="category-delete">Delete</button>
+      </div>
+    </section>
+  `:'';
+  return `
+    <section class="studio-taxonomy-section" aria-label="Categories">
+      <div class="studio-taxonomy-section__head">
+        <h3>CATEGORIES</h3>
+      </div>
+      <div class="studio-taxonomy-list" role="listbox" aria-label="Category list">${recordsMarkup}</div>
+      ${mode==='browse'?'<button class="ghost-action studio-taxonomy-add-cta" type="button" data-taxonomy-ui-action="category-open-add">+ ADD CATEGORY</button>':''}
+      ${addMarkup}
+      ${editMarkup}
+    </section>
+  `;
+}
+function studioTaxonomySectionMarkupSubcategories(taxonomy){
+  const mode=studioTaxonomySectionMode('subcategories');
+  const selectedCategory=studioCategoryById(studioComponentTaxonomySelection.category);
+  const selectedSubcategory=selectedCategory && selectedCategory.subcategories.find((item)=>item.id===studioComponentTaxonomySelection.subcategory);
+  const selectedSubIndex=selectedCategory?selectedCategory.subcategories.findIndex((item)=>item.id===studioComponentTaxonomySelection.subcategory):-1;
   const categoryOptions=['<option value="">Select category</option>']
     .concat(taxonomy.categories.map((category)=>`<option value="${escapeAttributeValue(category.id)}"${category.id===studioComponentTaxonomySelection.category?' selected':''}>${escapeHtml(category.name)}</option>`));
-  const subcategoryOptions=['<option value="">Select subcategory</option>']
-    .concat((selectedCategory&&selectedCategory.subcategories||[]).map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.id)}"${subcategory.id===studioComponentTaxonomySelection.subcategory?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
-  const supplierOptions=['<option value="">Select supplier</option>']
-    .concat(taxonomy.suppliers.map((supplier)=>`<option value="${escapeAttributeValue(supplier.id)}"${supplier.id===studioComponentTaxonomySelection.supplier?' selected':''}>${escapeHtml(supplier.name)}</option>`));
-  host.innerHTML=`
-    <div class="studio-components-taxonomy__grid">
-      <article class="studio-components-taxonomy__card" aria-label="Category management">
-        <h3>Categories</h3>
-        <p>User-managed component groups.</p>
-        <label class="studio-components-taxonomy__field"><span>Category</span><select id="studioTaxonomyCategorySelect">${categoryOptions.join('')}</select></label>
-        <div class="studio-components-taxonomy__row">
-          <input id="studioTaxonomyCategoryName" type="text" value="${escapeHtml(selectedCategory?selectedCategory.name:'')}" placeholder="Category name" />
-          <button class="ghost-action" type="button" data-taxonomy-action="category-add">Add</button>
-        </div>
-        <div class="studio-components-taxonomy__actions">
-          <button class="ghost-action" type="button" data-taxonomy-action="category-rename">Rename</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="category-up">Move Up</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="category-down">Move Down</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="category-delete">Delete</button>
-        </div>
-      </article>
-      <article class="studio-components-taxonomy__card" aria-label="Subcategory management">
-        <h3>Subcategories</h3>
-        <p>Child groups under the selected category.</p>
-        <label class="studio-components-taxonomy__field"><span>Parent Category</span><select id="studioTaxonomySubParentSelect">${categoryOptions.join('')}</select></label>
-        <label class="studio-components-taxonomy__field"><span>Subcategory</span><select id="studioTaxonomySubcategorySelect">${subcategoryOptions.join('')}</select></label>
-        <div class="studio-components-taxonomy__row">
-          <input id="studioTaxonomySubcategoryName" type="text" value="${escapeHtml(selectedSubcategory?selectedSubcategory.name:'')}" placeholder="Subcategory name" />
-          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-add">Add</button>
-        </div>
-        <div class="studio-components-taxonomy__actions">
-          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-rename">Rename</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-up">Move Up</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-down">Move Down</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="subcategory-delete">Delete</button>
-        </div>
-      </article>
-      <article class="studio-components-taxonomy__card" aria-label="Supplier management">
-        <h3>Suppliers</h3>
-        <p>User-managed supplier options.</p>
-        <label class="studio-components-taxonomy__field"><span>Supplier</span><select id="studioTaxonomySupplierSelect">${supplierOptions.join('')}</select></label>
-        <div class="studio-components-taxonomy__row">
-          <input id="studioTaxonomySupplierName" type="text" value="${escapeHtml(selectedSupplier?selectedSupplier.name:'')}" placeholder="Supplier name" />
-          <button class="ghost-action" type="button" data-taxonomy-action="supplier-add">Add</button>
-        </div>
-        <div class="studio-components-taxonomy__actions">
-          <button class="ghost-action" type="button" data-taxonomy-action="supplier-rename">Rename</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="supplier-up">Move Up</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="supplier-down">Move Down</button>
-          <button class="ghost-action" type="button" data-taxonomy-action="supplier-delete">Delete</button>
-        </div>
-      </article>
-    </div>
-    <p class="studio-components-taxonomy__warn">Deleting a used category, subcategory, or supplier requires explicit unassignment confirmation and never deletes components.</p>
+  const subcategoryRows=selectedCategory&&selectedCategory.subcategories.length
+    ?selectedCategory.subcategories.map((subcategory)=>{
+      const active=subcategory.id===studioComponentTaxonomySelection.subcategory;
+      return `<button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-select="subcategory" data-taxonomy-id="${escapeAttributeValue(subcategory.id)}" aria-pressed="${active?'true':'false'}"><strong>${escapeHtml(subcategory.name)}</strong></button>`;
+    }).join('')
+    :'<p class="studio-taxonomy-list__empty">No subcategories in this category yet.</p>';
+  const addMarkup=mode==='add'?`
+    <section class="studio-taxonomy-editor" aria-label="Add subcategory">
+      <h3>ADD SUBCATEGORY</h3>
+      <label class="studio-taxonomy-form-field"><span>Parent Category</span><select id="studioTaxonomySubcategoryParentSelectAdd">${categoryOptions.join('')}</select></label>
+      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySubcategoryName" type="text" placeholder="Subcategory name" /></label>
+      <div class="studio-taxonomy-editor__actions">
+        <button class="primary-action" type="button" data-taxonomy-action="subcategory-add">ADD SUBCATEGORY</button>
+        <button class="ghost-action" type="button" data-taxonomy-ui-action="subcategory-cancel">Cancel</button>
+      </div>
+    </section>
+  `:'';
+  const editMarkup=mode==='edit' && selectedSubcategory?`
+    <section class="studio-taxonomy-editor" aria-label="Edit subcategory">
+      <h3>${escapeHtml(String(selectedSubcategory.name||'').toUpperCase())}</h3>
+      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySubcategoryName" type="text" value="${escapeHtml(selectedSubcategory.name)}" /></label>
+      <label class="studio-taxonomy-form-field"><span>Parent Category</span><select id="studioTaxonomySubcategoryParentSelectEdit">${categoryOptions.join('')}</select></label>
+      <div class="studio-taxonomy-editor__actions">
+        <button class="primary-action" type="button" data-taxonomy-action="subcategory-save">SAVE</button>
+      </div>
+      <div class="studio-taxonomy-editor__actions studio-taxonomy-editor__actions--secondary">
+        <button class="ghost-action" type="button" data-taxonomy-action="subcategory-up"${selectedSubIndex<=0?' disabled':''}>Move Up</button>
+        <button class="ghost-action" type="button" data-taxonomy-action="subcategory-down"${selectedSubIndex<0 || !selectedCategory || selectedSubIndex>=selectedCategory.subcategories.length-1?' disabled':''}>Move Down</button>
+        <button class="ghost-action studio-taxonomy-editor__danger" type="button" data-taxonomy-action="subcategory-delete">Delete</button>
+      </div>
+    </section>
+  `:'';
+  return `
+    <section class="studio-taxonomy-section" aria-label="Subcategories">
+      <div class="studio-taxonomy-section__head">
+        <h3>SUBCATEGORIES</h3>
+      </div>
+      <label class="studio-taxonomy-form-field">
+        <span>Parent Category</span>
+        <select id="studioTaxonomySubcategoryParentSelectBrowse">${categoryOptions.join('')}</select>
+      </label>
+      <p class="studio-taxonomy-context">${selectedCategory?`Subcategories under ${escapeHtml(selectedCategory.name)}`:'Select a parent category to view subcategories.'}</p>
+      <div class="studio-taxonomy-list" role="listbox" aria-label="Subcategory list">${subcategoryRows}</div>
+      ${mode==='browse'?`
+      <button class="ghost-action studio-taxonomy-add-cta" type="button" data-taxonomy-ui-action="subcategory-open-add" ${selectedCategory?'':'disabled'}>+ ADD SUBCATEGORY</button>
+      `:''}
+      ${addMarkup}
+      ${editMarkup}
+    </section>
   `;
+}
+function studioTaxonomySectionMarkupSuppliers(taxonomy){
+  const selectedSupplier=studioSupplierById(studioComponentTaxonomySelection.supplier);
+  const selectedIndex=taxonomy.suppliers.findIndex((item)=>item.id===studioComponentTaxonomySelection.supplier);
+  const mode=studioTaxonomySectionMode('suppliers');
+  const supplierRows=taxonomy.suppliers.length
+    ?taxonomy.suppliers.map((supplier)=>{
+      const active=supplier.id===studioComponentTaxonomySelection.supplier;
+      return `<button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-select="supplier" data-taxonomy-id="${escapeAttributeValue(supplier.id)}" aria-pressed="${active?'true':'false'}"><strong>${escapeHtml(supplier.name)}</strong></button>`;
+    }).join('')
+    :'<p class="studio-taxonomy-list__empty">No suppliers yet.</p>';
+  const showMoveControls=taxonomy.suppliers.length>1;
+  const addMarkup=mode==='add'?`
+    <section class="studio-taxonomy-editor" aria-label="Add supplier">
+      <h3>ADD SUPPLIER</h3>
+      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" placeholder="Supplier name" /></label>
+      <div class="studio-taxonomy-editor__actions">
+        <button class="primary-action" type="button" data-taxonomy-action="supplier-add">ADD SUPPLIER</button>
+        <button class="ghost-action" type="button" data-taxonomy-ui-action="supplier-cancel">Cancel</button>
+      </div>
+    </section>
+  `:'';
+  const editMarkup=mode==='edit' && selectedSupplier?`
+    <section class="studio-taxonomy-editor" aria-label="Edit supplier">
+      <h3>${escapeHtml(String(selectedSupplier.name||'').toUpperCase())}</h3>
+      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" value="${escapeHtml(selectedSupplier.name)}" /></label>
+      <div class="studio-taxonomy-editor__actions">
+        <button class="primary-action" type="button" data-taxonomy-action="supplier-rename">SAVE</button>
+      </div>
+      <div class="studio-taxonomy-editor__actions studio-taxonomy-editor__actions--secondary">
+        ${showMoveControls?`<button class="ghost-action" type="button" data-taxonomy-action="supplier-up"${selectedIndex<=0?' disabled':''}>Move Up</button>
+        <button class="ghost-action" type="button" data-taxonomy-action="supplier-down"${selectedIndex<0 || selectedIndex>=taxonomy.suppliers.length-1?' disabled':''}>Move Down</button>`:''}
+        <button class="ghost-action studio-taxonomy-editor__danger" type="button" data-taxonomy-action="supplier-delete">Delete</button>
+      </div>
+    </section>
+  `:'';
+  return `
+    <section class="studio-taxonomy-section" aria-label="Suppliers">
+      <div class="studio-taxonomy-section__head">
+        <h3>SUPPLIERS</h3>
+      </div>
+      <div class="studio-taxonomy-list" role="listbox" aria-label="Supplier list">${supplierRows}</div>
+      ${mode==='browse'?'<button class="ghost-action studio-taxonomy-add-cta" type="button" data-taxonomy-ui-action="supplier-open-add">+ ADD SUPPLIER</button>':''}
+      ${addMarkup}
+      ${editMarkup}
+    </section>
+  `;
+}
+function renderStudioTaxonomyManager(){
+  const host=$('studioTaxonomyBody');
+  const sectionNav=$('studioTaxonomySectionNav');
+  if(!host)return;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  syncStudioTaxonomySelection();
+  if(sectionNav){
+    sectionNav.querySelectorAll('[data-taxonomy-section]').forEach((button)=>{
+      const active=button.getAttribute('data-taxonomy-section')===studioTaxonomyManagerSection;
+      button.classList.toggle('active',active);
+      button.setAttribute('aria-pressed',active?'true':'false');
+    });
+  }
+  if(studioTaxonomyManagerSection==='subcategories'){
+    host.innerHTML=studioTaxonomySectionMarkupSubcategories(taxonomy);
+    return;
+  }
+  if(studioTaxonomyManagerSection==='suppliers'){
+    host.innerHTML=studioTaxonomySectionMarkupSuppliers(taxonomy);
+    return;
+  }
+  host.innerHTML=studioTaxonomySectionMarkupCategories(taxonomy);
 }
 function studioUpdateComponents(mutator){
   const records=componentLibraryRecords();
@@ -2176,6 +2314,22 @@ function studioRenameSubcategory(categoryName,oldSubcategory,newSubcategory){
   });
   return true;
 }
+function studioRelinkSubcategory(oldCategoryName,oldSubcategory,newCategoryName,newSubcategory){
+  const oldCategoryKey=normalizeNameKey(oldCategoryName);
+  const oldSubcategoryKey=normalizeNameKey(oldSubcategory);
+  const nextCategory=String(newCategoryName||'').trim();
+  const nextSubcategory=String(newSubcategory||'').trim();
+  if(!oldCategoryKey || !oldSubcategoryKey)return false;
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.category)!==oldCategoryKey)return;
+      if(normalizeNameKey(record.subcategory)!==oldSubcategoryKey)return;
+      record.category=nextCategory;
+      record.subcategory=nextSubcategory;
+    });
+  });
+  return true;
+}
 function studioRenameSupplier(oldName,newName){
   const oldKey=normalizeNameKey(oldName);
   const next=String(newName||'').trim();
@@ -2199,6 +2353,12 @@ function studioMoveArrayRow(rows,index,direction){
   rows[index]=swapped;
   return true;
 }
+function refreshStudioComponentAndTaxonomyViews(){
+  renderStudioComponentsLibrary();
+  if(studioScreenView==='taxonomy'){
+    renderStudioTaxonomyManager();
+  }
+}
 function handleStudioTaxonomyAction(action){
   ensureStudioComponentTaxonomyLoaded();
   syncStudioTaxonomySelection();
@@ -2213,7 +2373,11 @@ function handleStudioTaxonomyAction(action){
   if(action==='category-add'){
     if(!nextCategoryName){openInfoDialog('Category Name Required','Enter a category name to add.');return;}
     if(studioCategoryByName(nextCategoryName)){openInfoDialog('Category Exists','A category with this name already exists.');return;}
-    studioComponentTaxonomyState.categories.push({id:studioTaxonomyId('cat'),name:nextCategoryName,subcategories:[]});
+    const created={id:studioTaxonomyId('cat'),name:nextCategoryName,subcategories:[]};
+    studioComponentTaxonomyState.categories.push(created);
+    studioComponentTaxonomySelection.category=created.id;
+    studioComponentTaxonomySelection.subcategory='';
+    setStudioTaxonomySectionMode('categories','browse');
     saveStudioComponentTaxonomy();
   }
   if(action==='category-rename'){
@@ -2224,6 +2388,7 @@ function handleStudioTaxonomyAction(action){
     const oldName=category.name;
     category.name=nextCategoryName;
     studioRenameCategory(oldName,nextCategoryName);
+    setStudioTaxonomySectionMode('categories','edit');
     saveStudioComponentTaxonomy();
   }
   if(action==='category-delete'){
@@ -2232,7 +2397,7 @@ function handleStudioTaxonomyAction(action){
     const deleteNow=()=>{
       studioComponentTaxonomyState.categories=studioComponentTaxonomyState.categories.filter((item)=>item.id!==category.id);
       saveStudioComponentTaxonomy();
-      renderStudioComponentsLibrary();
+      refreshStudioComponentAndTaxonomyViews();
     };
     openConfirmDialog({
       title:usage>0?'Category In Use':'Delete Category',
@@ -2245,6 +2410,7 @@ function handleStudioTaxonomyAction(action){
       if(usage>0){
         studioReassignUsedCategoryToUnassigned(category.name);
       }
+      setStudioTaxonomySectionMode('categories','browse');
       deleteNow();
     });
     return;
@@ -2256,23 +2422,47 @@ function handleStudioTaxonomyAction(action){
     if(moved)saveStudioComponentTaxonomy();
   }
   if(action==='subcategory-add'){
-    if(!category){openInfoDialog('Select Category','Choose a parent category first.');return;}
+    const addParent=$('studioTaxonomySubcategoryParentSelectAdd');
+    const targetCategoryId=String(addParent&&addParent.value||studioComponentTaxonomySelection.category||'');
+    const targetCategory=studioCategoryById(targetCategoryId);
+    if(!targetCategory){openInfoDialog('Select Category','Choose a parent category first.');return;}
     if(!nextSubcategoryName){openInfoDialog('Subcategory Name Required','Enter a subcategory name to add.');return;}
-    const exists=category.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextSubcategoryName));
+    const exists=targetCategory.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextSubcategoryName));
     if(exists){openInfoDialog('Subcategory Exists','This subcategory already exists for the selected category.');return;}
-    category.subcategories.push({id:studioTaxonomyId('sub'),name:nextSubcategoryName});
+    const created={id:studioTaxonomyId('sub'),name:nextSubcategoryName};
+    targetCategory.subcategories.push(created);
+    studioComponentTaxonomySelection.category=targetCategory.id;
+    studioComponentTaxonomySelection.subcategory=created.id;
+    setStudioTaxonomySectionMode('subcategories','browse');
     saveStudioComponentTaxonomy();
   }
-  if(action==='subcategory-rename'){
+  if(action==='subcategory-save' || action==='subcategory-rename'){
     if(!category){openInfoDialog('Select Category','Choose a parent category first.');return;}
     const subcategory=category.subcategories.find((item)=>item.id===studioComponentTaxonomySelection.subcategory);
     if(!subcategory){openInfoDialog('Select Subcategory','Choose a subcategory to rename.');return;}
     if(!nextSubcategoryName){openInfoDialog('Subcategory Name Required','Enter a new subcategory name.');return;}
-    const duplicate=category.subcategories.some((item)=>item.id!==subcategory.id && normalizeNameKey(item.name)===normalizeNameKey(nextSubcategoryName));
+    const editParent=$('studioTaxonomySubcategoryParentSelectEdit');
+    const targetCategoryId=String(editParent&&editParent.value||studioComponentTaxonomySelection.category||'');
+    const targetCategory=studioCategoryById(targetCategoryId);
+    if(!targetCategory){openInfoDialog('Select Category','Choose a parent category first.');return;}
+    const duplicate=targetCategory.subcategories.some((item)=>item.id!==subcategory.id && normalizeNameKey(item.name)===normalizeNameKey(nextSubcategoryName));
     if(duplicate){openInfoDialog('Subcategory Exists','Another subcategory already uses this name.');return;}
+    const oldCategoryName=category.name;
     const oldName=subcategory.name;
+    const movingParent=targetCategory.id!==category.id;
+    if(movingParent){
+      category.subcategories=category.subcategories.filter((item)=>item.id!==subcategory.id);
+      targetCategory.subcategories.push(subcategory);
+    }
     subcategory.name=nextSubcategoryName;
-    studioRenameSubcategory(category.name,oldName,nextSubcategoryName);
+    if(movingParent){
+      studioRelinkSubcategory(oldCategoryName,oldName,targetCategory.name,nextSubcategoryName);
+    }else{
+      studioRenameSubcategory(category.name,oldName,nextSubcategoryName);
+    }
+    studioComponentTaxonomySelection.category=targetCategory.id;
+    studioComponentTaxonomySelection.subcategory=subcategory.id;
+    setStudioTaxonomySectionMode('subcategories','edit');
     saveStudioComponentTaxonomy();
   }
   if(action==='subcategory-delete'){
@@ -2283,7 +2473,7 @@ function handleStudioTaxonomyAction(action){
     const deleteNow=()=>{
       category.subcategories=category.subcategories.filter((item)=>item.id!==subcategory.id);
       saveStudioComponentTaxonomy();
-      renderStudioComponentsLibrary();
+      refreshStudioComponentAndTaxonomyViews();
     };
     openConfirmDialog({
       title:usage>0?'Subcategory In Use':'Delete Subcategory',
@@ -2296,6 +2486,7 @@ function handleStudioTaxonomyAction(action){
       if(usage>0){
         studioReassignUsedSubcategoryToUnassigned(category.name,subcategory.name);
       }
+      setStudioTaxonomySectionMode('subcategories','browse');
       deleteNow();
     });
     return;
@@ -2309,7 +2500,10 @@ function handleStudioTaxonomyAction(action){
   if(action==='supplier-add'){
     if(!nextSupplierName){openInfoDialog('Supplier Name Required','Enter a supplier name to add.');return;}
     if(studioSupplierByName(nextSupplierName)){openInfoDialog('Supplier Exists','A supplier with this name already exists.');return;}
-    studioComponentTaxonomyState.suppliers.push({id:studioTaxonomyId('sup'),name:nextSupplierName});
+    const created={id:studioTaxonomyId('sup'),name:nextSupplierName};
+    studioComponentTaxonomyState.suppliers.push(created);
+    studioComponentTaxonomySelection.supplier=created.id;
+    setStudioTaxonomySectionMode('suppliers','browse');
     saveStudioComponentTaxonomy();
   }
   if(action==='supplier-rename'){
@@ -2320,6 +2514,7 @@ function handleStudioTaxonomyAction(action){
     const oldName=supplier.name;
     supplier.name=nextSupplierName;
     studioRenameSupplier(oldName,nextSupplierName);
+    setStudioTaxonomySectionMode('suppliers','edit');
     saveStudioComponentTaxonomy();
   }
   if(action==='supplier-delete'){
@@ -2328,7 +2523,7 @@ function handleStudioTaxonomyAction(action){
     const deleteNow=()=>{
       studioComponentTaxonomyState.suppliers=studioComponentTaxonomyState.suppliers.filter((item)=>item.id!==supplier.id);
       saveStudioComponentTaxonomy();
-      renderStudioComponentsLibrary();
+      refreshStudioComponentAndTaxonomyViews();
     };
     openConfirmDialog({
       title:usage>0?'Supplier In Use':'Delete Supplier',
@@ -2341,6 +2536,7 @@ function handleStudioTaxonomyAction(action){
       if(usage>0){
         studioReassignUsedSupplierToUnassigned(supplier.name);
       }
+      setStudioTaxonomySectionMode('suppliers','browse');
       deleteNow();
     });
     return;
@@ -2351,39 +2547,137 @@ function handleStudioTaxonomyAction(action){
     const moved=studioMoveArrayRow(studioComponentTaxonomyState.suppliers,index,action==='supplier-up'?-1:1);
     if(moved)saveStudioComponentTaxonomy();
   }
-  renderStudioComponentsLibrary();
+  refreshStudioComponentAndTaxonomyViews();
 }
 function renderStudioComponentsLibrary(){
   const list=$('studioComponentsList');
+  const details=$('studioComponentDetails');
   const searchInput=$('studioComponentsSearch');
-  if(!list)return;
-  ensureStudioComponentTaxonomyLoaded();
-  renderStudioComponentsTaxonomyManager();
+  const addBtn=$('studioComponentsAddBtn');
+  if(!list || !details)return;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const records=componentLibraryRecords();
   const queryRaw=String(studioComponentsSearch||'').trim();
   const queryKey=queryRaw.toLowerCase();
   if(searchInput && searchInput.value!==queryRaw){searchInput.value=queryRaw;}
-  const records=componentLibraryRecords();
-  const visible=records.filter((record)=>studioComponentMatchesSearch(record,queryKey));
+  const categoryNames=Array.from(new Set(
+    taxonomy.categories.map((item)=>String(item.name||'').trim()).filter(Boolean)
+      .concat(records.map((item)=>String(item&&item.category||'').trim()).filter(Boolean))
+  )).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  const validCategory=categoryNames.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.categoryId))||'';
+  if(studioLibraryPath.level!=='categories' && !validCategory){
+    studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+  }else if(validCategory){
+    studioLibraryPath.categoryId=validCategory;
+  }
+  let scopeSubcategories=[];
+  if(studioLibraryPath.level==='category' || studioLibraryPath.level==='subcategory'){
+    const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(studioLibraryPath.categoryId));
+    scopeSubcategories=(category&&Array.isArray(category.subcategories)?category.subcategories:[])
+      .map((item)=>String(item.name||'').trim())
+      .filter(Boolean)
+      .concat(records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId)).map((item)=>String(item.subcategory||'').trim()).filter(Boolean));
+    scopeSubcategories=Array.from(new Set(scopeSubcategories)).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  }
+  if(studioLibraryPath.level==='subcategory'){
+    const validSubcategory=scopeSubcategories.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.subcategoryId))||'';
+    if(!validSubcategory){
+      studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
+    }else{
+      studioLibraryPath.subcategoryId=validSubcategory;
+    }
+  }
+  if(addBtn){
+    addBtn.textContent=studioLibraryPath.level==='categories'?'ADD CATEGORY':studioLibraryPath.level==='category'?'ADD SUBCATEGORY':'ADD COMPONENT';
+  }
+  const manageBtn=$('studioComponentsManageBtn');
+  if(manageBtn){
+    if(studioLibraryPath.level==='categories'){
+      manageBtn.hidden=true;
+    }else if(studioLibraryPath.level==='category'){
+      manageBtn.hidden=false;
+      manageBtn.textContent='BACK TO CATEGORIES';
+      manageBtn.title='Back to categories';
+    }else{
+      manageBtn.hidden=false;
+      manageBtn.textContent=`BACK TO ${String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase()}`;
+      manageBtn.title='Back to category';
+    }
+  }
+  const rows=[];
+  if(studioLibraryPath.level==='categories'){
+    const visibleCategories=categoryNames.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
+    if(!visibleCategories.length){
+      list.innerHTML='<p class="studio-components-list__empty">No categories found.</p>';
+    }else{
+      visibleCategories.forEach((name)=>{
+        rows.push(`<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong><span>Open category</span></button><button class="ghost-action studio-components-list__edit" type="button" data-studio-library-edit-category="${escapeAttributeValue(name)}">Edit</button></article>`);
+      });
+      list.innerHTML=rows.join('');
+    }
+    if(studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='add'){
+      details.innerHTML='<div class="studio-component-details__head"><h2>Add Category</h2><p>Create a new category.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" placeholder="Category name" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-add">Add Category</button></div>';
+      return;
+    }
+    if(studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='edit'){
+      details.innerHTML=`<div class="studio-component-details__head"><h2>Edit Category</h2><p>Rename this category.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-rename">Save</button></div>`;
+      return;
+    }
+    details.innerHTML='<p class="studio-component-details__empty">Open a category to browse subcategories and components.</p>';
+    return;
+  }
+  if(studioLibraryPath.level==='category'){
+    const visibleSubcategories=scopeSubcategories.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
+    if(!visibleSubcategories.length){
+      list.innerHTML='<p class="studio-components-list__empty">No subcategories found.</p>';
+    }else{
+      visibleSubcategories.forEach((name)=>{
+        rows.push(`<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-subcategory="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong><span>Open subcategory</span></button><button class="ghost-action studio-components-list__edit" type="button" data-studio-library-edit-subcategory="${escapeAttributeValue(name)}">Edit</button></article>`);
+      });
+      list.innerHTML=rows.join('');
+    }
+    if(studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='add'){
+      details.innerHTML=`<div class="studio-component-details__head"><h2>Add Subcategory</h2><p>Create a subcategory under ${escapeHtml(studioLibraryPath.categoryId)}.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" placeholder="Subcategory name" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-add">Add Subcategory</button></div>`;
+      return;
+    }
+    if(studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='edit'){
+      details.innerHTML=`<div class="studio-component-details__head"><h2>Edit Subcategory</h2><p>Rename this subcategory.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-rename">Save</button></div>`;
+      return;
+    }
+    details.innerHTML=`<div class="studio-component-details__head"><h2>${escapeHtml(studioLibraryPath.categoryId)}</h2><p>Select a subcategory to open its component list.</p></div><div class="studio-component-details__actions"><button class="ghost-action" type="button" data-studio-library-nav="categories">Back To Categories</button></div>`;
+    return;
+  }
+  const scopedRecords=records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId) && normalizeNameKey(item.subcategory)===normalizeNameKey(studioLibraryPath.subcategoryId));
+  const visible=scopedRecords.filter((record)=>studioComponentMatchesSearch(record,queryKey));
   const selectedVisible=visible.some((record)=>normalizeNameKey(record.name)===studioSelectedComponentKey);
   if(!studioComponentDraft && !selectedVisible){
     studioSelectedComponentKey=visible.length?normalizeNameKey(visible[0].name):'';
   }
   if(!visible.length){
-    list.innerHTML='<p class="studio-components-list__empty">No components found.</p>';
+    list.innerHTML='<p class="studio-components-list__empty">No components found in this subcategory.</p>';
   }else{
     list.innerHTML=visible.map((record)=>{
       const name=String(record&&record.name||'').trim();
       const key=normalizeNameKey(name);
-      const isActive=!studioComponentDraft && key===studioSelectedComponentKey;
-      return `<button class="studio-components-list__item${isActive?' is-active':''}" type="button" data-studio-component-open="${escapeHtml(name)}" role="option" aria-selected="${isActive?'true':'false'}"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(studioComponentListMeta(record))}</span></button>`;
+      const active=!studioComponentDraft && key===studioSelectedComponentKey;
+      return `<article class="studio-components-list__row"><button class="studio-components-list__item${active?' is-active':''}" type="button" data-studio-library-select-component="${escapeAttributeValue(name)}" role="option" aria-selected="${active?'true':'false'}"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(studioComponentListMeta(record))}</span></button><button class="ghost-action studio-components-list__edit" type="button" data-studio-library-edit-component="${escapeAttributeValue(name)}">Edit</button></article>`;
     }).join('');
   }
-  if(studioComponentDraft){
+  if(studioLibraryEditor.type==='component' && studioLibraryEditor.mode==='add' && studioComponentDraft){
     renderStudioComponentDetails(studioComponentDraft,{addMode:true});
     return;
   }
+  if(studioLibraryEditor.type==='component' && studioLibraryEditor.mode==='edit'){
+    const editRecord=componentLibraryRecords().find((item)=>normalizeNameKey(item.name)===normalizeNameKey(studioLibraryEditor.targetName));
+    renderStudioComponentDetails(editRecord||null,{addMode:false});
+    return;
+  }
   const selectedRecord=visible.find((record)=>normalizeNameKey(record.name)===studioSelectedComponentKey)||null;
-  renderStudioComponentDetails(selectedRecord,{addMode:false});
+  if(!selectedRecord){
+    details.innerHTML=`<div class="studio-component-details__head"><h2>${escapeHtml(studioLibraryPath.subcategoryId)}</h2><p>Add a component to start this subcategory library.</p></div><div class="studio-component-details__actions"><button class="ghost-action" type="button" data-studio-library-nav="category">Back To ${escapeHtml(studioLibraryPath.categoryId)}</button></div>`;
+    return;
+  }
+  details.innerHTML=`<div class="studio-component-details__head"><h2>${escapeHtml(selectedRecord.name||'Component')}</h2><p>${escapeHtml(studioComponentListMeta(selectedRecord))}</p></div><div class="studio-component-details__fields"><label><span>Description</span><textarea rows="3" readonly>${escapeHtml(String(selectedRecord.description||''))}</textarea></label><label><span>Specifications</span><textarea rows="3" readonly>${escapeHtml(String(selectedRecord.specifications||''))}</textarea></label></div><div class="studio-component-details__actions"><button class="ghost-action" type="button" data-studio-library-nav="category">Back To ${escapeHtml(studioLibraryPath.categoryId)}</button><button class="primary-action studio-component-details__save" type="button" data-studio-library-edit-component="${escapeAttributeValue(String(selectedRecord.name||''))}">Edit Component</button></div>`;
 }
 function bindStudioComponentsPanel(){
   const panel=$('studioComponentsPanel');
@@ -2408,65 +2702,86 @@ function bindStudioComponentsPanel(){
   const addBtn=$('studioComponentsAddBtn');
   if(addBtn){
     addBtn.addEventListener('click',()=>{
-      studioComponentDraft={
-        name:'',
-        category:'',
-        subcategory:'',
-        supplier:'',
-        description:'',
-        specifications:'',
-        cost:undefined,
-        unitPrice:undefined,
-      };
+      if(studioLibraryPath.level==='categories'){
+        studioLibraryEditor={type:'category',mode:'add',targetName:''};
+      }else if(studioLibraryPath.level==='category'){
+        studioLibraryEditor={type:'subcategory',mode:'add',targetName:''};
+      }else{
+        studioComponentDraft={
+          name:'',
+          category:studioLibraryPath.categoryId,
+          subcategory:studioLibraryPath.subcategoryId,
+          supplier:'',
+          description:'',
+          specifications:'',
+          cost:undefined,
+          unitPrice:undefined,
+        };
+        studioLibraryEditor={type:'component',mode:'add',targetName:''};
+      }
       renderStudioComponentsLibrary();
-      const nameInput=$('studioComponentName');
+      const nameInput=$('studioComponentName')||$('studioLibraryCategoryName')||$('studioLibrarySubcategoryName');
       if(nameInput)nameInput.focus();
     });
   }
   const manageBtn=$('studioComponentsManageBtn');
   if(manageBtn){
     manageBtn.addEventListener('click',()=>{
-      studioComponentTaxonomyManagerOpen=!studioComponentTaxonomyManagerOpen;
-      renderStudioComponentsTaxonomyManager();
-    });
-  }
-  const taxonomyBody=$('studioComponentsTaxonomyBody');
-  if(taxonomyBody){
-    taxonomyBody.addEventListener('change',(event)=>{
-      const target=event.target;
-      if(!target)return;
-      if(target.id==='studioTaxonomyCategorySelect'){
-        studioComponentTaxonomySelection.category=String(target.value||'');
-        studioComponentTaxonomySelection.subcategory='';
-        renderStudioComponentsTaxonomyManager();
+      studioLibraryEditor={type:'',mode:'',targetName:''};
+      studioComponentDraft=null;
+      if(studioLibraryPath.level==='subcategory'){
+        studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
+      }else if(studioLibraryPath.level==='category'){
+        studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
       }
-      if(target.id==='studioTaxonomySubParentSelect'){
-        studioComponentTaxonomySelection.category=String(target.value||'');
-        studioComponentTaxonomySelection.subcategory='';
-        renderStudioComponentsTaxonomyManager();
-      }
-      if(target.id==='studioTaxonomySubcategorySelect'){
-        studioComponentTaxonomySelection.subcategory=String(target.value||'');
-        renderStudioComponentsTaxonomyManager();
-      }
-      if(target.id==='studioTaxonomySupplierSelect'){
-        studioComponentTaxonomySelection.supplier=String(target.value||'');
-        renderStudioComponentsTaxonomyManager();
-      }
-    });
-    taxonomyBody.addEventListener('click',(event)=>{
-      const button=event.target.closest('[data-taxonomy-action]');
-      if(!button)return;
-      handleStudioTaxonomyAction(button.getAttribute('data-taxonomy-action')||'');
+      renderStudioComponentsLibrary();
     });
   }
   const list=$('studioComponentsList');
   if(list){
     list.addEventListener('click',(event)=>{
-      const button=event.target.closest('[data-studio-component-open]');
-      if(!button)return;
-      studioComponentDraft=null;
-      studioSelectedComponentKey=normalizeNameKey(button.getAttribute('data-studio-component-open')||'');
+      const openCategoryButton=event.target.closest('[data-studio-library-open-category]');
+      if(openCategoryButton){
+        studioLibraryPath={level:'category',categoryId:String(openCategoryButton.getAttribute('data-studio-library-open-category')||''),subcategoryId:''};
+        studioLibraryEditor={type:'',mode:'',targetName:''};
+        studioComponentDraft=null;
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const editCategoryButton=event.target.closest('[data-studio-library-edit-category]');
+      if(editCategoryButton){
+        studioLibraryEditor={type:'category',mode:'edit',targetName:String(editCategoryButton.getAttribute('data-studio-library-edit-category')||'')};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const openSubcategoryButton=event.target.closest('[data-studio-library-open-subcategory]');
+      if(openSubcategoryButton){
+        studioLibraryPath={level:'subcategory',categoryId:studioLibraryPath.categoryId,subcategoryId:String(openSubcategoryButton.getAttribute('data-studio-library-open-subcategory')||'')};
+        studioLibraryEditor={type:'',mode:'',targetName:''};
+        studioComponentDraft=null;
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const editSubcategoryButton=event.target.closest('[data-studio-library-edit-subcategory]');
+      if(editSubcategoryButton){
+        studioLibraryEditor={type:'subcategory',mode:'edit',targetName:String(editSubcategoryButton.getAttribute('data-studio-library-edit-subcategory')||'')};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const selectComponentButton=event.target.closest('[data-studio-library-select-component]');
+      if(selectComponentButton){
+        studioLibraryEditor={type:'',mode:'',targetName:''};
+        studioComponentDraft=null;
+        studioSelectedComponentKey=normalizeNameKey(selectComponentButton.getAttribute('data-studio-library-select-component')||'');
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const editComponentButton=event.target.closest('[data-studio-library-edit-component]');
+      if(editComponentButton){
+        studioComponentDraft=null;
+        studioLibraryEditor={type:'component',mode:'edit',targetName:String(editComponentButton.getAttribute('data-studio-library-edit-component')||'')};
+        studioSelectedComponentKey=normalizeNameKey(studioLibraryEditor.targetName);
+      }
       renderStudioComponentsLibrary();
     });
   }
@@ -2488,9 +2803,109 @@ function bindStudioComponentsPanel(){
       syncStudioComponentSaveButtonState();
     });
     details.addEventListener('click',(event)=>{
+      const navButton=event.target.closest('[data-studio-library-nav]');
+      if(navButton){
+        const navTarget=String(navButton.getAttribute('data-studio-library-nav')||'');
+        studioLibraryEditor={type:'',mode:'',targetName:''};
+        studioComponentDraft=null;
+        if(navTarget==='categories'){
+          studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+        }else if(navTarget==='category'){
+          studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
+        }
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const libraryActionButton=event.target.closest('[data-studio-library-action]');
+      if(libraryActionButton){
+        const action=String(libraryActionButton.getAttribute('data-studio-library-action')||'');
+        const taxonomy=ensureStudioComponentTaxonomyLoaded();
+        if(action==='category-add'){
+          const input=$('studioLibraryCategoryName');
+          const nextName=String(input&&input.value||'').trim();
+          if(!nextName){openInfoDialog('Category Name Required','Enter a category name.');return;}
+          if(taxonomy.categories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName))){openInfoDialog('Category Exists','A category with this name already exists.');return;}
+          taxonomy.categories.push({id:studioTaxonomyId('cat'),name:nextName,subcategories:[]});
+          saveStudioComponentTaxonomy();
+          studioLibraryEditor={type:'',mode:'',targetName:''};
+          studioLibraryPath={level:'category',categoryId:nextName,subcategoryId:''};
+          renderStudioComponentsLibrary();
+          return;
+        }
+        if(action==='category-rename'){
+          const sourceName=String(studioLibraryEditor.targetName||'').trim();
+          const input=$('studioLibraryCategoryName');
+          const nextName=String(input&&input.value||'').trim();
+          if(!sourceName){return;}
+          if(!nextName){openInfoDialog('Category Name Required','Enter a category name.');return;}
+          const duplicate=taxonomy.categories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName) && normalizeNameKey(item.name)!==normalizeNameKey(sourceName));
+          if(duplicate){openInfoDialog('Category Exists','A category with this name already exists.');return;}
+          const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
+          if(!target)return;
+          target.name=nextName;
+          studioRenameCategory(sourceName,nextName);
+          if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceName))studioLibraryPath.categoryId=nextName;
+          saveStudioComponentTaxonomy();
+          studioLibraryEditor={type:'',mode:'',targetName:''};
+          renderStudioComponentsLibrary();
+          return;
+        }
+        if(action==='subcategory-add'){
+          const categoryName=String(studioLibraryPath.categoryId||'').trim();
+          if(!categoryName){openInfoDialog('Category Required','Open a category first.');return;}
+          const input=$('studioLibrarySubcategoryName');
+          const nextName=String(input&&input.value||'').trim();
+          if(!nextName){openInfoDialog('Subcategory Name Required','Enter a subcategory name.');return;}
+          const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(categoryName));
+          if(!category){
+            taxonomy.categories.push({id:studioTaxonomyId('cat'),name:categoryName,subcategories:[{id:studioTaxonomyId('sub'),name:nextName}]});
+          }else{
+            const exists=category.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName));
+            if(exists){openInfoDialog('Subcategory Exists','This subcategory already exists in the selected category.');return;}
+            category.subcategories.push({id:studioTaxonomyId('sub'),name:nextName});
+          }
+          saveStudioComponentTaxonomy();
+          studioLibraryEditor={type:'',mode:'',targetName:''};
+          studioLibraryPath={level:'subcategory',categoryId:categoryName,subcategoryId:nextName};
+          renderStudioComponentsLibrary();
+          return;
+        }
+        if(action==='subcategory-rename'){
+          const categoryName=String(studioLibraryPath.categoryId||'').trim();
+          const sourceName=String(studioLibraryEditor.targetName||'').trim();
+          const input=$('studioLibrarySubcategoryName');
+          const nextName=String(input&&input.value||'').trim();
+          if(!categoryName || !sourceName)return;
+          if(!nextName){openInfoDialog('Subcategory Name Required','Enter a subcategory name.');return;}
+          const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(categoryName));
+          if(!category){openInfoDialog('Category Missing','The selected category was not found.');return;}
+          const duplicate=category.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName) && normalizeNameKey(item.name)!==normalizeNameKey(sourceName));
+          if(duplicate){openInfoDialog('Subcategory Exists','This subcategory already exists in the selected category.');return;}
+          const target=category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
+          if(!target)return;
+          target.name=nextName;
+          studioRenameSubcategory(categoryName,sourceName,nextName);
+          if(normalizeNameKey(studioLibraryPath.subcategoryId)===normalizeNameKey(sourceName))studioLibraryPath.subcategoryId=nextName;
+          saveStudioComponentTaxonomy();
+          studioLibraryEditor={type:'',mode:'',targetName:''};
+          renderStudioComponentsLibrary();
+          return;
+        }
+      }
       const saveButton=event.target.closest('#studioComponentSaveBtn');
-      if(!saveButton)return;
-      saveStudioComponentDetails();
+      if(saveButton){
+        saveStudioComponentDetails();
+        return;
+      }
+      const editComponentButton=event.target.closest('[data-studio-library-edit-component]');
+      if(editComponentButton){
+        studioComponentDraft=null;
+        studioLibraryEditor={type:'component',mode:'edit',targetName:String(editComponentButton.getAttribute('data-studio-library-edit-component')||'')};
+        studioSelectedComponentKey=normalizeNameKey(studioLibraryEditor.targetName);
+        renderStudioComponentsLibrary();
+        return;
+      }
+      return;
     });
   }
 }
@@ -2652,7 +3067,11 @@ function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
   target.cityTown=String(source.cityTown||'').trim();
   target.regionState=String(source.regionState||'').trim();
   target.postcode=String(source.postcode||'').trim();
-  target.country=String(source.country||target.country||'').trim();
+  if(Object.prototype.hasOwnProperty.call(source,'country')){
+    target.country=String(source.country||'').trim();
+  }else{
+    target.country=String(target.country||'').trim();
+  }
   return target;
 }
 function startFreshQuoteForCustomer(record,options){
@@ -3341,8 +3760,24 @@ function persistBuildRecord(currentQuote){
   return {source:'build',index:0,record};
 }
 function syncMissingComponentLibraryData(currentQuote){
-  // Library updates are explicit via dedicated user actions.
-  void currentQuote;
+  const sourceQuote=currentQuote&&typeof currentQuote==='object'?currentQuote:{};
+  const rows=Array.isArray(sourceQuote.components)?sourceQuote.components:[];
+  if(!rows.length)return;
+  const mergedByName=new Map();
+  rows.forEach((row)=>{
+    if(!componentRowHasMeaningfulData(row))return;
+    const name=specificationValue(row&&row.description)||specificationValue(row&&row.category);
+    if(!name)return;
+    const key=normalizeNameKey(name);
+    if(!key)return;
+    const baseline=mergedByName.get(key)||findComponentLibraryRecordByName(name)||{name};
+    const merged=mergeAutoSyncedLibraryRecord(baseline,row,name);
+    mergedByName.set(key,merged);
+  });
+  mergedByName.forEach((record,key)=>{
+    if(!record || !key)return;
+    upsertComponentLibraryRecord(record.name,record);
+  });
 }
 function saveBlankLibrarySearch(value){
   blankLibrarySearch=String(value||'');
@@ -3742,6 +4177,41 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   }
   saveComponentLibraryRecords(records);
 }
+function componentLibraryTextFieldValue(value){
+  return String(value||'').trim();
+}
+function mergeAutoSyncedLibraryRecord(existingRecord,incomingRecord,componentName){
+  const existing=existingRecord&&typeof existingRecord==='object'?existingRecord:{};
+  const incoming=incomingRecord&&typeof incomingRecord==='object'?incomingRecord:{};
+  const name=componentLibraryTextFieldValue(componentName)||componentLibraryTextFieldValue(existing.name)||componentLibraryTextFieldValue(incoming.name);
+  const pickText=(currentValue,nextValue)=>{
+    const current=componentLibraryTextFieldValue(currentValue);
+    if(current)return current;
+    return componentLibraryTextFieldValue(nextValue);
+  };
+  const existingUnitCost=componentLibraryUnitCostValue(existing);
+  const existingUnitPrice=componentLibraryUnitPriceValue(existing);
+  const existingCost=componentLibraryCostValue(existing);
+  const incomingUnitCost=componentLibraryUnitCostValue(incoming);
+  const incomingUnitPrice=componentLibraryUnitPriceValue(incoming);
+  const incomingCost=componentLibraryCostValue(incoming);
+  return {
+    name,
+    category:pickText(existing.category,incoming.category),
+    subcategory:pickText(existing.subcategory,incoming.subcategory),
+    supplier:pickText(existing.supplier,incoming.supplier),
+    description:pickText(existing.description,incoming.description),
+    customerLabel:pickText(existing.customerLabel,incoming.customerLabel),
+    unit:pickText(existing.unit,incoming.unit),
+    // Quantity is generally build-scoped; keep the saved library quantity unless explicitly set there.
+    quantity:Number.isFinite(Number(existing.quantity))?Number(existing.quantity):undefined,
+    unitCost:existingUnitCost!==undefined?existingUnitCost:incomingUnitCost,
+    unitPrice:existingUnitPrice!==undefined?existingUnitPrice:incomingUnitPrice,
+    notes:pickText(existing.notes,incoming.notes),
+    specifications:pickText(existing.specifications,incoming.specifications),
+    cost:existingCost!==undefined?existingCost:(incomingUnitCost!==undefined?incomingUnitCost:incomingCost),
+  };
+}
 function renameComponentLibraryRecord(fromName,toName){
   const fromKey=normalizeNameKey(fromName);
   const toKey=normalizeNameKey(toName);
@@ -3804,6 +4274,7 @@ function applyComponentLibraryRecordToRow(index,name){
   const record=findComponentLibraryRecordByName(name);
   if(!record)return;
   const row=quote.components[index];
+  if(specificationValue(record.subcategory))row.subcategory=record.subcategory;
   if(specificationValue(record.supplier))row.supplier=record.supplier;
   if(specificationValue(record.description))row.description=record.description;
   if(specificationValue(record.customerLabel))row.customerLabel=record.customerLabel;
@@ -3843,6 +4314,10 @@ function syncComponentRowEditorInputs(index){
   const supplierTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-supplier-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
   if(supplierTrigger){
     supplierTrigger.textContent=String(row.supplier||'').trim()||'Select supplier';
+  }
+  const subcategoryInput=document.querySelector(`#quoteComponentsList [data-component-key="subcategory"][data-component-index="${index}"]`);
+  if(subcategoryInput && document.activeElement!==subcategoryInput){
+    subcategoryInput.value=String(row.subcategory||'');
   }
 }
 function defaultChoiceNameSet(type){
@@ -4238,7 +4713,7 @@ function setComponentName(index,name){
   saveQuoteCurrent();
 }
 function defaultComponentRow(){
-  return{category:'',description:'',customerLabel:'',supplier:'',cost:0};
+  return{category:'',subcategory:'',description:'',customerLabel:'',supplier:'',cost:0};
 }
 function componentRowIsEffectivelyEmpty(item){
   return !specificationValue(item&&item.category) && !specificationValue(item&&item.description) && numberOrZero(item&&item.cost)<=0;
@@ -4263,9 +4738,13 @@ function componentRowSummaryMetaParts(item){
   if(componentRowIsEffectivelyEmpty(item))return[];
   const parts=[];
   const category=componentRowCategoryLabel(item);
+  const subcategory=specificationValue(item&&item.subcategory);
   const description=specificationValue(item&&item.description);
   if(category && description && normalizeNameKey(category)!==normalizeNameKey(description)){
     parts.push(category);
+  }
+  if(subcategory){
+    parts.push(subcategory);
   }
   return parts;
 }
@@ -4322,7 +4801,7 @@ function componentRowMenuMarkup(item,index){
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><input data-component-index="${index}" data-component-key="subcategory" type="text" placeholder="e.g. EVA Grips" value="${escapeHtml(item.subcategory||'')}" /></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -4805,7 +5284,7 @@ function customerFinderDraftFromForm(){
     cityTown:String(($('customerFinderNewCity')&&$('customerFinderNewCity').value)||'').trim(),
     regionState:String(($('customerFinderNewRegion')&&$('customerFinderNewRegion').value)||'').trim(),
     postcode:String(($('customerFinderNewPostcode')&&$('customerFinderNewPostcode').value)||'').trim(),
-    country:String(($('customerFinderNewCountry')&&$('customerFinderNewCountry').value)||'').trim()||'New Zealand',
+    country:String(($('customerFinderNewCountry')&&$('customerFinderNewCountry').value)||'').trim(),
   };
 }
 function setCustomerFinderNameValidation(message){
@@ -4821,12 +5300,10 @@ function setCustomerFinderNameValidation(message){
   }
 }
 function resetCustomerFinderNewForm(){
-  ['customerFinderNewCustomerName','customerFinderNewPhone','customerFinderNewEmail','customerFinderNewAddress1','customerFinderNewAddress2','customerFinderNewSuburb','customerFinderNewCity','customerFinderNewRegion','customerFinderNewPostcode'].forEach((id)=>{
+  ['customerFinderNewCustomerName','customerFinderNewPhone','customerFinderNewEmail','customerFinderNewAddress1','customerFinderNewAddress2','customerFinderNewSuburb','customerFinderNewCity','customerFinderNewRegion','customerFinderNewPostcode','customerFinderNewCountry'].forEach((id)=>{
     const input=$(id);
     if(input)input.value='';
   });
-  const country=$('customerFinderNewCountry');
-  if(country)country.value='New Zealand';
   setCustomerFinderNameValidation('');
 }
 function setCustomerFinderNewBuildStep(step){
@@ -5309,8 +5786,8 @@ function ensureCustomerFinderSheet(){
       <div class="component-sheet__body customer-finder__body">
         <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their saved jobs.</p>
         <div id="customerFinderStartActions" class="customer-finder__start-actions" hidden>
-          <button id="customerFinderSearchExistingAction" class="primary-action" type="button" data-customer-finder-action="search-existing">Search Existing Customer</button>
-          <button id="customerFinderAddNewAction" class="ghost-action" type="button" data-customer-finder-action="add-new">Add New Customer</button>
+          <button id="customerFinderSearchExistingAction" class="primary-action" type="button" data-customer-finder-action="search-existing">SEARCH EXISTING CUSTOMER</button>
+          <button id="customerFinderAddNewAction" class="ghost-action" type="button" data-customer-finder-action="add-new">ADD NEW CUSTOMER</button>
         </div>
         <div id="customerFinderSearchBlock" hidden>
           <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
@@ -5333,7 +5810,7 @@ function ensureCustomerFinderSheet(){
           <label><span>City / Town</span><input id="customerFinderNewCity" type="text" placeholder="City / town" autocomplete="address-level2" /></label>
           <label><span>Region / State</span><input id="customerFinderNewRegion" type="text" placeholder="Region / state" autocomplete="address-level1" /></label>
           <label><span>Postcode / ZIP</span><input id="customerFinderNewPostcode" type="text" placeholder="Postcode / ZIP" autocomplete="postal-code" /></label>
-          <label class="customer-finder__new-form-full"><span>Country</span><input id="customerFinderNewCountry" type="text" placeholder="Country" value="New Zealand" autocomplete="country-name" /></label>
+          <label class="customer-finder__new-form-full"><span>Country</span><input id="customerFinderNewCountry" type="text" placeholder="Country" autocomplete="country-name" /></label>
           <div class="customer-finder__new-form-actions">
             <button class="ghost-action" type="button" data-customer-finder-action="back-to-actions">Back</button>
             <button class="primary-action" type="button" data-customer-finder-action="submit-new">Start Build</button>
@@ -6803,6 +7280,8 @@ function onScreenChange(screenId){
     }else{
       if(studioScreenView==='components'){
         renderStudioComponentsLibrary();
+      }else if(studioScreenView==='taxonomy'){
+        renderStudioTaxonomyManager();
       }else if(studioScreenView!=='workflow'){
         showStudioLanding();
       }
@@ -6993,6 +7472,8 @@ function render(){
       renderWorkshopQuote();
     }else if(studioScreenView==='components'){
       renderStudioComponentsLibrary();
+    }else if(studioScreenView==='taxonomy'){
+      renderStudioTaxonomyManager();
     }
   }
   const workshopLandingScreen=$('workshopLandingScreen');

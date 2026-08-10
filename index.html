@@ -273,24 +273,24 @@
     <section class="screen" id="workshopScreen">
       <section id="studioLandingPanel" class="studio-landing-shell" aria-label="Studio landing">
         <div class="studio-landing-shell__intro">
-          <h1>Studio</h1>
+          <h1>STUDIO</h1>
           <p>Build, manage and specify custom rods.</p>
         </div>
         <div id="studioLandingActions" class="studio-landing-actions" aria-label="Studio entry points">
           <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="new-build">
-            <span class="workshop-tool-launch__title">New Build</span>
+            <span class="workshop-tool-launch__title">NEW BUILD</span>
             <span class="workshop-tool-launch__meta">Start a new custom rod build.</span>
           </button>
           <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="open-builds">
-            <span class="workshop-tool-launch__title">Open Builds</span>
+            <span class="workshop-tool-launch__title">OPEN BUILDS</span>
             <span class="workshop-tool-launch__meta">Open and continue saved rod builds.</span>
           </button>
           <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="customers">
-            <span class="workshop-tool-launch__title">Customers</span>
+            <span class="workshop-tool-launch__title">CUSTOMERS</span>
             <span class="workshop-tool-launch__meta">Find, add and manage customers.</span>
           </button>
           <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="components">
-            <span class="workshop-tool-launch__title">Components</span>
+            <span class="workshop-tool-launch__title">COMPONENTS</span>
             <span class="workshop-tool-launch__meta">View, add, edit and manage rod components.</span>
           </button>
         </div>
@@ -300,23 +300,19 @@
         <header class="studio-components-shell__head">
           <button id="studioComponentsBackBtn" class="workshop-tool-nav-back" type="button" aria-label="Back to Studio landing">
             <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-            <span>Back to Studio</span>
+            <span>BACK TO STUDIO</span>
           </button>
           <div class="studio-components-shell__intro">
-            <h1>Components</h1>
+            <h1>COMPONENTS</h1>
             <p>Manage the parts used in your builds.</p>
           </div>
         </header>
 
         <div class="studio-components-shell__controls" aria-label="Components actions">
-          <input id="studioComponentsSearch" class="studio-components-shell__search" type="search" placeholder="Search Components" autocomplete="off" spellcheck="false" />
-          <button id="studioComponentsAddBtn" class="ghost-action studio-components-shell__add" type="button">Add Component</button>
-          <button id="studioComponentsManageBtn" class="ghost-action studio-components-shell__manage" type="button" aria-expanded="false" aria-controls="studioComponentsTaxonomy" title="Manage Categories, Subcategories and Suppliers">Manage Categories & Suppliers</button>
+          <input id="studioComponentsSearch" class="studio-components-shell__search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" />
+          <button id="studioComponentsAddBtn" class="ghost-action studio-components-shell__add" type="button">ADD COMPONENT</button>
+          <button id="studioComponentsManageBtn" class="ghost-action studio-components-shell__manage" type="button" title="Back">BACK</button>
         </div>
-
-        <section id="studioComponentsTaxonomy" class="studio-components-taxonomy" aria-label="Component taxonomy manager" hidden>
-          <div id="studioComponentsTaxonomyBody" class="studio-components-taxonomy__body"></div>
-        </section>
 
         <div class="studio-components-shell__content">
           <section class="studio-components-shell__list-card" aria-label="Component list">
@@ -324,6 +320,26 @@
           </section>
           <section id="studioComponentDetails" class="studio-component-details" aria-live="polite" aria-label="Component Details"></section>
         </div>
+      </section>
+
+      <section id="studioTaxonomyPanel" class="studio-taxonomy-shell" aria-label="Categories and suppliers manager" hidden>
+        <header class="studio-taxonomy-shell__head">
+          <button id="studioTaxonomyBackBtn" class="workshop-tool-nav-back" type="button" aria-label="Back to Components">
+            <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+            <span>COMPONENTS</span>
+          </button>
+          <div class="studio-taxonomy-shell__intro">
+            <h1>CATEGORIES &amp; SUPPLIERS</h1>
+          </div>
+        </header>
+
+        <nav id="studioTaxonomySectionNav" class="studio-taxonomy-sections" aria-label="Management sections">
+          <button class="ghost-action studio-taxonomy-sections__button" type="button" data-taxonomy-section="categories" aria-pressed="true">Categories</button>
+          <button class="ghost-action studio-taxonomy-sections__button" type="button" data-taxonomy-section="subcategories" aria-pressed="false">Subcategories</button>
+          <button class="ghost-action studio-taxonomy-sections__button" type="button" data-taxonomy-section="suppliers" aria-pressed="false">Suppliers</button>
+        </nav>
+
+        <section id="studioTaxonomyBody" class="studio-taxonomy-body" aria-live="polite"></section>
       </section>
 
       <section id="studioWorkflowPanel" class="quote-builder" aria-label="Rod Builder Quote" hidden>
