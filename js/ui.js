@@ -6533,7 +6533,6 @@ function focusWorkshopToolPrimaryInput(tool){
   if(!input || input.disabled || input.hidden)return;
   window.requestAnimationFrame(()=>{
     try{input.focus({preventScroll:true});}catch{input.focus();}
-    if(typeof input.select==='function')input.select();
   });
 }
 function bindWorkshopToolEnterFlow(inputIds){
