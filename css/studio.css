@@ -1520,16 +1520,6 @@ body.component-sheet-open .workshop-back-to-top{
   width:100%;
 }
 
-#workshopScreen .quote-actions-grid--build #saveQuoteBtn{
-  min-height:54px;
-}
-
-#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn{
-  border-color:rgba(214,210,200,.26);
-  color:rgba(236,230,220,.86);
-  background:rgba(255,255,255,.02);
-}
-
 #workshopScreen .quote-actions-status{
   margin:2px 2px 0;
   min-height:15px;
@@ -4602,10 +4592,6 @@ textarea::-moz-selection,
   border-radius:11px;
 }
 
-#workshopScreen .quote-actions-grid--build #saveQuoteBtn{
-  min-height:50px;
-}
-
 #workshopScreen .quote-actions-status{
   margin:0;
   min-height:13px;
@@ -4902,8 +4888,7 @@ textarea::-moz-selection,
 }
 
 .component-sheet__danger,
-.quote-component-row__delete,
-#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn{
+.quote-component-row__delete{
   border-color:rgba(191,63,75,.44)!important;
   color:#f0d6d9!important;
   background:linear-gradient(180deg,rgba(88,23,31,.5),rgba(53,14,19,.58))!important;
@@ -4912,9 +4897,7 @@ textarea::-moz-selection,
 .component-sheet__danger:hover,
 .component-sheet__danger:focus-visible,
 .quote-component-row__delete:hover,
-.quote-component-row__delete:focus-visible,
-#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn:hover,
-#workshopScreen .quote-actions-grid--build #deleteCurrentBuildBtn:focus-visible{
+.quote-component-row__delete:focus-visible{
   border-color:rgba(214,92,103,.58)!important;
   color:#fae6e8!important;
 }
@@ -5085,7 +5068,7 @@ textarea::-moz-selection,
   }
 }
 
-/* Sprint 2: Saved Jobs production refinements */
+/* Sprint 2: Active Builds production refinements */
 #buildsScreen .screen-head .subtle{
   max-width:34ch;
 }
@@ -5159,38 +5142,79 @@ textarea::-moz-selection,
 }
 
 .saved-build-card__status--accepted{
-  border-color:rgba(130,176,131,.5);
-  color:#cee7cf;
-  background:rgba(50,88,51,.34);
+  border-color:rgba(214,210,200,.34);
+  color:#d8d1c4;
+  background:rgba(255,255,255,.03);
 }
 
-.saved-build-card__status--draft,
-.saved-build-card__status--revised{
-  border-color:rgba(187,169,117,.5);
-  color:#eadfb8;
-  background:rgba(96,79,39,.34);
+.saved-build-card__status--active{
+  border-color:rgba(var(--kl-red-rgb),.6);
+  color:#f4ddda;
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.2),rgba(56,14,18,.24));
 }
 
-.saved-build-card__status--declined,
-.saved-build-card__status--expired{
-  border-color:rgba(176,98,108,.5);
-  color:#f0d6d9;
-  background:rgba(92,33,41,.36);
+.saved-build-card__status--complete{
+  border-color:rgba(214,210,200,.34);
+  color:#d8d1c4;
+  background:rgba(255,255,255,.03);
 }
 
 .saved-build-card__actions{
   display:grid;
   align-items:center;
+  justify-items:end;
+  position:relative;
 }
 
-.saved-build-card__delete{
-  min-width:78px;
-  min-height:44px;
-  padding:0 12px;
+.saved-build-card__menu-toggle{
+  min-width:42px;
+  min-height:42px;
+  padding:0;
   border-radius:var(--ds-radius-md);
+  font-size:18px;
+  line-height:1;
+  letter-spacing:0;
+  color:var(--ds-text-muted);
+}
+
+.saved-build-card__menu{
+  position:absolute;
+  right:0;
+  top:46px;
+  min-width:160px;
+  padding:6px;
+  display:grid;
+  gap:4px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-md);
+  background:var(--ds-surface);
+  box-shadow:0 12px 26px rgba(0,0,0,.28);
+  z-index:2;
+}
+
+.saved-build-card__menu-item{
+  min-height:34px;
+  padding:0 10px;
+  border-radius:10px;
+  border:1px solid rgba(214,210,200,.16);
+  background:linear-gradient(180deg,rgba(18,22,24,.88),rgba(10,13,14,.96));
+  color:#ddd6ca;
+  text-align:left;
   font-size:10px;
   letter-spacing:.08em;
   text-transform:uppercase;
+}
+
+.saved-build-card__menu-item:hover,
+.saved-build-card__menu-item:focus-visible{
+  border-color:rgba(214,210,200,.34);
+  color:#ece4d7;
+}
+
+.saved-build-card__menu-item--danger{
+  border-color:rgba(191,63,75,.44);
+  color:#f0d6d9;
+  background:linear-gradient(180deg,rgba(88,23,31,.5),rgba(53,14,19,.58));
 }
 
 .saved-builds-empty{
@@ -5214,6 +5238,142 @@ textarea::-moz-selection,
   min-height:44px;
 }
 
+#workshopScreen .quote-actions-grid--build{
+  grid-template-columns:1fr;
+  gap:8px;
+}
+
+#workshopScreen .workshop-build-actions-surface{
+  display:grid;
+  gap:8px;
+  padding:10px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-lg);
+  background:var(--ds-surface-soft);
+}
+
+#workshopScreen .workshop-build-actions-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+#workshopScreen .workshop-build-actions-row-end{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  min-width:0;
+}
+
+#workshopScreen .workshop-build-actions-row > span{
+  color:var(--ds-text-muted);
+  font-size:9px;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+}
+
+#workshopScreen .workshop-build-actions-status-value{
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:0 9px;
+  border-radius:999px;
+  border:var(--ds-stroke);
+  color:#d7d0c3;
+  background:rgba(255,255,255,.03);
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+#workshopScreen .workshop-build-actions-status-value--active{
+  border-color:rgba(var(--kl-red-rgb),.6);
+  color:#f4ddda;
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.2),rgba(56,14,18,.24));
+}
+
+#workshopScreen .workshop-build-actions-status-value--complete{
+  border-color:rgba(214,210,200,.34);
+  color:#d8d1c4;
+  background:rgba(255,255,255,.03);
+}
+
+#workshopScreen .workshop-build-actions-status-toggle{
+  justify-content:center;
+  min-height:40px;
+  border-color:rgba(var(--kl-red-rgb),.52);
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.16),rgba(17,21,23,.96));
+  color:#edd9d4;
+}
+
+#workshopScreen .workshop-build-actions-status-toggle:hover,
+#workshopScreen .workshop-build-actions-status-toggle:focus-visible{
+  border-color:rgba(var(--kl-red-active-rgb),.66);
+  color:#f8e6df;
+}
+
+#workshopScreen #workshopBuildActionsStatus{
+  margin:0;
+  min-height:0;
+  font-size:9px;
+  color:#b8b1a6;
+  text-align:right;
+}
+
+#workshopScreen .workshop-build-actions-menu-wrap{
+  position:relative;
+  flex:0 0 auto;
+}
+
+#workshopScreen .workshop-build-actions-menu{
+  top:auto;
+  bottom:44px;
+  right:0;
+  left:auto;
+  min-width:136px;
+  padding:4px;
+  gap:3px;
+  background:linear-gradient(180deg,rgba(16,20,22,.96),rgba(9,12,13,.98));
+  box-shadow:0 8px 16px rgba(0,0,0,.2);
+}
+
+#workshopScreen .workshop-build-actions-menu-wrap .saved-build-card__menu-toggle{
+  min-width:38px;
+  min-height:38px;
+}
+
+#workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item{
+  min-height:30px;
+  padding:0 9px;
+  border-radius:9px;
+  border:1px solid rgba(214,210,200,.14);
+  background:linear-gradient(180deg,rgba(17,21,23,.76),rgba(10,13,15,.88));
+  color:#d6cec0;
+  font-size:10px;
+  letter-spacing:.03em;
+  text-transform:none;
+}
+
+#workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item:hover,
+#workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item:focus-visible{
+  border-color:rgba(214,210,200,.26);
+  color:#e8dece;
+}
+
+#workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item--danger{
+  border-color:rgba(166,70,80,.36);
+  color:#e4aeb4;
+  background:linear-gradient(180deg,rgba(52,19,24,.5),rgba(30,11,15,.62));
+}
+
+#workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item--danger:hover,
+#workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item--danger:focus-visible{
+  border-color:rgba(186,86,96,.46);
+  color:#efd0d4;
+}
+
 @media (max-width:520px){
   .saved-build-card{
     grid-template-columns:minmax(0,1fr);
@@ -5223,14 +5383,29 @@ textarea::-moz-selection,
 
   .saved-build-card__actions{
     justify-self:stretch;
+    justify-items:start;
   }
 
-  .saved-build-card__delete{
-    width:100%;
+  .saved-build-card__menu{
+    right:auto;
+    left:0;
   }
 
   .saved-builds-empty__actions{
     grid-template-columns:1fr;
+  }
+
+  #workshopScreen .workshop-build-actions-menu{
+    right:auto;
+    left:0;
+  }
+
+  #workshopScreen .workshop-build-actions-row{
+    align-items:flex-start;
+  }
+
+  #workshopScreen .workshop-build-actions-row-end{
+    gap:6px;
   }
 }
 

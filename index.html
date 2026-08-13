@@ -198,6 +198,15 @@
 
     <section class="screen" id="layoutScreen">
       <div class="layout-screen-shell">
+        <div class="workshop-tool-head">
+          <button class="workshop-tool-nav-back" type="button" data-workshop-return-landing aria-label="Return to Workshop landing screen">
+            <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+            <span>Workshop</span>
+          </button>
+          <h3>Guide Spacing</h3>
+          <p>Set and tune guide positions along the rod blank.</p>
+        </div>
+
         <article class="layout-control-card">
           <div class="layout-control-card__title">Running Guides</div>
           <div class="layout-control-card__body layout-control-card__body--compact">
@@ -257,10 +266,6 @@
 
         <section class="guide-spacing-panel" aria-live="polite">
           <div class="guide-spacing-panel__header workshop-guide-spacing-panel__header">
-            <button class="workshop-tool-nav-back workshop-tool-nav-back--compact" type="button" data-workshop-return-landing aria-label="Return to Workshop landing screen">
-              <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-              <span>Workshop</span>
-            </button>
             <p class="eyebrow">Guide Spacing</p>
           </div>
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
@@ -281,8 +286,8 @@
             <span class="workshop-tool-launch__meta">Start a new custom rod build.</span>
           </button>
           <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="open-builds">
-            <span class="workshop-tool-launch__title">OPEN BUILDS</span>
-            <span class="workshop-tool-launch__meta">Open and continue saved rod builds.</span>
+            <span class="workshop-tool-launch__title">ACTIVE BUILDS</span>
+            <span class="workshop-tool-launch__meta">Continue rods currently in progress.</span>
           </button>
           <button class="workshop-tool-launch studio-launch-card" type="button" data-studio-action="customers">
             <span class="workshop-tool-launch__title">CUSTOMERS</span>
@@ -461,24 +466,41 @@
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Build Actions</span>
               <span class="quote-section__toggle-summary" aria-live="polite">
-                <span>Save when build details are complete</span>
+                <span>Track status and manage this build.</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
           <div id="workshopBuildActionsBody" class="quote-actions-grid quote-actions-grid--build quote-section__body">
-            <button id="saveQuoteBtn" class="primary-action" type="button">Save Build</button>
-            <button id="deleteCurrentBuildBtn" class="ghost-action" type="button">Delete Build</button>
-            <p id="workshopBuildActionsStatus" class="quote-actions-status" aria-live="polite">All changes saved</p>
+            <section class="workshop-build-actions-surface" aria-label="Build actions">
+              <div class="workshop-build-actions-row">
+                <span>Status</span>
+                <strong id="workshopBuildLifecycleStatus" class="workshop-build-actions-status-value">Active</strong>
+              </div>
+              <button id="toggleCurrentBuildStatusBtn" class="ghost-action workshop-build-actions-status-toggle" type="button">Mark Complete</button>
+              <div class="workshop-build-actions-row">
+                <span>Saved</span>
+                <div class="workshop-build-actions-row-end">
+                  <strong id="workshopBuildActionsStatus" class="quote-actions-status" aria-live="polite">All changes saved</strong>
+                  <div class="workshop-build-actions-menu-wrap">
+                    <button id="currentBuildActionsMenuBtn" class="ghost-action saved-build-card__menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Build actions">&hellip;</button>
+                    <div id="currentBuildActionsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="Build actions menu" hidden>
+                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="rename">Rename Build</button>
+                      <button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-current-build-action="delete">Delete Build</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </article>
       </section>
     </section>
 
     <section class="screen" id="buildsScreen">
-      <div class="screen-head"><h1>Saved Jobs</h1><p class="subtle">Tap a row to open. Use search to find builds fast.</p></div>
+      <div class="screen-head"><h1>Active Builds</h1><p class="subtle">Continue rods currently in progress.</p></div>
       <div class="blank-library-controls saved-builds-controls">
-        <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search customer, build, or status" autocomplete="off" />
+        <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search customer or build" autocomplete="off" />
         <button id="savedBuildsNewBuildBtn" class="primary-action" type="button">New Build</button>
       </div>
       <div id="buildCards" class="saved-builds-list" aria-live="polite"></div>

@@ -39,6 +39,7 @@ let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuot
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
+let activeBuildRowMenu='';
 let customerFinderSearch='';
 let customerFinderSelectedKey='';
 let customerFinderIntent='browse';
@@ -82,6 +83,9 @@ let workshopStatusFlashText='';
 let workshopStatusFlashPending=false;
 let workshopStatusFlashUntil=0;
 let workshopStatusFlashTimer=null;
+let quoteAutosaveTimer=null;
+let quoteAutosaveInFlight=false;
+let currentBuildActionsMenuOpen=false;
 let preserveWorkshopQuoteOnEntry=false;
 let studioScreenView='landing';
 let studioComponentsSearch='';
@@ -1620,29 +1624,58 @@ function normalizeQuote(inputQuote){
   return merged;
 }
 function updateQuoteActionPriority(){
-  const saveQuoteBtn=$('saveQuoteBtn');
   const statusEl=$('workshopBuildActionsStatus');
-  if(saveQuoteBtn){
-    saveQuoteBtn.classList.add('primary-action');
-    saveQuoteBtn.classList.remove('ghost-action');
-    const saveDisabled=!hasUnsavedQuoteChanges;
-    saveQuoteBtn.disabled=saveDisabled;
-    saveQuoteBtn.setAttribute('aria-disabled',String(saveDisabled));
-  }
   if(statusEl){
     const hasFlash=workshopStatusFlashText && Date.now()<workshopStatusFlashUntil;
     if(hasFlash){
       statusEl.textContent=workshopStatusFlashText;
       statusEl.classList.toggle('is-pending',workshopStatusFlashPending);
     }else{
-      statusEl.textContent=hasUnsavedQuoteChanges?'Unsaved changes':'All changes saved';
-      statusEl.classList.toggle('is-pending',hasUnsavedQuoteChanges);
+      const isSaving=quoteAutosaveInFlight||hasUnsavedQuoteChanges;
+      statusEl.textContent=isSaving?'Saving...':'All changes saved';
+      statusEl.classList.toggle('is-pending',isSaving);
     }
   }
+}
+function clearQuoteAutosaveTimer(){
+  if(!quoteAutosaveTimer)return;
+  clearTimeout(quoteAutosaveTimer);
+  quoteAutosaveTimer=null;
+}
+function persistCurrentQuoteRecord(){
+  if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
+  saveQuoteCurrent();
+  const savedRef=persistBuildRecord(quote);
+  if(savedRef){
+    setActiveSavedBuildRef(savedRef.source,savedRef.index,savedRef.record);
+  }
+  return savedRef||null;
+}
+function runQuoteAutosave(){
+  if(quoteAutosaveInFlight || !hasUnsavedQuoteChanges)return;
+  quoteAutosaveInFlight=true;
+  updateQuoteActionPriority();
+  try{
+    persistCurrentQuoteRecord();
+    markQuoteSaved();
+  }finally{
+    quoteAutosaveInFlight=false;
+    updateQuoteActionPriority();
+  }
+}
+function scheduleQuoteAutosave(options){
+  const settings={immediate:false,...(options||{})};
+  clearQuoteAutosaveTimer();
+  const delay=settings.immediate?80:520;
+  quoteAutosaveTimer=window.setTimeout(()=>{
+    quoteAutosaveTimer=null;
+    runQuoteAutosave();
+  },delay);
 }
 function markQuoteDirty(){
   hasUnsavedQuoteChanges=true;
   updateQuoteActionPriority();
+  scheduleQuoteAutosave();
 }
 function markQuoteSaved(){
   hasUnsavedQuoteChanges=false;
@@ -3224,6 +3257,8 @@ function findCurrentSavedBuildTarget(){
   return {index:byBuildNumber,record:records[byBuildNumber]};
 }
 function finalizeDeletedCurrentBuild(){
+  clearQuoteAutosaveTimer();
+  closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
@@ -3317,6 +3352,8 @@ function focusWorkshopSection(bodyId,options){
 }
 function beginFreshQuote(options){
   const settings={navigate:true,...(options||{})};
+  clearQuoteAutosaveTimer();
+  closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
@@ -3351,6 +3388,8 @@ function startFreshQuoteForCustomer(record,options){
   const settings={...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
+  clearQuoteAutosaveTimer();
+  closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
   quote=normalizeQuote(next);
   saveQuoteCurrent();
@@ -5609,7 +5648,7 @@ function customerGroupByKey(customerKey){
 }
 function customerFinderActionIntroText(){
   if(customerFinderIntent!=='new-build'){
-    return 'Search customer name and open their saved jobs.';
+    return 'Search customer name and open their build history.';
   }
   if(customerFinderNewBuildStep==='search'){
     return 'Search and select a customer to start a new build.';
@@ -5756,16 +5795,19 @@ function customerFinderPrimaryRecord(group){
 }
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
-  const isBuild=entry.source==='build';
   const title=specificationValue(record.buildName)||'Untitled Job';
-  const typeLabel=isBuild?'Build job':'Saved quote';
-  const refText=isBuild
-    ? (specificationValue(record.buildNumber)?`${typeLabel} ${specificationValue(record.buildNumber)}`:typeLabel)
-    : typeLabel;
-  const savedAtText=record.savedAt?formatDateDisplay(record.savedAt,{includeTime:true}):'Unknown save time';
+  const lifecycle=buildLifecycleStatusKey(record);
+  const statusLabel=lifecycle==='complete'?'COMPLETE':'ACTIVE';
+  const editedAtIso=record.updatedAt||record.savedAt||'';
+  const editedAtText=editedAtIso?formatDateDisplay(editedAtIso,{includeTime:true}):'Unknown date';
+  const completedAtIso=record.completedAt||record.updatedAt||record.savedAt||'';
+  const completedAtText=completedAtIso?formatDateDisplay(completedAtIso,{includeTime:true}):'Unknown date';
+  const timelineText=lifecycle==='complete'?`Completed ${completedAtText}`:`Edited ${editedAtText}`;
+  const buildNumber=specificationValue(record.buildNumber);
+  const buildRef=buildNumber?` • ${buildNumber}`:'';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open saved job ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(refText)} • Saved ${escapeHtml(savedAtText)}</small></div><button class="customer-finder__work-delete ghost-action" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-label="Delete saved job ${escapeHtml(title)}">Delete</button></div>`;
+  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open build ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${statusLabel} • ${escapeHtml(timelineText)}${escapeHtml(buildRef)}</small></div><button class="customer-finder__work-delete ghost-action" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-label="Delete build ${escapeHtml(title)}">Delete</button></div>`;
 }
 function setCustomerRenameValidation(message){
   const error=$('customerRenameNameError');
@@ -5899,7 +5941,7 @@ function requestDeleteCustomerGroup(customerKey,customerName){
   if(refs>0){
     openConfirmDialog({
       title:'Delete Customer',
-      message:`This customer has ${refs} saved job${refs===1?'':'s'}. Delete those records first.`,
+      message:`This customer has ${refs} build${refs===1?'':'s'}. Delete those records first.`,
       actions:[{id:'ok',label:'OK',kind:'primary'}]
     },()=>{});
     return;
@@ -5929,7 +5971,7 @@ function renderCustomerFinder(){
   resultHost.innerHTML=groups.map((group)=>{
     const active=group.key===customerFinderSelectedKey;
     const totalJobs=group.quotes.length+group.builds.length;
-    const summary=`${totalJobs} saved job${totalJobs===1?'':'s'}`;
+    const summary=`${totalJobs} build${totalJobs===1?'':'s'}`;
     return `<div class="component-sheet__row customer-finder__customer-row"><button class="component-sheet__option customer-finder__customer-select${active?' is-active-customer':''}" type="button" data-customer-key="${escapeHtml(group.key)}"><span class="customer-finder__customer-name">${escapeHtml(group.name)}</span><small class="customer-finder__customer-meta">${escapeHtml(summary)}</small></button></div>`;
   }).join('');
   if(customerFinderIntent==='new-build'){
@@ -5949,7 +5991,7 @@ function renderCustomerFinder(){
   const company=specificationValue(customerRecord.company||customerRecord.companyName||customerRecord.businessName);
   const latestSavedAt=selected.latestSavedAt?formatDateDisplay(selected.latestSavedAt,{includeTime:true}):'';
   const detailMeta=[
-    `${selected.entries.length} saved job${selected.entries.length===1?'':'s'}`,
+    `${selected.entries.length} build${selected.entries.length===1?'':'s'}`,
     latestSavedAt?`Latest ${latestSavedAt}`:''
   ].filter(Boolean).join(' • ');
   const facts=[
@@ -5957,20 +5999,20 @@ function renderCustomerFinder(){
     phone?`<small>Phone: ${escapeHtml(phone)}</small>`:'',
     email?`<small>Email: ${escapeHtml(email)}</small>`:''
   ].filter(Boolean).join('');
-  const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No saved jobs for this customer.</div>';
+  const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No builds found for this customer.</div>';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customer-finder__detail-head">
       <h3>${escapeHtml(selected.name)}</h3>
-      <p>${escapeHtml(detailMeta||'Saved jobs for this customer.')}</p>
+      <p>${escapeHtml(detailMeta||'Build history for this customer.')}</p>
       ${facts?`<div class="customer-finder__detail-facts">${facts}</div>`:''}
       <div class="customer-finder__detail-actions">
         <button class="ghost-action" type="button" data-customer-detail-action="rename" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Rename Customer</button>
         <button class="ghost-action" type="button" data-customer-detail-action="delete" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Delete Customer</button>
       </div>
     </header>
-    <section class="customer-finder__work-section" aria-label="Saved Jobs">
-      <h4>Saved Jobs</h4>
+    <section class="customer-finder__work-section" aria-label="Build History">
+      <h4>Build History</h4>
       <div class="customer-finder__work-list">${jobRows}</div>
     </section>
   `;
@@ -6130,7 +6172,7 @@ function ensureCustomerFinderSheet(){
         <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">×</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
-        <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their saved jobs.</p>
+        <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their build history.</p>
         <div id="customerFinderStartActions" class="customer-finder__start-actions" hidden>
           <button id="customerFinderSearchExistingAction" class="primary-action" type="button" data-customer-finder-action="search-existing">SEARCH EXISTING CUSTOMER</button>
           <button id="customerFinderAddNewAction" class="ghost-action" type="button" data-customer-finder-action="add-new">ADD NEW CUSTOMER</button>
@@ -6286,7 +6328,6 @@ function savedBuildSearchText(entry){
     record.customerName,
     record.buildName,
     record.buildNumber,
-    savedBuildDisplayStatus(record),
   ]
     .map((value)=>String(value||''))
     .join(' ')
@@ -6307,28 +6348,181 @@ function savedBuildMatchesSearch(entry,terms){
 function savedBuildDisplayCustomerName(record){
   return specificationValue(record&&record.customerName)||'Unassigned';
 }
-function savedBuildDisplayStatus(record){
+function buildLifecycleStatusKey(record){
   const rawStatus=specificationValue((record&&record.quoteStatus)||(record&&record.status));
-  if(!rawStatus)return '';
   const normalized=normalizeQuoteStatus(rawStatus);
-  return normalized==='accepted'?'Accepted':normalized.replace(/^./,(letter)=>letter.toUpperCase());
+  return normalized==='accepted'?'complete':'active';
+}
+function savedBuildDisplayStatus(record){
+  return buildLifecycleStatusKey(record)==='complete'?'Complete':'Active';
 }
 function savedBuildDisplayDate(value){
   return formatDateDisplay(value,{includeTime:true});
+}
+function savedBuildMenuKey(source,index){
+  return `${String(source||'build')}::${Number(index)}`;
+}
+function closeSavedBuildRowMenu(){
+  activeBuildRowMenu='';
+}
+function toggleSavedBuildRowMenu(source,index){
+  const key=savedBuildMenuKey(source,index);
+  activeBuildRowMenu=activeBuildRowMenu===key?'':key;
+}
+function isSavedBuildRowMenuOpen(source,index){
+  return activeBuildRowMenu===savedBuildMenuKey(source,index);
+}
+function savedBuildRowMenuMarkup(entry){
+  const lifecycle=buildLifecycleStatusKey(entry.record);
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  const toggleLabel=lifecycle==='complete'?'Mark Active':'Mark Complete';
+  const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
+  return `<div class="saved-build-card__menu" role="menu" aria-label="Build actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-build-action="${toggleAction}" data-build-source="${source}" data-build-index="${index}">${toggleLabel}</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-build-action="delete" data-build-source="${source}" data-build-index="${index}">Delete</button></div>`;
 }
 function savedBuildRowMarkup(entry){
   const record=entry.record;
   const customerName=savedBuildDisplayCustomerName(record);
   const statusText=savedBuildDisplayStatus(record);
-  const statusKey=normalizeQuoteStatus((record&&record.quoteStatus)||(record&&record.status));
+  const statusKey=buildLifecycleStatusKey(record);
   const statusClass=statusKey?` saved-build-card__status--${escapeHtml(statusKey)}`:'';
   const updatedAtText=savedBuildDisplayDate(record.updatedAt||record.savedAt);
   const buildName=specificationValue(record.buildName);
-  const buildNameMarkup=buildName?`<p class="saved-build-card__title">${escapeHtml(buildName)}</p>`:'';
+  const fallbackTitle=specificationValue(record.blankSeries)||specificationValue(record.blankMaker)||'Untitled Build';
+  const buildNameMarkup=`<p class="saved-build-card__title">${escapeHtml(buildName||fallbackTitle)}</p>`;
   const statusMarkup=statusText?`<span class="saved-build-card__status${statusClass}">${escapeHtml(statusText)}</span>`:'';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open saved build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__delete" data-build-action="delete" data-build-source="${source}" data-build-index="${index}" type="button" aria-label="Delete saved build for ${escapeHtml(customerName)}">Delete</button></div></article>`;
+  const menuOpen=isSavedBuildRowMenuOpen(entry.source,index);
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
+}
+function isBuildEntryInStatusFilter(entry){
+  return buildLifecycleStatusKey(entry&&entry.record)==='active';
+}
+function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
+  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
+  const numericIndex=Number(index);
+  if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
+  const target=records[numericIndex]&&typeof records[numericIndex]==='object'?records[numericIndex]:{};
+  const nextStatus=nextLifecycle==='complete'?'accepted':'draft';
+  const nowIso=new Date().toISOString();
+  const nextRecord={
+    ...target,
+    quoteStatus:nextStatus,
+    updatedAt:nowIso,
+  };
+  if(nextLifecycle==='complete'){
+    nextRecord.completedAt=nowIso;
+  }
+  records[numericIndex]=nextRecord;
+  Store.set(storageKey,records);
+  return true;
+}
+function buildLifecycleLabel(lifecycle){
+  return lifecycle==='complete'?'Complete':'Active';
+}
+function currentBuildLifecycleStatus(){
+  return buildLifecycleStatusKey(quote);
+}
+function closeCurrentBuildActionsMenu(){
+  currentBuildActionsMenuOpen=false;
+  const menuButton=$('currentBuildActionsMenuBtn');
+  const menu=$('currentBuildActionsMenu');
+  if(menuButton){menuButton.setAttribute('aria-expanded','false');}
+  if(menu){menu.hidden=true;}
+}
+function openCurrentBuildActionsMenu(){
+  currentBuildActionsMenuOpen=true;
+  const menuButton=$('currentBuildActionsMenuBtn');
+  const menu=$('currentBuildActionsMenu');
+  if(menuButton){menuButton.setAttribute('aria-expanded','true');}
+  if(menu){menu.hidden=false;}
+}
+function toggleCurrentBuildActionsMenu(){
+  if(currentBuildActionsMenuOpen){
+    closeCurrentBuildActionsMenu();
+  }else{
+    openCurrentBuildActionsMenu();
+  }
+}
+function updateWorkshopBuildActionsUi(){
+  const lifecycle=currentBuildLifecycleStatus();
+  const statusLabel=buildLifecycleLabel(lifecycle);
+  const statusEl=$('workshopBuildLifecycleStatus');
+  if(statusEl){
+    statusEl.textContent=statusLabel;
+    statusEl.classList.toggle('workshop-build-actions-status-value--complete',lifecycle==='complete');
+    statusEl.classList.toggle('workshop-build-actions-status-value--active',lifecycle!=='complete');
+  }
+  const toggleButton=$('toggleCurrentBuildStatusBtn');
+  if(toggleButton){
+    toggleButton.textContent=lifecycle==='complete'?'Mark Active':'Mark Complete';
+  }
+  const menuToggle=$('currentBuildActionsToggleStatus');
+  if(menuToggle){
+    menuToggle.textContent=lifecycle==='complete'?'Mark Active':'Mark Complete';
+  }
+}
+function ensureCurrentBuildReference(){
+  const target=findCurrentSavedBuildTarget();
+  if(target){
+    setActiveSavedBuildRef('build',target.index,target.record);
+    return {source:'build',index:target.index,record:normalizeQuote(target.record)};
+  }
+  if(!quoteHasMeaningfulDraft(quote)){
+    flashWorkshopStatus('Add build details first',{pending:true,duration:1800});
+    return null;
+  }
+  const savedRef=persistCurrentQuoteRecord();
+  if(!savedRef)return null;
+  markQuoteSaved();
+  return savedRef;
+}
+function setCurrentBuildLifecycle(nextLifecycle){
+  const target=ensureCurrentBuildReference();
+  if(!target)return false;
+  if(!saveBuildLifecycleStatusBySource(target.source,target.index,nextLifecycle))return false;
+  const refreshed=getSavedEntryBySource(target.source,target.index);
+  if(refreshed){
+    quote=normalizeQuote(refreshed);
+    saveQuoteCurrent();
+    setActiveSavedBuildRef(target.source,target.index,refreshed);
+  }
+  markQuoteSaved();
+  renderWorkshopQuote();
+  renderBuilds();
+  renderCustomerFinder();
+  flashWorkshopStatus(nextLifecycle==='complete'?'Build marked complete':'Build marked active');
+  return true;
+}
+function toggleCurrentBuildLifecycle(){
+  const current=currentBuildLifecycleStatus();
+  return setCurrentBuildLifecycle(current==='complete'?'active':'complete');
+}
+function focusBuildNameField(){
+  const input=$('quoteBuildName');
+  if(!input)return;
+  setWorkshopSectionCollapsed('workshopCustomerBody',false);
+  try{input.focus({preventScroll:false});}catch{input.focus();}
+  try{input.select();}catch{}
+}
+function handleCurrentBuildAction(action){
+  if(action==='toggle-status'){
+    toggleCurrentBuildLifecycle();
+    closeCurrentBuildActionsMenu();
+    return;
+  }
+  if(action==='rename'){
+    closeCurrentBuildActionsMenu();
+    focusBuildNameField();
+    flashWorkshopStatus('Rename build in Customer section',{pending:true,duration:1900});
+    return;
+  }
+  if(action==='delete'){
+    closeCurrentBuildActionsMenu();
+    requestDeleteCurrentBuild();
+  }
 }
 function deleteSavedEntryBySource(source,index){
   const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
@@ -6342,6 +6536,7 @@ function deleteSavedEntryBySource(source,index){
 function requestDeleteSavedBuildRecord(source,index){
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
+  closeSavedBuildRowMenu();
   openConfirmDialog({
     title:'Delete this build?',
     message:'This action cannot be undone.',
@@ -6366,6 +6561,8 @@ function getSavedEntryBySource(source,index){
 function openSavedBuildRecord(source,index){
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
+  clearQuoteAutosaveTimer();
+  closeCurrentBuildActionsMenu();
   setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
   saveQuoteCurrent();
@@ -6389,10 +6586,12 @@ function renderBuilds(){
       const rightDate=Date.parse(right.record&&right.record.updatedAt||right.record&&right.record.savedAt||'')||0;
       return rightDate-leftDate;
     })
+    .filter((entry)=>isBuildEntryInStatusFilter(entry))
     .filter((entry)=>savedBuildMatchesSearch(entry,terms));
   if(!records.length){
+    closeSavedBuildRowMenu();
     if(query){
-      host.innerHTML='<section class="saved-builds-empty"><h3>No saved jobs found.</h3><p>Try another customer, build name, or status.</p><div class="saved-builds-empty__actions"><button id="savedBuildsClearSearchBtn" class="ghost-action" type="button">Clear Search</button><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></div></section>';
+      host.innerHTML='<section class="saved-builds-empty"><h3>No builds found.</h3><p>Try another customer or build name.</p><div class="saved-builds-empty__actions"><button id="savedBuildsClearSearchBtn" class="ghost-action" type="button">Clear Search</button><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></div></section>';
       const clearButton=$('savedBuildsClearSearchBtn');
       if(clearButton){
         clearButton.addEventListener('click',()=>{
@@ -6406,7 +6605,7 @@ function renderBuilds(){
         });
       }
     }else{
-      host.innerHTML='<section class="saved-builds-empty"><h3>No saved jobs yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+      host.innerHTML='<section class="saved-builds-empty"><h3>No active builds yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
     }
     const emptyButton=$('savedBuildsEmptyNewBuildBtn');
     if(emptyButton){
@@ -6527,10 +6726,29 @@ function persistLayoutControlState(){
   pendingControlPersist=false;
   save();
 }
+function shouldAvoidWorkshopToolAutoFocus(){
+  return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
 function focusWorkshopToolPrimaryInput(tool){
   const targetId=tool==='grip'?'workshopGripDiameter':'workshopDcDiameter';
   const input=$(targetId);
   if(!input || input.disabled || input.hidden)return;
+  if(shouldAvoidWorkshopToolAutoFocus()){
+    window.requestAnimationFrame(()=>{
+      if(document.activeElement===input){
+        input.blur();
+      }
+      try{
+        const end=String(input.value||'').length;
+        if(typeof input.setSelectionRange==='function')input.setSelectionRange(end,end);
+      }catch{}
+      const selection=window.getSelection?window.getSelection():null;
+      if(selection && selection.rangeCount>0){
+        selection.removeAllRanges();
+      }
+    });
+    return;
+  }
   window.requestAnimationFrame(()=>{
     try{input.focus({preventScroll:true});}catch{input.focus();}
   });
@@ -6620,6 +6838,14 @@ function startHold(field,direction,button){
   },500);
 }
 function bindLayoutControls(){
+  const returnLandingButton=$('[data-workshop-return-landing]');
+  if(returnLandingButton && returnLandingButton.getAttribute('data-workshop-return-bound')!=='true'){
+    returnLandingButton.setAttribute('data-workshop-return-bound','true');
+    returnLandingButton.addEventListener('click',()=>{
+      goToWorkshopLandingScreen();
+    });
+  }
+
   const statusBadge=$('layoutStatusBadge');
   if(statusBadge && statusBadge.getAttribute('data-layout-lock-bound')!=='true'){
     statusBadge.setAttribute('data-layout-lock-bound','true');
@@ -7139,28 +7365,46 @@ function bindWorkshopQuoteBuilder(){
       });
     });
   }
-  const saveQuoteBtn=$('saveQuoteBtn');
-  if(saveQuoteBtn){
-    saveQuoteBtn.addEventListener('click',()=>{
-      if(saveQuoteBtn.disabled)return;
-      if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
-      saveQuoteCurrent();
-      const savedRef=persistBuildRecord(quote);
-      if(savedRef){
-        setActiveSavedBuildRef(savedRef.source,savedRef.index,savedRef.record);
-      }
-      markQuoteSaved();
-      flashWorkshopStatus('Build saved');
-      focusWorkshopSection('workshopBuildActionsBody',{scroll:false});
+  const toggleStatusBtn=$('toggleCurrentBuildStatusBtn');
+  if(toggleStatusBtn && toggleStatusBtn.getAttribute('data-build-status-bound')!=='true'){
+    toggleStatusBtn.setAttribute('data-build-status-bound','true');
+    toggleStatusBtn.addEventListener('click',()=>{
+      toggleCurrentBuildLifecycle();
     });
   }
-  const deleteCurrentBuildBtn=$('deleteCurrentBuildBtn');
-  if(deleteCurrentBuildBtn){
-    deleteCurrentBuildBtn.addEventListener('click',()=>{
-      requestDeleteCurrentBuild();
+  const currentBuildActionsMenuBtn=$('currentBuildActionsMenuBtn');
+  if(currentBuildActionsMenuBtn && currentBuildActionsMenuBtn.getAttribute('data-build-actions-bound')!=='true'){
+    currentBuildActionsMenuBtn.setAttribute('data-build-actions-bound','true');
+    currentBuildActionsMenuBtn.addEventListener('click',(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCurrentBuildActionsMenu();
+    });
+  }
+  const currentBuildActionsMenu=$('currentBuildActionsMenu');
+  if(currentBuildActionsMenu && currentBuildActionsMenu.getAttribute('data-build-actions-menu-bound')!=='true'){
+    currentBuildActionsMenu.setAttribute('data-build-actions-menu-bound','true');
+    currentBuildActionsMenu.addEventListener('click',(event)=>{
+      const actionButton=event.target.closest('[data-current-build-action]');
+      if(!actionButton)return;
+      const action=actionButton.getAttribute('data-current-build-action')||'';
+      handleCurrentBuildAction(action);
+    });
+  }
+  if(document.body.getAttribute('data-current-build-menu-dismiss-bound')!=='true'){
+    document.body.setAttribute('data-current-build-menu-dismiss-bound','true');
+    document.addEventListener('click',(event)=>{
+      if(!currentBuildActionsMenuOpen)return;
+      if(event.target.closest('.workshop-build-actions-menu-wrap'))return;
+      closeCurrentBuildActionsMenu();
+    });
+    document.addEventListener('keydown',(event)=>{
+      if(event.key!=='Escape' || !currentBuildActionsMenuOpen)return;
+      closeCurrentBuildActionsMenu();
     });
   }
   updateQuoteActionPriority();
+  updateWorkshopBuildActionsUi();
 }
 function renderWorkshopQuote(){
   workshopInputMap().forEach(([id,key])=>{
@@ -7187,6 +7431,7 @@ function renderWorkshopQuote(){
   }
   updateBuildPricingSummary();
   updateQuoteActionPriority();
+  updateWorkshopBuildActionsUi();
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput && document.activeElement!==includeTaxInput){
     includeTaxInput.checked=quote.includeGst!==false;
@@ -7600,11 +7845,53 @@ function bindBuildsControls(){
       const source=button.getAttribute('data-build-source')||'quote';
       const index=Number(button.getAttribute('data-build-index'));
       if(action==='open'){openSavedBuildRecord(source,index);}
+      if(action==='toggle-menu'){
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSavedBuildRowMenu(source,index);
+        renderBuilds();
+        return;
+      }
+      if(action==='mark-complete'){
+        if(saveBuildLifecycleStatusBySource(source,index,'complete')){
+          closeSavedBuildRowMenu();
+          renderBuilds();
+          renderCustomerFinder();
+          flashWorkshopStatus('Build marked complete');
+        }
+        return;
+      }
+      if(action==='mark-active'){
+        if(saveBuildLifecycleStatusBySource(source,index,'active')){
+          closeSavedBuildRowMenu();
+          renderBuilds();
+          renderCustomerFinder();
+          flashWorkshopStatus('Build marked active');
+        }
+        return;
+      }
       if(action==='delete'){requestDeleteSavedBuildRecord(source,index);}
+    });
+  }
+  if(document.body.getAttribute('data-build-menu-dismiss-bound')!=='true'){
+    document.body.setAttribute('data-build-menu-dismiss-bound','true');
+    document.addEventListener('click',(event)=>{
+      if(!activeBuildRowMenu)return;
+      if(event.target.closest('.saved-build-card__actions'))return;
+      closeSavedBuildRowMenu();
+      renderBuilds();
+    });
+    document.addEventListener('keydown',(event)=>{
+      if(event.key!=='Escape' || !activeBuildRowMenu)return;
+      closeSavedBuildRowMenu();
+      renderBuilds();
     });
   }
 }
 function onScreenChange(screenId){
+  if(screenId!=='workshopScreen'){
+    closeCurrentBuildActionsMenu();
+  }
   clearLayoutFieldFocusSelection();
   if(screenId==='homeScreen'){
     homeRodRefreshFromState(true);
@@ -7615,9 +7902,11 @@ function onScreenChange(screenId){
   if(screenId==='buildsScreen'){
     const searchInput=$('buildsSearchInput');
     if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
+    closeSavedBuildRowMenu();
     renderBuilds();
   }
   if(screenId==='workshopScreen'){
+    closeCurrentBuildActionsMenu();
     renderStudioScreenMode();
     if(preserveWorkshopQuoteOnEntry){
       preserveWorkshopQuoteOnEntry=false;
@@ -7632,6 +7921,7 @@ function onScreenChange(screenId){
         showStudioLanding();
       }
     }
+    updateWorkshopBuildActionsUi();
   }
   if(screenId==='workshopLandingScreen'){
     renderWorkshopCalculator();
