@@ -5377,12 +5377,15 @@ function renderQuoteComponents(){
   componentsList.innerHTML=quote.components.map((item,i)=>({item,i})).filter(({item,i})=>!componentRowIsEffectivelyEmpty(item) || expandedComponentRowIndex===i).map(({item,i})=>`
       <article class="quote-component-row${animateClass}${expandedComponentRowIndex===i?' is-expanded':''}" data-component-row-index="${i}" aria-label="Build cost item ${i+1}">
         <div class="quote-component-row__summary">
-          <button class="quote-component-row__open" data-component-action="open-row" data-component-index="${i}" type="button" aria-expanded="${expandedComponentRowIndex===i?'true':'false'}">
+          <button class="quote-component-row__open" data-component-action="open-row" data-component-index="${i}" type="button" aria-expanded="${expandedComponentRowIndex===i?'true':'false'}" aria-label="${expandedComponentRowIndex===i?'Collapse':'Expand'} component details for ${escapeHtml(componentRowItemLabel(item))}">
             <span class="quote-component-row__summary-copy">
               <strong class="quote-component-row__summary-item">${escapeHtml(componentRowItemLabel(item))}</strong>
               ${componentRowSummaryMetaParts(item).length?`<span class="quote-component-row__summary-meta">${componentRowSummaryMetaParts(item).map((part)=>`<span>${escapeHtml(part)}</span>`).join('')}</span>`:''}
             </span>
-            ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
+            <span class="quote-component-row__summary-trailing">
+              ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
+              <span class="quote-component-row__disclosure" aria-hidden="true">›</span>
+            </span>
           </button>
         </div>
         ${expandedComponentRowIndex===i?componentRowEditorMarkup(item,i):''}
@@ -6241,11 +6244,25 @@ function openCustomerFinderSheet(intent){
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   bindCustomerFinderViewportHandlers();
-  const input=(customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add')?$('customerFinderNewCustomerName'):$('customerFinderSearch');
-  if(input && !input.hidden){
-    try{input.focus({preventScroll:true});}catch{input.focus();}
+  if(customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add'){
+    const nameInput=$('customerFinderNewCustomerName');
+    if(nameInput && !nameInput.hidden){
+      try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
+    }
   }
   scheduleCustomerFinderViewportSync(40);
+}
+function dismissCustomerFinderKeyboardFocus(){
+  const sheet=$('customerFinderSheet');
+  if(!sheet)return;
+  const activeEl=document.activeElement;
+  if(activeEl && sheet.contains(activeEl) && typeof activeEl.blur==='function'){
+    activeEl.blur();
+  }
+  const selection=window.getSelection?window.getSelection():null;
+  if(selection && selection.rangeCount>0){
+    selection.removeAllRanges();
+  }
 }
 function ensureCustomerFinderSheet(){
   if($('customerFinderSheet'))return;
@@ -6375,6 +6392,7 @@ function ensureCustomerFinderSheet(){
       }
       customerFinderSelectedKey=customerKey;
       customerFinderBrowseView='detail';
+      dismissCustomerFinderKeyboardFocus();
       closeCustomerFinderBuildRowMenu();
       closeCustomerFinderCustomerMenu();
       renderCustomerFinder();
@@ -6416,7 +6434,7 @@ function ensureCustomerFinderSheet(){
       }
       if(action==='rename'){
         closeCustomerFinderSheet();
-        openSavedBuildRecord(source,index);
+        openSavedBuildRecord(source,index,{openAtTop:true});
         window.setTimeout(()=>{
           focusBuildNameField();
           flashWorkshopStatus('Rename build in Customer section',{pending:true,duration:1900});
@@ -6434,7 +6452,7 @@ function ensureCustomerFinderSheet(){
       const source=openRow.getAttribute('data-customer-open-source')||'quote';
       const index=Number(openRow.getAttribute('data-customer-open-index'));
       closeCustomerFinderSheet();
-      openSavedBuildRecord(source,index);
+      openSavedBuildRecord(source,index,{openAtTop:true});
       return;
     }
     if(customerFinderBuildRowMenu || customerFinderCustomerMenuOpen){
@@ -6451,7 +6469,7 @@ function ensureCustomerFinderSheet(){
     const source=openRow.getAttribute('data-customer-open-source')||'quote';
     const index=Number(openRow.getAttribute('data-customer-open-index'));
     closeCustomerFinderSheet();
-    openSavedBuildRecord(source,index);
+    openSavedBuildRecord(source,index,{openAtTop:true});
   });
   const searchInput=sheet.querySelector('#customerFinderSearch');
   if(searchInput){
@@ -6726,7 +6744,20 @@ function getSavedEntryBySource(source,index){
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return null;
   return normalizeQuote(records[numericIndex]);
 }
-function openSavedBuildRecord(source,index){
+function positionWorkshopScreenAtTop(){
+  const shell=$('studioWorkflowPanel')||$('workshopScreen');
+  window.requestAnimationFrame(()=>{
+    window.scrollTo(0,0);
+    if(shell && typeof shell.scrollIntoView==='function'){
+      shell.scrollIntoView({block:'start',inline:'nearest',behavior:'auto'});
+    }
+    window.setTimeout(()=>{
+      window.scrollTo(0,0);
+    },44);
+  });
+}
+function openSavedBuildRecord(source,index,options){
+  const settings={openAtTop:false,...(options||{})};
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
   clearQuoteAutosaveTimer();
@@ -6740,6 +6771,13 @@ function openSavedBuildRecord(source,index){
   collapseWorkshopSections();
   preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
+  if(settings.openAtTop){
+    window.setTimeout(()=>{
+      focusWorkshopSection('workshopCustomerBody',{scroll:false});
+      positionWorkshopScreenAtTop();
+    },36);
+    return;
+  }
   window.setTimeout(()=>focusWorkshopSection(nextWorkshopSectionId()),36);
 }
 function renderBuilds(){
