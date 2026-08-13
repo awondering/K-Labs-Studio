@@ -1887,6 +1887,121 @@ body.component-sheet-open .workshop-back-to-top{
   line-height:1.35;
   letter-spacing:.01em;
 }
+
+.customer-finder__root-view{
+  display:grid;
+  gap:8px;
+}
+
+.customer-finder__browse-head{
+  display:grid;
+  gap:4px;
+}
+
+.customer-finder__studio-back{
+  justify-self:start;
+  min-height:30px;
+}
+
+.customer-finder__browse-head h3{
+  margin:0;
+  color:#ece4d7;
+  font-size:16px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.customer-finder__browse-head p{
+  margin:0;
+  color:#a49e92;
+  font-size:11px;
+}
+
+.customer-finder__root-controls{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+}
+
+.customer-finder__root-controls .ghost-action{
+  min-height:34px;
+  padding:0 12px;
+}
+
+.customer-finder__customer-row .component-sheet__option{
+  min-height:52px;
+  border-color:rgba(170,165,154,.2);
+  background:linear-gradient(180deg,rgba(16,20,22,.9),rgba(10,13,15,.96));
+}
+
+.customer-finder__customer-row .component-sheet__option:hover,
+.customer-finder__customer-row .component-sheet__option:focus-visible{
+  border-color:rgba(var(--kl-red-rgb),.42);
+  color:#f0e5d6;
+}
+
+.customer-finder__detail{
+  border-color:rgba(180,173,161,.22);
+}
+
+.customer-finder__detail-nav{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.customer-finder__detail-menu-wrap,
+.customer-finder__work-actions{
+  position:relative;
+  flex:0 0 auto;
+}
+
+.customer-finder__detail-more,
+.customer-finder__work-more{
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+  border-radius:10px;
+  font-size:18px;
+  line-height:1;
+}
+
+.customer-finder__inline-menu{
+  top:36px;
+  right:0;
+  min-width:146px;
+  padding:4px;
+  gap:3px;
+  box-shadow:0 8px 16px rgba(0,0,0,.2);
+}
+
+.customer-finder__inline-menu .saved-build-card__menu-item{
+  min-height:30px;
+  padding:0 9px;
+  border-radius:9px;
+  font-size:10px;
+  letter-spacing:.03em;
+  text-transform:none;
+}
+
+.customer-finder__work-row{
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  padding:8px;
+}
+
+.customer-finder__work-copy{
+  gap:3px;
+}
+
+.customer-finder__work-copy small{
+  letter-spacing:.03em;
+}
+
+.customer-finder__work-delete{
+  display:none;
+}
 @media (max-width:760px){
   .customer-finder__start-actions{
     grid-template-columns:1fr;
@@ -1911,6 +2026,15 @@ body.component-sheet-open .workshop-back-to-top{
 
   .customer-finder__detail-actions{
     grid-template-columns:1fr;
+  }
+
+  .customer-finder__root-controls{
+    grid-template-columns:1fr;
+  }
+
+  .customer-finder__inline-menu{
+    right:auto;
+    left:0;
   }
 }
 

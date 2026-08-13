@@ -42,6 +42,9 @@ let buildsSearch='';
 let activeBuildRowMenu='';
 let customerFinderSearch='';
 let customerFinderSelectedKey='';
+let customerFinderBrowseView='list';
+let customerFinderBuildRowMenu='';
+let customerFinderCustomerMenuOpen=false;
 let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
 let activeCustomerRenameContext={key:'',existingName:''};
@@ -5727,19 +5730,32 @@ function updateCustomerFinderIntentUi(){
   if(intro)intro.textContent=customerFinderActionIntroText();
   const startActions=$('customerFinderStartActions');
   const searchBlock=$('customerFinderSearchBlock');
+  const rootView=$('customerFinderRootView');
+  const browseHead=$('customerFinderBrowseHead');
+  const browseAddBtn=$('customerFinderBrowseAddBtn');
   const form=$('customerFinderNewForm');
-  const back=searchBlock?searchBlock.querySelector('[data-customer-finder-action="back-to-actions"]'):null;
+  const backs=searchBlock?Array.from(searchBlock.querySelectorAll('[data-customer-finder-action="back-to-actions"]')):[];
+  const back=backs.length?backs[0]:null;
+  const backToList=searchBlock?searchBlock.querySelector('[data-customer-finder-action="back-to-list"]'):null;
   if(customerFinderIntent==='new-build'){
     if(startActions)startActions.hidden=customerFinderNewBuildStep!=='actions';
     if(searchBlock)searchBlock.hidden=customerFinderNewBuildStep!=='search';
+    if(rootView)rootView.hidden=false;
+    if(browseHead)browseHead.hidden=true;
+    if(browseAddBtn)browseAddBtn.hidden=true;
     if(form)form.hidden=customerFinderNewBuildStep!=='add';
     if(back)back.hidden=customerFinderNewBuildStep==='actions';
+    if(backToList)backToList.hidden=true;
     return;
   }
   if(startActions)startActions.hidden=true;
   if(searchBlock)searchBlock.hidden=false;
+  if(rootView)rootView.hidden=customerFinderBrowseView==='detail';
+  if(browseHead)browseHead.hidden=false;
+  if(browseAddBtn)browseAddBtn.hidden=false;
   if(form)form.hidden=true;
   if(back)back.hidden=true;
+  if(backToList)backToList.hidden=customerFinderBrowseView!=='detail';
 }
 function handleCustomerSelectionForNewBuild(customerKey,customerName){
   const key=String(customerKey||'');
@@ -5793,6 +5809,33 @@ function customerFinderPrimaryRecord(group){
   });
   return sorted[0]&&sorted[0].record?sorted[0].record:{};
 }
+function closeCustomerFinderBuildRowMenu(){
+  customerFinderBuildRowMenu='';
+}
+function customerFinderBuildRowMenuKey(source,index){
+  return `${String(source||'build')}::${Number(index)}`;
+}
+function isCustomerFinderBuildRowMenuOpen(source,index){
+  return customerFinderBuildRowMenu===customerFinderBuildRowMenuKey(source,index);
+}
+function toggleCustomerFinderBuildRowMenu(source,index){
+  const key=customerFinderBuildRowMenuKey(source,index);
+  customerFinderBuildRowMenu=customerFinderBuildRowMenu===key?'':key;
+}
+function closeCustomerFinderCustomerMenu(){
+  customerFinderCustomerMenuOpen=false;
+}
+function toggleCustomerFinderCustomerMenu(){
+  customerFinderCustomerMenuOpen=!customerFinderCustomerMenuOpen;
+}
+function customerFinderBuildRowMenuMarkup(entry){
+  const lifecycle=buildLifecycleStatusKey(entry&&entry.record);
+  const toggleLabel=lifecycle==='complete'?'Mark Active':'Mark Complete';
+  const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
+  const source=escapeHtml(entry.source);
+  const index=Number(entry.index);
+  return `<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Build actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="${toggleAction}" data-customer-open-source="${source}" data-customer-open-index="${index}">${toggleLabel}</button><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="rename" data-customer-open-source="${source}" data-customer-open-index="${index}">Rename Build</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-build-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">Delete Build</button></div>`;
+}
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
   const title=specificationValue(record.buildName)||'Untitled Job';
@@ -5803,11 +5846,10 @@ function customerFinderWorkRowMarkup(entry){
   const completedAtIso=record.completedAt||record.updatedAt||record.savedAt||'';
   const completedAtText=completedAtIso?formatDateDisplay(completedAtIso,{includeTime:true}):'Unknown date';
   const timelineText=lifecycle==='complete'?`Completed ${completedAtText}`:`Edited ${editedAtText}`;
-  const buildNumber=specificationValue(record.buildNumber);
-  const buildRef=buildNumber?` • ${buildNumber}`:'';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open build ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${statusLabel} • ${escapeHtml(timelineText)}${escapeHtml(buildRef)}</small></div><button class="customer-finder__work-delete ghost-action" type="button" data-customer-row-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-label="Delete build ${escapeHtml(title)}">Delete</button></div>`;
+  const menuOpen=isCustomerFinderBuildRowMenuOpen(entry.source,index);
+  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open build ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${statusLabel}</small><small>${escapeHtml(timelineText)}</small></div><div class="customer-finder__work-actions"><button class="ghost-action customer-finder__work-more" type="button" data-customer-row-action="toggle-menu" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?customerFinderBuildRowMenuMarkup(entry):''}</div></div>`;
 }
 function setCustomerRenameValidation(message){
   const error=$('customerRenameNameError');
@@ -5955,13 +5997,18 @@ function requestDeleteCustomerGroup(customerKey,customerName){
 function renderCustomerFinder(){
   const resultHost=$('customerFinderResults');
   const detailHost=$('customerFinderDetail');
+  const rootView=$('customerFinderRootView');
+  const backButton=$('customerFinderSearchBlock')&&$('customerFinderSearchBlock').querySelector('[data-customer-finder-action="back-to-list"]');
   if(!resultHost || !detailHost)return;
   const groups=customerSavedGroups(customerFinderSearch);
   if(!groups.length){
     customerFinderSelectedKey='';
+    customerFinderBrowseView='list';
     resultHost.innerHTML='<div class="component-sheet__empty">No customers matched that name.</div>';
     detailHost.hidden=true;
     detailHost.innerHTML='';
+    if(rootView)rootView.hidden=false;
+    if(backButton)backButton.hidden=true;
     return;
   }
   const hasSelected=groups.some((group)=>group.key===customerFinderSelectedKey);
@@ -5977,45 +6024,61 @@ function renderCustomerFinder(){
   if(customerFinderIntent==='new-build'){
     detailHost.hidden=true;
     detailHost.innerHTML='';
+    if(rootView)rootView.hidden=false;
+    if(backButton)backButton.hidden=true;
+    return;
+  }
+  if(customerFinderBrowseView!=='detail'){
+    detailHost.hidden=true;
+    detailHost.innerHTML='';
+    if(rootView)rootView.hidden=false;
+    if(backButton)backButton.hidden=true;
     return;
   }
   const selected=groups.find((group)=>group.key===customerFinderSelectedKey)||groups[0];
   if(!selected){
     detailHost.hidden=true;
     detailHost.innerHTML='';
+    if(rootView)rootView.hidden=false;
+    if(backButton)backButton.hidden=true;
     return;
   }
   const customerRecord=customerFinderPrimaryRecord(selected);
   const phone=specificationValue(customerRecord.phone);
   const email=specificationValue(customerRecord.email);
+  const notes=specificationValue(customerRecord.notes);
   const company=specificationValue(customerRecord.company||customerRecord.companyName||customerRecord.businessName);
-  const latestSavedAt=selected.latestSavedAt?formatDateDisplay(selected.latestSavedAt,{includeTime:true}):'';
-  const detailMeta=[
-    `${selected.entries.length} build${selected.entries.length===1?'':'s'}`,
-    latestSavedAt?`Latest ${latestSavedAt}`:''
-  ].filter(Boolean).join(' • ');
   const facts=[
     company?`<small>Company: ${escapeHtml(company)}</small>`:'',
     phone?`<small>Phone: ${escapeHtml(phone)}</small>`:'',
-    email?`<small>Email: ${escapeHtml(email)}</small>`:''
+    email?`<small>Email: ${escapeHtml(email)}</small>`:'',
+    notes?`<small>Notes: ${escapeHtml(notes)}</small>`:''
   ].filter(Boolean).join('');
   const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No builds found for this customer.</div>';
+  const customerMenu=customerFinderCustomerMenuOpen?`<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Customer actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-detail-action="rename" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Rename Customer</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-detail-action="delete" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Delete Customer</button></div>`:'';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customer-finder__detail-head">
-      <h3>${escapeHtml(selected.name)}</h3>
-      <p>${escapeHtml(detailMeta||'Build history for this customer.')}</p>
-      ${facts?`<div class="customer-finder__detail-facts">${facts}</div>`:''}
-      <div class="customer-finder__detail-actions">
-        <button class="ghost-action" type="button" data-customer-detail-action="rename" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Rename Customer</button>
-        <button class="ghost-action" type="button" data-customer-detail-action="delete" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Delete Customer</button>
+      <div class="customer-finder__detail-nav">
+        <button class="workshop-tool-nav-back" type="button" data-customer-finder-action="back-to-list" aria-label="Return to Customers">
+          <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+          <span>Customers</span>
+        </button>
+        <div class="customer-finder__detail-menu-wrap">
+          <button class="ghost-action customer-finder__detail-more" type="button" data-customer-detail-action="toggle-menu" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}" aria-haspopup="menu" aria-expanded="${customerFinderCustomerMenuOpen?'true':'false'}" aria-label="Customer actions">&hellip;</button>
+          ${customerMenu}
+        </div>
       </div>
+      <h3>${escapeHtml(selected.name)}</h3>
+      ${facts?`<div class="customer-finder__detail-facts">${facts}</div>`:''}
     </header>
     <section class="customer-finder__work-section" aria-label="Build History">
       <h4>Build History</h4>
       <div class="customer-finder__work-list">${jobRows}</div>
     </section>
   `;
+  if(rootView)rootView.hidden=true;
+  if(backButton)backButton.hidden=true;
 }
 function clearCustomerFinderViewportStyles(){
   const sheet=$('customerFinderSheet');
@@ -6129,6 +6192,9 @@ function closeCustomerFinderSheet(){
     activeEl.blur();
   }
   sheet.hidden=true;
+  customerFinderBrowseView='list';
+  customerFinderBuildRowMenu='';
+  customerFinderCustomerMenuOpen=false;
   unbindCustomerFinderViewportHandlers();
   unlockModalLayer({restoreFocus:true});
 }
@@ -6138,6 +6204,9 @@ function openCustomerFinderSheet(intent){
   if(!sheet)return;
   customerFinderIntent=intent==='new-build'?'new-build':'browse';
   customerFinderNewBuildStep=customerFinderIntent==='new-build'?'actions':'search';
+  customerFinderBrowseView='list';
+  customerFinderBuildRowMenu='';
+  customerFinderCustomerMenuOpen=false;
   customerFinderSearch='';
   customerFinderSelectedKey='';
   if($('customerFinderSearch'))$('customerFinderSearch').value='';
@@ -6178,14 +6247,24 @@ function ensureCustomerFinderSheet(){
           <button id="customerFinderAddNewAction" class="ghost-action" type="button" data-customer-finder-action="add-new">ADD NEW CUSTOMER</button>
         </div>
         <div id="customerFinderSearchBlock" hidden>
-          <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customer name" autocomplete="off" spellcheck="false" />
-          <section class="customer-finder__layout" aria-label="Customer finder layout">
-            <aside class="customer-finder__list-pane" aria-label="Customers">
-              <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
-            </aside>
-            <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
-          </section>
+          <div id="customerFinderRootView" class="customer-finder__root-view">
+            <div id="customerFinderBrowseHead" class="customer-finder__browse-head">
+              <button class="workshop-tool-nav-back customer-finder__studio-back" type="button" data-customer-finder-action="back-to-studio" aria-label="Return to Studio">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Studio</span>
+              </button>
+              <h3>Customers</h3>
+              <p>Find and manage customers.</p>
+            </div>
+            <div class="customer-finder__root-controls">
+              <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" />
+              <button id="customerFinderBrowseAddBtn" class="ghost-action" type="button" data-customer-finder-action="browse-add-customer">Add Customer</button>
+            </div>
+            <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
+          </div>
+          <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
           <button class="ghost-action customer-finder__back" type="button" data-customer-finder-action="back-to-actions" hidden>Back</button>
+          <button class="ghost-action customer-finder__back" type="button" data-customer-finder-action="back-to-list" hidden>Back to Customers</button>
         </div>
         <form id="customerFinderNewForm" class="customer-finder__new-form" hidden>
           <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" placeholder="Customer name" autocomplete="name" /></label>
@@ -6230,6 +6309,23 @@ function ensureCustomerFinderSheet(){
         }
         return;
       }
+      if(action==='back-to-studio'){
+        closeCustomerFinderSheet();
+        return;
+      }
+      if(action==='back-to-list'){
+        customerFinderBrowseView='list';
+        closeCustomerFinderBuildRowMenu();
+        closeCustomerFinderCustomerMenu();
+        renderCustomerFinder();
+        return;
+      }
+      if(action==='browse-add-customer'){
+        closeCustomerFinderSheet();
+        openCustomerFinderSheet('new-build');
+        setCustomerFinderNewBuildStep('add');
+        return;
+      }
       if(action==='submit-new'){
         handleCreateCustomerFromNewBuildForm();
         return;
@@ -6240,6 +6336,12 @@ function ensureCustomerFinderSheet(){
       const action=customerDetailAction.getAttribute('data-customer-detail-action')||'';
       const customerKey=customerDetailAction.getAttribute('data-customer-key')||'';
       const customerName=customerDetailAction.getAttribute('data-customer-name')||'';
+      if(action==='toggle-menu'){
+        toggleCustomerFinderCustomerMenu();
+        renderCustomerFinder();
+        return;
+      }
+      closeCustomerFinderCustomerMenu();
       if(action==='rename'){requestRenameCustomer(customerKey,customerName);}
       if(action==='delete'){requestDeleteCustomerGroup(customerKey,customerName);}
       return;
@@ -6253,6 +6355,9 @@ function ensureCustomerFinderSheet(){
         return;
       }
       customerFinderSelectedKey=customerKey;
+      customerFinderBrowseView='detail';
+      closeCustomerFinderBuildRowMenu();
+      closeCustomerFinderCustomerMenu();
       renderCustomerFinder();
       return;
     }
@@ -6261,24 +6366,68 @@ function ensureCustomerFinderSheet(){
       const action=rowAction.getAttribute('data-customer-row-action')||'';
       const source=rowAction.getAttribute('data-customer-open-source')||'quote';
       const index=Number(rowAction.getAttribute('data-customer-open-index'));
+      if(action==='toggle-menu'){
+        toggleCustomerFinderBuildRowMenu(source,index);
+        renderCustomerFinder();
+      }
+      return;
+    }
+    const buildActionButton=event.target.closest('[data-customer-build-action]');
+    if(buildActionButton){
+      const action=buildActionButton.getAttribute('data-customer-build-action')||'';
+      const source=buildActionButton.getAttribute('data-customer-open-source')||'quote';
+      const index=Number(buildActionButton.getAttribute('data-customer-open-index'));
+      if(action==='mark-complete'){
+        if(saveBuildLifecycleStatusBySource(source,index,'complete')){
+          closeCustomerFinderBuildRowMenu();
+          renderCustomerFinder();
+          renderBuilds();
+          flashWorkshopStatus('Build marked complete');
+        }
+        return;
+      }
+      if(action==='mark-active'){
+        if(saveBuildLifecycleStatusBySource(source,index,'active')){
+          closeCustomerFinderBuildRowMenu();
+          renderCustomerFinder();
+          renderBuilds();
+          flashWorkshopStatus('Build marked active');
+        }
+        return;
+      }
+      if(action==='rename'){
+        closeCustomerFinderSheet();
+        openSavedBuildRecord(source,index);
+        window.setTimeout(()=>{
+          focusBuildNameField();
+          flashWorkshopStatus('Rename build in Customer section',{pending:true,duration:1900});
+        },56);
+        return;
+      }
       if(action==='delete'){
+        closeCustomerFinderBuildRowMenu();
         requestDeleteSavedBuildRecord(source,index);
       }
       return;
     }
     const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
-    if(openRow && !event.target.closest('[data-customer-row-action]')){
+    if(openRow && !event.target.closest('[data-customer-row-action]') && !event.target.closest('[data-customer-build-action]')){
       const source=openRow.getAttribute('data-customer-open-source')||'quote';
       const index=Number(openRow.getAttribute('data-customer-open-index'));
       closeCustomerFinderSheet();
       openSavedBuildRecord(source,index);
       return;
     }
+    if(customerFinderBuildRowMenu || customerFinderCustomerMenuOpen){
+      closeCustomerFinderBuildRowMenu();
+      closeCustomerFinderCustomerMenu();
+      renderCustomerFinder();
+    }
   });
   sheet.addEventListener('keydown',(event)=>{
     if(event.key!=='Enter' && event.key!==' ')return;
     const openRow=event.target.closest('.customer-finder__work-row[data-customer-open-source][data-customer-open-index]');
-    if(!openRow || event.target.closest('[data-customer-row-action]'))return;
+    if(!openRow || event.target.closest('[data-customer-row-action]') || event.target.closest('[data-customer-build-action]'))return;
     event.preventDefault();
     const source=openRow.getAttribute('data-customer-open-source')||'quote';
     const index=Number(openRow.getAttribute('data-customer-open-index'));
