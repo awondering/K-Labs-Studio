@@ -5601,6 +5601,25 @@ function isValidCustomerName(name){
   ]);
   return !blockedNames.has(normalized);
 }
+function customerSurnameFromRecord(record,name){
+  const source=record&&typeof record==='object'?record:{};
+  const explicitSurname=specificationValue(source.surname)
+    || specificationValue(source.lastName)
+    || specificationValue(source.familyName)
+    || specificationValue(source.customerLastName);
+  if(explicitSurname)return normalizeNameKey(explicitSurname);
+  const display=String(name||'').trim();
+  if(!display)return '';
+  const parts=display.split(/\s+/).filter(Boolean);
+  return normalizeNameKey(parts[parts.length-1]||display);
+}
+function customerGivenNamesFromDisplay(name){
+  const display=String(name||'').trim();
+  if(!display)return '';
+  const parts=display.split(/\s+/).filter(Boolean);
+  if(parts.length<=1)return normalizeNameKey(display);
+  return normalizeNameKey(parts.slice(0,-1).join(' '));
+}
 function customerSavedGroups(searchValue,options){
   const settings=options&&typeof options==='object'?options:{};
   const includeInvalidCustomers=settings.includeInvalidCustomers!==false;
@@ -5611,11 +5630,17 @@ function customerSavedGroups(searchValue,options){
     if(!includeInvalidCustomers && !isValidCustomerName(customerName))return;
     const key=normalizeNameKey(customerName)||'__no_customer__';
     if(!grouped.has(key)){
-      grouped.set(key,{key,name:customerName||'No customer name',entries:[]});
+      grouped.set(key,{key,name:customerName||'No customer name',entries:[],sortSurname:'',sortGiven:''});
     }
     const target=grouped.get(key);
     target.entries.push(entry);
     if(customerName && target.name==='No customer name')target.name=customerName;
+    if(!target.sortSurname){
+      target.sortSurname=customerSurnameFromRecord(record,target.name);
+    }
+    if(!target.sortGiven){
+      target.sortGiven=customerGivenNamesFromDisplay(target.name);
+    }
   });
   const normalizedSearch=normalizeNameKey(searchValue);
   const groups=Array.from(grouped.values()).map((group)=>{
@@ -5630,15 +5655,19 @@ function customerSavedGroups(searchValue,options){
       quotes:entries.filter((entry)=>entry.source==='quote'),
       builds:entries.filter((entry)=>entry.source==='build'),
       latestSavedAt:entries[0]&&entries[0].record?entries[0].record.savedAt:'',
+      sortSurname:group.sortSurname||customerSurnameFromRecord(entries[0]&&entries[0].record,group.name),
+      sortGiven:group.sortGiven||customerGivenNamesFromDisplay(group.name),
     };
   }).filter((group)=>{
     if(!normalizedSearch)return true;
     return normalizeNameKey(group.name).includes(normalizedSearch);
   });
   return groups.sort((left,right)=>{
-    const leftDate=Date.parse(left.latestSavedAt||'')||0;
-    const rightDate=Date.parse(right.latestSavedAt||'')||0;
-    return rightDate-leftDate;
+    const surnameCompare=String(left.sortSurname||'').localeCompare(String(right.sortSurname||''),undefined,{sensitivity:'base'});
+    if(surnameCompare!==0)return surnameCompare;
+    const givenCompare=String(left.sortGiven||'').localeCompare(String(right.sortGiven||''),undefined,{sensitivity:'base'});
+    if(givenCompare!==0)return givenCompare;
+    return String(left.name||'').localeCompare(String(right.name||''),undefined,{sensitivity:'base'});
   });
 }
 function customerFinderMatchesKey(customerKey,name){
@@ -5736,7 +5765,6 @@ function updateCustomerFinderIntentUi(){
   const form=$('customerFinderNewForm');
   const backs=searchBlock?Array.from(searchBlock.querySelectorAll('[data-customer-finder-action="back-to-actions"]')):[];
   const back=backs.length?backs[0]:null;
-  const backToList=searchBlock?searchBlock.querySelector('[data-customer-finder-action="back-to-list"]'):null;
   if(customerFinderIntent==='new-build'){
     if(startActions)startActions.hidden=customerFinderNewBuildStep!=='actions';
     if(searchBlock)searchBlock.hidden=customerFinderNewBuildStep!=='search';
@@ -5745,7 +5773,6 @@ function updateCustomerFinderIntentUi(){
     if(browseAddBtn)browseAddBtn.hidden=true;
     if(form)form.hidden=customerFinderNewBuildStep!=='add';
     if(back)back.hidden=customerFinderNewBuildStep==='actions';
-    if(backToList)backToList.hidden=true;
     return;
   }
   if(startActions)startActions.hidden=true;
@@ -5755,7 +5782,6 @@ function updateCustomerFinderIntentUi(){
   if(browseAddBtn)browseAddBtn.hidden=false;
   if(form)form.hidden=true;
   if(back)back.hidden=true;
-  if(backToList)backToList.hidden=customerFinderBrowseView!=='detail';
 }
 function handleCustomerSelectionForNewBuild(customerKey,customerName){
   const key=String(customerKey||'');
@@ -5998,7 +6024,6 @@ function renderCustomerFinder(){
   const resultHost=$('customerFinderResults');
   const detailHost=$('customerFinderDetail');
   const rootView=$('customerFinderRootView');
-  const backButton=$('customerFinderSearchBlock')&&$('customerFinderSearchBlock').querySelector('[data-customer-finder-action="back-to-list"]');
   if(!resultHost || !detailHost)return;
   const groups=customerSavedGroups(customerFinderSearch);
   if(!groups.length){
@@ -6008,7 +6033,6 @@ function renderCustomerFinder(){
     detailHost.hidden=true;
     detailHost.innerHTML='';
     if(rootView)rootView.hidden=false;
-    if(backButton)backButton.hidden=true;
     return;
   }
   const hasSelected=groups.some((group)=>group.key===customerFinderSelectedKey);
@@ -6025,14 +6049,12 @@ function renderCustomerFinder(){
     detailHost.hidden=true;
     detailHost.innerHTML='';
     if(rootView)rootView.hidden=false;
-    if(backButton)backButton.hidden=true;
     return;
   }
   if(customerFinderBrowseView!=='detail'){
     detailHost.hidden=true;
     detailHost.innerHTML='';
     if(rootView)rootView.hidden=false;
-    if(backButton)backButton.hidden=true;
     return;
   }
   const selected=groups.find((group)=>group.key===customerFinderSelectedKey)||groups[0];
@@ -6040,7 +6062,6 @@ function renderCustomerFinder(){
     detailHost.hidden=true;
     detailHost.innerHTML='';
     if(rootView)rootView.hidden=false;
-    if(backButton)backButton.hidden=true;
     return;
   }
   const customerRecord=customerFinderPrimaryRecord(selected);
@@ -6078,7 +6099,6 @@ function renderCustomerFinder(){
     </section>
   `;
   if(rootView)rootView.hidden=true;
-  if(backButton)backButton.hidden=true;
 }
 function clearCustomerFinderViewportStyles(){
   const sheet=$('customerFinderSheet');
@@ -6264,7 +6284,6 @@ function ensureCustomerFinderSheet(){
           </div>
           <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
           <button class="ghost-action customer-finder__back" type="button" data-customer-finder-action="back-to-actions" hidden>Back</button>
-          <button class="ghost-action customer-finder__back" type="button" data-customer-finder-action="back-to-list" hidden>Back to Customers</button>
         </div>
         <form id="customerFinderNewForm" class="customer-finder__new-form" hidden>
           <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" placeholder="Customer name" autocomplete="name" /></label>
