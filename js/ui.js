@@ -23,7 +23,7 @@ const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
 const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
-const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy','yyyy-mm-dd'];
+const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
@@ -89,6 +89,7 @@ let studioSelectedComponentKey='';
 let studioComponentDraft=null;
 let studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
 let studioLibraryEditor={type:'',mode:'',targetName:''};
+let studioLibraryContextMenu={type:'',key:''};
 let studioTaxonomyManagerSection='categories';
 let studioTaxonomyUiState={
   categories:{mode:'browse'},
@@ -172,10 +173,11 @@ function saveChoicePickerFavourites(){
 function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
+  const trackComponentStock=!!(settings&&settings.trackComponentStock);
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
-  return {taxRate,taxEnabled,measurementUnits,imperialDisplay,dateFormat};
+  return {taxRate,taxEnabled,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
@@ -185,6 +187,9 @@ function activeTaxRate(){
 }
 function activeTaxEnabled(){
   return (studioSettings&&typeof studioSettings.taxEnabled==='boolean')?studioSettings.taxEnabled:true;
+}
+function activeTrackComponentStock(){
+  return !!(studioSettings&&studioSettings.trackComponentStock);
 }
 function activeMeasurementUnits(){
   return normalizeMeasurementUnits(studioSettings&&studioSettings.measurementUnits);
@@ -1687,6 +1692,7 @@ function showStudioComponents(){
   studioComponentsSearch='';
   studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
   studioLibraryEditor={type:'',mode:'',targetName:''};
+  closeStudioLibraryContextMenu();
   studioComponentDraft=null;
   studioSelectedComponentKey='';
   renderStudioScreenMode();
@@ -1694,6 +1700,8 @@ function showStudioComponents(){
 }
 function showStudioTaxonomyManager(){
   studioScreenView='taxonomy';
+  studioTaxonomyManagerSection='suppliers';
+  setStudioTaxonomySectionMode('suppliers','browse');
   renderStudioScreenMode();
   renderStudioTaxonomyManager();
 }
@@ -1870,15 +1878,19 @@ function supplierOptionsMarkup(selectedSupplierName){
   return options.join('');
 }
 function studioComponentDetailPayloadFromDom(){
+  const stockInput=$('studioComponentStockOnHand');
+  const rawStock=String(stockInput&&stockInput.value||'').trim();
+  const stockOnHand=rawStock===''?undefined:numberOrZero(rawStock);
   return {
     name:String(($('studioComponentName')&&$('studioComponentName').value)||'').trim(),
-    description:String(($('studioComponentDescription')&&$('studioComponentDescription').value)||'').trim(),
     category:String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim(),
     subcategory:String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim(),
     supplier:String(($('studioComponentSupplier')&&$('studioComponentSupplier').value)||'').trim(),
     specifications:String(($('studioComponentSpecifications')&&$('studioComponentSpecifications').value)||'').trim(),
+    notes:String(($('studioComponentNotes')&&$('studioComponentNotes').value)||'').trim(),
     cost:studioComponentCurrencyFieldValue('studioComponentCost'),
     unitPrice:studioComponentCurrencyFieldValue('studioComponentUnitPrice'),
+    stockOnHand,
   };
 }
 function studioComponentPayloadSignature(payload){
@@ -1937,6 +1949,14 @@ function studioComponentCurrencyFieldValue(id){
   if(raw==='')return undefined;
   return numberOrZero(raw);
 }
+function studioMergedSpecificationValue(record){
+  const specs=String(record&&record.specifications||'').trim();
+  const details=String(record&&record.description||'').trim();
+  if(specs && details && normalizeNameKey(specs)!==normalizeNameKey(details)){
+    return `${details} | ${specs}`;
+  }
+  return specs || details;
+}
 function renderStudioComponentDetails(record,options){
   const details=$('studioComponentDetails');
   if(!details)return;
@@ -1950,39 +1970,45 @@ function renderStudioComponentDetails(record,options){
   const category=String(record.category||'').trim();
   const subcategory=String(record.subcategory||'').trim();
   const supplier=String(record.supplier||'').trim();
+  const notes=String(record.notes||'').trim();
+  const specifications=studioMergedSpecificationValue(record);
+  const stockOnHand=componentLibraryStockValue(record);
+  const trackStock=activeTrackComponentStock();
   const optionMarkup=categorySubcategoryOptionsMarkup(category,subcategory);
   const supplierMarkup=supplierOptionsMarkup(supplier);
   details.innerHTML=`
     <div class="studio-component-details__head">
-      <h2>${isAddMode?'Add Component':'Component Details'}</h2>
-      <p>${isAddMode?'Enter details and save to add this component to your library.':'Update this component and save your changes.'}</p>
+      <p>${isAddMode?'Add this component to your reusable parts library.':'Update this reusable component and save your changes.'}</p>
     </div>
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
-    <div class="studio-component-details__fields">
-      <label><span>Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
-      <label><span>Description</span><textarea id="studioComponentDescription" rows="2" placeholder="Description">${escapeHtml(String(record.description||''))}</textarea></label>
-      <label><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
-      <label><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
-      <label><span>Supplier</span><select id="studioComponentSupplier">${supplierMarkup}</select></label>
-      <label><span>Specifications</span><textarea id="studioComponentSpecifications" rows="2" placeholder="Specifications">${escapeHtml(String(record.specifications||''))}</textarea></label>
-      <label><span>Cost</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
-      <label><span>Customer Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
+    <div class="studio-component-details__fields quote-component-row__fields">
+      <label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
+      <label class="quote-component-field"><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
+      <label class="quote-component-field"><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
+      <label class="quote-component-field"><span>Supplier</span><select id="studioComponentSupplier">${supplierMarkup}</select></label>
+      <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
+      <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
+      ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
+      <label class="quote-component-field quote-component-field--description studio-component-details__field--full"><span>Specifications</span><input id="studioComponentSpecifications" type="text" placeholder="80mm x 28mm x 19mm, ID 9mm, Black EVA" value="${escapeHtml(specifications)}" /></label>
+      <label class="quote-component-field quote-component-field--description studio-component-details__field--full"><span>Notes</span><input id="studioComponentNotes" type="text" placeholder="Any extra notes..." value="${escapeHtml(notes)}" /></label>
     </div>
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
+      ${isAddMode?'':`<button id="studioComponentDeleteBtn" class="ghost-action studio-component-details__delete" type="button">Delete</button>`}
     </div>
   `;
   studioComponentDetailContext={
     isAddMode,
     baseline:studioComponentPayloadSignature({
       name,
-      description:String(record.description||'').trim(),
       category,
       subcategory,
       supplier,
-      specifications:String(record.specifications||'').trim(),
+      specifications,
+      notes,
       cost:record.cost===undefined?undefined:numberOrZero(record.cost),
       unitPrice:record.unitPrice===undefined?undefined:numberOrZero(record.unitPrice),
+      stockOnHand:trackStock?(stockOnHand===undefined?undefined:numberOrZero(stockOnHand)):undefined,
     }),
     savedTimer:0,
     savedFlash:false,
@@ -2008,10 +2034,13 @@ function saveStudioComponentDetails(){
     category:payload.category,
     subcategory:payload.subcategory,
     supplier:payload.supplier,
-    description:payload.description,
+    // Keep legacy description in sync for backward compatibility paths.
+    description:payload.specifications,
     specifications:payload.specifications,
+    notes:payload.notes,
     cost:payload.cost,
     unitPrice:payload.unitPrice,
+    stockOnHand:activeTrackComponentStock()?payload.stockOnHand:undefined,
   };
   if(normalizeNameKey(originalName) && normalizeNameKey(originalName)!==normalizeNameKey(nextName)){
     removeComponentLibraryRecord(originalName);
@@ -2037,7 +2066,7 @@ function saveStudioComponentDetails(){
   studioComponentDraft=null;
   studioLibraryEditor={type:'',mode:'',targetName:''};
   if(sourceRecord.category && sourceRecord.subcategory){
-    studioLibraryPath={level:'subcategory',categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
+    studioLibraryPath={level:'component',categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
   }else if(sourceRecord.category){
     studioLibraryPath={level:'category',categoryId:sourceRecord.category,subcategoryId:''};
   }else{
@@ -2221,21 +2250,9 @@ function renderStudioTaxonomyManager(){
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
   syncStudioTaxonomySelection();
   if(sectionNav){
-    sectionNav.querySelectorAll('[data-taxonomy-section]').forEach((button)=>{
-      const active=button.getAttribute('data-taxonomy-section')===studioTaxonomyManagerSection;
-      button.classList.toggle('active',active);
-      button.setAttribute('aria-pressed',active?'true':'false');
-    });
+    sectionNav.hidden=true;
   }
-  if(studioTaxonomyManagerSection==='subcategories'){
-    host.innerHTML=studioTaxonomySectionMarkupSubcategories(taxonomy);
-    return;
-  }
-  if(studioTaxonomyManagerSection==='suppliers'){
-    host.innerHTML=studioTaxonomySectionMarkupSuppliers(taxonomy);
-    return;
-  }
-  host.innerHTML=studioTaxonomySectionMarkupCategories(taxonomy);
+  host.innerHTML=studioTaxonomySectionMarkupSuppliers(taxonomy);
 }
 function studioUpdateComponents(mutator){
   const records=componentLibraryRecords();
@@ -2549,37 +2566,108 @@ function handleStudioTaxonomyAction(action){
   }
   refreshStudioComponentAndTaxonomyViews();
 }
+function studioCategoryNamesForLibrary(taxonomy,records){
+  return Array.from(new Set(
+    (taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[])
+      .map((item)=>String(item.name||'').trim())
+      .filter(Boolean)
+      .concat((records||[]).map((item)=>String(item&&item.category||'').trim()).filter(Boolean))
+  )).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+}
+function studioSubcategoryNamesForLibrary(taxonomy,records,categoryName){
+  const categoryKey=normalizeNameKey(categoryName);
+  if(!categoryKey)return [];
+  const scopedCategory=(taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[])
+    .find((item)=>normalizeNameKey(item.name)===categoryKey);
+  const taxonomySubcategories=(scopedCategory&&Array.isArray(scopedCategory.subcategories)?scopedCategory.subcategories:[])
+    .map((item)=>String(item.name||'').trim())
+    .filter(Boolean);
+  const recordSubcategories=(records||[])
+    .filter((item)=>normalizeNameKey(item&&item.category)===categoryKey)
+    .map((item)=>String(item&&item.subcategory||'').trim())
+    .filter(Boolean);
+  return Array.from(new Set(taxonomySubcategories.concat(recordSubcategories)))
+    .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+}
+function currentStudioComponentRecord(){
+  if(studioComponentDraft)return studioComponentDraft;
+  const key=normalizeNameKey(studioSelectedComponentKey);
+  if(!key)return null;
+  return componentLibraryRecords().find((item)=>normalizeNameKey(item.name)===key)||null;
+}
+function closeStudioLibraryContextMenu(){
+  studioLibraryContextMenu={type:'',key:''};
+}
+function openStudioLibraryContextMenu(type,key){
+  studioLibraryContextMenu={type:String(type||''),key:String(key||'')};
+}
+function isStudioLibraryContextMenuOpen(type,key){
+  return studioLibraryContextMenu.type===String(type||'') && studioLibraryContextMenu.key===String(key||'');
+}
+function studioCategorySelectionByName(categoryName){
+  const category=studioCategoryByName(categoryName);
+  if(!category)return null;
+  studioComponentTaxonomySelection.category=category.id;
+  studioComponentTaxonomySelection.subcategory='';
+  return category;
+}
+function studioSubcategorySelectionByName(categoryName,subcategoryName){
+  const category=studioCategoryByName(categoryName);
+  if(!category)return null;
+  const subcategory=category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(subcategoryName));
+  if(!subcategory)return null;
+  studioComponentTaxonomySelection.category=category.id;
+  studioComponentTaxonomySelection.subcategory=subcategory.id;
+  return {category,subcategory};
+}
+function studioCategoryContextMenuMarkup(categoryName){
+  return `<div class="studio-components-row-menu" role="menu" aria-label="Category actions">
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-rename" data-studio-library-name="${escapeAttributeValue(categoryName)}">Rename</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-up" data-studio-library-name="${escapeAttributeValue(categoryName)}">Move Up</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-down" data-studio-library-name="${escapeAttributeValue(categoryName)}">Move Down</button>
+    <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-library-menu-action="category-delete" data-studio-library-name="${escapeAttributeValue(categoryName)}">Delete</button>
+  </div>`;
+}
+function studioSubcategoryContextMenuMarkup(subcategoryName){
+  return `<div class="studio-components-row-menu" role="menu" aria-label="Subcategory actions">
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-rename" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Rename</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-parent" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Change Parent Category</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-up" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Move Up</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-down" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Move Down</button>
+    <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-library-menu-action="subcategory-delete" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Delete</button>
+  </div>`;
+}
 function renderStudioComponentsLibrary(){
   const list=$('studioComponentsList');
   const details=$('studioComponentDetails');
   const searchInput=$('studioComponentsSearch');
   const addBtn=$('studioComponentsAddBtn');
+  const utilityBtn=$('studioComponentsUtilityBtn');
+  const backLabel=$('studioComponentsBackLabel');
+  const title=$('studioComponentsTitle');
+  const subtitle=$('studioComponentsSubtitle');
+  const listCard=list?list.closest('.studio-components-shell__list-card'):null;
   if(!list || !details)return;
+
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
   const records=componentLibraryRecords();
   const queryRaw=String(studioComponentsSearch||'').trim();
   const queryKey=queryRaw.toLowerCase();
   if(searchInput && searchInput.value!==queryRaw){searchInput.value=queryRaw;}
-  const categoryNames=Array.from(new Set(
-    taxonomy.categories.map((item)=>String(item.name||'').trim()).filter(Boolean)
-      .concat(records.map((item)=>String(item&&item.category||'').trim()).filter(Boolean))
-  )).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+
+  const categoryNames=studioCategoryNamesForLibrary(taxonomy,records);
   const validCategory=categoryNames.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.categoryId))||'';
   if(studioLibraryPath.level!=='categories' && !validCategory){
     studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
   }else if(validCategory){
     studioLibraryPath.categoryId=validCategory;
   }
+
   let scopeSubcategories=[];
-  if(studioLibraryPath.level==='category' || studioLibraryPath.level==='subcategory'){
-    const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(studioLibraryPath.categoryId));
-    scopeSubcategories=(category&&Array.isArray(category.subcategories)?category.subcategories:[])
-      .map((item)=>String(item.name||'').trim())
-      .filter(Boolean)
-      .concat(records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId)).map((item)=>String(item.subcategory||'').trim()).filter(Boolean));
-    scopeSubcategories=Array.from(new Set(scopeSubcategories)).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  if(studioLibraryPath.level==='category' || studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component'){
+    scopeSubcategories=studioSubcategoryNamesForLibrary(taxonomy,records,studioLibraryPath.categoryId);
   }
-  if(studioLibraryPath.level==='subcategory'){
+  if(studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component'){
     const validSubcategory=scopeSubcategories.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.subcategoryId))||'';
     if(!validSubcategory){
       studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
@@ -2587,111 +2675,171 @@ function renderStudioComponentsLibrary(){
       studioLibraryPath.subcategoryId=validSubcategory;
     }
   }
+
+  const isCategoryAdd=studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='add';
+  const isSubcategoryAdd=studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='add';
+  const isCategoryEdit=studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='edit';
+  const isSubcategoryEdit=studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='edit';
+  const showFormScreen=isCategoryAdd || isSubcategoryAdd || isCategoryEdit || isSubcategoryEdit || studioLibraryPath.level==='component';
+
+  if(studioLibraryPath.level==='categories'){
+    if(backLabel)backLabel.textContent='BACK TO STUDIO';
+    if(title)title.textContent='COMPONENTS';
+    if(subtitle)subtitle.textContent='Manage the parts used in your builds.';
+  }else if(studioLibraryPath.level==='category'){
+    if(backLabel)backLabel.textContent='COMPONENTS';
+    if(title)title.textContent=String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase();
+    if(subtitle)subtitle.textContent='';
+  }else if(studioLibraryPath.level==='subcategory'){
+    if(backLabel)backLabel.textContent=String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase();
+    if(title)title.textContent=String(studioLibraryPath.subcategoryId||'SUBCATEGORY').toUpperCase();
+    if(subtitle)subtitle.textContent='';
+  }else{
+    const selected=currentStudioComponentRecord();
+    if(backLabel)backLabel.textContent=String(studioLibraryPath.subcategoryId||'SUBCATEGORY').toUpperCase();
+    if(title)title.textContent=String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
+    if(subtitle)subtitle.textContent='';
+  }
+
   if(addBtn){
+    addBtn.hidden=studioLibraryPath.level==='component';
+    addBtn.disabled=false;
     addBtn.textContent=studioLibraryPath.level==='categories'?'ADD CATEGORY':studioLibraryPath.level==='category'?'ADD SUBCATEGORY':'ADD COMPONENT';
   }
-  const manageBtn=$('studioComponentsManageBtn');
-  if(manageBtn){
-    if(studioLibraryPath.level==='categories'){
-      manageBtn.hidden=true;
-    }else if(studioLibraryPath.level==='category'){
-      manageBtn.hidden=false;
-      manageBtn.textContent='BACK TO CATEGORIES';
-      manageBtn.title='Back to categories';
-    }else{
-      manageBtn.hidden=false;
-      manageBtn.textContent=`BACK TO ${String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase()}`;
-      manageBtn.title='Back to category';
-    }
+  if(utilityBtn){
+    utilityBtn.hidden=studioLibraryPath.level!=='categories';
   }
-  const rows=[];
+  if(searchInput){
+    searchInput.hidden=studioLibraryPath.level==='component';
+  }
+  if(listCard)listCard.hidden=showFormScreen;
+  details.hidden=!showFormScreen;
+
+  if(isCategoryAdd){
+    details.innerHTML='<div class="studio-component-details__head"><h2>ADD CATEGORY</h2><p>Create a category for your parts library.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" placeholder="Category name" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-add">Add Category</button></div>';
+    return;
+  }
+  if(isSubcategoryAdd){
+    details.innerHTML=`<div class="studio-component-details__head"><h2>ADD SUBCATEGORY</h2><p>Create a subcategory under ${escapeHtml(studioLibraryPath.categoryId)}.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" placeholder="Subcategory name" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-add">Add Subcategory</button></div>`;
+    return;
+  }
+  if(isCategoryEdit){
+    details.innerHTML=`<div class="studio-component-details__head"><h2>RENAME CATEGORY</h2><p>Update the category name.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-rename">Save</button><button class="ghost-action" type="button" data-studio-library-action="editor-cancel">Cancel</button></div>`;
+    return;
+  }
+  if(isSubcategoryEdit){
+    const taxonomyCategories=ensureStudioComponentTaxonomyLoaded().categories||[];
+    const sourceCategoryName=String(studioLibraryEditor.sourceCategory||studioLibraryPath.categoryId||'').trim();
+    const categoryOptions=taxonomyCategories
+      .map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(sourceCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`)
+      .join('');
+    details.innerHTML=`<div class="studio-component-details__head"><h2>EDIT SUBCATEGORY</h2><p>Rename or move this subcategory to another category.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label><label><span>Parent Category</span><select id="studioLibrarySubcategoryParent">${categoryOptions}</select></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-rename">Save</button><button class="ghost-action" type="button" data-studio-library-action="editor-cancel">Cancel</button></div>`;
+    return;
+  }
+
   if(studioLibraryPath.level==='categories'){
     const visibleCategories=categoryNames.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
     if(!visibleCategories.length){
       list.innerHTML='<p class="studio-components-list__empty">No categories found.</p>';
     }else{
-      visibleCategories.forEach((name)=>{
-        rows.push(`<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong><span>Open category</span></button><button class="ghost-action studio-components-list__edit" type="button" data-studio-library-edit-category="${escapeAttributeValue(name)}">Edit</button></article>`);
-      });
-      list.innerHTML=rows.join('');
+      list.innerHTML=visibleCategories.map((name)=>{
+        const menuKey=normalizeNameKey(name);
+        const menuOpen=isStudioLibraryContextMenuOpen('category',menuKey);
+        return `<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button><button class="studio-components-list__menu-trigger" type="button" aria-label="Category actions" data-studio-library-menu-toggle="category" data-studio-library-menu-key="${escapeAttributeValue(menuKey)}">&hellip;</button>${menuOpen?studioCategoryContextMenuMarkup(name):''}</article>`;
+      }).join('');
     }
-    if(studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='add'){
-      details.innerHTML='<div class="studio-component-details__head"><h2>Add Category</h2><p>Create a new category.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" placeholder="Category name" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-add">Add Category</button></div>';
-      return;
-    }
-    if(studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='edit'){
-      details.innerHTML=`<div class="studio-component-details__head"><h2>Edit Category</h2><p>Rename this category.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-rename">Save</button></div>`;
-      return;
-    }
-    details.innerHTML='<p class="studio-component-details__empty">Open a category to browse subcategories and components.</p>';
     return;
   }
+
   if(studioLibraryPath.level==='category'){
     const visibleSubcategories=scopeSubcategories.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
     if(!visibleSubcategories.length){
       list.innerHTML='<p class="studio-components-list__empty">No subcategories found.</p>';
     }else{
-      visibleSubcategories.forEach((name)=>{
-        rows.push(`<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-subcategory="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong><span>Open subcategory</span></button><button class="ghost-action studio-components-list__edit" type="button" data-studio-library-edit-subcategory="${escapeAttributeValue(name)}">Edit</button></article>`);
-      });
-      list.innerHTML=rows.join('');
+      list.innerHTML=visibleSubcategories.map((name)=>{
+        const menuKey=normalizeNameKey(name);
+        const menuOpen=isStudioLibraryContextMenuOpen('subcategory',menuKey);
+        return `<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-subcategory="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button><button class="studio-components-list__menu-trigger" type="button" aria-label="Subcategory actions" data-studio-library-menu-toggle="subcategory" data-studio-library-menu-key="${escapeAttributeValue(menuKey)}">&hellip;</button>${menuOpen?studioSubcategoryContextMenuMarkup(name):''}</article>`;
+      }).join('');
     }
-    if(studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='add'){
-      details.innerHTML=`<div class="studio-component-details__head"><h2>Add Subcategory</h2><p>Create a subcategory under ${escapeHtml(studioLibraryPath.categoryId)}.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" placeholder="Subcategory name" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-add">Add Subcategory</button></div>`;
-      return;
+    return;
+  }
+
+  if(studioLibraryPath.level==='subcategory'){
+    const trackStock=activeTrackComponentStock();
+    const scopedRecords=records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId) && normalizeNameKey(item.subcategory)===normalizeNameKey(studioLibraryPath.subcategoryId));
+    const visible=scopedRecords.filter((record)=>studioComponentMatchesSearch(record,queryKey));
+    if(!visible.length){
+      list.innerHTML='<p class="studio-components-list__empty">No components found in this subcategory.</p>';
+    }else{
+      list.innerHTML=visible.map((record)=>{
+        const name=String(record&&record.name||'').trim();
+        const supplier=String(record&&record.supplier||'').trim();
+        const buyValue=record&&record.unitCost!==undefined?numberOrZero(record.unitCost):(record&&record.cost!==undefined?numberOrZero(record.cost):undefined);
+        const sellValue=record&&record.unitPrice!==undefined?numberOrZero(record.unitPrice):undefined;
+        const pricingBits=[];
+        if(buyValue!==undefined)pricingBits.push(`Buy $${buyValue.toFixed(2)}`);
+        if(sellValue!==undefined)pricingBits.push(`Sell $${sellValue.toFixed(2)}`);
+        const secondaryParts=[];
+        if(supplier)secondaryParts.push(supplier);
+        if(pricingBits.length)secondaryParts.push(pricingBits.join(' · '));
+        if(trackStock){
+          const stockValue=componentLibraryStockValue(record);
+          secondaryParts.push(`In Stock ${stockValue===undefined?0:stockValue}`);
+        }
+        const secondary=secondaryParts.join(' • ');
+        return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}</button>`;
+      }).join('');
     }
-    if(studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='edit'){
-      details.innerHTML=`<div class="studio-component-details__head"><h2>Edit Subcategory</h2><p>Rename this subcategory.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-rename">Save</button></div>`;
-      return;
-    }
-    details.innerHTML=`<div class="studio-component-details__head"><h2>${escapeHtml(studioLibraryPath.categoryId)}</h2><p>Select a subcategory to open its component list.</p></div><div class="studio-component-details__actions"><button class="ghost-action" type="button" data-studio-library-nav="categories">Back To Categories</button></div>`;
     return;
   }
-  const scopedRecords=records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId) && normalizeNameKey(item.subcategory)===normalizeNameKey(studioLibraryPath.subcategoryId));
-  const visible=scopedRecords.filter((record)=>studioComponentMatchesSearch(record,queryKey));
-  const selectedVisible=visible.some((record)=>normalizeNameKey(record.name)===studioSelectedComponentKey);
-  if(!studioComponentDraft && !selectedVisible){
-    studioSelectedComponentKey=visible.length?normalizeNameKey(visible[0].name):'';
-  }
-  if(!visible.length){
-    list.innerHTML='<p class="studio-components-list__empty">No components found in this subcategory.</p>';
-  }else{
-    list.innerHTML=visible.map((record)=>{
-      const name=String(record&&record.name||'').trim();
-      const key=normalizeNameKey(name);
-      const active=!studioComponentDraft && key===studioSelectedComponentKey;
-      return `<article class="studio-components-list__row"><button class="studio-components-list__item${active?' is-active':''}" type="button" data-studio-library-select-component="${escapeAttributeValue(name)}" role="option" aria-selected="${active?'true':'false'}"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(studioComponentListMeta(record))}</span></button><button class="ghost-action studio-components-list__edit" type="button" data-studio-library-edit-component="${escapeAttributeValue(name)}">Edit</button></article>`;
-    }).join('');
-  }
-  if(studioLibraryEditor.type==='component' && studioLibraryEditor.mode==='add' && studioComponentDraft){
-    renderStudioComponentDetails(studioComponentDraft,{addMode:true});
+
+  const componentRecord=currentStudioComponentRecord();
+  if(!componentRecord){
+    studioComponentDraft=null;
+    studioSelectedComponentKey='';
+    studioLibraryPath={level:'subcategory',categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
+    renderStudioComponentsLibrary();
     return;
   }
-  if(studioLibraryEditor.type==='component' && studioLibraryEditor.mode==='edit'){
-    const editRecord=componentLibraryRecords().find((item)=>normalizeNameKey(item.name)===normalizeNameKey(studioLibraryEditor.targetName));
-    renderStudioComponentDetails(editRecord||null,{addMode:false});
-    return;
-  }
-  const selectedRecord=visible.find((record)=>normalizeNameKey(record.name)===studioSelectedComponentKey)||null;
-  if(!selectedRecord){
-    details.innerHTML=`<div class="studio-component-details__head"><h2>${escapeHtml(studioLibraryPath.subcategoryId)}</h2><p>Add a component to start this subcategory library.</p></div><div class="studio-component-details__actions"><button class="ghost-action" type="button" data-studio-library-nav="category">Back To ${escapeHtml(studioLibraryPath.categoryId)}</button></div>`;
-    return;
-  }
-  details.innerHTML=`<div class="studio-component-details__head"><h2>${escapeHtml(selectedRecord.name||'Component')}</h2><p>${escapeHtml(studioComponentListMeta(selectedRecord))}</p></div><div class="studio-component-details__fields"><label><span>Description</span><textarea rows="3" readonly>${escapeHtml(String(selectedRecord.description||''))}</textarea></label><label><span>Specifications</span><textarea rows="3" readonly>${escapeHtml(String(selectedRecord.specifications||''))}</textarea></label></div><div class="studio-component-details__actions"><button class="ghost-action" type="button" data-studio-library-nav="category">Back To ${escapeHtml(studioLibraryPath.categoryId)}</button><button class="primary-action studio-component-details__save" type="button" data-studio-library-edit-component="${escapeAttributeValue(String(selectedRecord.name||''))}">Edit Component</button></div>`;
+  renderStudioComponentDetails(componentRecord,{addMode:!!studioComponentDraft});
 }
 function bindStudioComponentsPanel(){
   const panel=$('studioComponentsPanel');
   if(!panel || panel.getAttribute('data-studio-components-bound')==='true')return;
   panel.setAttribute('data-studio-components-bound','true');
   ensureStudioComponentTaxonomyLoaded();
+
   const backBtn=$('studioComponentsBackBtn');
   if(backBtn){
     backBtn.addEventListener('click',()=>{
       clearStudioComponentSavedTimer();
+      if(studioLibraryEditor.type){
+        studioLibraryEditor={type:'',mode:'',targetName:''};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      if(studioLibraryPath.level==='component'){
+        studioComponentDraft=null;
+        studioLibraryPath={level:'subcategory',categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      if(studioLibraryPath.level==='subcategory'){
+        studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      if(studioLibraryPath.level==='category'){
+        studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+        renderStudioComponentsLibrary();
+        return;
+      }
       studioComponentDraft=null;
       showStudioLanding();
     });
   }
+
   const searchInput=$('studioComponentsSearch');
   if(searchInput){
     searchInput.addEventListener('input',()=>{
@@ -2699,6 +2847,7 @@ function bindStudioComponentsPanel(){
       renderStudioComponentsLibrary();
     });
   }
+
   const addBtn=$('studioComponentsAddBtn');
   if(addBtn){
     addBtn.addEventListener('click',()=>{
@@ -2706,7 +2855,7 @@ function bindStudioComponentsPanel(){
         studioLibraryEditor={type:'category',mode:'add',targetName:''};
       }else if(studioLibraryPath.level==='category'){
         studioLibraryEditor={type:'subcategory',mode:'add',targetName:''};
-      }else{
+      }else if(studioLibraryPath.level==='subcategory'){
         studioComponentDraft={
           name:'',
           category:studioLibraryPath.categoryId,
@@ -2718,73 +2867,99 @@ function bindStudioComponentsPanel(){
           unitPrice:undefined,
         };
         studioLibraryEditor={type:'component',mode:'add',targetName:''};
+        studioLibraryPath={level:'component',categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
       }
       renderStudioComponentsLibrary();
       const nameInput=$('studioComponentName')||$('studioLibraryCategoryName')||$('studioLibrarySubcategoryName');
       if(nameInput)nameInput.focus();
     });
   }
-  const manageBtn=$('studioComponentsManageBtn');
-  if(manageBtn){
-    manageBtn.addEventListener('click',()=>{
-      studioLibraryEditor={type:'',mode:'',targetName:''};
-      studioComponentDraft=null;
-      if(studioLibraryPath.level==='subcategory'){
-        studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
-      }else if(studioLibraryPath.level==='category'){
-        studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
-      }
-      renderStudioComponentsLibrary();
+
+  const utilityBtn=$('studioComponentsUtilityBtn');
+  if(utilityBtn){
+    utilityBtn.addEventListener('click',()=>{
+      showStudioTaxonomyManager();
     });
   }
+
   const list=$('studioComponentsList');
   if(list){
     list.addEventListener('click',(event)=>{
+      const menuToggle=event.target.closest('[data-studio-library-menu-toggle]');
+      if(menuToggle){
+        const type=String(menuToggle.getAttribute('data-studio-library-menu-toggle')||'');
+        const key=String(menuToggle.getAttribute('data-studio-library-menu-key')||'');
+        const isOpen=isStudioLibraryContextMenuOpen(type,key);
+        if(isOpen){
+          closeStudioLibraryContextMenu();
+        }else{
+          openStudioLibraryContextMenu(type,key);
+        }
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const menuActionButton=event.target.closest('[data-studio-library-menu-action]');
+      if(menuActionButton){
+        const action=String(menuActionButton.getAttribute('data-studio-library-menu-action')||'');
+        const name=String(menuActionButton.getAttribute('data-studio-library-name')||'').trim();
+        closeStudioLibraryContextMenu();
+        if(action.startsWith('category-')){
+          const category=studioCategorySelectionByName(name);
+          if(!category){openInfoDialog('Category Missing','The selected category was not found.');renderStudioComponentsLibrary();return;}
+          if(action==='category-rename'){
+            studioLibraryEditor={type:'category',mode:'edit',targetName:category.name};
+            renderStudioComponentsLibrary();
+            return;
+          }
+          if(action==='category-up'){handleStudioTaxonomyAction('category-up');return;}
+          if(action==='category-down'){handleStudioTaxonomyAction('category-down');return;}
+          if(action==='category-delete'){handleStudioTaxonomyAction('category-delete');return;}
+        }
+        if(action.startsWith('subcategory-')){
+          const scoped=studioSubcategorySelectionByName(studioLibraryPath.categoryId,name);
+          if(!scoped){openInfoDialog('Subcategory Missing','The selected subcategory was not found.');renderStudioComponentsLibrary();return;}
+          if(action==='subcategory-rename' || action==='subcategory-parent'){
+            studioLibraryEditor={type:'subcategory',mode:'edit',targetName:scoped.subcategory.name,sourceCategory:scoped.category.name};
+            renderStudioComponentsLibrary();
+            return;
+          }
+          if(action==='subcategory-up'){handleStudioTaxonomyAction('subcategory-up');return;}
+          if(action==='subcategory-down'){handleStudioTaxonomyAction('subcategory-down');return;}
+          if(action==='subcategory-delete'){handleStudioTaxonomyAction('subcategory-delete');return;}
+        }
+        renderStudioComponentsLibrary();
+        return;
+      }
       const openCategoryButton=event.target.closest('[data-studio-library-open-category]');
       if(openCategoryButton){
+        closeStudioLibraryContextMenu();
         studioLibraryPath={level:'category',categoryId:String(openCategoryButton.getAttribute('data-studio-library-open-category')||''),subcategoryId:''};
         studioLibraryEditor={type:'',mode:'',targetName:''};
         studioComponentDraft=null;
         renderStudioComponentsLibrary();
         return;
       }
-      const editCategoryButton=event.target.closest('[data-studio-library-edit-category]');
-      if(editCategoryButton){
-        studioLibraryEditor={type:'category',mode:'edit',targetName:String(editCategoryButton.getAttribute('data-studio-library-edit-category')||'')};
-        renderStudioComponentsLibrary();
-        return;
-      }
       const openSubcategoryButton=event.target.closest('[data-studio-library-open-subcategory]');
       if(openSubcategoryButton){
+        closeStudioLibraryContextMenu();
         studioLibraryPath={level:'subcategory',categoryId:studioLibraryPath.categoryId,subcategoryId:String(openSubcategoryButton.getAttribute('data-studio-library-open-subcategory')||'')};
         studioLibraryEditor={type:'',mode:'',targetName:''};
         studioComponentDraft=null;
         renderStudioComponentsLibrary();
         return;
       }
-      const editSubcategoryButton=event.target.closest('[data-studio-library-edit-subcategory]');
-      if(editSubcategoryButton){
-        studioLibraryEditor={type:'subcategory',mode:'edit',targetName:String(editSubcategoryButton.getAttribute('data-studio-library-edit-subcategory')||'')};
-        renderStudioComponentsLibrary();
-        return;
-      }
-      const selectComponentButton=event.target.closest('[data-studio-library-select-component]');
-      if(selectComponentButton){
+      const openComponentButton=event.target.closest('[data-studio-library-open-component]');
+      if(openComponentButton){
+        closeStudioLibraryContextMenu();
+        studioComponentDraft=null;
         studioLibraryEditor={type:'',mode:'',targetName:''};
-        studioComponentDraft=null;
-        studioSelectedComponentKey=normalizeNameKey(selectComponentButton.getAttribute('data-studio-library-select-component')||'');
+        studioSelectedComponentKey=normalizeNameKey(openComponentButton.getAttribute('data-studio-library-open-component')||'');
+        studioLibraryPath={level:'component',categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
         renderStudioComponentsLibrary();
-        return;
       }
-      const editComponentButton=event.target.closest('[data-studio-library-edit-component]');
-      if(editComponentButton){
-        studioComponentDraft=null;
-        studioLibraryEditor={type:'component',mode:'edit',targetName:String(editComponentButton.getAttribute('data-studio-library-edit-component')||'')};
-        studioSelectedComponentKey=normalizeNameKey(studioLibraryEditor.targetName);
-      }
-      renderStudioComponentsLibrary();
     });
   }
+
   const details=$('studioComponentDetails');
   if(details){
     details.addEventListener('input',()=>{
@@ -2803,23 +2978,15 @@ function bindStudioComponentsPanel(){
       syncStudioComponentSaveButtonState();
     });
     details.addEventListener('click',(event)=>{
-      const navButton=event.target.closest('[data-studio-library-nav]');
-      if(navButton){
-        const navTarget=String(navButton.getAttribute('data-studio-library-nav')||'');
-        studioLibraryEditor={type:'',mode:'',targetName:''};
-        studioComponentDraft=null;
-        if(navTarget==='categories'){
-          studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
-        }else if(navTarget==='category'){
-          studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
-        }
-        renderStudioComponentsLibrary();
-        return;
-      }
       const libraryActionButton=event.target.closest('[data-studio-library-action]');
       if(libraryActionButton){
         const action=String(libraryActionButton.getAttribute('data-studio-library-action')||'');
         const taxonomy=ensureStudioComponentTaxonomyLoaded();
+        if(action==='editor-cancel'){
+          studioLibraryEditor={type:'',mode:'',targetName:''};
+          renderStudioComponentsLibrary();
+          return;
+        }
         if(action==='category-add'){
           const input=$('studioLibraryCategoryName');
           const nextName=String(input&&input.value||'').trim();
@@ -2836,12 +3003,12 @@ function bindStudioComponentsPanel(){
           const sourceName=String(studioLibraryEditor.targetName||'').trim();
           const input=$('studioLibraryCategoryName');
           const nextName=String(input&&input.value||'').trim();
-          if(!sourceName){return;}
+          if(!sourceName)return;
           if(!nextName){openInfoDialog('Category Name Required','Enter a category name.');return;}
           const duplicate=taxonomy.categories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName) && normalizeNameKey(item.name)!==normalizeNameKey(sourceName));
           if(duplicate){openInfoDialog('Category Exists','A category with this name already exists.');return;}
           const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
-          if(!target)return;
+          if(!target){openInfoDialog('Category Missing','The selected category was not found.');return;}
           target.name=nextName;
           studioRenameCategory(sourceName,nextName);
           if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceName))studioLibraryPath.categoryId=nextName;
@@ -2871,43 +3038,149 @@ function bindStudioComponentsPanel(){
           return;
         }
         if(action==='subcategory-rename'){
-          const categoryName=String(studioLibraryPath.categoryId||'').trim();
+          const sourceCategoryName=String(studioLibraryEditor.sourceCategory||studioLibraryPath.categoryId||'').trim();
           const sourceName=String(studioLibraryEditor.targetName||'').trim();
-          const input=$('studioLibrarySubcategoryName');
-          const nextName=String(input&&input.value||'').trim();
-          if(!categoryName || !sourceName)return;
+          const nextName=String(($('studioLibrarySubcategoryName')&&$('studioLibrarySubcategoryName').value)||'').trim();
+          const nextCategoryName=String(($('studioLibrarySubcategoryParent')&&$('studioLibrarySubcategoryParent').value)||sourceCategoryName).trim();
+          if(!sourceCategoryName || !sourceName)return;
           if(!nextName){openInfoDialog('Subcategory Name Required','Enter a subcategory name.');return;}
-          const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(categoryName));
-          if(!category){openInfoDialog('Category Missing','The selected category was not found.');return;}
-          const duplicate=category.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName) && normalizeNameKey(item.name)!==normalizeNameKey(sourceName));
+          const sourceCategory=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceCategoryName));
+          const nextCategory=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextCategoryName));
+          if(!sourceCategory || !nextCategory){openInfoDialog('Category Missing','The selected parent category was not found.');return;}
+          const subcategory=sourceCategory.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
+          if(!subcategory){openInfoDialog('Subcategory Missing','The selected subcategory was not found.');return;}
+          const duplicate=nextCategory.subcategories.some((item)=>item.id!==subcategory.id && normalizeNameKey(item.name)===normalizeNameKey(nextName));
           if(duplicate){openInfoDialog('Subcategory Exists','This subcategory already exists in the selected category.');return;}
-          const target=category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
-          if(!target)return;
-          target.name=nextName;
-          studioRenameSubcategory(categoryName,sourceName,nextName);
-          if(normalizeNameKey(studioLibraryPath.subcategoryId)===normalizeNameKey(sourceName))studioLibraryPath.subcategoryId=nextName;
+          const movingParent=nextCategory.id!==sourceCategory.id;
+          if(movingParent){
+            sourceCategory.subcategories=sourceCategory.subcategories.filter((item)=>item.id!==subcategory.id);
+            nextCategory.subcategories.push(subcategory);
+            studioRelinkSubcategory(sourceCategory.name,sourceName,nextCategory.name,nextName);
+          }else{
+            studioRenameSubcategory(sourceCategory.name,sourceName,nextName);
+          }
+          subcategory.name=nextName;
           saveStudioComponentTaxonomy();
           studioLibraryEditor={type:'',mode:'',targetName:''};
+          studioLibraryPath={level:'category',categoryId:nextCategory.name,subcategoryId:''};
           renderStudioComponentsLibrary();
           return;
         }
       }
+
       const saveButton=event.target.closest('#studioComponentSaveBtn');
       if(saveButton){
         saveStudioComponentDetails();
         return;
       }
-      const editComponentButton=event.target.closest('[data-studio-library-edit-component]');
-      if(editComponentButton){
-        studioComponentDraft=null;
-        studioLibraryEditor={type:'component',mode:'edit',targetName:String(editComponentButton.getAttribute('data-studio-library-edit-component')||'')};
-        studioSelectedComponentKey=normalizeNameKey(studioLibraryEditor.targetName);
-        renderStudioComponentsLibrary();
-        return;
+
+      const deleteButton=event.target.closest('#studioComponentDeleteBtn');
+      if(deleteButton){
+        const record=currentStudioComponentRecord();
+        if(!record || !record.name)return;
+        openConfirmDialog({
+          title:'Delete Component',
+          message:`Delete ${record.name}? This removes only this reusable library component.`,
+          actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]
+        },(choice)=>{
+          if(choice!=='delete')return;
+          removeComponentLibraryRecord(record.name);
+          studioComponentDraft=null;
+          studioSelectedComponentKey='';
+          studioLibraryPath={level:'subcategory',categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
+          renderStudioComponentsLibrary();
+        });
       }
-      return;
     });
   }
+  document.addEventListener('click',(event)=>{
+    if(!studioLibraryContextMenu.type || !studioLibraryContextMenu.key)return;
+    if(panel.contains(event.target) && !event.target.closest('.studio-components-row-menu') && !event.target.closest('[data-studio-library-menu-toggle]')){
+      closeStudioLibraryContextMenu();
+      renderStudioComponentsLibrary();
+    }
+  });
+}
+function bindStudioTaxonomyPanel(){
+  const panel=$('studioTaxonomyPanel');
+  if(!panel || panel.getAttribute('data-studio-taxonomy-bound')==='true')return;
+  panel.setAttribute('data-studio-taxonomy-bound','true');
+
+  const backBtn=$('studioTaxonomyBackBtn');
+  if(backBtn){
+    backBtn.addEventListener('click',()=>{
+      showStudioComponents();
+    });
+  }
+
+  const nav=$('studioTaxonomySectionNav');
+  if(nav){
+    nav.addEventListener('click',(event)=>{
+      const sectionButton=event.target.closest('[data-taxonomy-section]');
+      if(!sectionButton)return;
+      const nextSection=String(sectionButton.getAttribute('data-taxonomy-section')||'categories');
+      if(!['categories','subcategories','suppliers'].includes(nextSection))return;
+      studioTaxonomyManagerSection=nextSection;
+      renderStudioTaxonomyManager();
+    });
+  }
+
+  panel.addEventListener('change',(event)=>{
+    const browseParent=event.target.closest('#studioTaxonomySubcategoryParentSelectBrowse');
+    if(browseParent){
+      studioComponentTaxonomySelection.category=String(browseParent.value||'');
+      studioComponentTaxonomySelection.subcategory='';
+      renderStudioTaxonomyManager();
+      return;
+    }
+    const addParent=event.target.closest('#studioTaxonomySubcategoryParentSelectAdd');
+    if(addParent){
+      studioComponentTaxonomySelection.category=String(addParent.value||studioComponentTaxonomySelection.category||'');
+      return;
+    }
+  });
+
+  panel.addEventListener('click',(event)=>{
+    const selectButton=event.target.closest('[data-taxonomy-select]');
+    if(selectButton){
+      const selectType=String(selectButton.getAttribute('data-taxonomy-select')||'');
+      const selectId=String(selectButton.getAttribute('data-taxonomy-id')||'');
+      if(selectType==='category'){
+        studioComponentTaxonomySelection.category=selectId;
+        studioComponentTaxonomySelection.subcategory='';
+        setStudioTaxonomySectionMode('categories','edit');
+      }else if(selectType==='subcategory'){
+        studioComponentTaxonomySelection.subcategory=selectId;
+        setStudioTaxonomySectionMode('subcategories','edit');
+      }else if(selectType==='supplier'){
+        studioComponentTaxonomySelection.supplier=selectId;
+        setStudioTaxonomySectionMode('suppliers','edit');
+      }
+      renderStudioTaxonomyManager();
+      return;
+    }
+
+    const uiActionButton=event.target.closest('[data-taxonomy-ui-action]');
+    if(uiActionButton){
+      const action=String(uiActionButton.getAttribute('data-taxonomy-ui-action')||'');
+      if(action==='category-open-add')setStudioTaxonomySectionMode('categories','add');
+      if(action==='category-cancel')setStudioTaxonomySectionMode('categories','browse');
+      if(action==='subcategory-open-add')setStudioTaxonomySectionMode('subcategories','add');
+      if(action==='subcategory-cancel')setStudioTaxonomySectionMode('subcategories','browse');
+      if(action==='supplier-open-add')setStudioTaxonomySectionMode('suppliers','add');
+      if(action==='supplier-cancel')setStudioTaxonomySectionMode('suppliers','browse');
+      renderStudioTaxonomyManager();
+      return;
+    }
+
+    const taxonomyActionButton=event.target.closest('[data-taxonomy-action]');
+    if(taxonomyActionButton){
+      const action=String(taxonomyActionButton.getAttribute('data-taxonomy-action')||'');
+      if(action){
+        handleStudioTaxonomyAction(action);
+      }
+    }
+  });
 }
 function openInfoDialog(title,message){
   openConfirmDialog({
@@ -3740,11 +4013,13 @@ function persistBuildRecord(currentQuote){
   syncMissingComponentLibraryData(currentQuote);
   const records=Store.get('klabs-workshop-builds',[]);
   const target=findCurrentSavedBuildTarget();
+  const previousRecord=target?normalizeQuote(target.record):null;
+  const persistedQuote=quoteForPersistence(currentQuote);
   const nowIso=new Date().toISOString();
   if(target){
     const createdAt=specificationValue(target.record&&target.record.createdAt)||specificationValue(target.record&&target.record.savedAt)||nowIso;
     const updatedRecord={
-      ...quoteForPersistence(currentQuote),
+      ...persistedQuote,
       createdAt,
       savedAt:nowIso,
       updatedAt:nowIso,
@@ -3752,12 +4027,65 @@ function persistBuildRecord(currentQuote){
     records.splice(target.index,1);
     records.unshift(updatedRecord);
     Store.set('klabs-workshop-builds',records);
+    reconcileCommittedBuildStock(previousRecord,updatedRecord);
     return {source:'build',index:0,record:updatedRecord};
   }
-  const record={...quoteForPersistence(currentQuote),createdAt:nowIso,savedAt:nowIso,updatedAt:nowIso};
+  const record={...persistedQuote,createdAt:nowIso,savedAt:nowIso,updatedAt:nowIso};
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
+  reconcileCommittedBuildStock(null,record);
   return {source:'build',index:0,record};
+}
+function componentStockReferenceKey(component){
+  const primaryName=specificationValue(component&&component.description);
+  const fallbackName=specificationValue(component&&component.category);
+  const candidateName=primaryName||fallbackName;
+  if(!candidateName)return '';
+  const libraryRecord=findComponentLibraryRecordByName(candidateName);
+  return normalizeNameKey((libraryRecord&&libraryRecord.name)||candidateName);
+}
+function componentCommittedStockQuantity(component){
+  const parsed=Number(component&&component.quantity);
+  return (Number.isFinite(parsed) && parsed>0)?parsed:1;
+}
+function buildCommittedStockUsageMap(record){
+  const normalized=record&&typeof record==='object'?normalizeQuote(record):normalizeQuote({});
+  const components=Array.isArray(normalized.components)?normalized.components:[];
+  const usage=new Map();
+  components.forEach((component)=>{
+    if(!componentRowHasMeaningfulData(component))return;
+    const key=componentStockReferenceKey(component);
+    if(!key)return;
+    const quantity=componentCommittedStockQuantity(component);
+    usage.set(key,(usage.get(key)||0)+quantity);
+  });
+  return usage;
+}
+function reconcileCommittedBuildStock(previousRecord,nextRecord){
+  if(!activeTrackComponentStock())return;
+  const previousUsage=buildCommittedStockUsageMap(previousRecord);
+  const nextUsage=buildCommittedStockUsageMap(nextRecord);
+  const allKeys=new Set([...previousUsage.keys(),...nextUsage.keys()]);
+  if(!allKeys.size)return;
+  const records=componentLibraryRecords();
+  let changed=false;
+  allKeys.forEach((key)=>{
+    const previousQty=numberOrZero(previousUsage.get(key));
+    const nextQty=numberOrZero(nextUsage.get(key));
+    const delta=nextQty-previousQty;
+    if(!delta)return;
+    const index=records.findIndex((record)=>normalizeNameKey(record&&record.name)===key);
+    if(index<0)return;
+    const currentStock=componentLibraryStockValue(records[index]);
+    const baseline=currentStock===undefined?0:numberOrZero(currentStock);
+    const updatedStock=baseline-delta;
+    if(updatedStock===baseline)return;
+    records[index]={...records[index],stockOnHand:updatedStock};
+    changed=true;
+  });
+  if(changed){
+    saveComponentLibraryRecords(records);
+  }
 }
 function syncMissingComponentLibraryData(currentQuote){
   const sourceQuote=currentQuote&&typeof currentQuote==='object'?currentQuote:{};
@@ -4094,6 +4422,12 @@ function componentLibraryUnitPriceValue(record){
   if(source.price!==undefined && source.price!==null && source.price!=='')return numberOrZero(source.price);
   return undefined;
 }
+function componentLibraryStockValue(record){
+  const source=record&&typeof record==='object'?record:{};
+  if(source.stockOnHand===undefined || source.stockOnHand===null || source.stockOnHand==='')return undefined;
+  const parsed=Number(source.stockOnHand);
+  return Number.isFinite(parsed)?parsed:undefined;
+}
 function componentLibraryRecords(){
   const stored=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
   if(!Array.isArray(stored))return[];
@@ -4110,6 +4444,7 @@ function componentLibraryRecords(){
       quantity:Number.isFinite(Number(record.quantity))?Number(record.quantity):undefined,
       unitCost:componentLibraryUnitCostValue(record),
       unitPrice:componentLibraryUnitPriceValue(record),
+      stockOnHand:componentLibraryStockValue(record),
       notes:String(record.notes||'').trim(),
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
@@ -4130,6 +4465,7 @@ function saveComponentLibraryRecords(records){
       quantity:Number.isFinite(Number(record.quantity))?Number(record.quantity):undefined,
       unitCost:componentLibraryUnitCostValue(record),
       unitPrice:componentLibraryUnitPriceValue(record),
+      stockOnHand:componentLibraryStockValue(record),
       notes:String(record.notes||'').trim(),
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
@@ -4164,6 +4500,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     quantity:Number.isFinite(Number(item.quantity))?Number(item.quantity):undefined,
     unitCost,
     unitPrice,
+    stockOnHand:componentLibraryStockValue(item),
     notes:String(item.notes||'').trim(),
     specifications:String(item.specifications||'').trim(),
     cost:resolvedCost,
@@ -4171,8 +4508,14 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const records=componentLibraryRecords();
   const existingIndex=records.findIndex((record)=>normalizeNameKey(record.name)===normalizedKey);
   if(existingIndex>=0){
+    if(nextRecord.stockOnHand===undefined){
+      nextRecord.stockOnHand=componentLibraryStockValue(records[existingIndex]);
+    }
     records[existingIndex]=nextRecord;
   }else{
+    if(nextRecord.stockOnHand===undefined && activeTrackComponentStock()){
+      nextRecord.stockOnHand=0;
+    }
     records.unshift(nextRecord);
   }
   saveComponentLibraryRecords(records);
@@ -4192,9 +4535,11 @@ function mergeAutoSyncedLibraryRecord(existingRecord,incomingRecord,componentNam
   const existingUnitCost=componentLibraryUnitCostValue(existing);
   const existingUnitPrice=componentLibraryUnitPriceValue(existing);
   const existingCost=componentLibraryCostValue(existing);
+  const existingStock=componentLibraryStockValue(existing);
   const incomingUnitCost=componentLibraryUnitCostValue(incoming);
   const incomingUnitPrice=componentLibraryUnitPriceValue(incoming);
   const incomingCost=componentLibraryCostValue(incoming);
+  const incomingStock=componentLibraryStockValue(incoming);
   return {
     name,
     category:pickText(existing.category,incoming.category),
@@ -4207,6 +4552,7 @@ function mergeAutoSyncedLibraryRecord(existingRecord,incomingRecord,componentNam
     quantity:Number.isFinite(Number(existing.quantity))?Number(existing.quantity):undefined,
     unitCost:existingUnitCost!==undefined?existingUnitCost:incomingUnitCost,
     unitPrice:existingUnitPrice!==undefined?existingUnitPrice:incomingUnitPrice,
+    stockOnHand:existingStock!==undefined?existingStock:incomingStock,
     notes:pickText(existing.notes,incoming.notes),
     specifications:pickText(existing.specifications,incoming.specifications),
     cost:existingCost!==undefined?existingCost:(incomingUnitCost!==undefined?incomingUnitCost:incomingCost),
@@ -6622,6 +6968,7 @@ function bindWorkshopQuoteBuilder(){
     });
   }
   bindStudioComponentsPanel();
+  bindStudioTaxonomyPanel();
   const newQuoteEntryBtn=$('newQuoteEntryBtn');
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
@@ -7305,6 +7652,7 @@ function onScreenChange(screenId){
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+    if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
     syncSettingsPreferenceControls();
   }
   updateWorkshopBackToTopVisibility();
@@ -7340,6 +7688,19 @@ function bindSettingsControls(){
     };
     taxEnabledInput.addEventListener('input',onTaxEnabledChange);
     taxEnabledInput.addEventListener('change',onTaxEnabledChange);
+  }
+  const trackStockInput=$('settingsTrackComponentStock');
+  if(trackStockInput){
+    trackStockInput.checked=activeTrackComponentStock();
+    const onTrackStockChange=()=>{
+      studioSettings.trackComponentStock=trackStockInput.checked;
+      saveStudioSettings();
+      if(studioScreenView==='components'){
+        renderStudioComponentsLibrary();
+      }
+    };
+    trackStockInput.addEventListener('input',onTrackStockChange);
+    trackStockInput.addEventListener('change',onTrackStockChange);
   }
   const taxRateInput=$('settingsTaxRate');
   const taxSavedLabel=$('settingsTaxSaved');

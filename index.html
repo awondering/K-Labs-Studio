@@ -299,18 +299,18 @@
         <header class="studio-components-shell__head">
           <button id="studioComponentsBackBtn" class="workshop-tool-nav-back" type="button" aria-label="Back to Studio landing">
             <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-            <span>BACK TO STUDIO</span>
+            <span id="studioComponentsBackLabel">BACK TO STUDIO</span>
           </button>
           <div class="studio-components-shell__intro">
-            <h1>COMPONENTS</h1>
-            <p>Manage the parts used in your builds.</p>
+            <h1 id="studioComponentsTitle">COMPONENTS</h1>
+            <p id="studioComponentsSubtitle">Manage the parts used in your builds.</p>
           </div>
         </header>
 
         <div class="studio-components-shell__controls" aria-label="Components actions">
           <input id="studioComponentsSearch" class="studio-components-shell__search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" />
-          <button id="studioComponentsAddBtn" class="ghost-action studio-components-shell__add" type="button">ADD COMPONENT</button>
-          <button id="studioComponentsManageBtn" class="ghost-action studio-components-shell__manage" type="button" title="Back">BACK</button>
+          <button id="studioComponentsAddBtn" class="ghost-action studio-components-shell__add" type="button">ADD CATEGORY</button>
+          <button id="studioComponentsUtilityBtn" class="ghost-action studio-components-shell__utility" type="button" title="Supplier utility" hidden>SUPPLIERS</button>
         </div>
 
         <div class="studio-components-shell__content">
@@ -321,14 +321,14 @@
         </div>
       </section>
 
-      <section id="studioTaxonomyPanel" class="studio-taxonomy-shell" aria-label="Categories and suppliers manager" hidden>
+      <section id="studioTaxonomyPanel" class="studio-taxonomy-shell" aria-label="Supplier utility" hidden>
         <header class="studio-taxonomy-shell__head">
           <button id="studioTaxonomyBackBtn" class="workshop-tool-nav-back" type="button" aria-label="Back to Components">
             <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
             <span>COMPONENTS</span>
           </button>
           <div class="studio-taxonomy-shell__intro">
-            <h1>CATEGORIES &amp; SUPPLIERS</h1>
+            <h1>SUPPLIERS</h1>
           </div>
         </header>
 
@@ -487,35 +487,60 @@
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><h1>Studio Settings</h1><p class="subtle">Configure pricing, units, and date format.</p></div>
       <article class="settings-card" aria-label="Pricing and Tax">
-        <h2>Pricing &amp; Tax</h2>
-        <div class="settings-row"><span>Tax Enabled (Default)</span><strong><input id="settingsTaxEnabled" type="checkbox" checked /></strong></div>
+        <header class="settings-preference-card__head">
+          <h3>Pricing &amp; Tax</h3>
+          <p>Set default tax handling for Studio pricing calculations.</p>
+        </header>
+        <div class="settings-row"><span>Tax Enabled (Default)</span><strong><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" checked /><span class="settings-toggle__state-off" aria-hidden="true">OFF</span><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span><span class="settings-toggle__state-on" aria-hidden="true">ON</span></label></strong></div>
         <div class="settings-row"><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
       </article>
-      <article class="settings-card" aria-label="Preferences">
-        <h2>Preferences</h2>
-        <div class="settings-preferences-group">
-          <span>Measurement Units</span>
-          <div class="settings-choice-row" role="group" aria-label="Measurement Units">
+      <section class="settings-preferences-shell" aria-label="Preferences">
+        <h2 class="settings-preferences-shell__title">Preferences</h2>
+
+        <article class="settings-card settings-preference-card" aria-label="Track Component Stock Preference">
+          <header class="settings-preference-card__head">
+            <h3>Track Component Stock</h3>
+            <p>Keep component quantities updated as parts are used in builds.</p>
+          </header>
+          <div class="settings-toggle-row">
+            <label class="settings-toggle" for="settingsTrackComponentStock">
+              <input id="settingsTrackComponentStock" type="checkbox" />
+              <span class="settings-toggle__state-off" aria-hidden="true">OFF</span>
+              <span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span>
+              <span class="settings-toggle__state-on" aria-hidden="true">ON</span>
+            </label>
+          </div>
+        </article>
+
+        <article class="settings-card settings-preference-card" aria-label="Measurement Units Preference">
+          <header class="settings-preference-card__head">
+            <h3>Measurement Units</h3>
+            <p>Choose how measurements are displayed.</p>
+          </header>
+          <div class="settings-choice-row settings-segmented" role="group" aria-label="Measurement Units">
             <button id="settingsUnitsMetric" class="ghost-action settings-choice-button" type="button" data-settings-units="metric" aria-pressed="true">Metric (mm)</button>
             <button id="settingsUnitsImperial" class="ghost-action settings-choice-button" type="button" data-settings-units="imperial" aria-pressed="false">Imperial (in)</button>
           </div>
-        </div>
-        <div id="settingsImperialDisplayGroup" class="settings-preferences-group" hidden>
-          <span>Imperial Display</span>
-          <div class="settings-choice-row" role="group" aria-label="Imperial Display">
-            <button class="ghost-action settings-choice-button" type="button" data-settings-imperial-display="decimal" aria-pressed="false">Decimal Inches</button>
-            <button class="ghost-action settings-choice-button" type="button" data-settings-imperial-display="fractional" aria-pressed="true">Fractional Inches</button>
+          <div id="settingsImperialDisplayGroup" class="settings-preference-subgroup" hidden>
+            <span>Imperial Display</span>
+            <div class="settings-choice-row settings-segmented" role="group" aria-label="Imperial Display">
+              <button class="ghost-action settings-choice-button" type="button" data-settings-imperial-display="decimal" aria-pressed="false">Decimal Inches</button>
+              <button class="ghost-action settings-choice-button" type="button" data-settings-imperial-display="fractional" aria-pressed="true">Fractional Inches</button>
+            </div>
           </div>
-        </div>
-        <div class="settings-preferences-group">
-          <span>Date Format</span>
-          <div class="settings-choice-column" role="group" aria-label="Date Format">
+        </article>
+
+        <article class="settings-card settings-preference-card" aria-label="Date Format Preference">
+          <header class="settings-preference-card__head">
+            <h3>Date Format</h3>
+            <p>Choose how dates are displayed.</p>
+          </header>
+          <div class="settings-choice-row settings-segmented" role="group" aria-label="Date Format">
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="dd/mm/yyyy" aria-pressed="true">DD/MM/YYYY</button>
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="mm/dd/yyyy" aria-pressed="false">MM/DD/YYYY</button>
-            <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="yyyy-mm-dd" aria-pressed="false">YYYY-MM-DD</button>
           </div>
-        </div>
-      </article>
+        </article>
+      </section>
     </section>
 
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
