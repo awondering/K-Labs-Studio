@@ -608,8 +608,13 @@ function openGripCutTemplatePrint(){
   <title>Grip Wrap Cut Template</title>
   <style>
     @page { size: A4 portrait; margin: 14mm; }
-    html,body{ margin:0; padding:0; background:#fff; color:#111; font-family: "Segoe UI", Arial, sans-serif; }
+    html,body{ margin:0; padding:0; background:#e8e8e8; color:#111; font-family: "Segoe UI", Arial, sans-serif; }
     body{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .preview-shell{ min-height:100dvh; padding:14px; display:grid; gap:12px; }
+    .preview-controls{ position:sticky; top:0; z-index:3; display:flex; gap:8px; justify-content:flex-end; align-items:center; background:#f3f3f3; border:1px solid #c7c7c7; border-radius:10px; padding:8px; }
+    .preview-btn{ border:1px solid #1b1b1b; background:#fff; color:#111; border-radius:8px; min-height:38px; padding:0 14px; font-size:12px; letter-spacing:.04em; text-transform:uppercase; font-weight:700; cursor:pointer; }
+    .preview-btn:hover,.preview-btn:focus-visible{ background:#f6f6f6; }
+    .preview-tip{ margin:0 auto 0 0; font-size:11px; color:#3a3a3a; }
     .sheet{ width:100%; max-width:180mm; margin:0 auto; display:grid; gap:6mm; }
     h1{ margin:0; font-size:19pt; letter-spacing:.01em; color:#1a1a1a; }
     .brand{ font-size:9.5pt; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6a2228; }
@@ -640,31 +645,66 @@ function openGripCutTemplatePrint(){
     .guide-angle{ font-size:2.9px; letter-spacing:.1px; font-weight:700; fill:#111; }
     .instructions{ margin:0; padding-left:4.8mm; display:grid; gap:1.2mm; font-size:8.6pt; color:#161616; }
     .instructions li{ line-height:1.32; }
+    @media print{
+      html,body{ background:#fff; }
+      .preview-shell{ padding:0; gap:0; }
+      .preview-controls{ display:none !important; }
+    }
   </style>
 </head>
 <body>
-  <main class="sheet">
-    <header>
-      <div class="brand">K-Labs Studio</div>
-      <h1>Grip Wrap Cut Template</h1>
-      <div class="meta">Use this workshop sheet to mark and cut wrap material ends before wrapping.</div>
-    </header>
-    <div class="print-instruction">PRINT AT 100% / ACTUAL SIZE</div>
-    <section class="summary" aria-label="Measurement summary">
-      ${summaryHtml}
-    </section>
-    ${calibrationLineHtml}
-    <section class="guides" aria-label="1 to 1 cut geometry guide">
-      <article class="guide-panel" aria-label="Start end cut template">
-        <h2>Start End Template (1:1)</h2>
-        ${startGuideSvg}
-      </article>
-      ${template.profile==='tapered'?`<article class="guide-panel" aria-label="Finish end cut template"><h2>Finish End Template (1:1)</h2>${finishGuideSvg}</article>`:''}
-    </section>
-    <section aria-label="Template instructions">
-      ${instructionsHtml}
-    </section>
-  </main>
+  <div class="preview-shell">
+    <div class="preview-controls" aria-label="Template preview actions">
+      <p class="preview-tip">Inspect template, then print.</p>
+      <button id="previewPrintBtn" class="preview-btn" type="button">Print Template</button>
+      <button id="previewCloseBtn" class="preview-btn" type="button">Close / Back to Grip Wrap</button>
+    </div>
+    <main class="sheet">
+      <header>
+        <div class="brand">K-Labs Studio</div>
+        <h1>Grip Wrap Cut Template</h1>
+        <div class="meta">Use this workshop sheet to mark and cut wrap material ends before wrapping.</div>
+      </header>
+      <div class="print-instruction">PRINT AT 100% / ACTUAL SIZE</div>
+      <section class="summary" aria-label="Measurement summary">
+        ${summaryHtml}
+      </section>
+      ${calibrationLineHtml}
+      <section class="guides" aria-label="1 to 1 cut geometry guide">
+        <article class="guide-panel" aria-label="Start end cut template">
+          <h2>Start End Template (1:1)</h2>
+          ${startGuideSvg}
+        </article>
+        ${template.profile==='tapered'?`<article class="guide-panel" aria-label="Finish end cut template"><h2>Finish End Template (1:1)</h2>${finishGuideSvg}</article>`:''}
+      </section>
+      <section aria-label="Template instructions">
+        ${instructionsHtml}
+      </section>
+    </main>
+  </div>
+  <script>
+    (function(){
+      var printBtn=document.getElementById('previewPrintBtn');
+      var closeBtn=document.getElementById('previewCloseBtn');
+      if(printBtn){
+        printBtn.addEventListener('click',function(){
+          try{window.focus();}catch(_error){}
+          try{window.print();}catch(_error){}
+        });
+      }
+      if(closeBtn){
+        closeBtn.addEventListener('click',function(){
+          try{ if(window.opener && !window.opener.closed){ window.opener.focus(); } }catch(_error){}
+          try{ window.close(); }catch(_error){}
+          if(!window.closed){
+            try{
+              if(window.history.length>1){ window.history.back(); }
+            }catch(_error){}
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>`;
 
@@ -682,44 +722,7 @@ function openGripCutTemplatePrint(){
     openInfoDialog('Print Unavailable','Could not render the print template window. Check pop-up permissions and try again.');
     return;
   }
-
-  const userAgent=String((navigator&&navigator.userAgent)||'');
-  const isIosDevice=/iPad|iPhone|iPod/i.test(userAgent) || (navigator.platform==='MacIntel' && Number(navigator.maxTouchPoints)>1);
-  const shouldAutoPrint=!isIosDevice;
-  let printTriggered=false;
-  const triggerPrint=()=>{
-    if(!shouldAutoPrint || printTriggered)return;
-    printTriggered=true;
-    try{printWindow.focus();}catch{}
-    window.setTimeout(()=>{
-      try{
-        printWindow.print();
-      }catch(_error){
-        // Allow manual printing if automatic print is blocked.
-      }
-    },150);
-  };
-  const afterRender=()=>{
-    try{
-      printWindow.requestAnimationFrame(()=>{
-        printWindow.requestAnimationFrame(()=>{
-          triggerPrint();
-        });
-      });
-    }catch(_error){
-      triggerPrint();
-    }
-  };
-
   try{printWindow.focus();}catch{}
-  if(shouldAutoPrint){
-    if(printWindow.document && printWindow.document.readyState==='complete'){
-      afterRender();
-    }else{
-      printWindow.addEventListener('load',afterRender,{once:true});
-      window.setTimeout(afterRender,720);
-    }
-  }
 }
 function renderGripCoveringTool(){
   const panel=$('workshopToolsPanel');
