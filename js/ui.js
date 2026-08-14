@@ -18,6 +18,35 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
+// Known singular/plural naming variants for the same logical Components category (e.g. seeded "Grips" vs default "Grip").
+const CATEGORY_NAME_ALIAS_GROUPS=[
+  ['Blank','Blanks'],
+  ['Reel Seat','Reel Seats'],
+  ['Grip','Grips'],
+  ['Butt Cap','Butt Caps'],
+  ['Hook Keeper','Hook Keepers'],
+  ['Tip Top','Tip Tops'],
+  ['Winding Check','Winding Checks'],
+  ['Decal','Decals'],
+];
+// Business/admin charge names that should never be stored as physical Component library records.
+const NON_COMPONENT_LINE_ITEM_NAMES=['freight','shipping','courier','postage','post & packing','post and packing','repair'];
+function categoryAliasGroupKeyFor(name){
+  const key=normalizeNameKey(name);
+  if(!key)return '';
+  const group=CATEGORY_NAME_ALIAS_GROUPS.find((variants)=>variants.some((variant)=>normalizeNameKey(variant)===key));
+  return group?normalizeNameKey(group[0]):'';
+}
+function findExistingCategoryByAlias(categoryMap,name){
+  const directKey=normalizeNameKey(name);
+  if(categoryMap.has(directKey))return categoryMap.get(directKey);
+  const aliasGroupKey=categoryAliasGroupKeyFor(name);
+  if(!aliasGroupKey)return null;
+  for(const [key,category] of categoryMap){
+    if(categoryAliasGroupKeyFor(key)===aliasGroupKey)return category;
+  }
+  return null;
+}
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
@@ -1867,27 +1896,20 @@ function allStudioSupplierNames(taxonomy){
   const values=(taxonomy&&Array.isArray(taxonomy.suppliers)?taxonomy.suppliers:[]).map((item)=>String(item.name||'').trim()).filter(Boolean);
   return Array.from(new Set(values.map((name)=>name))).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
 }
-function ensureStudioComponentTaxonomyLoaded(){
-  if(studioComponentTaxonomyState)return studioComponentTaxonomyState;
-  const stored=Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null);
-  const taxonomy=normalizeStudioComponentTaxonomy(stored);
-  const categoryMap=new Map(taxonomy.categories.map((item)=>[normalizeNameKey(item.name),item]));
-  const supplierMap=new Map(taxonomy.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
+function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
   componentLibraryRecords().forEach((record)=>{
     const categoryName=String(record&&record.category||'').trim();
     const categoryKey=normalizeNameKey(categoryName);
     if(categoryKey){
-      if(!categoryMap.has(categoryKey)){
-        const created={id:studioTaxonomyId('cat'),name:categoryName,subcategories:[]};
-        categoryMap.set(categoryKey,created);
+      let category=findExistingCategoryByAlias(categoryMap,categoryName);
+      if(!category){
+        category={id:studioTaxonomyId('cat'),name:categoryName,subcategories:[]};
+        categoryMap.set(categoryKey,category);
       }
       const subName=String(record&&record.subcategory||'').trim();
       const subKey=normalizeNameKey(subName);
-      if(subKey){
-        const category=categoryMap.get(categoryKey);
-        if(category && !category.subcategories.some((row)=>normalizeNameKey(row.name)===subKey)){
-          category.subcategories.push({id:studioTaxonomyId('sub'),name:subName});
-        }
+      if(subKey && !category.subcategories.some((row)=>normalizeNameKey(row.name)===subKey)){
+        category.subcategories.push({id:studioTaxonomyId('sub'),name:subName});
       }
     }
     const supplierName=String(record&&record.supplier||'').trim();
@@ -1898,7 +1920,7 @@ function ensureStudioComponentTaxonomyLoaded(){
   });
   getCustomCategoryNames().forEach((name)=>{
     const key=normalizeNameKey(name);
-    if(!key || categoryMap.has(key))return;
+    if(!key || findExistingCategoryByAlias(categoryMap,name))return;
     categoryMap.set(key,{id:studioTaxonomyId('cat'),name:String(name).trim(),subcategories:[]});
   });
   getCustomSupplierNames().forEach((name)=>{
@@ -1906,6 +1928,25 @@ function ensureStudioComponentTaxonomyLoaded(){
     if(!key || supplierMap.has(key))return;
     supplierMap.set(key,{id:studioTaxonomyId('sup'),name:String(name).trim()});
   });
+}
+function ensureStudioComponentTaxonomyLoaded(){
+  if(studioComponentTaxonomyState)return studioComponentTaxonomyState;
+  const stored=Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null);
+  const taxonomy=normalizeStudioComponentTaxonomy(stored);
+  const categoryMap=new Map(taxonomy.categories.map((item)=>[normalizeNameKey(item.name),item]));
+  const supplierMap=new Map(taxonomy.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
+  harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap);
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
+  Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
+  return studioComponentTaxonomyState;
+}
+// Re-harvests taxonomy from current component records; used to self-heal a category/supplier lookup miss
+// caused by records changing (e.g. via the build-time Select Component flow) after taxonomy was cached in memory.
+function resyncStudioComponentTaxonomyWithRecords(){
+  const baseline=studioComponentTaxonomyState||normalizeStudioComponentTaxonomy(Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null));
+  const categoryMap=new Map(baseline.categories.map((item)=>[normalizeNameKey(item.name),item]));
+  const supplierMap=new Map(baseline.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
+  harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap);
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
   Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
   return studioComponentTaxonomyState;
@@ -1928,7 +1969,11 @@ function studioCategoryByName(name){
   const key=normalizeNameKey(name);
   if(!key)return null;
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
-  return taxonomy.categories.find((item)=>normalizeNameKey(item.name)===key)||null;
+  const found=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===key);
+  if(found)return found;
+  // Self-heal: a visible category row may have come from a component record added after taxonomy was cached.
+  const resynced=resyncStudioComponentTaxonomyWithRecords();
+  return resynced.categories.find((item)=>normalizeNameKey(item.name)===key)||null;
 }
 function studioSupplierByName(name){
   const key=normalizeNameKey(name);
@@ -2147,6 +2192,10 @@ function saveStudioComponentDetails(){
   if(!nextName){
     openInfoDialog('Component Name Required','Enter a component name before saving.');
     nameInput.focus();
+    return;
+  }
+  if(NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizeNameKey(nextName))){
+    openInfoDialog('Not a Physical Component','Business charges like Freight, Postage or Repair are not stored as physical Components. Add these directly on the build/quote instead.');
     return;
   }
   const originalName=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'').trim();
@@ -4806,6 +4855,8 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const normalizedName=String(name||'').trim();
   const normalizedKey=normalizeNameKey(normalizedName);
   if(!normalizedKey)return;
+  // Business/admin charges (Freight, Repair, etc.) are not physical parts and must never enter the Components library.
+  if(NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizedKey))return;
   const item=sourceComponent&&typeof sourceComponent==='object'?sourceComponent:{};
   const rowCategory=String(item.category||'').trim();
   const categoryValue=rowCategory;
@@ -4956,6 +5007,83 @@ function assignStarterComponentSuppliers(){
   });
   if(changed)saveComponentLibraryRecords(records);
   Store.set(STARTER_COMPONENTS_SUPPLIER_FIX_KEY,true);
+}
+const CATEGORY_ALIAS_MERGE_STORAGE_KEY='klabs-studio-category-alias-merge-v1';
+function mergeDuplicateCategoryAliasesOnce(){
+  if(Store.get(CATEGORY_ALIAS_MERGE_STORAGE_KEY,false))return;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const report=[];
+  CATEGORY_NAME_ALIAS_GROUPS.forEach((variants)=>{
+    const variantKeys=new Set(variants.map(normalizeNameKey));
+    const matches=taxonomy.categories.filter((item)=>variantKeys.has(normalizeNameKey(item.name)));
+    if(matches.length<2)return;
+    // Prefer the variant with real components already assigned; ties break on subcategory count then longer (more descriptive) name.
+    const scored=matches.map((item)=>({
+      item,
+      usage:studioCountCategoryUsage(item.name),
+      subCount:Array.isArray(item.subcategories)?item.subcategories.length:0,
+    })).sort((a,b)=>(b.usage-a.usage)||(b.subCount-a.subCount)||(b.item.name.length-a.item.name.length));
+    const survivor=scored[0].item;
+    scored.slice(1).forEach((entry)=>{
+      const loser=entry.item;
+      const movedCount=studioCountCategoryUsage(loser.name);
+      if(movedCount>0)studioRenameCategory(loser.name,survivor.name);
+      (loser.subcategories||[]).forEach((sub)=>{
+        if(!survivor.subcategories.some((existing)=>normalizeNameKey(existing.name)===normalizeNameKey(sub.name))){
+          survivor.subcategories.push(sub);
+        }
+      });
+      taxonomy.categories=taxonomy.categories.filter((row)=>row.id!==loser.id);
+      report.push(`Merged category "${loser.name}" into "${survivor.name}" (${movedCount} component(s) preserved).`);
+    });
+  });
+  if(report.length){
+    studioComponentTaxonomyState=taxonomy;
+    saveStudioComponentTaxonomy();
+    console.info('[K-Labs Studio] Category duplicate cleanup:',report.join(' '));
+  }
+  Store.set(CATEGORY_ALIAS_MERGE_STORAGE_KEY,true);
+}
+const PLACEHOLDER_COMPONENT_CLEANUP_STORAGE_KEY='klabs-studio-placeholder-cleanup-v1';
+// Category-name-shaped component records created by an earlier bug where picking a brand new Build Cost
+// category/line-item name also created a matching "component" record using that same name.
+const SEEDED_PLACEHOLDER_COMPONENT_NAMES=['reel seats','hook keepers','miscellaneous'];
+function componentRecordLooksLikePlaceholder(record){
+  if(!record)return false;
+  const hasCost=numberOrZero(record.cost)>0;
+  const hasUnitPrice=numberOrZero(record.unitPrice)>0;
+  const hasStock=record.stockOnHand!==undefined && numberOrZero(record.stockOnHand)>0;
+  const hasSpecs=!!String(record.specifications||'').trim();
+  const hasNotes=!!String(record.notes||'').trim();
+  const hasSupplier=!!String(record.supplier||'').trim();
+  const hasSubcategory=!!String(record.subcategory||'').trim();
+  return !hasCost && !hasUnitPrice && !hasStock && !hasSpecs && !hasNotes && !hasSupplier && !hasSubcategory;
+}
+function cleanupPlaceholderComponentRecordsOnce(){
+  if(Store.get(PLACEHOLDER_COMPONENT_CLEANUP_STORAGE_KEY,false))return;
+  const records=componentLibraryRecords();
+  const removed=[];
+  const kept=[];
+  const next=records.filter((record)=>{
+    const nameKey=normalizeNameKey(record.name);
+    const isCategoryNamePlaceholder=SEEDED_PLACEHOLDER_COMPONENT_NAMES.includes(nameKey) && nameKey===normalizeNameKey(record.category);
+    const isBusinessChargeName=NON_COMPONENT_LINE_ITEM_NAMES.includes(nameKey);
+    if(!isCategoryNamePlaceholder && !isBusinessChargeName)return true;
+    if(!componentRecordLooksLikePlaceholder(record)){
+      kept.push(record.name);
+      return true;
+    }
+    removed.push(record.name);
+    return false;
+  });
+  if(removed.length){
+    saveComponentLibraryRecords(next);
+    console.info('[K-Labs Studio] Removed seeded placeholder/business-charge component records:',removed.join(', '));
+  }
+  if(kept.length){
+    console.info('[K-Labs Studio] Kept components matching placeholder names because they contain real data:',kept.join(', '));
+  }
+  Store.set(PLACEHOLDER_COMPONENT_CLEANUP_STORAGE_KEY,true);
 }
 function componentLibraryTextFieldValue(value){
   return String(value||'').trim();
@@ -8735,6 +8863,8 @@ function render(){
 }
 seedStarterComponentsLibrary();
 assignStarterComponentSuppliers();
+mergeDuplicateCategoryAliasesOnce();
+cleanupPlaceholderComponentRecordsOnce();
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();
