@@ -463,8 +463,8 @@ function renderDiameterCircumferenceTool(){
   if(!diameterInput || !circumferenceInput)return;
 
   const state=workshopToolsState.diameter;
-  state.unit=normalizeWorkshopUnit(state.unit);
-  state.imperialDisplay=normalizeWorkshopImperialDisplay(state.imperialDisplay);
+  state.unit=activeMeasurementUnits();
+  state.imperialDisplay=activeImperialDisplay();
   state.diameterMm=Math.max(0.01,numberOrZero(state.diameterMm));
 
   const circumferenceMm=state.diameterMm*Math.PI;
@@ -495,13 +495,6 @@ function renderDiameterCircumferenceTool(){
     imperialFractionalLine.textContent=`D ${formatImperialFractionInches(mmToInches(state.diameterMm),32)} in • C ${formatImperialFractionInches(mmToInches(circumferenceMm),32)} in`;
   }
 
-  const imperialDisplayRow=$('workshopDcImperialDisplay');
-  if(imperialDisplayRow)imperialDisplayRow.hidden=state.unit!=='imperial';
-
-  const panel=$('workshopToolsPanel');
-  if(!panel)return;
-  syncWorkshopToggleButtons(panel,'[data-dc-unit]','data-dc-unit',state.unit);
-  syncWorkshopToggleButtons(panel,'[data-dc-imperial-display]','data-dc-imperial-display',state.imperialDisplay);
 }
 function buildGripCutEndGuideSvg(options){
   const settings=options&&typeof options==='object'?options:{};
@@ -728,8 +721,8 @@ function renderGripCoveringTool(){
   const panel=$('workshopToolsPanel');
   if(!panel)return;
   const state=workshopToolsState.grip;
-  state.unit=normalizeWorkshopUnit(state.unit);
-  state.imperialDisplay=normalizeWorkshopImperialDisplay(state.imperialDisplay);
+  state.unit=activeMeasurementUnits();
+  state.imperialDisplay=activeImperialDisplay();
   state.profile=state.profile==='tapered'?'tapered':'straight';
   state.straightDiameterMm=Math.max(0.01,numberOrZero(state.straightDiameterMm));
   state.startDiameterMm=Math.max(0.01,numberOrZero(state.startDiameterMm));
@@ -742,9 +735,6 @@ function renderGripCoveringTool(){
   const taperedFields=$('workshopGripTaperedFields');
   if(straightFields)straightFields.hidden=state.profile!=='straight';
   if(taperedFields)taperedFields.hidden=state.profile!=='tapered';
-
-  const imperialDisplayRow=$('workshopGripImperialDisplay');
-  if(imperialDisplayRow)imperialDisplayRow.hidden=state.unit!=='imperial';
 
   const gripDiameterInput=$('workshopGripDiameter');
   const startDiameterInput=$('workshopGripStartDiameter');
@@ -829,8 +819,6 @@ function renderGripCoveringTool(){
     dateText:formatDateDisplay(new Date(),{includeTime:false}),
   }:null;
 
-  syncWorkshopToggleButtons(panel,'[data-grip-unit]','data-grip-unit',state.unit);
-  syncWorkshopToggleButtons(panel,'[data-grip-imperial-display]','data-grip-imperial-display',state.imperialDisplay);
   syncWorkshopToggleButtons(panel,'[data-grip-profile]','data-grip-profile',state.profile);
 }
 function renderWorkshopCalculator(){
@@ -870,15 +858,6 @@ function bindWorkshopCalculatorControls(){
     state.lastEdited='circumference';
     renderWorkshopCalculator();
   });
-  bindWorkshopToggleButtons(panel,'[data-dc-unit]',(button)=>{
-    workshopToolsState.diameter.unit=normalizeWorkshopUnit(button.getAttribute('data-dc-unit'));
-    renderWorkshopCalculator();
-  });
-  bindWorkshopToggleButtons(panel,'[data-dc-imperial-display]',(button)=>{
-    workshopToolsState.diameter.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-dc-imperial-display'));
-    renderWorkshopCalculator();
-  });
-
   const gripDiameterInput=$('workshopGripDiameter');
   const gripStartDiameterInput=$('workshopGripStartDiameter');
   const gripEndDiameterInput=$('workshopGripEndDiameter');
@@ -920,14 +899,6 @@ function bindWorkshopCalculatorControls(){
     renderWorkshopCalculator();
   });
 
-  bindWorkshopToggleButtons(panel,'[data-grip-unit]',(button)=>{
-    workshopToolsState.grip.unit=normalizeWorkshopUnit(button.getAttribute('data-grip-unit'));
-    renderWorkshopCalculator();
-  });
-  bindWorkshopToggleButtons(panel,'[data-grip-imperial-display]',(button)=>{
-    workshopToolsState.grip.imperialDisplay=normalizeWorkshopImperialDisplay(button.getAttribute('data-grip-imperial-display'));
-    renderWorkshopCalculator();
-  });
   bindWorkshopToggleButtons(panel,'[data-grip-profile]',(button)=>{
     workshopToolsState.grip.profile=button.getAttribute('data-grip-profile')==='tapered'?'tapered':'straight';
     renderWorkshopCalculator();
@@ -7121,7 +7092,7 @@ function startHold(field,direction,button){
   },500);
 }
 function bindLayoutControls(){
-  const returnLandingButton=$('[data-workshop-return-landing]');
+  const returnLandingButton=document.querySelector('[data-workshop-return-landing]');
   if(returnLandingButton && returnLandingButton.getAttribute('data-workshop-return-bound')!=='true'){
     returnLandingButton.setAttribute('data-workshop-return-bound','true');
     returnLandingButton.addEventListener('click',()=>{
