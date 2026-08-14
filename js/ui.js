@@ -99,6 +99,7 @@ let studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
 let studioLibraryEditor={type:'',mode:'',targetName:''};
 let studioLibraryContextMenu={type:'',key:''};
 let studioTaxonomyManagerSection='categories';
+let studioSupplierContextMenu='';
 let studioTaxonomyUiState={
   categories:{mode:'browse'},
   subcategories:{mode:'browse'},
@@ -2303,7 +2304,9 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
   const supplierRows=taxonomy.suppliers.length
     ?taxonomy.suppliers.map((supplier)=>{
       const active=supplier.id===studioComponentTaxonomySelection.supplier;
-      return `<article class="studio-taxonomy-supplier-row"><button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-browse-supplier="${escapeAttributeValue(supplier.name)}"><strong>${escapeHtml(supplier.name)}</strong></button><button class="studio-components-list__menu-trigger studio-taxonomy-supplier-row__menu" type="button" aria-label="${escapeAttributeValue(supplier.name)} actions" data-taxonomy-select="supplier" data-taxonomy-id="${escapeAttributeValue(supplier.id)}" aria-pressed="${active?'true':'false'}">&hellip;</button></article>`;
+      const menuOpen=studioSupplierContextMenu===supplier.id;
+      const menu=menuOpen?`<div class="studio-taxonomy-supplier-menu" role="menu"><button class="studio-components-row-menu__item" type="button" role="menuitem" data-taxonomy-supplier-action="edit" data-taxonomy-id="${escapeAttributeValue(supplier.id)}">Edit / Rename</button><button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-taxonomy-supplier-action="delete" data-taxonomy-id="${escapeAttributeValue(supplier.id)}">Delete</button></div>`:'';
+      return `<article class="studio-taxonomy-supplier-row"><button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-browse-supplier="${escapeAttributeValue(supplier.name)}"><strong>${escapeHtml(supplier.name)}</strong></button><button class="studio-components-list__menu-trigger studio-taxonomy-supplier-row__menu" type="button" aria-label="${escapeAttributeValue(supplier.name)} actions" data-taxonomy-supplier-menu-toggle="${escapeAttributeValue(supplier.id)}" aria-expanded="${menuOpen?'true':'false'}">&hellip;</button>${menu}</article>`;
     }).join('')
     :'<p class="studio-taxonomy-list__empty">No suppliers yet.</p>';
   const showMoveControls=taxonomy.suppliers.length>1;
@@ -3363,6 +3366,27 @@ function bindStudioTaxonomyPanel(){
     if(browseSupplierButton){
       const supplierName=String(browseSupplierButton.getAttribute('data-taxonomy-browse-supplier')||'').trim();
       if(supplierName)showStudioSupplierBrowse(supplierName);
+      return;
+    }
+    const supplierMenuToggle=event.target.closest('[data-taxonomy-supplier-menu-toggle]');
+    if(supplierMenuToggle){
+      const supplierId=String(supplierMenuToggle.getAttribute('data-taxonomy-supplier-menu-toggle')||'');
+      studioSupplierContextMenu=studioSupplierContextMenu===supplierId?'':supplierId;
+      renderStudioTaxonomyManager();
+      return;
+    }
+    const supplierMenuAction=event.target.closest('[data-taxonomy-supplier-action]');
+    if(supplierMenuAction){
+      const action=String(supplierMenuAction.getAttribute('data-taxonomy-supplier-action')||'');
+      const supplierId=String(supplierMenuAction.getAttribute('data-taxonomy-id')||'');
+      studioSupplierContextMenu='';
+      studioComponentTaxonomySelection.supplier=supplierId;
+      if(action==='edit'){
+        setStudioTaxonomySectionMode('suppliers','edit');
+        renderStudioTaxonomyManager();
+      }else if(action==='delete'){
+        handleStudioTaxonomyAction('supplier-delete');
+      }
       return;
     }
     const selectButton=event.target.closest('[data-taxonomy-select]');

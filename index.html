@@ -30,18 +30,14 @@
     <input id="authEmail" type="email" autocomplete="email">
   </label>
 
-  <label>
-    Password
-   <label class="auth-password-label">
-  Password
-
-  <div class="auth-password-wrap">
-    <input id="authPassword" type="password" autocomplete="current-password">
-    <button id="authTogglePassword" type="button" aria-label="Show password">👁</button>
+  <div class="auth-password-field">
+    <label class="auth-password-label" for="authPassword">Password</label>
+    <div class="auth-password-wrap">
+      <input id="authPassword" type="password" autocomplete="current-password">
+      <button id="authTogglePassword" type="button" aria-label="Show password">👁</button>
+    </div>
+    <button id="authForgotPassword" type="button">Forgot password?</button>
   </div>
-
-  <button id="authForgotPassword" type="button">Forgot password?</button>
-</label>
   <button id="authSignIn" type="button">Sign In</button>
 
   <p id="authMessage" aria-live="polite"></p>
