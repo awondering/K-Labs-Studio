@@ -108,6 +108,7 @@ let studioTaxonomyUiState={
 let studioComponentTaxonomyState=null;
 let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
 let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
+let studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
 let activeSavedBuildRef=null;
 const workshopKeyboardDismissState={
   suppressNavUntil:0,
@@ -2025,6 +2026,32 @@ function syncStudioComponentSaveButtonState(){
   button.textContent='Save Changes';
   button.classList.remove('is-saved');
 }
+function clearStudioSupplierSavedTimer(){
+  if(studioSupplierEditContext.savedTimer){
+    clearTimeout(studioSupplierEditContext.savedTimer);
+    studioSupplierEditContext.savedTimer=0;
+  }
+}
+function syncStudioTaxonomySupplierSaveButtonState(){
+  const button=$('studioTaxonomySupplierSaveBtn');
+  const input=$('studioTaxonomySupplierName');
+  if(!button || !input)return;
+  const currentValue=String(input.value||'').trim();
+  const dirty=currentValue!=='' && currentValue!==studioSupplierEditContext.baseline;
+  if(dirty){
+    studioSupplierEditContext.savedFlash=false;
+    clearStudioSupplierSavedTimer();
+  }
+  if(studioSupplierEditContext.savedFlash && !dirty){
+    button.disabled=true;
+    button.textContent='✓ SAVED';
+    button.className='ghost-action studio-taxonomy-editor__save is-saved';
+    return;
+  }
+  button.disabled=!dirty;
+  button.textContent='SAVE';
+  button.className=dirty?'primary-action studio-taxonomy-editor__save':'ghost-action studio-taxonomy-editor__save';
+}
 function studioComponentListMeta(record){
   const parts=[String(record&&record.category||'').trim(),String(record&&record.subcategory||'').trim(),String(record&&record.supplier||'').trim()].filter(Boolean);
   return parts.length?parts.join(' • '):'No category or supplier';
@@ -2299,17 +2326,22 @@ function studioTaxonomySectionMarkupSubcategories(taxonomy){
 }
 function studioTaxonomySectionMarkupSuppliers(taxonomy){
   const selectedSupplier=studioSupplierById(studioComponentTaxonomySelection.supplier);
-  const selectedIndex=taxonomy.suppliers.findIndex((item)=>item.id===studioComponentTaxonomySelection.supplier);
   const mode=studioTaxonomySectionMode('suppliers');
   const supplierRows=taxonomy.suppliers.length
-    ?taxonomy.suppliers.map((supplier)=>{
+    ?taxonomy.suppliers.map((supplier,rowIndex)=>{
       const active=supplier.id===studioComponentTaxonomySelection.supplier;
       const menuOpen=studioSupplierContextMenu===supplier.id;
-      const menu=menuOpen?`<div class="studio-taxonomy-supplier-menu" role="menu"><button class="studio-components-row-menu__item" type="button" role="menuitem" data-taxonomy-supplier-action="edit" data-taxonomy-id="${escapeAttributeValue(supplier.id)}">Edit / Rename</button><button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-taxonomy-supplier-action="delete" data-taxonomy-id="${escapeAttributeValue(supplier.id)}">Delete</button></div>`:'';
+      const canMoveUp=rowIndex>0;
+      const canMoveDown=rowIndex<taxonomy.suppliers.length-1;
+      const menu=menuOpen?`<div class="studio-taxonomy-supplier-menu" role="menu">
+        <button class="studio-components-row-menu__item" type="button" role="menuitem" data-taxonomy-supplier-action="edit" data-taxonomy-id="${escapeAttributeValue(supplier.id)}">Edit / Rename</button>
+        <button class="studio-components-row-menu__item" type="button" role="menuitem" data-taxonomy-supplier-action="move-up" data-taxonomy-id="${escapeAttributeValue(supplier.id)}"${canMoveUp?'':' disabled'}>Move Up</button>
+        <button class="studio-components-row-menu__item" type="button" role="menuitem" data-taxonomy-supplier-action="move-down" data-taxonomy-id="${escapeAttributeValue(supplier.id)}"${canMoveDown?'':' disabled'}>Move Down</button>
+        <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-taxonomy-supplier-action="delete" data-taxonomy-id="${escapeAttributeValue(supplier.id)}">Delete</button>
+      </div>`:'';
       return `<article class="studio-taxonomy-supplier-row"><button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-browse-supplier="${escapeAttributeValue(supplier.name)}"><strong>${escapeHtml(supplier.name)}</strong></button><button class="studio-components-list__menu-trigger studio-taxonomy-supplier-row__menu" type="button" aria-label="${escapeAttributeValue(supplier.name)} actions" data-taxonomy-supplier-menu-toggle="${escapeAttributeValue(supplier.id)}" aria-expanded="${menuOpen?'true':'false'}">&hellip;</button>${menu}</article>`;
     }).join('')
     :'<p class="studio-taxonomy-list__empty">No suppliers yet.</p>';
-  const showMoveControls=taxonomy.suppliers.length>1;
   const addMarkup=mode==='add'?`
     <section class="studio-taxonomy-editor" aria-label="Add supplier">
       <h3>ADD SUPPLIER</h3>
@@ -2320,17 +2352,16 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
       </div>
     </section>
   `:'';
+  const showSaved=mode==='edit' && selectedSupplier && studioSupplierEditContext.savedFlash;
+  const saveButtonClass=showSaved?'ghost-action studio-taxonomy-editor__save is-saved':'ghost-action studio-taxonomy-editor__save';
+  const saveButtonLabel=showSaved?'✓ SAVED':'SAVE';
   const editMarkup=mode==='edit' && selectedSupplier?`
     <section class="studio-taxonomy-editor" aria-label="Edit supplier">
       <h3>${escapeHtml(String(selectedSupplier.name||'').toUpperCase())}</h3>
       <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" value="${escapeHtml(selectedSupplier.name)}" /></label>
       <div class="studio-taxonomy-editor__actions">
-        <button class="primary-action" type="button" data-taxonomy-action="supplier-rename">SAVE</button>
-      </div>
-      <div class="studio-taxonomy-editor__actions studio-taxonomy-editor__actions--secondary">
-        ${showMoveControls?`<button class="ghost-action" type="button" data-taxonomy-action="supplier-up"${selectedIndex<=0?' disabled':''}>Move Up</button>
-        <button class="ghost-action" type="button" data-taxonomy-action="supplier-down"${selectedIndex<0 || selectedIndex>=taxonomy.suppliers.length-1?' disabled':''}>Move Down</button>`:''}
-        <button class="ghost-action studio-taxonomy-editor__danger" type="button" data-taxonomy-action="supplier-delete">Delete</button>
+        <button id="studioTaxonomySupplierSaveBtn" class="${saveButtonClass}" type="button" data-taxonomy-action="supplier-rename" disabled>${saveButtonLabel}</button>
+        <button class="ghost-action" type="button" data-taxonomy-ui-action="supplier-cancel">Cancel</button>
       </div>
     </section>
   `:'';
@@ -2634,8 +2665,18 @@ function handleStudioTaxonomyAction(action){
     const oldName=supplier.name;
     supplier.name=nextSupplierName;
     studioRenameSupplier(oldName,nextSupplierName);
-    setStudioTaxonomySectionMode('suppliers','edit');
     saveStudioComponentTaxonomy();
+    studioSupplierEditContext.baseline=nextSupplierName;
+    studioSupplierEditContext.savedFlash=true;
+    clearStudioSupplierSavedTimer();
+    refreshStudioComponentAndTaxonomyViews();
+    studioSupplierEditContext.savedTimer=window.setTimeout(()=>{
+      studioSupplierEditContext.savedFlash=false;
+      studioSupplierEditContext.savedTimer=0;
+      setStudioTaxonomySectionMode('suppliers','browse');
+      renderStudioTaxonomyManager();
+    },700);
+    return;
   }
   if(action==='supplier-delete'){
     if(!supplier){openInfoDialog('Select Supplier','Choose a supplier to delete.');return;}
@@ -3361,6 +3402,13 @@ function bindStudioTaxonomyPanel(){
     }
   });
 
+  panel.addEventListener('input',(event)=>{
+    const supplierNameInput=event.target.closest('#studioTaxonomySupplierName');
+    if(supplierNameInput){
+      syncStudioTaxonomySupplierSaveButtonState();
+    }
+  });
+
   panel.addEventListener('click',(event)=>{
     const browseSupplierButton=event.target.closest('[data-taxonomy-browse-supplier]');
     if(browseSupplierButton){
@@ -3377,15 +3425,22 @@ function bindStudioTaxonomyPanel(){
     }
     const supplierMenuAction=event.target.closest('[data-taxonomy-supplier-action]');
     if(supplierMenuAction){
+      if(supplierMenuAction.disabled)return;
       const action=String(supplierMenuAction.getAttribute('data-taxonomy-supplier-action')||'');
       const supplierId=String(supplierMenuAction.getAttribute('data-taxonomy-id')||'');
       studioSupplierContextMenu='';
       studioComponentTaxonomySelection.supplier=supplierId;
       if(action==='edit'){
+        const supplierRecord=studioSupplierById(supplierId);
+        studioSupplierEditContext={baseline:supplierRecord?String(supplierRecord.name||''):'',savedTimer:0,savedFlash:false};
         setStudioTaxonomySectionMode('suppliers','edit');
         renderStudioTaxonomyManager();
       }else if(action==='delete'){
         handleStudioTaxonomyAction('supplier-delete');
+      }else if(action==='move-up'){
+        handleStudioTaxonomyAction('supplier-up');
+      }else if(action==='move-down'){
+        handleStudioTaxonomyAction('supplier-down');
       }
       return;
     }
@@ -3402,6 +3457,8 @@ function bindStudioTaxonomyPanel(){
         setStudioTaxonomySectionMode('subcategories','edit');
       }else if(selectType==='supplier'){
         studioComponentTaxonomySelection.supplier=selectId;
+        const supplierRecord=studioSupplierById(selectId);
+        studioSupplierEditContext={baseline:supplierRecord?String(supplierRecord.name||''):'',savedTimer:0,savedFlash:false};
         setStudioTaxonomySectionMode('suppliers','edit');
       }
       renderStudioTaxonomyManager();

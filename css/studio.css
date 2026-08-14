@@ -4444,6 +4444,12 @@ textarea::-moz-selection,
   color:#ffb5bb;
 }
 
+.studio-taxonomy-editor__save.is-saved{
+  background:rgba(216,210,197,.22);
+  border-color:rgba(216,210,197,.4);
+  color:#efe8dc;
+}
+
 .studio-taxonomy-add-cta{
   justify-self:start;
 }
@@ -4557,6 +4563,16 @@ textarea::-moz-selection,
 
 .studio-components-row-menu__item--danger{
   color:#ffb5bb;
+}
+
+.studio-components-row-menu__item:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+}
+
+.studio-components-row-menu__item:disabled:hover{
+  background:transparent;
+  border-color:transparent;
 }
 
 .studio-components-list__empty,
