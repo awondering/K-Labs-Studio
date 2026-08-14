@@ -5527,19 +5527,19 @@ textarea::-moz-selection,
 
 @media (max-width:520px){
   .saved-build-card{
-    grid-template-columns:minmax(0,1fr);
-    align-items:stretch;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
     gap:var(--ds-space-3);
   }
 
   .saved-build-card__actions{
-    justify-self:stretch;
-    justify-items:start;
+    justify-self:end;
+    justify-items:end;
   }
 
   .saved-build-card__menu{
-    right:auto;
-    left:0;
+    right:0;
+    left:auto;
   }
 
   .saved-builds-empty__actions{
