@@ -623,6 +623,7 @@ body.component-sheet-open .workshop-back-to-top{
   align-content:start;
   gap:14px;
   justify-items:stretch;
+  padding-top:14px;
 }
 
 #settingsScreen .screen-head{
@@ -3227,70 +3228,6 @@ body.component-sheet-open .workshop-back-to-top{
   padding-bottom:calc(122px + var(--safe-bottom));
 }
 
-.app-shell:has(#homeScreen.active) .topbar{
-  display:grid;
-  grid-template-columns:48px minmax(0,1fr) 48px;
-  align-items:center;
-  gap:12px;
-  margin-bottom:clamp(8px,1.6vh,14px);
-  padding:4px 1px 0;
-}
-
-.app-shell:has(#homeScreen.active) .icon-button{
-  width:48px;
-  height:48px;
-  border-radius:14px;
-  border-color:rgba(214,210,200,.17);
-  background:rgba(10,12,13,.78);
-}
-
-.app-shell:has(#homeScreen.active) .brand-lockup{
-  justify-self:center;
-  gap:11px;
-  width:100%;
-  max-width:280px;
-}
-
-.app-shell:has(#homeScreen.active) .brand-mark{
-  width:34px;
-  height:34px;
-  border-radius:10px;
-}
-
-.app-shell:has(#homeScreen.active) .brand-copy{
-  min-width:0;
-}
-
-.app-shell:has(#homeScreen.active) .brand-lockup strong{
-  font-size:13px;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  color:#e0d9cd;
-}
-
-.app-shell:has(#homeScreen.active) .brand-lockup small{
-  margin-top:2px;
-  font-size:7px;
-  letter-spacing:.2em;
-  color:#999d96;
-}
-
-.app-shell:has(#homeScreen.active) .brand-copy span{
-  margin-top:2px;
-  font-size:7px;
-  letter-spacing:.18em;
-  color:#777c75;
-}
-
-.app-shell:has(#homeScreen.active) .build-pill{
-  width:48px;
-  min-width:48px;
-  padding:0;
-  border:0;
-  opacity:0;
-  pointer-events:none;
-}
-
 .home-hero,
 .module-card,
 .layout-control-card,
@@ -3306,10 +3243,9 @@ body.component-sheet-open .workshop-back-to-top{
 
 #homeScreen.active{
   display:grid;
-  align-content:center;
+  align-content:start;
   gap:var(--surface-stack-gap);
-  min-height:calc(100dvh - 218px);
-  padding-block:clamp(6px,1.8vh,16px);
+  padding-block:clamp(6px,1.8vh,16px) 0;
 }
 
 #homeScreen .home-premium-shell{
@@ -3559,6 +3495,7 @@ body.component-sheet-open .workshop-back-to-top{
 
 .workshop-landing-shell{
   gap:14px;
+  padding-top:14px;
 }
 
 .workshop-landing-panel{
