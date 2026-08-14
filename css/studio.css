@@ -4738,6 +4738,24 @@ textarea::-moz-selection,
   letter-spacing:.03em;
 }
 
+.quote-builder__overview{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:2px 0 4px;
+}
+
+.quote-builder__overview-status{
+  min-height:18px;
+  font-size:9px;
+}
+
+.quote-builder__overview-due{
+  font-size:11px;
+  letter-spacing:.03em;
+  color:rgba(214,210,200,.78);
+}
+
 #workshopScreen .quote-builder__entry-actions{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));

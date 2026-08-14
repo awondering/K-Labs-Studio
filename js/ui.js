@@ -55,7 +55,7 @@ const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
-const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
+const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildDetailsBody','workshopBuildSpecsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
@@ -6960,7 +6960,7 @@ function ensureCustomerFinderSheet(){
         openSavedBuildRecord(source,index,{openAtTop:true});
         window.setTimeout(()=>{
           focusBuildNameField();
-          flashWorkshopStatus('Rename build in Customer section',{pending:true,duration:1900});
+          flashWorkshopStatus('Rename build in Build Details section',{pending:true,duration:1900});
         },56);
         return;
       }
@@ -7175,6 +7175,32 @@ function updateWorkshopBuildActionsUi(){
     menuToggle.textContent=lifecycle==='complete'?'Mark Active':'Mark Complete';
   }
 }
+// Compact at-a-glance strip for an existing build: who/what it is, active/complete, and due date, without opening any section.
+function updateWorkshopBuildOverview(){
+  const titleEl=$('quoteBuilderTitle');
+  const overviewEl=$('quoteBuilderOverview');
+  const customerName=specificationValue(quote&&quote.customerName);
+  const buildName=specificationValue(quote&&quote.buildName);
+  const hasIdentity=!!(customerName||buildName);
+  if(titleEl){
+    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
+  }
+  if(!overviewEl)return;
+  overviewEl.hidden=!hasIdentity;
+  if(!hasIdentity)return;
+  const lifecycle=currentBuildLifecycleStatus();
+  const statusEl=$('quoteBuilderOverviewStatus');
+  if(statusEl){
+    statusEl.textContent=buildLifecycleLabel(lifecycle).toUpperCase();
+    statusEl.classList.toggle('saved-build-card__status--complete',lifecycle==='complete');
+    statusEl.classList.toggle('saved-build-card__status--active',lifecycle!=='complete');
+  }
+  const dueEl=$('quoteBuilderOverviewDue');
+  if(dueEl){
+    const dueRaw=specificationValue(quote&&quote.estimatedCompletionDate);
+    dueEl.textContent=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'No due date set';
+  }
+}
 function ensureCurrentBuildReference(){
   const target=findCurrentSavedBuildTarget();
   if(target){
@@ -7214,7 +7240,7 @@ function toggleCurrentBuildLifecycle(){
 function focusBuildNameField(){
   const input=$('quoteBuildName');
   if(!input)return;
-  setWorkshopSectionCollapsed('workshopCustomerBody',false);
+  setWorkshopSectionCollapsed('workshopBuildDetailsBody',false);
   try{input.focus({preventScroll:false});}catch{input.focus();}
   try{input.select();}catch{}
 }
@@ -7227,7 +7253,7 @@ function handleCurrentBuildAction(action){
   if(action==='rename'){
     closeCurrentBuildActionsMenu();
     focusBuildNameField();
-    flashWorkshopStatus('Rename build in Customer section',{pending:true,duration:1900});
+    flashWorkshopStatus('Rename build in Build Details section',{pending:true,duration:1900});
     return;
   }
   if(action==='delete'){
@@ -7297,8 +7323,8 @@ function openSavedBuildRecord(source,index,options){
   preserveWorkshopQuoteOnEntry=true;
   goScreen('workshopScreen');
   if(settings.openAtTop){
+    // Land on the collapsed build overview rather than forcing the Customer Details form open.
     window.setTimeout(()=>{
-      focusWorkshopSection('workshopCustomerBody',{scroll:false});
       positionWorkshopScreenAtTop();
     },36);
     return;
@@ -8152,13 +8178,21 @@ function renderWorkshopQuote(){
   }
   document.querySelectorAll('[data-internal-only]').forEach((el)=>el.hidden=false);
   document.querySelectorAll('[data-customer-only]').forEach((el)=>el.hidden=true);
-  if($('quoteBuilderTitle'))$('quoteBuilderTitle').textContent='Studio';
+  updateWorkshopBuildOverview();
   const customerSummaryTextEl=$('quoteCustomerSummaryText');
   if(customerSummaryTextEl){
     const customerName=specificationValue(quote.customerName);
     const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
     const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'Add customer details';
     customerSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
+  }
+  const buildDetailsSummaryTextEl=$('quoteBuildDetailsSummaryText');
+  if(buildDetailsSummaryTextEl){
+    const buildName=specificationValue(quote.buildName);
+    const dueRaw=specificationValue(quote.estimatedCompletionDate);
+    const dueText=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'';
+    const summary=buildName?(dueText?`${buildName} • ${dueText}`:buildName):(dueText||'Add build name and due date');
+    buildDetailsSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   updateBuildPricingSummary();
   updateQuoteActionPriority();

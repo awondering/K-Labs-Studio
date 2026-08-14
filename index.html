@@ -351,6 +351,10 @@
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
           <h1 id="quoteBuilderTitle">Studio</h1>
+          <p id="quoteBuilderOverview" class="quote-builder__overview" hidden>
+            <span id="quoteBuilderOverviewStatus" class="saved-build-card__status quote-builder__overview-status">Active</span>
+            <span id="quoteBuilderOverviewDue" class="quote-builder__overview-due"></span>
+          </p>
           <p class="subtle">Start a build, then complete each section in order.</p>
         </header>
 
@@ -362,7 +366,7 @@
         <article id="workshopCustomerSection" class="quote-section quote-section--collapsible quote-section--collapsed">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopCustomerBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Customer</span>
+              <span class="quote-section__toggle-title">Customer Details</span>
               <span id="quoteCustomerSummaryText" class="quote-section__toggle-summary" aria-live="polite">
                 <span>Add customer details</span>
               </span>
@@ -380,6 +384,20 @@
             <label><span>Region / State</span><input id="quoteRegionState" type="text" placeholder="Region, province, state or county" /></label>
             <label><span>Postcode / ZIP</span><input id="quotePostcode" type="text" inputmode="text" placeholder="Postal or ZIP code" /></label>
             <label class="quote-grid__full"><span>Country</span><input id="quoteCountry" type="text" list="quoteCountryList" placeholder="Country" /></label>
+          </div>
+        </article>
+
+        <article id="workshopBuildDetailsSection" class="quote-section quote-section--collapsible quote-section--collapsed">
+          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildDetailsBody">
+            <span class="quote-section__toggle-copy">
+              <span class="quote-section__toggle-title">Build Details</span>
+              <span id="quoteBuildDetailsSummaryText" class="quote-section__toggle-summary" aria-live="polite">
+                <span>Add build name and due date</span>
+              </span>
+            </span>
+            <b class="quote-section__chevron" aria-hidden="true">▾</b>
+          </button>
+          <div id="workshopBuildDetailsBody" class="quote-grid quote-grid--two quote-section__body">
             <label><span>Build Name</span><input id="quoteBuildName" type="text" placeholder="Build name" /></label>
             <label><span>Estimated Completion Date</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
             <label class="quote-grid__full"><span>Notes</span><textarea id="quoteNotes" rows="2" placeholder="Build notes"></textarea></label>
