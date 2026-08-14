@@ -5929,3 +5929,153 @@ textarea::-moz-selection,
     min-height:58px;
   }
 }
+/* K-Labs Studio — Supabase sign-in screen */
+
+#authScreen {
+  min-height: 100vh;
+  padding: 32px 24px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255,255,255,0.035), transparent 34%),
+    #050607;
+  color: #f1eee7;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+#authScreen h1 {
+  margin: 0 0 10px;
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+#authScreen > p:first-of-type {
+  margin: 0 0 34px;
+  color: rgba(241, 238, 231, 0.62);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+#authScreen label {
+  width: min(100%, 420px);
+  display: block;
+  margin-bottom: 18px;
+  color: rgba(241, 238, 231, 0.72);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#authScreen input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 15px 16px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 14px;
+  background: #0b0d0f;
+  color: #f1eee7;
+  font: inherit;
+  outline: none;
+}
+
+#authScreen input:focus {
+  border-color: rgba(184, 35, 57, 0.95);
+  box-shadow: 0 0 0 1px rgba(184, 35, 57, 0.3);
+}
+
+#authSignIn {
+  width: min(100%, 420px);
+  margin-top: 4px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #c23349 0%, #8d182d 100%);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#authMessage {
+  width: min(100%, 420px);
+  min-height: 20px;
+  margin: 14px 0 0;
+  color: rgba(241, 238, 231, 0.68);
+  font-size: 13px;
+  text-align: center;
+}
+
+body:has(#authScreen[style*="block"]) #app,
+body:has(#authScreen[style*="block"]) .bottom-nav,
+body:has(#authScreen[style*="block"]) .carbon-field {
+  display: none !important;
+}
+/* Force login to behave as its own full-screen Studio view */
+#authScreen.screen.active {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+body.klabs-logged-out .bottom-nav {
+  display: none !important;
+}
+#authScreen {
+  display: flex;
+}
+
+#authScreen[style*="display: none"] {
+  display: none !important;
+}
+
+/* Initial Supabase session check: show neither login nor Studio yet */
+body.klabs-auth-resolving #authScreen,
+body.klabs-auth-resolving #app,
+body.klabs-auth-resolving .bottom-nav,
+body.klabs-auth-resolving .carbon-field {
+  display: none !important;
+}
+
+body.klabs-auth-resolving {
+  background: #050607;
+}
+
+body.klabs-auth-resolving::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: #050607;
+  z-index: 10000;
+}
+
+.settings-account-card__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.settings-signout-button {
+  color: rgba(241, 238, 231, 0.72);
+  letter-spacing: 0.1em;
+}
+
+.settings-signout-button:hover {
+  color: #f1eee7;
+}

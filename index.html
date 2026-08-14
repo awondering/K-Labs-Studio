@@ -20,7 +20,32 @@
   <link rel="stylesheet" href="css/animations.css" />
   <link rel="stylesheet" href="css/studio.css" />
 </head>
-<body>
+<body class="klabs-auth-resolving">
+ <section id="authScreen">
+  <h1>K-Labs Studio</h1>
+  <p>Sign in to sync Studio across your devices.</p>
+
+  <label>
+    Email
+    <input id="authEmail" type="email" autocomplete="email">
+  </label>
+
+  <label>
+    Password
+   <label class="auth-password-label">
+  Password
+
+  <div class="auth-password-wrap">
+    <input id="authPassword" type="password" autocomplete="current-password">
+    <button id="authTogglePassword" type="button" aria-label="Show password">👁</button>
+  </div>
+
+  <button id="authForgotPassword" type="button">Forgot password?</button>
+</label>
+  <button id="authSignIn" type="button">Sign In</button>
+
+  <p id="authMessage" aria-live="polite"></p>
+</section>
   <div class="carbon-field"></div>
   <main class="app-shell" id="app">
     <header class="topbar">
@@ -563,6 +588,15 @@
           </div>
         </article>
       </section>
+      <article class="settings-card settings-preference-card settings-account-card" aria-label="Account">
+        <header class="settings-preference-card__head">
+          <h3>Account</h3>
+          <p id="settingsAccountEmail">Signed in</p>
+        </header>
+        <div class="settings-account-card__actions">
+          <button id="settingsSignOut" class="ghost-action settings-signout-button" type="button">Log Out</button>
+        </div>
+      </article>
     </section>
 
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>
@@ -581,6 +615,15 @@
   <script src="js/studio-visuals.js"></script>
   <script src="js/navigation.js"></script>
   <script src="js/ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+ <script src="js/supabase-config.js"></script>
+ <script src="js/supabase-client.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // Safety net: never leave the app hidden if the auth check cannot run (e.g. offline CDN).
+    setTimeout(function () {
+      document.body.classList.remove('klabs-auth-resolving');
+    }, 6000);
+  </script>
 </body>
 </html>
