@@ -5640,8 +5640,9 @@ textarea::-moz-selection,
   }
 
   #workshopScreen .workshop-build-actions-menu{
-    right:auto;
-    left:0;
+    right:0;
+    left:auto;
+    max-width:min(180px,calc(100vw - 20px));
   }
 
   #workshopScreen .workshop-build-actions-row{
