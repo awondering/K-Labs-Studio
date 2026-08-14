@@ -1641,9 +1641,11 @@ body.component-sheet-open .workshop-back-to-top{
   box-sizing:border-box;
 }
 
-.component-sheet__option.is-active-customer{
-  border-color:rgba(186,177,161,.42);
-  box-shadow:inset 0 0 0 1px rgba(var(--kl-red-rgb),.22);
+.customer-finder__customer-row .component-sheet__option.is-active-customer{
+  border-color:rgba(var(--kl-red-rgb),.5);
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.16),rgba(24,10,11,.5));
+  box-shadow:inset 0 0 0 1px rgba(var(--kl-red-rgb),.24);
+  color:#f6eee2;
 }
 
 .customer-finder__panel{

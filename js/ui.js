@@ -6127,24 +6127,15 @@ function isValidCustomerName(name){
   ]);
   return !blockedNames.has(normalized);
 }
-function customerSurnameFromRecord(record,name){
+function customerSurnameFromRecord(record){
   const source=record&&typeof record==='object'?record:{};
-  const explicitSurname=specificationValue(source.surname)
+  // Only trust an explicit structured surname field; guessing the last word of a display name can misorder
+  // business names, suffixes (Jr/Snr) and multi-part surnames, so unstructured names fall back to full-name sort.
+  return specificationValue(source.surname)
     || specificationValue(source.lastName)
     || specificationValue(source.familyName)
-    || specificationValue(source.customerLastName);
-  if(explicitSurname)return normalizeNameKey(explicitSurname);
-  const display=String(name||'').trim();
-  if(!display)return '';
-  const parts=display.split(/\s+/).filter(Boolean);
-  return normalizeNameKey(parts[parts.length-1]||display);
-}
-function customerGivenNamesFromDisplay(name){
-  const display=String(name||'').trim();
-  if(!display)return '';
-  const parts=display.split(/\s+/).filter(Boolean);
-  if(parts.length<=1)return normalizeNameKey(display);
-  return normalizeNameKey(parts.slice(0,-1).join(' '));
+    || specificationValue(source.customerLastName)
+    || '';
 }
 function customerSavedGroups(searchValue,options){
   const settings=options&&typeof options==='object'?options:{};
@@ -6156,16 +6147,13 @@ function customerSavedGroups(searchValue,options){
     if(!includeInvalidCustomers && !isValidCustomerName(customerName))return;
     const key=normalizeNameKey(customerName)||'__no_customer__';
     if(!grouped.has(key)){
-      grouped.set(key,{key,name:customerName||'No customer name',entries:[],sortSurname:'',sortGiven:''});
+      grouped.set(key,{key,name:customerName||'No customer name',entries:[],sortSurname:''});
     }
     const target=grouped.get(key);
     target.entries.push(entry);
     if(customerName && target.name==='No customer name')target.name=customerName;
     if(!target.sortSurname){
-      target.sortSurname=customerSurnameFromRecord(record,target.name);
-    }
-    if(!target.sortGiven){
-      target.sortGiven=customerGivenNamesFromDisplay(target.name);
+      target.sortSurname=customerSurnameFromRecord(record);
     }
   });
   const normalizedSearch=normalizeNameKey(searchValue);
@@ -6175,24 +6163,23 @@ function customerSavedGroups(searchValue,options){
       const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
       return rightDate-leftDate;
     });
+    const sortSurname=group.sortSurname||customerSurnameFromRecord(entries[0]&&entries[0].record);
     return {
       ...group,
       entries,
       quotes:entries.filter((entry)=>entry.source==='quote'),
       builds:entries.filter((entry)=>entry.source==='build'),
       latestSavedAt:entries[0]&&entries[0].record?entries[0].record.savedAt:'',
-      sortSurname:group.sortSurname||customerSurnameFromRecord(entries[0]&&entries[0].record,group.name),
-      sortGiven:group.sortGiven||customerGivenNamesFromDisplay(group.name),
+      // Reliable structured surname sorts first; otherwise sort by the full display name rather than a guess.
+      sortKey:normalizeNameKey(sortSurname||group.name),
     };
   }).filter((group)=>{
     if(!normalizedSearch)return true;
     return normalizeNameKey(group.name).includes(normalizedSearch);
   });
   return groups.sort((left,right)=>{
-    const surnameCompare=String(left.sortSurname||'').localeCompare(String(right.sortSurname||''),undefined,{sensitivity:'base'});
-    if(surnameCompare!==0)return surnameCompare;
-    const givenCompare=String(left.sortGiven||'').localeCompare(String(right.sortGiven||''),undefined,{sensitivity:'base'});
-    if(givenCompare!==0)return givenCompare;
+    const keyCompare=String(left.sortKey||'').localeCompare(String(right.sortKey||''),undefined,{sensitivity:'base'});
+    if(keyCompare!==0)return keyCompare;
     return String(left.name||'').localeCompare(String(right.name||''),undefined,{sensitivity:'base'});
   });
 }
@@ -6823,7 +6810,6 @@ function ensureCustomerFinderSheet(){
             <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
           </div>
           <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
-          <button class="ghost-action customer-finder__back" type="button" data-customer-finder-action="back-to-actions" hidden>Back</button>
         </div>
         <form id="customerFinderNewForm" class="customer-finder__new-form" hidden>
           <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" placeholder="Customer name" autocomplete="name" /></label>
