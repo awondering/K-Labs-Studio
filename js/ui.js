@@ -1274,12 +1274,12 @@ function homeRodRefreshFromState(triggerSequence){
 function newQuoteTemplate(){
   return{
     buildNumber:'',
-    customerName:'',company:'',phone:'',email:'',buildName:'',notes:'',
+    customerName:'',company:'',phone:'',email:'',buildName:'',estimatedCompletionDate:'',notes:'',
     addressLine1:'',addressLine2:'',suburbLocality:'',cityTown:'',regionState:'',postcode:'',country:'New Zealand',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'draft'
+    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'active'
   };
 }
 function normalizeAddressText(value){
@@ -1630,7 +1630,7 @@ function normalizeQuoteMode(value){
 }
 function normalizeQuoteStatus(value){
   const normalized=String(value||'').trim().toLowerCase();
-  return QUOTE_STATUS_VALUES.includes(normalized)?normalized:'draft';
+  return normalized==='complete' || normalized==='accepted'?'complete':'active';
 }
 function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
@@ -1642,6 +1642,7 @@ function normalizeQuote(inputQuote){
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
+  merged.estimatedCompletionDate=String(inputQuote&&inputQuote.estimatedCompletionDate||'').trim();
   const incomingGstRate=(inputQuote&&inputQuote.gstRate);
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
@@ -6633,7 +6634,7 @@ function savedBuildDisplayCustomerName(record){
 function buildLifecycleStatusKey(record){
   const rawStatus=specificationValue((record&&record.quoteStatus)||(record&&record.status));
   const normalized=normalizeQuoteStatus(rawStatus);
-  return normalized==='accepted'?'complete':'active';
+  return normalized==='complete'?'complete':'active';
 }
 function savedBuildDisplayStatus(record){
   return buildLifecycleStatusKey(record)==='complete'?'Complete':'Active';
@@ -6669,6 +6670,8 @@ function savedBuildRowMarkup(entry){
   const statusKey=buildLifecycleStatusKey(record);
   const statusClass=statusKey?` saved-build-card__status--${escapeHtml(statusKey)}`:'';
   const updatedAtText=savedBuildDisplayDate(record.updatedAt||record.savedAt);
+  const estimatedCompletionDate=specificationValue(record.estimatedCompletionDate);
+  const estimatedCompletionText=estimatedCompletionDate?formatDateDisplay(estimatedCompletionDate,{includeTime:false}):'';
   const buildName=specificationValue(record.buildName);
   const fallbackTitle=specificationValue(record.blankSeries)||specificationValue(record.blankMaker)||'Untitled Build';
   const buildNameMarkup=`<p class="saved-build-card__title">${escapeHtml(buildName||fallbackTitle)}</p>`;
@@ -6676,7 +6679,7 @@ function savedBuildRowMarkup(entry){
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
   const menuOpen=isSavedBuildRowMenuOpen(entry.source,index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small></div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small>${estimatedCompletionText?`<small>Est. ${escapeHtml(estimatedCompletionText)}</small>`:''}</div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
 }
 function isBuildEntryInStatusFilter(entry){
   return buildLifecycleStatusKey(entry&&entry.record)==='active';
@@ -6687,7 +6690,7 @@ function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
   const target=records[numericIndex]&&typeof records[numericIndex]==='object'?records[numericIndex]:{};
-  const nextStatus=nextLifecycle==='complete'?'accepted':'draft';
+  const nextStatus=nextLifecycle==='complete'?'complete':'active';
   const nowIso=new Date().toISOString();
   const nextRecord={
     ...target,
@@ -7300,7 +7303,7 @@ function workshopInputMap(){
   return[
     ['quoteCustomerName','customerName'],['quoteCustomerPhone','phone'],['quoteCustomerEmail','email'],
     ['quoteAddressLine1','addressLine1'],['quoteAddressLine2','addressLine2'],['quoteSuburbLocality','suburbLocality'],['quoteCityTown','cityTown'],['quoteRegionState','regionState'],['quotePostcode','postcode'],['quoteCountry','country'],
-    ['quoteBuildName','buildName'],['quoteNotes','notes'],
+    ['quoteBuildName','buildName'],['quoteEstimatedCompletionDate','estimatedCompletionDate'],['quoteNotes','notes'],
     ['quoteBlankName','blankName'],['quoteBlankMaker','blankMaker'],['quoteBlankSeries','blankSeries'],['quoteBlankLength','blankLength'],['quoteBlankPower','blankPower'],['quoteBlankAction','blankAction'],['quoteBlankPieces','blankPieces'],
     ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours']
   ];
