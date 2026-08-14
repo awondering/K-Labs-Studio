@@ -4659,6 +4659,77 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   }
   saveComponentLibraryRecords(records);
 }
+const STARTER_COMPONENTS_SEED_KEY='klabs-studio-starter-components-v1';
+const STARTER_COMPONENTS_SEED_SUPPLIERS=['K-Labs','Fuji','Alps','American Tackle','PacBay','SeaGuide','CTS','Mud Hole','Local Supplier','Unassigned'];
+const STARTER_COMPONENTS_SEED_CATEGORIES=[
+  {name:'Blanks',subcategory:'Spinning Blanks',products:['7\'0" Light Spin 4-8 kg','7\'0" Medium Spin 6-10 kg','7\'6" Medium Heavy Spin 8-12 kg','6\'6" Casting 6-10 kg','7\'6" Heavy Spin 10-15 kg']},
+  {name:'Guides',subcategory:'Spinning Guide Sets',products:['Light Spin Guide Set','Medium Spin Guide Set','Heavy Spin Guide Set','Casting Guide Set','Micro Casting Guide Set']},
+  {name:'Tip Tops',subcategory:'Tip Top Guides',products:['FAT 4.5 Tip Top 2.0 mm','FAT 5.5 Tip Top 2.4 mm','FAT 6.0 Tip Top 2.6 mm','Alconite Tip Top 3.0 mm','Heavy Duty Tip Top 3.5 mm']},
+  {name:'Reel Seats',subcategory:'Threaded Reel Seats',products:['DPS 16','DPS 18','TVS 16','ACS 17','PTS 17']},
+  {name:'Grips',subcategory:'EVA Grips',products:['EVA Straight 25 mm','EVA Tapered 28 mm','EVA Split Grip','Cork Full Grip','Carbon Split Grip']},
+  {name:'Butt Caps',subcategory:'Rubber and Aluminium Caps',products:['Rubber Butt Cap 25 mm','Rubber Butt Cap 30 mm','Aluminium Butt Cap 25 mm','Composite Butt Cap 28 mm','Gimbal Butt Cap 30 mm']},
+  {name:'Winding Checks',subcategory:'Grip Winding Checks',products:['EVA Winding Check 25 mm','EVA Winding Check 28 mm','Cork Winding Check 30 mm','Aluminium Winding Check 16 mm','Carbon Winding Check 18 mm']},
+  {name:'Trim Rings',subcategory:'Decorative Rings',products:['Aluminium Trim Ring 16 mm','Aluminium Trim Ring 18 mm','Carbon Trim Ring 20 mm','Silver Trim Ring 25 mm','Black Trim Ring 28 mm']},
+  {name:'Thread',subcategory:'Nylon',products:['NCP Nylon Thread A Black','NCP Nylon Thread A Red','Nylon Thread D Black','Nylon Thread D Blue','Nylon Thread D Metallic Gold']},
+  {name:'Epoxy / Finish',subcategory:'Rod Finish',products:['High Build Rod Finish 4 oz','High Build Rod Finish 8 oz','Lite Build Rod Finish 4 oz','Thread Finish Gloss 2 oz','Matte Rod Finish 4 oz']},
+  {name:'Arbors',subcategory:'Reel Seat Arbors',products:['Graphite Arbor 16 mm','Graphite Arbor 18 mm','Carbon Arbor 20 mm','Composite Arbor 22 mm','Spiral Arbor 25 mm']},
+  {name:'Hook Keepers',subcategory:'Hook Keepers',products:['Wire Hook Keeper Small','Wire Hook Keeper Medium','Fold Down Hook Keeper','Titanium Hook Keeper','Thread-On Hook Keeper']},
+  {name:'Decals / Labels',subcategory:'Rod Decals',products:['K-Labs Logo Decal Small','K-Labs Logo Decal Large','Blank Specification Label','Custom Build Label','Warning Label Set']},
+  {name:'Ferrules',subcategory:'Ferrule Parts',products:['Spigot Ferrule Sleeve 8 mm','Spigot Ferrule Sleeve 10 mm','Overfit Ferrule 12 mm','Ferrule Alignment Ring 14 mm','Ferrule Reinforcement Wrap']},
+  {name:'Gimbals',subcategory:'Fighting Gimbals',products:['Aluminium Gimbal 25 mm','Aluminium Gimbal 30 mm','Deluxe Gimbal 32 mm','Rubber Gimbal 25 mm','Stainless Gimbal 30 mm']},
+  {name:'Fighting Butts',subcategory:'Fighting Butt Assemblies',products:['EVA Fighting Butt 30 mm','EVA Fighting Butt 35 mm','Rubber Fighting Butt 32 mm','Short Fighting Butt 28 mm','Heavy Fighting Butt 40 mm']},
+  {name:'Shrink Tube',subcategory:'Grip Shrink Tube',products:['Shrink Tube 25 mm Black','Shrink Tube 30 mm Black','Shrink Tube 35 mm Black','Clear Shrink Tube 25 mm','Textured Shrink Tube 30 mm']},
+  {name:'Carbon Tubes',subcategory:'Carbon Tube Parts',products:['Carbon Tube 16 mm x 500 mm','Carbon Tube 18 mm x 500 mm','Carbon Tube 20 mm x 500 mm','Carbon Tube 22 mm x 500 mm','Carbon Tube 25 mm x 500 mm']},
+  {name:'Adhesives',subcategory:'Rod Building Adhesives',products:['Araldite Slow Cure 24 ml','Two Part Rod Bond 50 ml','Cork and EVA Glue 100 ml','Contact Adhesive 125 ml','5 Minute Epoxy 50 ml']},
+  {name:'Miscellaneous',subcategory:'Workshop Accessories',products:['Rod Building Tape 25 mm','Mixing Cups 100 Pack','Disposable Brushes 10 Pack','Hook Keeper Tool','Guide Alignment Tool']},
+];
+function seedStarterComponentsLibrary(){
+  if(Store.get(STARTER_COMPONENTS_SEED_KEY,false))return;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const categoryMap=new Map(taxonomy.categories.map((item)=>[normalizeNameKey(item.name),item]));
+  const supplierMap=new Map(taxonomy.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
+  STARTER_COMPONENTS_SEED_SUPPLIERS.forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(key && !supplierMap.has(key)){
+      const supplier={id:studioTaxonomyId('sup'),name};
+      taxonomy.suppliers.push(supplier);
+      supplierMap.set(key,supplier);
+    }
+  });
+  STARTER_COMPONENTS_SEED_CATEGORIES.forEach((definition,categoryIndex)=>{
+    const categoryKey=normalizeNameKey(definition.name);
+    let category=categoryMap.get(categoryKey);
+    if(!category){
+      category={id:studioTaxonomyId('cat'),name:definition.name,subcategories:[]};
+      taxonomy.categories.push(category);
+      categoryMap.set(categoryKey,category);
+    }
+    const subcategoryKey=normalizeNameKey(definition.subcategory);
+    if(!category.subcategories.some((item)=>normalizeNameKey(item.name)===subcategoryKey)){
+      category.subcategories.push({id:studioTaxonomyId('sub'),name:definition.subcategory});
+    }
+    definition.products.forEach((name,productIndex)=>{
+      if(findComponentLibraryRecordByName(name))return;
+      const supplier=STARTER_COMPONENTS_SEED_SUPPLIERS[(categoryIndex+productIndex)%STARTER_COMPONENTS_SEED_SUPPLIERS.length];
+      const price=categoryIndex<2?18+(productIndex*7):6+(productIndex*3);
+      upsertComponentLibraryRecord(name,{
+        category:definition.name,
+        subcategory:definition.subcategory,
+        supplier,
+        cost:price,
+        unitPrice:Math.round(price*1.65*100)/100,
+        stockOnHand:productIndex===4?6:12-productIndex,
+        specifications:categoryIndex===1
+          ?`Guide family: ${productIndex<3?'Alconite':'Fuji Concept'}; frame: ${productIndex%2?'black':'smoke'}; ring: ${productIndex%2?'Alconite':'ceramic'}; set sizes and quantities to be confirmed.`
+          :`${definition.subcategory}; workshop starter specification for ${name}.`,
+        notes:'Starter library record. Edit supplier, pricing, stock and specifications for your shop.',
+      });
+    });
+  });
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(taxonomy);
+  saveStudioComponentTaxonomy();
+  Store.set(STARTER_COMPONENTS_SEED_KEY,true);
+}
 function componentLibraryTextFieldValue(value){
   return String(value||'').trim();
 }
@@ -8435,6 +8506,7 @@ function render(){
   if(workshopLandingScreen && workshopLandingScreen.classList.contains('active')){renderWorkshopCalculator();}
   if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
 }
+seedStarterComponentsLibrary();
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();
