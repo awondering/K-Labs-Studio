@@ -24,6 +24,7 @@ const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
 const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
+const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
@@ -2651,12 +2652,31 @@ function handleStudioTaxonomyAction(action){
   refreshStudioComponentAndTaxonomyViews();
 }
 function studioCategoryNamesForLibrary(taxonomy,records){
-  return Array.from(new Set(
+  const hasUnassignedRecords=(records||[]).some((record)=>!normalizeNameKey(record&&record.category));
+  const promotedComponentKeys=new Set((records||[])
+    .filter((record)=>!normalizeNameKey(record&&record.category))
+    .map((record)=>normalizeNameKey(record&&record.name))
+    .filter(Boolean));
+  const promotedCategoryKeys=new Set((Array.isArray(Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]))?Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]):[])
+    .map((record)=>{
+      const rawCategory=String(record&&record.category||'').trim();
+      return rawCategory && !componentLibraryCategoryValue(record)?normalizeNameKey(rawCategory):'';
+    })
+    .filter(Boolean));
+  const categoryNames=Array.from(new Set(
     (taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[])
       .map((item)=>String(item.name||'').trim())
+      .filter((name)=>{
+        const key=normalizeNameKey(name);
+        return !promotedComponentKeys.has(key) && !promotedCategoryKeys.has(key);
+      })
       .filter(Boolean)
       .concat((records||[]).map((item)=>String(item&&item.category||'').trim()).filter(Boolean))
-  )).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  ));
+  if(hasUnassignedRecords && !categoryNames.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
+    categoryNames.push(UNASSIGNED_COMPONENT_CATEGORY);
+  }
+  return categoryNames.sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
 }
 function studioSubcategoryNamesForLibrary(taxonomy,records,categoryName){
   const categoryKey=normalizeNameKey(categoryName);
@@ -2751,7 +2771,7 @@ function renderStudioComponentsLibrary(){
   if(studioLibraryPath.level==='category' || studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component'){
     scopeSubcategories=studioSubcategoryNamesForLibrary(taxonomy,records,studioLibraryPath.categoryId);
   }
-  if(studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component'){
+  if((studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component') && normalizeNameKey(studioLibraryPath.categoryId)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
     const validSubcategory=scopeSubcategories.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.subcategoryId))||'';
     if(!validSubcategory){
       studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
@@ -2780,7 +2800,7 @@ function renderStudioComponentsLibrary(){
     if(subtitle)subtitle.textContent='';
   }else{
     const selected=currentStudioComponentRecord();
-    if(backLabel)backLabel.textContent=String(studioLibraryPath.subcategoryId||'SUBCATEGORY').toUpperCase();
+    if(backLabel)backLabel.textContent=(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)?UNASSIGNED_COMPONENT_CATEGORY:String(studioLibraryPath.subcategoryId||'SUBCATEGORY')).toUpperCase();
     if(title)title.textContent=String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
     if(subtitle)subtitle.textContent='';
   }
@@ -2836,6 +2856,21 @@ function renderStudioComponentsLibrary(){
   }
 
   if(studioLibraryPath.level==='category'){
+    if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
+      const unassignedRecords=records.filter((record)=>!normalizeNameKey(record&&record.category) && studioComponentMatchesSearch(record,queryKey));
+      if(!unassignedRecords.length){
+        list.innerHTML='<p class="studio-components-list__empty">No unassigned components found.</p>';
+      }else{
+        list.innerHTML=unassignedRecords.map((record)=>{
+          const name=String(record&&record.name||'').trim();
+          const supplier=String(record&&record.supplier||'').trim();
+          const specifications=studioMergedSpecificationValue(record);
+          const secondary=[supplier,specifications].filter(Boolean).join(' • ');
+          return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}</button>`;
+        }).join('');
+      }
+      return;
+    }
     const visibleSubcategories=scopeSubcategories.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
     if(!visibleSubcategories.length){
       list.innerHTML='<p class="studio-components-list__empty">No subcategories found.</p>';
@@ -4518,6 +4553,19 @@ function componentLibraryStockValue(record){
   const parsed=Number(source.stockOnHand);
   return Number.isFinite(parsed)?parsed:undefined;
 }
+function componentLibraryCategoryValue(record){
+  const source=record&&typeof record==='object'?record:{};
+  const name=String(source.name||'').trim();
+  const category=String(source.category||'').trim();
+  const categoryKey=normalizeNameKey(category);
+  const componentTextKeys=[
+    name,
+    source.description,
+    source.specifications,
+    source.customerLabel,
+  ].map(normalizeNameKey).filter(Boolean);
+  return componentTextKeys.includes(categoryKey)?'':category;
+}
 function componentLibraryRecords(){
   const stored=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
   if(!Array.isArray(stored))return[];
@@ -4525,7 +4573,7 @@ function componentLibraryRecords(){
     .filter((record)=>record&&typeof record==='object')
     .map((record)=>({
       name:String(record.name||'').trim(),
-      category:String(record.category||record.name||'').trim(),
+      category:componentLibraryCategoryValue(record),
       subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
       description:String(record.description||'').trim(),
@@ -4546,7 +4594,7 @@ function saveComponentLibraryRecords(records){
     .filter((record)=>record&&typeof record==='object'&&normalizeNameKey(record.name))
     .map((record)=>({
       name:String(record.name||'').trim(),
-      category:String(record.category||record.name||'').trim(),
+      category:componentLibraryCategoryValue(record),
       subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
       description:String(record.description||'').trim(),
