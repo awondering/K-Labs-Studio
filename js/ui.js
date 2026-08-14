@@ -1784,6 +1784,17 @@ function showStudioComponents(){
   renderStudioScreenMode();
   renderStudioComponentsLibrary();
 }
+function showStudioSupplierBrowse(supplierName){
+  studioScreenView='components';
+  studioComponentsSearch='';
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  closeStudioLibraryContextMenu();
+  studioComponentDraft=null;
+  studioSelectedComponentKey='';
+  studioLibraryPath={level:'supplier',supplierName:String(supplierName||'').trim(),categoryId:'',subcategoryId:''};
+  renderStudioScreenMode();
+  renderStudioComponentsLibrary();
+}
 function showStudioTaxonomyManager(){
   studioScreenView='taxonomy';
   studioTaxonomyManagerSection='suppliers';
@@ -2111,6 +2122,7 @@ function saveStudioComponentDetails(){
     return;
   }
   const originalName=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'').trim();
+  const supplierBrowseName=studioLibraryPath.level.startsWith('supplier')?String(studioLibraryPath.supplierName||'').trim():'';
   const payload=studioComponentDetailPayloadFromDom();
   const payloadSignature=studioComponentPayloadSignature(payload);
   if(!studioComponentDetailContext.isAddMode && payloadSignature===studioComponentDetailContext.baseline){
@@ -2151,7 +2163,9 @@ function saveStudioComponentDetails(){
   saveStudioComponentTaxonomy();
   studioComponentDraft=null;
   studioLibraryEditor={type:'',mode:'',targetName:''};
-  if(sourceRecord.category && sourceRecord.subcategory){
+  if(supplierBrowseName){
+    studioLibraryPath={level:sourceRecord.subcategory?'supplier-component':'supplier-category',supplierName:supplierBrowseName,categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
+  }else if(sourceRecord.category && sourceRecord.subcategory){
     studioLibraryPath={level:'component',categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
   }else if(sourceRecord.category){
     studioLibraryPath={level:'category',categoryId:sourceRecord.category,subcategoryId:''};
@@ -2289,7 +2303,7 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
   const supplierRows=taxonomy.suppliers.length
     ?taxonomy.suppliers.map((supplier)=>{
       const active=supplier.id===studioComponentTaxonomySelection.supplier;
-      return `<button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-select="supplier" data-taxonomy-id="${escapeAttributeValue(supplier.id)}" aria-pressed="${active?'true':'false'}"><strong>${escapeHtml(supplier.name)}</strong></button>`;
+      return `<article class="studio-taxonomy-supplier-row"><button class="studio-taxonomy-list__item${active?' is-active':''}" type="button" data-taxonomy-browse-supplier="${escapeAttributeValue(supplier.name)}"><strong>${escapeHtml(supplier.name)}</strong></button><button class="studio-components-list__menu-trigger studio-taxonomy-supplier-row__menu" type="button" aria-label="${escapeAttributeValue(supplier.name)} actions" data-taxonomy-select="supplier" data-taxonomy-id="${escapeAttributeValue(supplier.id)}" aria-pressed="${active?'true':'false'}">&hellip;</button></article>`;
     }).join('')
     :'<p class="studio-taxonomy-list__empty">No suppliers yet.</p>';
   const showMoveControls=taxonomy.suppliers.length>1;
@@ -2762,7 +2776,8 @@ function renderStudioComponentsLibrary(){
 
   const categoryNames=studioCategoryNamesForLibrary(taxonomy,records);
   const validCategory=categoryNames.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.categoryId))||'';
-  if(studioLibraryPath.level!=='categories' && !validCategory){
+  const supplierBrowseLevels=['supplier','supplier-category','supplier-subcategory','supplier-component'];
+  if(!supplierBrowseLevels.includes(studioLibraryPath.level) && studioLibraryPath.level!=='categories' && !validCategory){
     studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
   }else if(validCategory){
     studioLibraryPath.categoryId=validCategory;
@@ -2785,7 +2800,40 @@ function renderStudioComponentsLibrary(){
   const isSubcategoryAdd=studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='add';
   const isCategoryEdit=studioLibraryEditor.type==='category' && studioLibraryEditor.mode==='edit';
   const isSubcategoryEdit=studioLibraryEditor.type==='subcategory' && studioLibraryEditor.mode==='edit';
-  const showFormScreen=isCategoryAdd || isSubcategoryAdd || isCategoryEdit || isSubcategoryEdit || studioLibraryPath.level==='component';
+  const showFormScreen=isCategoryAdd || isSubcategoryAdd || isCategoryEdit || isSubcategoryEdit || studioLibraryPath.level==='component' || studioLibraryPath.level==='supplier-component';
+
+  if(studioLibraryPath.level==='supplier'){
+    const supplierKey=normalizeNameKey(studioLibraryPath.supplierName);
+    const supplierCategories=Array.from(new Set(records
+      .filter((record)=>normalizeNameKey(record&&record.supplier)===supplierKey && normalizeNameKey(record&&record.category))
+      .map((record)=>String(record.category||'').trim())
+      .filter(Boolean)))
+      .filter((name)=>!queryKey || name.toLowerCase().includes(queryKey))
+      .sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
+    list.innerHTML=supplierCategories.length?supplierCategories.map((name)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button>`).join(''):'<p class="studio-components-list__empty">No components assigned to this supplier.</p>';
+    return;
+  }
+
+  if(studioLibraryPath.level==='supplier-category'){
+    const supplierKey=normalizeNameKey(studioLibraryPath.supplierName);
+    const categoryKey=normalizeNameKey(studioLibraryPath.categoryId);
+    const supplierRecords=records.filter((record)=>normalizeNameKey(record&&record.supplier)===supplierKey && normalizeNameKey(record&&record.category)===categoryKey && studioComponentMatchesSearch(record,queryKey));
+    const subcategories=Array.from(new Set(supplierRecords.map((record)=>String(record.subcategory||'').trim()).filter(Boolean)))
+      .sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
+    const rows=subcategories.map((name)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-subcategory="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button>`);
+    const direct=supplierRecords.filter((record)=>!normalizeNameKey(record.subcategory)).map((record)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-component="${escapeAttributeValue(record.name)}"><strong>${escapeHtml(record.name)}</strong></button>`);
+    list.innerHTML=rows.concat(direct).join('')||'<p class="studio-components-list__empty">No components found in this category.</p>';
+    return;
+  }
+
+  if(studioLibraryPath.level==='supplier-subcategory'){
+    const supplierKey=normalizeNameKey(studioLibraryPath.supplierName);
+    const categoryKey=normalizeNameKey(studioLibraryPath.categoryId);
+    const subcategoryKey=normalizeNameKey(studioLibraryPath.subcategoryId);
+    const scopedRecords=records.filter((record)=>normalizeNameKey(record&&record.supplier)===supplierKey && normalizeNameKey(record&&record.category)===categoryKey && normalizeNameKey(record&&record.subcategory)===subcategoryKey && studioComponentMatchesSearch(record,queryKey));
+    list.innerHTML=scopedRecords.length?scopedRecords.map((record)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-component="${escapeAttributeValue(record.name)}"><strong>${escapeHtml(record.name)}</strong>${record.supplier?`<span>${escapeHtml(record.supplier)}</span>`:''}</button>`).join(''):'<p class="studio-components-list__empty">No components found in this subcategory.</p>';
+    return;
+  }
 
   if(studioLibraryPath.level==='categories'){
     if(backLabel)backLabel.textContent='BACK TO STUDIO';
@@ -2799,15 +2847,27 @@ function renderStudioComponentsLibrary(){
     if(backLabel)backLabel.textContent=String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase();
     if(title)title.textContent=String(studioLibraryPath.subcategoryId||'SUBCATEGORY').toUpperCase();
     if(subtitle)subtitle.textContent='';
+  }else if(studioLibraryPath.level==='supplier'){
+    if(backLabel)backLabel.textContent='SUPPLIERS';
+    if(title)title.textContent=String(studioLibraryPath.supplierName||'SUPPLIER').toUpperCase();
+    if(subtitle)subtitle.textContent='';
+  }else if(studioLibraryPath.level==='supplier-category'){
+    if(backLabel)backLabel.textContent=String(studioLibraryPath.supplierName||'SUPPLIER').toUpperCase();
+    if(title)title.textContent=String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase();
+    if(subtitle)subtitle.textContent='';
+  }else if(studioLibraryPath.level==='supplier-subcategory'){
+    if(backLabel)backLabel.textContent=String(studioLibraryPath.categoryId||'CATEGORY').toUpperCase();
+    if(title)title.textContent=String(studioLibraryPath.subcategoryId||'SUBCATEGORY').toUpperCase();
+    if(subtitle)subtitle.textContent='';
   }else{
     const selected=currentStudioComponentRecord();
-    if(backLabel)backLabel.textContent=(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)?UNASSIGNED_COMPONENT_CATEGORY:String(studioLibraryPath.subcategoryId||'SUBCATEGORY')).toUpperCase();
+    if(backLabel)backLabel.textContent=(studioLibraryPath.level==='supplier-component'?String(studioLibraryPath.subcategoryId||studioLibraryPath.categoryId||studioLibraryPath.supplierName||'SUPPLIER'):(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)?UNASSIGNED_COMPONENT_CATEGORY:String(studioLibraryPath.subcategoryId||'SUBCATEGORY'))).toUpperCase();
     if(title)title.textContent=String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
     if(subtitle)subtitle.textContent='';
   }
 
   if(addBtn){
-    addBtn.hidden=studioLibraryPath.level==='component';
+    addBtn.hidden=studioLibraryPath.level==='component' || studioLibraryPath.level.startsWith('supplier');
     addBtn.disabled=false;
     addBtn.textContent=studioLibraryPath.level==='categories'?'ADD CATEGORY':studioLibraryPath.level==='category'?'ADD SUBCATEGORY':'ADD COMPONENT';
   }
@@ -2815,7 +2875,7 @@ function renderStudioComponentsLibrary(){
     utilityBtn.hidden=studioLibraryPath.level!=='categories';
   }
   if(searchInput){
-    searchInput.hidden=studioLibraryPath.level==='component';
+    searchInput.hidden=studioLibraryPath.level==='component' || studioLibraryPath.level==='supplier-component';
   }
   if(listCard)listCard.hidden=showFormScreen;
   details.hidden=!showFormScreen;
@@ -2945,6 +3005,25 @@ function bindStudioComponentsPanel(){
         renderStudioComponentsLibrary();
         return;
       }
+      if(studioLibraryPath.level==='supplier-component'){
+        studioLibraryPath={level:studioLibraryPath.subcategoryId?'supplier-subcategory':'supplier-category',supplierName:studioLibraryPath.supplierName,categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      if(studioLibraryPath.level==='supplier-subcategory'){
+        studioLibraryPath={level:'supplier-category',supplierName:studioLibraryPath.supplierName,categoryId:studioLibraryPath.categoryId,subcategoryId:''};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      if(studioLibraryPath.level==='supplier-category'){
+        studioLibraryPath={level:'supplier',supplierName:studioLibraryPath.supplierName,categoryId:'',subcategoryId:''};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      if(studioLibraryPath.level==='supplier'){
+        showStudioTaxonomyManager();
+        return;
+      }
       if(studioLibraryPath.level==='subcategory'){
         studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
         renderStudioComponentsLibrary();
@@ -3047,6 +3126,25 @@ function bindStudioComponentsPanel(){
           if(action==='subcategory-down'){handleStudioTaxonomyAction('subcategory-down');return;}
           if(action==='subcategory-delete'){handleStudioTaxonomyAction('subcategory-delete');return;}
         }
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const supplierCategoryButton=event.target.closest('[data-studio-supplier-open-category]');
+      if(supplierCategoryButton){
+        studioLibraryPath={level:'supplier-category',supplierName:studioLibraryPath.supplierName,categoryId:String(supplierCategoryButton.getAttribute('data-studio-supplier-open-category')||''),subcategoryId:''};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const supplierSubcategoryButton=event.target.closest('[data-studio-supplier-open-subcategory]');
+      if(supplierSubcategoryButton){
+        studioLibraryPath={level:'supplier-subcategory',supplierName:studioLibraryPath.supplierName,categoryId:studioLibraryPath.categoryId,subcategoryId:String(supplierSubcategoryButton.getAttribute('data-studio-supplier-open-subcategory')||'')};
+        renderStudioComponentsLibrary();
+        return;
+      }
+      const supplierComponentButton=event.target.closest('[data-studio-supplier-open-component]');
+      if(supplierComponentButton){
+        studioSelectedComponentKey=normalizeNameKey(supplierComponentButton.getAttribute('data-studio-supplier-open-component')||'');
+        studioLibraryPath={level:'supplier-component',supplierName:studioLibraryPath.supplierName,categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
         renderStudioComponentsLibrary();
         return;
       }
@@ -3261,6 +3359,12 @@ function bindStudioTaxonomyPanel(){
   });
 
   panel.addEventListener('click',(event)=>{
+    const browseSupplierButton=event.target.closest('[data-taxonomy-browse-supplier]');
+    if(browseSupplierButton){
+      const supplierName=String(browseSupplierButton.getAttribute('data-taxonomy-browse-supplier')||'').trim();
+      if(supplierName)showStudioSupplierBrowse(supplierName);
+      return;
+    }
     const selectButton=event.target.closest('[data-taxonomy-select]');
     if(selectButton){
       const selectType=String(selectButton.getAttribute('data-taxonomy-select')||'');
@@ -4660,6 +4764,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   saveComponentLibraryRecords(records);
 }
 const STARTER_COMPONENTS_SEED_KEY='klabs-studio-starter-components-v1';
+const STARTER_COMPONENTS_SUPPLIER_FIX_KEY='klabs-studio-starter-suppliers-v1';
 const STARTER_COMPONENTS_SEED_SUPPLIERS=['K-Labs','Fuji','Alps','American Tackle','PacBay','SeaGuide','CTS','Mud Hole','Local Supplier','Unassigned'];
 const STARTER_COMPONENTS_SEED_CATEGORIES=[
   {name:'Blanks',subcategory:'Spinning Blanks',products:['7\'0" Light Spin 4-8 kg','7\'0" Medium Spin 6-10 kg','7\'6" Medium Heavy Spin 8-12 kg','6\'6" Casting 6-10 kg','7\'6" Heavy Spin 10-15 kg']},
@@ -4729,6 +4834,47 @@ function seedStarterComponentsLibrary(){
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(taxonomy);
   saveStudioComponentTaxonomy();
   Store.set(STARTER_COMPONENTS_SEED_KEY,true);
+}
+function starterComponentSupplier(category,name){
+  const categoryKey=normalizeNameKey(category);
+  const productKey=normalizeNameKey(name);
+  if(categoryKey==='blanks' || categoryKey==='ferrules')return 'CTS';
+  if(categoryKey==='guides'){
+    if(productKey.includes('casting'))return productKey.includes('micro')?'PacBay':'American Tackle';
+    return 'Fuji';
+  }
+  if(categoryKey==='tip tops')return productKey.includes('heavy')?'SeaGuide':'Fuji';
+  if(categoryKey==='reel seats'){
+    if(productKey.startsWith('acs'))return 'American Tackle';
+    if(productKey.startsWith('pts'))return 'PacBay';
+    return 'Fuji';
+  }
+  if(categoryKey==='gimbals')return 'Alps';
+  if(categoryKey==='grips')return productKey.includes('carbon')?'K-Labs':productKey.includes('cork')?'Local Supplier':'Mud Hole';
+  if(['butt caps','winding checks','trim rings','fighting butts','carbon tubes'].includes(categoryKey))return 'K-Labs';
+  if(['thread','epoxy / finish','arbors','decals / labels','shrink tube','adhesives'].includes(categoryKey))return 'Mud Hole';
+  if(categoryKey==='hook keepers')return productKey.includes('titanium')?'Alps':'K-Labs';
+  return 'Local Supplier';
+}
+function assignStarterComponentSuppliers(){
+  if(Store.get(STARTER_COMPONENTS_SUPPLIER_FIX_KEY,false))return;
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const existingSupplierKeys=new Set(taxonomy.suppliers.map((supplier)=>normalizeNameKey(supplier.name)));
+  const seededNames=new Map();
+  STARTER_COMPONENTS_SEED_CATEGORIES.forEach((definition)=>definition.products.forEach((name)=>seededNames.set(normalizeNameKey(name),definition.name)));
+  const records=componentLibraryRecords();
+  let changed=false;
+  records.forEach((record)=>{
+    const category=seededNames.get(normalizeNameKey(record.name));
+    if(!category || String(record.notes||'').trim()!=='Starter library record. Edit supplier, pricing, stock and specifications for your shop.')return;
+    const supplier=starterComponentSupplier(category,record.name);
+    if(!existingSupplierKeys.has(normalizeNameKey(supplier)))return;
+    if(record.supplier===supplier)return;
+    record.supplier=supplier;
+    changed=true;
+  });
+  if(changed)saveComponentLibraryRecords(records);
+  Store.set(STARTER_COMPONENTS_SUPPLIER_FIX_KEY,true);
 }
 function componentLibraryTextFieldValue(value){
   return String(value||'').trim();
@@ -8507,6 +8653,7 @@ function render(){
   if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
 }
 seedStarterComponentsLibrary();
+assignStarterComponentSuppliers();
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();

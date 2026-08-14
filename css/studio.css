@@ -4341,6 +4341,17 @@ textarea::-moz-selection,
   gap:8px;
 }
 
+.studio-taxonomy-supplier-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:6px;
+  align-items:center;
+}
+
+.studio-taxonomy-supplier-row__menu{
+  flex:0 0 auto;
+}
+
 .studio-taxonomy-list__item{
   width:100%;
   text-align:left;
