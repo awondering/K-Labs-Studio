@@ -168,6 +168,14 @@ const workshopToolsState={
     coverWidthMm:25,
     allowancePercent:5,
   },
+  spiral:{
+    unit:'metric',
+    imperialDisplay:'fractional',
+    method:'progressive',
+    direction:'left',
+    guideCount:5,
+    guides:[],
+  },
 };
 let gripCutTemplateSnapshot=null;
 let workshopLandingReturnFocusTool='';
@@ -454,14 +462,205 @@ function gripCutOffsetMm(cutAngleDeg,materialWidthMm){
 function gripCutAngleLabel(cutAngleDeg){
   return `${formatDecimal(cutAngleDeg,1)} deg off square`;
 }
+function normalizeSpiralMethod(value){
+  const next=String(value||'').trim().toLowerCase();
+  return next==='acute' || next==='offset'?next:'progressive';
+}
+function normalizeSpiralDirection(value){
+  return String(value||'').trim().toLowerCase()==='right'?'right':'left';
+}
+function spiralDefaultAngles(method,count){
+  const total=Math.max(1,Math.round(numberOrZero(count)||1));
+  const mode=normalizeSpiralMethod(method);
+  if(mode==='acute'){
+    const acute=[];
+    for(let i=0;i<total;i+=1){
+      if(i===0)acute.push(0);
+      else if(i===1)acute.push(90);
+      else acute.push(180);
+    }
+    return acute;
+  }
+  if(mode==='offset'){
+    const start=20;
+    if(total===1)return [start];
+    return Array.from({length:total},(_,index)=>{
+      if(index===total-1)return 180;
+      const ratio=index/(total-1);
+      return Math.max(start,Math.min(180,start+((180-start)*ratio)));
+    });
+  }
+  if(total===1)return [0];
+  return Array.from({length:total},(_,index)=>Math.min(180,(180*index)/(total-1)));
+}
+function clampSpiralGuideCount(value){
+  return Math.max(1,Math.min(20,Math.round(numberOrZero(value)||1)));
+}
+function clampSpiralAngle(value){
+  return Math.max(0,Math.min(180,numberOrZero(value)));
+}
+function spiralGuideFallbackPositionMm(index){
+  return Math.max(0,120+(index*180));
+}
+function syncSpiralGuidesLength(options){
+  const settings=options&&typeof options==='object'?options:{};
+  const spiral=workshopToolsState.spiral;
+  const nextCount=clampSpiralGuideCount(spiral.guideCount);
+  spiral.guideCount=nextCount;
+  const current=Array.isArray(spiral.guides)?spiral.guides:[];
+  const defaults=spiralDefaultAngles(spiral.method,nextCount);
+  const next=[];
+  for(let index=0;index<nextCount;index+=1){
+    const existing=current[index]&&typeof current[index]==='object'?current[index]:{};
+    const previous=index>0?next[index-1]:null;
+    const fallbackPosition=previous?Math.max(0,numberOrZero(previous.positionMm)+180):spiralGuideFallbackPositionMm(index);
+    next.push({
+      positionMm:Math.max(0,numberOrZero(existing.positionMm)||fallbackPosition),
+      odMm:Math.max(0.01,numberOrZero(existing.odMm)||10),
+      angleDeg:settings.resetAngles?defaults[index]:clampSpiralAngle(existing.angleDeg||defaults[index]),
+    });
+  }
+  spiral.guides=next;
+}
+function setSpiralMethod(method){
+  workshopToolsState.spiral.method=normalizeSpiralMethod(method);
+  syncSpiralGuidesLength({resetAngles:true});
+}
+function spiralVisualAngleDegrees(angleDeg,direction){
+  const angle=clampSpiralAngle(angleDeg);
+  return normalizeSpiralDirection(direction)==='right'?(-90+angle):(-90-angle);
+}
+function spiralOffsetLabel(guide,direction,unit,imperialDisplay){
+  const diameterMm=Math.max(0.01,numberOrZero(guide&&guide.odMm));
+  const angle=clampSpiralAngle(guide&&guide.angleDeg);
+  const circumferenceMm=Math.PI*diameterMm;
+  const offsetMm=(circumferenceMm*angle)/360;
+  if(angle>=179.95){
+    return {
+      offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:64})} - UNDERSIDE`,
+      rotationText:'180 deg - UNDERSIDE',
+      directionText:'UNDERSIDE',
+    };
+  }
+  const side=normalizeSpiralDirection(direction)==='right'?'RIGHT':'LEFT';
+  return {
+    offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:64})} ${side} OF TOP LINE`,
+    rotationText:`${formatDecimal(angle,1)} deg ${side}`,
+    directionText:`${side} SIDE`,
+  };
+}
+function importSpiralFromGuideSpacing(){
+  const spiral=workshopToolsState.spiral;
+  const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+  const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
+  if(!rows.length)return;
+  const existing=Array.isArray(spiral.guides)?spiral.guides:[];
+  const defaults=spiralDefaultAngles(spiral.method,rows.length);
+  spiral.guideCount=rows.length;
+  spiral.guides=rows.map((row,index)=>{
+    const previous=existing[index]&&typeof existing[index]==='object'?existing[index]:{};
+    return {
+      positionMm:Math.max(0,numberOrZero(row&&row.cum)),
+      odMm:Math.max(0.01,numberOrZero(previous.odMm)||10),
+      angleDeg:clampSpiralAngle(previous.angleDeg||defaults[index]),
+    };
+  });
+}
+function renderSpiralGuideMapper(){
+  const card=$('workshopToolSpiral');
+  if(!card)return;
+  const spiral=workshopToolsState.spiral;
+  spiral.unit=activeMeasurementUnits();
+  spiral.imperialDisplay=activeImperialDisplay();
+  spiral.method=normalizeSpiralMethod(spiral.method);
+  spiral.direction=normalizeSpiralDirection(spiral.direction);
+  syncSpiralGuidesLength();
+
+  const guideCountInput=$('workshopSpiralGuideCount');
+  if(guideCountInput && document.activeElement!==guideCountInput){
+    guideCountInput.value=String(spiral.guideCount);
+  }
+  if(guideCountInput)guideCountInput.placeholder='5';
+
+  syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
+  syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
+
+  const visualDirection=$('workshopSpiralVisualDirection');
+  if(visualDirection){
+    visualDirection.textContent=`${spiral.direction.toUpperCase()} TRANSITION`;
+  }
+
+  const visualCanvas=$('workshopSpiralVisualCanvas');
+  if(visualCanvas){
+    const markerSvg=spiral.guides.map((guide,index)=>{
+      const radius=74-((index%3)*7);
+      const visualAngle=(spiralVisualAngleDegrees(guide.angleDeg,spiral.direction)*Math.PI)/180;
+      const x=110+(Math.cos(visualAngle)*radius);
+      const y=110+(Math.sin(visualAngle)*radius);
+      return `
+        <g class="spiral-map-marker" aria-label="Guide ${index+1}">
+          <circle cx="${formatDecimal(x,2)}" cy="${formatDecimal(y,2)}" r="8.5"></circle>
+          <text x="${formatDecimal(x,2)}" y="${formatDecimal(y+0.5,2)}" text-anchor="middle" dominant-baseline="middle">${index+1}</text>
+        </g>
+      `;
+    }).join('');
+    visualCanvas.innerHTML=`
+      <svg viewBox="0 0 220 220" role="img" aria-label="Spiral mapper reference">
+        <circle class="spiral-map-ring" cx="110" cy="110" r="80"></circle>
+        <line class="spiral-map-axis" x1="110" y1="26" x2="110" y2="194"></line>
+        <line class="spiral-map-axis" x1="26" y1="110" x2="194" y2="110"></line>
+        <text class="spiral-map-label" x="110" y="18" text-anchor="middle">TOP 0 deg</text>
+        <text class="spiral-map-label" x="16" y="113" text-anchor="start">LEFT 90 deg</text>
+        <text class="spiral-map-label" x="204" y="113" text-anchor="end">RIGHT 90 deg</text>
+        <text class="spiral-map-label" x="110" y="214" text-anchor="middle">UNDERSIDE 180 deg</text>
+        ${markerSvg}
+      </svg>
+    `;
+  }
+
+  const rowsHost=$('workshopSpiralGuideRows');
+  if(rowsHost){
+    rowsHost.innerHTML=spiral.guides.map((guide,index)=>{
+      const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay);
+      return `
+        <article class="spiral-guide-row" data-spiral-row="${index}">
+          <header class="spiral-guide-row__head">
+            <strong>Guide ${index+1}</strong>
+            <span>${labels.rotationText}</span>
+          </header>
+          <div class="spiral-guide-row__fields">
+            <label>
+              <span>Position From Tip</span>
+              <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="position" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.positionMm,spiral.unit,spiral.imperialDisplay))}" />
+            </label>
+            <label>
+              <span>Blank OD</span>
+              <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay))}" />
+            </label>
+            <label>
+              <span>Rotation</span>
+              <input type="number" inputmode="decimal" min="0" max="180" step="0.1" autocomplete="off" data-spiral-field="angle" data-guide-index="${index}" value="${escapeHtml(formatDecimal(guide.angleDeg,1))}" />
+            </label>
+          </div>
+          <div class="spiral-guide-row__details">
+            <div><span>Direction</span><strong>${labels.directionText}</strong></div>
+            <div><span>Offset From Top</span><strong>${labels.offsetText}</strong></div>
+          </div>
+        </article>
+      `;
+    }).join('');
+  }
+}
 function renderWorkshopToolVisibility(){
   const list=$('workshopToolsList');
   const diameterCard=$('workshopToolDiameter');
   const gripCard=$('workshopToolGrip');
+  const spiralCard=$('workshopToolSpiral');
   const activeTool=workshopToolsState.activeTool;
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
+  if(spiralCard)spiralCard.hidden=activeTool!=='spiral';
 }
 function isWorkshopLandingScreenActive(){
   const workshopLandingScreen=$('workshopLandingScreen');
@@ -481,7 +680,7 @@ function openWorkshopTool(tool){
     goScreen('layoutScreen');
     return;
   }
-  workshopToolsState.activeTool=tool==='grip'?'grip':'diameter';
+  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='spiral'?'spiral':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
@@ -857,6 +1056,7 @@ function renderWorkshopCalculator(){
   renderWorkshopToolVisibility();
   renderDiameterCircumferenceTool();
   renderGripCoveringTool();
+  renderSpiralGuideMapper();
 }
 function bindWorkshopCalculatorControls(){
   const panel=$('workshopToolsPanel');
@@ -936,6 +1136,67 @@ function bindWorkshopCalculatorControls(){
     renderWorkshopCalculator();
   });
 
+  bindWorkshopToggleButtons(panel,'[data-spiral-method]',(button)=>{
+    setSpiralMethod(button.getAttribute('data-spiral-method'));
+    renderWorkshopCalculator();
+  });
+
+  bindWorkshopToggleButtons(panel,'[data-spiral-direction]',(button)=>{
+    workshopToolsState.spiral.direction=normalizeSpiralDirection(button.getAttribute('data-spiral-direction'));
+    renderWorkshopCalculator();
+  });
+
+  const spiralGuideCountInput=$('workshopSpiralGuideCount');
+  bindWorkshopCalculatorInput(spiralGuideCountInput,()=>{
+    const spiral=workshopToolsState.spiral;
+    const parsed=Number(spiralGuideCountInput.value);
+    if(!Number.isFinite(parsed))return;
+    spiral.guideCount=clampSpiralGuideCount(parsed);
+    syncSpiralGuidesLength();
+    renderWorkshopCalculator();
+  });
+
+  const spiralImportBtn=$('workshopSpiralImportBtn');
+  if(spiralImportBtn && spiralImportBtn.getAttribute('data-spiral-import-bound')!=='true'){
+    spiralImportBtn.setAttribute('data-spiral-import-bound','true');
+    spiralImportBtn.addEventListener('click',()=>{
+      importSpiralFromGuideSpacing();
+      renderWorkshopCalculator();
+    });
+  }
+
+  if(panel.getAttribute('data-spiral-row-bound')!=='true'){
+    panel.setAttribute('data-spiral-row-bound','true');
+    const handleSpiralFieldChange=(target)=>{
+      const input=target&&target.closest?target.closest('[data-spiral-field]'):null;
+      if(!input)return;
+      const index=Number(input.getAttribute('data-guide-index'));
+      const field=input.getAttribute('data-spiral-field')||'';
+      const spiral=workshopToolsState.spiral;
+      if(!Number.isFinite(index) || !spiral.guides[index])return;
+      const guide=spiral.guides[index];
+      if(field==='position'){
+        const next=parseWorkshopMeasurementMm(input.value,spiral.unit,guide.positionMm,true);
+        if(Number.isFinite(next))guide.positionMm=Math.max(0,next);
+      }else if(field==='od'){
+        const next=parseWorkshopMeasurementMm(input.value,spiral.unit,guide.odMm,false);
+        if(Number.isFinite(next) && next>0)guide.odMm=next;
+      }else if(field==='angle'){
+        const next=Number(input.value);
+        if(Number.isFinite(next))guide.angleDeg=clampSpiralAngle(next);
+      }
+      renderWorkshopCalculator();
+    };
+    panel.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
+    panel.addEventListener('input',(event)=>{
+      const target=event.target;
+      if(!(target instanceof HTMLInputElement))return;
+      if(!target.closest('[data-spiral-field]'))return;
+      if(target.getAttribute('data-spiral-field')!=='angle')return;
+      handleSpiralFieldChange(target);
+    });
+  }
+
   const gripPrintTemplateBtn=$('workshopGripPrintTemplateBtn');
   if(gripPrintTemplateBtn){
     gripPrintTemplateBtn.addEventListener('click',()=>{
@@ -945,6 +1206,7 @@ function bindWorkshopCalculatorControls(){
 
   bindWorkshopToolEnterFlow(['workshopDcDiameter','workshopDcCircumference']);
   bindWorkshopToolEnterFlow(['workshopGripDiameter','workshopGripStartDiameter','workshopGripEndDiameter','workshopGripLength','workshopGripCoverWidth','workshopGripAllowance']);
+  bindWorkshopToolEnterFlow(['workshopSpiralGuideCount']);
 
   renderWorkshopCalculator();
 }
@@ -7473,7 +7735,11 @@ function shouldAvoidWorkshopToolAutoFocus(){
   return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 }
 function focusWorkshopToolPrimaryInput(tool){
-  const targetId=tool==='grip'?'workshopGripDiameter':'workshopDcDiameter';
+  const targetId=tool==='grip'
+    ?'workshopGripDiameter'
+    :tool==='spiral'
+      ?'workshopSpiralGuideCount'
+      :'workshopDcDiameter';
   const input=$(targetId);
   if(!input || input.disabled || input.hidden)return;
   if(shouldAvoidWorkshopToolAutoFocus()){
@@ -8678,6 +8944,8 @@ function onScreenChange(screenId){
     renderWorkshopCalculator();
     const selector=workshopLandingReturnFocusTool==='grip'
       ?'[data-workshop-tool-open="grip"]'
+      :workshopLandingReturnFocusTool==='spiral'
+        ?'[data-workshop-tool-open="spiral"]'
       :workshopLandingReturnFocusTool==='guide-spacing'
         ?'[data-workshop-tool-open="guide-spacing"]'
         :'[data-workshop-tool-open="diameter"]';

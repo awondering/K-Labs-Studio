@@ -105,12 +105,16 @@
               <span class="workshop-tool-launch__meta">Set and tune guide positions.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="grip">
-              <span class="workshop-tool-launch__title">Grip Wrap Calculator</span>
+              <span class="workshop-tool-launch__title">Grip Wrap</span>
               <span class="workshop-tool-launch__meta">Calculate wrap length and cut angles.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="diameter">
               <span class="workshop-tool-launch__title">Diameter &amp; Circumference</span>
               <span class="workshop-tool-launch__meta">Quick measurement conversion.</span>
+            </button>
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="spiral">
+              <span class="workshop-tool-launch__title">Spiral Guide Mapper</span>
+              <span class="workshop-tool-launch__meta">Map rotational offsets around the blank.</span>
             </button>
           </div>
 
@@ -118,7 +122,7 @@
             <div class="workshop-tool-head">
               <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
                 <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-                <span>Workshop</span>
+                <span>WORKSHOP</span>
               </button>
               <h3>Diameter &amp; Circumference</h3>
               <p>Enter either value and the paired value updates live.</p>
@@ -195,6 +199,48 @@
             </div>
 
             <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
+          </article>
+
+          <article id="workshopToolSpiral" class="layout-control-card workshop-tool-card" aria-label="Spiral guide mapper tool" hidden>
+            <div class="workshop-tool-head">
+              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
+              </button>
+              <h3>Spiral Guide Mapper</h3>
+              <p>Map each guide rotation into a physical offset around the blank.</p>
+            </div>
+
+            <div class="workshop-tool-fields workshop-tool-fields--two">
+              <label>
+                <span>Number of Guides</span>
+                <input id="workshopSpiralGuideCount" type="number" inputmode="numeric" min="1" max="20" step="1" autocomplete="off" />
+              </label>
+              <div class="workshop-tool-stack-actions">
+                <button id="workshopSpiralImportBtn" class="ghost-action full" type="button">Import From Guide Spacing</button>
+              </div>
+            </div>
+
+            <div class="workshop-tool-unit-row" role="group" aria-label="Spiral method">
+              <button class="ghost-action active" type="button" data-spiral-method="progressive" aria-pressed="true">Progressive</button>
+              <button class="ghost-action" type="button" data-spiral-method="acute" aria-pressed="false">Acute</button>
+              <button class="ghost-action" type="button" data-spiral-method="offset" aria-pressed="false">Offset</button>
+            </div>
+
+            <div class="workshop-tool-unit-row" data-spiral-direction-row="true" role="group" aria-label="Spiral direction">
+              <button class="ghost-action active" type="button" data-spiral-direction="left" aria-pressed="true">Left</button>
+              <button class="ghost-action" type="button" data-spiral-direction="right" aria-pressed="false">Right</button>
+            </div>
+
+            <section class="spiral-mapper-visual" aria-label="Spiral progression visual">
+              <div class="spiral-mapper-visual__head">
+                <span>Visual Mapper</span>
+                <strong id="workshopSpiralVisualDirection">LEFT TRANSITION</strong>
+              </div>
+              <div id="workshopSpiralVisualCanvas" class="spiral-mapper-visual__canvas" aria-live="polite"></div>
+            </section>
+
+            <div id="workshopSpiralGuideRows" class="spiral-guide-rows" aria-live="polite"></div>
           </article>
         </section>
       </div>

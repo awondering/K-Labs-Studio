@@ -5849,17 +5849,20 @@ textarea::-moz-selection,
 }
 
 #workshopToolDiameter,
-#workshopToolGrip{
+#workshopToolGrip,
+#workshopToolSpiral{
   gap:14px;
 }
 
 #workshopToolDiameter .workshop-tool-head,
-#workshopToolGrip .workshop-tool-head{
+#workshopToolGrip .workshop-tool-head,
+#workshopToolSpiral .workshop-tool-head{
   gap:7px;
 }
 
 #workshopToolDiameter .workshop-tool-head p,
-#workshopToolGrip .workshop-tool-head p{
+#workshopToolGrip .workshop-tool-head p,
+#workshopToolSpiral .workshop-tool-head p{
   color:rgba(223,216,206,.82);
 }
 
@@ -5886,22 +5889,26 @@ textarea::-moz-selection,
 }
 
 #workshopToolDiameter .workshop-tool-fields,
-#workshopToolGrip .workshop-tool-fields{
+#workshopToolGrip .workshop-tool-fields,
+#workshopToolSpiral .workshop-tool-fields{
   gap:10px;
 }
 
 #workshopToolDiameter .workshop-tool-fields--two,
-#workshopToolGrip .workshop-tool-fields--two{
+#workshopToolGrip .workshop-tool-fields--two,
+#workshopToolSpiral .workshop-tool-fields--two{
   gap:9px;
 }
 
 #workshopToolDiameter .workshop-tool-fields label,
-#workshopToolGrip .workshop-tool-fields label{
+#workshopToolGrip .workshop-tool-fields label,
+#workshopToolSpiral .workshop-tool-fields label{
   gap:5px;
 }
 
 #workshopToolDiameter .workshop-tool-fields input,
-#workshopToolGrip .workshop-tool-fields input{
+#workshopToolGrip .workshop-tool-fields input,
+#workshopToolSpiral .workshop-tool-fields input{
   min-height:44px;
   padding:9px 10px;
   border-color:rgba(214,210,200,.2);
@@ -5909,19 +5916,22 @@ textarea::-moz-selection,
 }
 
 #workshopToolDiameter .workshop-tool-result,
-#workshopToolGrip .workshop-tool-result{
+#workshopToolGrip .workshop-tool-result,
+#workshopToolSpiral .workshop-tool-result{
   min-height:62px;
   border-color:rgba(214,210,200,.2);
   background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));
 }
 
 #workshopToolDiameter .workshop-tool-details,
-#workshopToolGrip .workshop-tool-details{
+#workshopToolGrip .workshop-tool-details,
+#workshopToolSpiral .workshop-tool-details{
   gap:8px;
 }
 
 #workshopToolDiameter .workshop-tool-details div,
-#workshopToolGrip .workshop-tool-details div{
+#workshopToolGrip .workshop-tool-details div,
+#workshopToolSpiral .workshop-tool-details div{
   min-height:34px;
   padding:6px 8px;
   border-radius:9px;
@@ -5930,13 +5940,169 @@ textarea::-moz-selection,
 }
 
 #workshopToolDiameter .workshop-tool-print-actions .ghost-action,
-#workshopToolGrip .workshop-tool-print-actions .ghost-action{
+#workshopToolGrip .workshop-tool-print-actions .ghost-action,
+#workshopToolSpiral .workshop-tool-print-actions .ghost-action{
   min-height:42px;
+}
+
+#workshopToolSpiral .workshop-tool-unit-row{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+#workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"]{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+
+.workshop-tool-stack-actions{
+  display:grid;
+  align-items:end;
+}
+
+.workshop-tool-stack-actions .ghost-action{
+  width:100%;
+  min-height:44px;
+  border-radius:11px;
+  letter-spacing:.08em;
+}
+
+.spiral-mapper-visual{
+  display:grid;
+  gap:9px;
+  padding:10px;
+  border:1px solid rgba(214,210,200,.14);
+  border-radius:12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.008));
+}
+
+.spiral-mapper-visual__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.spiral-mapper-visual__head span,
+.spiral-guide-row__head span,
+.spiral-guide-row__details span{
+  font-size:9px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(214,210,200,.72);
+}
+
+.spiral-mapper-visual__head strong,
+.spiral-guide-row__details strong{
+  font-size:11px;
+  letter-spacing:.03em;
+  color:#efe9de;
+}
+
+.spiral-mapper-visual__canvas{
+  display:grid;
+  place-items:center;
+  min-height:220px;
+}
+
+.spiral-mapper-visual__canvas svg{
+  width:min(270px,100%);
+  height:auto;
+}
+
+.spiral-map-ring{
+  fill:none;
+  stroke:rgba(214,210,200,.55);
+  stroke-width:1.3;
+}
+
+.spiral-map-axis{
+  stroke:rgba(214,210,200,.22);
+  stroke-width:1;
+}
+
+.spiral-map-label{
+  fill:rgba(225,219,207,.78);
+  font-size:8.4px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.spiral-map-marker circle{
+  fill:rgba(var(--kl-red-rgb),.86);
+  stroke:rgba(250,241,230,.7);
+  stroke-width:1;
+}
+
+.spiral-map-marker text{
+  fill:#fff4ec;
+  font-size:7.7px;
+  font-weight:700;
+}
+
+.spiral-guide-rows{
+  display:grid;
+  gap:9px;
+}
+
+.spiral-guide-row{
+  display:grid;
+  gap:8px;
+  padding:10px;
+  border-radius:11px;
+  border:1px solid rgba(214,210,200,.14);
+  background:rgba(255,255,255,.02);
+}
+
+.spiral-guide-row__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.spiral-guide-row__head strong{
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:#f1eadf;
+}
+
+.spiral-guide-row__fields{
+  display:grid;
+  gap:8px;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+.spiral-guide-row__fields label{
+  display:grid;
+  gap:5px;
+}
+
+.spiral-guide-row__fields input{
+  min-height:42px;
+  border-radius:10px;
+}
+
+.spiral-guide-row__details{
+  display:grid;
+  gap:6px;
+}
+
+.spiral-guide-row__details div{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  min-height:32px;
+  padding:5px 7px;
+  border-radius:8px;
+  border:1px solid rgba(214,210,200,.09);
+  background:rgba(255,255,255,.012);
 }
 
 #workshopToolsPanel .workshop-tool-launch,
 #workshopToolDiameter,
 #workshopToolGrip,
+#workshopToolSpiral,
 #workshopToolsPanel .workshop-tool-result,
 #workshopToolsPanel .workshop-tool-details div{
   transition:background-color var(--ds-transition),border-color var(--ds-transition),box-shadow var(--ds-transition),transform var(--ds-transition),opacity var(--ds-transition);
@@ -5955,18 +6121,27 @@ textarea::-moz-selection,
   }
 
   #workshopToolDiameter,
-  #workshopToolGrip{
+  #workshopToolGrip,
+  #workshopToolSpiral{
     gap:12px;
   }
 
   #workshopToolDiameter .workshop-tool-fields input,
-  #workshopToolGrip .workshop-tool-fields input{
+  #workshopToolGrip .workshop-tool-fields input,
+  #workshopToolSpiral .workshop-tool-fields input{
     min-height:46px;
   }
 
   #workshopToolDiameter .workshop-tool-result,
-  #workshopToolGrip .workshop-tool-result{
+  #workshopToolGrip .workshop-tool-result,
+  #workshopToolSpiral .workshop-tool-result{
     min-height:58px;
+  }
+
+  #workshopToolSpiral .workshop-tool-unit-row,
+  #workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"],
+  #workshopToolSpiral .spiral-guide-row__fields{
+    grid-template-columns:1fr;
   }
 }
 /* K-Labs Studio — Supabase sign-in screen */
