@@ -496,6 +496,27 @@ function spiralStripperIndex(guideCount){
 function spiralGuideFallbackPositionMm(index){
   return Math.max(0,120+(index*180));
 }
+function setSpiralGuideCount(nextCount){
+  const spiral=workshopToolsState.spiral;
+  const clamped=clampSpiralGuideCount(nextCount);
+  if(spiral.guideCount===clamped)return;
+  spiral.guideCount=clamped;
+  syncSpiralGuidesLength();
+}
+function setSpiralTransitionGuides(nextCount){
+  const spiral=workshopToolsState.spiral;
+  const clamped=clampSpiralTransitionGuides(nextCount,spiral.guideCount);
+  if(spiral.transitionGuides===clamped)return;
+  spiral.transitionGuides=clamped;
+  syncSpiralGuidesLength({resetAngles:true});
+}
+function applySpiralCountDelta(target,delta){
+  if(target==='transitionGuides'){
+    setSpiralTransitionGuides(workshopToolsState.spiral.transitionGuides+delta);
+    return;
+  }
+  setSpiralGuideCount(workshopToolsState.spiral.guideCount+delta);
+}
 function buildSpiralPresetAngles(method,guideCount,transitionGuides,offsetStartAngle){
   const total=clampSpiralGuideCount(guideCount);
   const mode=normalizeSpiralMethod(method);
@@ -625,22 +646,6 @@ function renderSpiralGuideMapper(){
   spiral.direction=normalizeSpiralDirection(spiral.direction);
   syncSpiralGuidesLength();
 
-  const guideCountInput=$('workshopSpiralGuideCount');
-  if(guideCountInput && document.activeElement!==guideCountInput){
-    guideCountInput.value=String(spiral.guideCount);
-  }
-  if(guideCountInput)guideCountInput.placeholder='5';
-
-  const transitionInput=$('workshopSpiralTransitionGuides');
-  if(transitionInput && document.activeElement!==transitionInput){
-    transitionInput.value=String(spiral.transitionGuides);
-  }
-  if(transitionInput){
-    transitionInput.min='0';
-    transitionInput.max=String(Math.max(0,spiral.guideCount-2));
-    transitionInput.placeholder='3';
-  }
-
   const offsetWrap=$('workshopSpiralOffsetStartWrap');
   const offsetInput=$('workshopSpiralOffsetStart');
   const showOffset=spiral.method==='offset';
@@ -649,6 +654,25 @@ function renderSpiralGuideMapper(){
     offsetInput.value=formatDecimal(spiral.offsetStartAngle,1);
   }
   if(offsetInput)offsetInput.placeholder='20';
+
+  const guideCountValue=$('workshopSpiralGuideCountValue');
+  if(guideCountValue)guideCountValue.textContent=String(spiral.guideCount);
+  const transitionValue=$('workshopSpiralTransitionGuidesValue');
+  if(transitionValue)transitionValue.textContent=String(spiral.transitionGuides);
+
+  const canDecreaseGuideCount=spiral.guideCount>1;
+  const canIncreaseGuideCount=spiral.guideCount<20;
+  const maxTransition=Math.max(0,spiral.guideCount-2);
+  const canDecreaseTransition=spiral.transitionGuides>0;
+  const canIncreaseTransition=spiral.transitionGuides<maxTransition;
+  const guideDecrement=$('workshopSpiralGuideCountDecrement');
+  const guideIncrement=$('workshopSpiralGuideCountIncrement');
+  const transitionDecrement=$('workshopSpiralTransitionDecrement');
+  const transitionIncrement=$('workshopSpiralTransitionIncrement');
+  if(guideDecrement)guideDecrement.disabled=!canDecreaseGuideCount;
+  if(guideIncrement)guideIncrement.disabled=!canIncreaseGuideCount;
+  if(transitionDecrement)transitionDecrement.disabled=!canDecreaseTransition;
+  if(transitionIncrement)transitionIncrement.disabled=!canIncreaseTransition;
 
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
@@ -1253,24 +1277,75 @@ function bindWorkshopCalculatorControls(){
     renderWorkshopCalculator();
   });
 
-  const spiralGuideCountInput=$('workshopSpiralGuideCount');
-  const spiralTransitionInput=$('workshopSpiralTransitionGuides');
   const spiralOffsetStartInput=$('workshopSpiralOffsetStart');
-  bindWorkshopCalculatorInput(spiralGuideCountInput,()=>{
-    const spiral=workshopToolsState.spiral;
-    const parsed=Number(spiralGuideCountInput.value);
-    if(!Number.isFinite(parsed))return;
-    spiral.guideCount=clampSpiralGuideCount(parsed);
-    syncSpiralGuidesLength();
-    renderWorkshopCalculator();
-  });
-  bindWorkshopCalculatorInput(spiralTransitionInput,()=>{
-    const spiral=workshopToolsState.spiral;
-    const parsed=Number(spiralTransitionInput.value);
-    if(!Number.isFinite(parsed))return;
-    spiral.transitionGuides=clampSpiralTransitionGuides(parsed,spiral.guideCount);
-    syncSpiralGuidesLength({resetAngles:true});
-    renderWorkshopCalculator();
+  const spiralCountButtons=Array.from(panel.querySelectorAll('[data-spiral-count-action][data-spiral-count-target]'));
+  const spiralCountHoldState={delayTimer:0,repeatTimer:0,target:'',delta:0,repeating:false};
+  const clearSpiralCountHold=()=>{
+    if(spiralCountHoldState.delayTimer){
+      clearTimeout(spiralCountHoldState.delayTimer);
+      spiralCountHoldState.delayTimer=0;
+    }
+    if(spiralCountHoldState.repeatTimer){
+      clearInterval(spiralCountHoldState.repeatTimer);
+      spiralCountHoldState.repeatTimer=0;
+    }
+    spiralCountHoldState.repeating=false;
+  };
+  const beginSpiralCountHold=(target,delta)=>{
+    clearSpiralCountHold();
+    spiralCountHoldState.target=target;
+    spiralCountHoldState.delta=delta;
+    spiralCountHoldState.delayTimer=window.setTimeout(()=>{
+      spiralCountHoldState.repeating=true;
+      applySpiralCountDelta(target,delta);
+      renderWorkshopCalculator();
+      spiralCountHoldState.repeatTimer=window.setInterval(()=>{
+        applySpiralCountDelta(target,delta);
+        renderWorkshopCalculator();
+      },135);
+    },500);
+  };
+  spiralCountButtons.forEach((button)=>{
+    if(button.getAttribute('data-spiral-count-bound')==='true')return;
+    button.setAttribute('data-spiral-count-bound','true');
+    const target=button.getAttribute('data-spiral-count-target')||'guideCount';
+    const delta=button.getAttribute('data-spiral-count-action')==='increment'?1:-1;
+    let pointerHandled=false;
+    button.style.touchAction='manipulation';
+    button.addEventListener('pointerdown',(event)=>{
+      if(event.button!==0 || !event.isPrimary)return;
+      pointerHandled=false;
+      event.preventDefault();
+      beginSpiralCountHold(target,delta);
+    });
+    const finishPointer=()=>{
+      if(!spiralCountHoldState.repeating){
+        applySpiralCountDelta(target,delta);
+        renderWorkshopCalculator();
+        pointerHandled=true;
+      }
+      clearSpiralCountHold();
+    };
+    button.addEventListener('pointerup',finishPointer);
+    button.addEventListener('pointercancel',clearSpiralCountHold);
+    button.addEventListener('pointerleave',()=>{
+      clearSpiralCountHold();
+    });
+    button.addEventListener('click',(event)=>{
+      event.preventDefault();
+      if(pointerHandled){
+        pointerHandled=false;
+        return;
+      }
+      applySpiralCountDelta(target,delta);
+      renderWorkshopCalculator();
+    });
+    button.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter' && event.key!==' ')return;
+      event.preventDefault();
+      applySpiralCountDelta(target,delta);
+      renderWorkshopCalculator();
+    });
   });
   bindWorkshopCalculatorInput(spiralOffsetStartInput,()=>{
     const spiral=workshopToolsState.spiral;
@@ -1336,7 +1411,7 @@ function bindWorkshopCalculatorControls(){
 
   bindWorkshopToolEnterFlow(['workshopDcDiameter','workshopDcCircumference']);
   bindWorkshopToolEnterFlow(['workshopGripDiameter','workshopGripStartDiameter','workshopGripEndDiameter','workshopGripLength','workshopGripCoverWidth','workshopGripAllowance']);
-  bindWorkshopToolEnterFlow(['workshopSpiralGuideCount','workshopSpiralTransitionGuides','workshopSpiralOffsetStart']);
+  bindWorkshopToolEnterFlow(['workshopSpiralOffsetStart']);
 
   renderWorkshopCalculator();
 }
@@ -7868,7 +7943,7 @@ function focusWorkshopToolPrimaryInput(tool){
   const targetId=tool==='grip'
     ?'workshopGripDiameter'
     :tool==='spiral'
-      ?'workshopSpiralGuideCount'
+      ?'workshopSpiralGuideCountIncrement'
       :'workshopDcDiameter';
   const input=$(targetId);
   if(!input || input.disabled || input.hidden)return;

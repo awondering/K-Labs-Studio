@@ -211,15 +211,26 @@
               <p>Map each guide rotation into a physical offset around the blank.</p>
             </div>
 
-            <div class="workshop-tool-fields workshop-tool-fields--two">
-              <label>
-                <span>Number of Guides</span>
-                <input id="workshopSpiralGuideCount" type="number" inputmode="numeric" min="1" max="20" step="1" autocomplete="off" />
-              </label>
-              <label>
-                <span>Transition Guides</span>
-                <input id="workshopSpiralTransitionGuides" type="number" inputmode="numeric" min="0" max="18" step="1" autocomplete="off" />
-              </label>
+            <div class="spiral-count-grid" aria-label="Spiral count controls">
+              <article class="layout-control-card spiral-count-card" aria-label="Number of guides control">
+                <div class="layout-control-card__title">Number of Guides</div>
+                <div class="layout-control-card__body layout-control-card__body--compact">
+                  <button id="workshopSpiralGuideCountDecrement" class="layout-control-card__button" data-spiral-count-action="decrement" data-spiral-count-target="guideCount" type="button" aria-label="Decrease number of guides">−</button>
+                  <div id="workshopSpiralGuideCountValue" class="layout-control-card__value" role="status" aria-live="polite" aria-label="Number of guides">0</div>
+                  <button id="workshopSpiralGuideCountIncrement" class="layout-control-card__button" data-spiral-count-action="increment" data-spiral-count-target="guideCount" type="button" aria-label="Increase number of guides">+</button>
+                </div>
+                <div class="layout-control-card__meta">guides</div>
+              </article>
+
+              <article class="layout-control-card spiral-count-card" aria-label="Transition guides control">
+                <div class="layout-control-card__title">Transition Guides</div>
+                <div class="layout-control-card__body layout-control-card__body--compact">
+                  <button id="workshopSpiralTransitionDecrement" class="layout-control-card__button" data-spiral-count-action="decrement" data-spiral-count-target="transitionGuides" type="button" aria-label="Decrease transition guides">−</button>
+                  <div id="workshopSpiralTransitionGuidesValue" class="layout-control-card__value" role="status" aria-live="polite" aria-label="Transition guides">0</div>
+                  <button id="workshopSpiralTransitionIncrement" class="layout-control-card__button" data-spiral-count-action="increment" data-spiral-count-target="transitionGuides" type="button" aria-label="Increase transition guides">+</button>
+                </div>
+                <div class="layout-control-card__meta">guides</div>
+              </article>
             </div>
 
             <div id="workshopSpiralOffsetStartWrap" class="workshop-tool-fields" hidden>

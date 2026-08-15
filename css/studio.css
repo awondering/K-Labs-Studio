@@ -5965,6 +5965,43 @@ textarea::-moz-selection,
   letter-spacing:.08em;
 }
 
+#workshopToolSpiral .spiral-count-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+
+#workshopToolSpiral .spiral-count-card{
+  padding:8px;
+  border-color:rgba(214,210,200,.14);
+  background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.012));
+}
+
+#workshopToolSpiral .spiral-count-card .layout-control-card__title{
+  margin-bottom:6px;
+  text-align:left;
+}
+
+#workshopToolSpiral .spiral-count-card .layout-control-card__body--compact{
+  min-height:44px;
+}
+
+#workshopToolSpiral .spiral-count-card .layout-control-card__button{
+  width:40px;
+  height:40px;
+  border-radius:11px;
+}
+
+#workshopToolSpiral .spiral-count-card .layout-control-card__value{
+  min-height:42px;
+  font-size:30px;
+}
+
+#workshopToolSpiral .spiral-count-card .layout-control-card__meta{
+  margin-top:5px;
+  text-align:left;
+}
+
 .spiral-mapper-visual{
   display:grid;
   gap:8px;
@@ -6203,6 +6240,10 @@ textarea::-moz-selection,
   #workshopToolSpiral .workshop-tool-unit-row,
   #workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"],
   #workshopToolSpiral .spiral-guide-row__fields{
+    grid-template-columns:1fr;
+  }
+
+  #workshopToolSpiral .spiral-count-grid{
     grid-template-columns:1fr;
   }
 
