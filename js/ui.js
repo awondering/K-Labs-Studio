@@ -174,6 +174,8 @@ const workshopToolsState={
     method:'progressive',
     direction:'left',
     guideCount:5,
+    transitionGuides:Math.max(0,Math.min(3,5-2)),
+    offsetStartAngle:20,
     guides:[],
   },
 };
@@ -469,62 +471,107 @@ function normalizeSpiralMethod(value){
 function normalizeSpiralDirection(value){
   return String(value||'').trim().toLowerCase()==='right'?'right':'left';
 }
-function spiralDefaultAngles(method,count){
-  const total=Math.max(1,Math.round(numberOrZero(count)||1));
-  const mode=normalizeSpiralMethod(method);
-  if(mode==='acute'){
-    const acute=[];
-    for(let i=0;i<total;i+=1){
-      if(i===0)acute.push(0);
-      else if(i===1)acute.push(90);
-      else acute.push(180);
-    }
-    return acute;
-  }
-  if(mode==='offset'){
-    const start=20;
-    if(total===1)return [start];
-    return Array.from({length:total},(_,index)=>{
-      if(index===total-1)return 180;
-      const ratio=index/(total-1);
-      return Math.max(start,Math.min(180,start+((180-start)*ratio)));
-    });
-  }
-  if(total===1)return [0];
-  return Array.from({length:total},(_,index)=>Math.min(180,(180*index)/(total-1)));
-}
 function clampSpiralGuideCount(value){
   return Math.max(1,Math.min(20,Math.round(numberOrZero(value)||1)));
+}
+function clampSpiralTransitionGuides(value,guideCount){
+  const total=clampSpiralGuideCount(guideCount);
+  const maxTransition=Math.max(0,total-2);
+  return Math.max(0,Math.min(maxTransition,Math.round(numberOrZero(value)||0)));
 }
 function clampSpiralAngle(value){
   return Math.max(0,Math.min(180,numberOrZero(value)));
 }
+function defaultSpiralTransitionGuides(method,guideCount){
+  const total=clampSpiralGuideCount(guideCount);
+  const maxTransition=Math.max(0,total-2);
+  if(normalizeSpiralMethod(method)==='acute'){
+    return Math.max(0,Math.min(1,maxTransition));
+  }
+  return Math.max(0,Math.min(3,maxTransition));
+}
+function spiralStripperIndex(guideCount){
+  return Math.max(0,clampSpiralGuideCount(guideCount)-1);
+}
 function spiralGuideFallbackPositionMm(index){
   return Math.max(0,120+(index*180));
+}
+function buildSpiralPresetAngles(method,guideCount,transitionGuides,offsetStartAngle){
+  const total=clampSpiralGuideCount(guideCount);
+  const mode=normalizeSpiralMethod(method);
+  const stripperIndex=spiralStripperIndex(total);
+  const angles=Array.from({length:total},()=>180);
+
+  if(mode==='acute'){
+    angles[stripperIndex]=0;
+    if(stripperIndex-1>=0)angles[stripperIndex-1]=90;
+    if(stripperIndex-2>=0)angles[stripperIndex-2]=180;
+    return angles.map((value)=>clampSpiralAngle(value));
+  }
+
+  const startAngle=mode==='offset'?Math.max(0,Math.min(179.9,numberOrZero(offsetStartAngle)||20)):0;
+  const transitionCount=clampSpiralTransitionGuides(transitionGuides,total);
+  const segments=Math.max(1,transitionCount+1);
+  for(let step=0;step<=segments;step+=1){
+    const guideIndex=stripperIndex-step;
+    if(guideIndex<0)break;
+    const ratio=step/segments;
+    const nextAngle=startAngle+((180-startAngle)*ratio);
+    angles[guideIndex]=clampSpiralAngle(nextAngle);
+  }
+  return angles.map((value)=>clampSpiralAngle(value));
 }
 function syncSpiralGuidesLength(options){
   const settings=options&&typeof options==='object'?options:{};
   const spiral=workshopToolsState.spiral;
+  spiral.method=normalizeSpiralMethod(spiral.method);
+  spiral.direction=normalizeSpiralDirection(spiral.direction);
   const nextCount=clampSpiralGuideCount(spiral.guideCount);
   spiral.guideCount=nextCount;
+  if(settings.resetTransition===true){
+    spiral.transitionGuides=defaultSpiralTransitionGuides(spiral.method,nextCount);
+  }else{
+    spiral.transitionGuides=clampSpiralTransitionGuides(spiral.transitionGuides,nextCount);
+  }
+  if(spiral.method==='acute'){
+    spiral.transitionGuides=defaultSpiralTransitionGuides('acute',nextCount);
+  }
+  spiral.offsetStartAngle=Math.max(0,Math.min(179.9,numberOrZero(spiral.offsetStartAngle)||20));
   const current=Array.isArray(spiral.guides)?spiral.guides:[];
-  const defaults=spiralDefaultAngles(spiral.method,nextCount);
+  const defaults=buildSpiralPresetAngles(spiral.method,nextCount,spiral.transitionGuides,spiral.offsetStartAngle);
   const next=[];
   for(let index=0;index<nextCount;index+=1){
     const existing=current[index]&&typeof current[index]==='object'?current[index]:{};
     const previous=index>0?next[index-1]:null;
     const fallbackPosition=previous?Math.max(0,numberOrZero(previous.positionMm)+180):spiralGuideFallbackPositionMm(index);
+    const existingAngle=Number(existing.angleDeg);
     next.push({
       positionMm:Math.max(0,numberOrZero(existing.positionMm)||fallbackPosition),
       odMm:Math.max(0.01,numberOrZero(existing.odMm)||10),
-      angleDeg:settings.resetAngles?defaults[index]:clampSpiralAngle(existing.angleDeg||defaults[index]),
+      angleDeg:settings.resetAngles
+        ?defaults[index]
+        :Number.isFinite(existingAngle)
+          ?clampSpiralAngle(existingAngle)
+          :defaults[index],
     });
   }
   spiral.guides=next;
+  if(spiral.method==='offset' && spiral.guides.length){
+    const stripper=spiral.guides[spiralStripperIndex(spiral.guideCount)];
+    if(stripper)spiral.offsetStartAngle=Math.max(0,Math.min(179.9,clampSpiralAngle(stripper.angleDeg)));
+  }
 }
 function setSpiralMethod(method){
-  workshopToolsState.spiral.method=normalizeSpiralMethod(method);
-  syncSpiralGuidesLength({resetAngles:true});
+  const spiral=workshopToolsState.spiral;
+  const nextMethod=normalizeSpiralMethod(method);
+  spiral.method=nextMethod;
+  if(nextMethod==='offset' && spiral.guides.length){
+    const stripper=spiral.guides[spiralStripperIndex(spiral.guideCount)];
+    if(stripper){
+      spiral.offsetStartAngle=Math.max(0,Math.min(179.9,clampSpiralAngle(stripper.angleDeg)||spiral.offsetStartAngle));
+    }
+  }
+  syncSpiralGuidesLength({resetAngles:true,resetTransition:true});
 }
 function spiralVisualAngleDegrees(angleDeg,direction){
   const angle=clampSpiralAngle(angleDeg);
@@ -554,15 +601,17 @@ function importSpiralFromGuideSpacing(){
   const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
   if(!rows.length)return;
-  const existing=Array.isArray(spiral.guides)?spiral.guides:[];
-  const defaults=spiralDefaultAngles(spiral.method,rows.length);
   spiral.guideCount=rows.length;
+  spiral.transitionGuides=clampSpiralTransitionGuides(spiral.transitionGuides,rows.length);
+  const existing=Array.isArray(spiral.guides)?spiral.guides:[];
+  const defaults=buildSpiralPresetAngles(spiral.method,rows.length,spiral.transitionGuides,spiral.offsetStartAngle);
   spiral.guides=rows.map((row,index)=>{
     const previous=existing[index]&&typeof existing[index]==='object'?existing[index]:{};
+    const existingAngle=Number(previous.angleDeg);
     return {
       positionMm:Math.max(0,numberOrZero(row&&row.cum)),
       odMm:Math.max(0.01,numberOrZero(previous.odMm)||10),
-      angleDeg:clampSpiralAngle(previous.angleDeg||defaults[index]),
+      angleDeg:Number.isFinite(existingAngle)?clampSpiralAngle(existingAngle):defaults[index],
     };
   });
 }
@@ -582,38 +631,94 @@ function renderSpiralGuideMapper(){
   }
   if(guideCountInput)guideCountInput.placeholder='5';
 
+  const transitionInput=$('workshopSpiralTransitionGuides');
+  if(transitionInput && document.activeElement!==transitionInput){
+    transitionInput.value=String(spiral.transitionGuides);
+  }
+  if(transitionInput){
+    transitionInput.min='0';
+    transitionInput.max=String(Math.max(0,spiral.guideCount-2));
+    transitionInput.placeholder='3';
+  }
+
+  const offsetWrap=$('workshopSpiralOffsetStartWrap');
+  const offsetInput=$('workshopSpiralOffsetStart');
+  const showOffset=spiral.method==='offset';
+  if(offsetWrap)offsetWrap.hidden=!showOffset;
+  if(offsetInput && document.activeElement!==offsetInput){
+    offsetInput.value=formatDecimal(spiral.offsetStartAngle,1);
+  }
+  if(offsetInput)offsetInput.placeholder='20';
+
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
 
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
-    visualDirection.textContent=`${spiral.direction.toUpperCase()} TRANSITION`;
+    visualDirection.textContent=`STRIPPER G${spiral.guideCount} - ${spiral.direction.toUpperCase()} SIDE`;
   }
 
   const visualCanvas=$('workshopSpiralVisualCanvas');
   if(visualCanvas){
+    const undersideIndexes=spiral.guides
+      .map((guide,index)=>({index,isUnder:clampSpiralAngle(guide.angleDeg)>=179.95}))
+      .filter((entry)=>entry.isUnder)
+      .map((entry)=>entry.index);
+    const undersideOrderByIndex={};
+    undersideIndexes.forEach((index,order)=>{
+      undersideOrderByIndex[index]=order;
+    });
+    const undersideCount=undersideIndexes.length;
+    const markerPoints=[];
     const markerSvg=spiral.guides.map((guide,index)=>{
-      const radius=74-((index%3)*7);
       const visualAngle=(spiralVisualAngleDegrees(guide.angleDeg,spiral.direction)*Math.PI)/180;
-      const x=110+(Math.cos(visualAngle)*radius);
-      const y=110+(Math.sin(visualAngle)*radius);
+      let x=110+(Math.cos(visualAngle)*68);
+      let y=110+(Math.sin(visualAngle)*68);
+      if(clampSpiralAngle(guide.angleDeg)>=179.95){
+        const order=Number(undersideOrderByIndex[index]||0);
+        const spread=(order-((undersideCount-1)/2))*10;
+        x=110+spread;
+        y=178;
+      }
+      markerPoints.push({index,x,y});
+      const isStripper=index===spiralStripperIndex(spiral.guideCount);
       return `
-        <g class="spiral-map-marker" aria-label="Guide ${index+1}">
+        <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" aria-label="Guide ${index+1}${isStripper?' stripper':''}">
           <circle cx="${formatDecimal(x,2)}" cy="${formatDecimal(y,2)}" r="8.5"></circle>
           <text x="${formatDecimal(x,2)}" y="${formatDecimal(y+0.5,2)}" text-anchor="middle" dominant-baseline="middle">${index+1}</text>
         </g>
       `;
     }).join('');
+
+    const progressionPoints=[];
+    for(let index=spiralStripperIndex(spiral.guideCount);index>=0;index-=1){
+      const found=markerPoints.find((point)=>point.index===index);
+      if(found)progressionPoints.push(`${formatDecimal(found.x,2)},${formatDecimal(found.y,2)}`);
+    }
+    const progressionPolyline=progressionPoints.length>1
+      ?`<polyline class="spiral-map-path" points="${progressionPoints.join(' ')}"></polyline>`
+      :'';
+
+    const undersideGroupLabel=undersideCount>1
+      ?`<text class="spiral-map-cluster" x="110" y="191" text-anchor="middle">${undersideCount} guides at 180 deg</text>`
+      :'';
+
     visualCanvas.innerHTML=`
       <svg viewBox="0 0 220 220" role="img" aria-label="Spiral mapper reference">
         <circle class="spiral-map-ring" cx="110" cy="110" r="80"></circle>
         <line class="spiral-map-axis" x1="110" y1="26" x2="110" y2="194"></line>
         <line class="spiral-map-axis" x1="26" y1="110" x2="194" y2="110"></line>
-        <text class="spiral-map-label" x="110" y="18" text-anchor="middle">TOP 0 deg</text>
-        <text class="spiral-map-label" x="16" y="113" text-anchor="start">LEFT 90 deg</text>
-        <text class="spiral-map-label" x="204" y="113" text-anchor="end">RIGHT 90 deg</text>
-        <text class="spiral-map-label" x="110" y="214" text-anchor="middle">UNDERSIDE 180 deg</text>
+        <text class="spiral-map-label" x="110" y="14" text-anchor="middle">TOP 0 deg</text>
+        <text class="spiral-map-label" x="10" y="66" text-anchor="start">LEFT 90 deg</text>
+        <text class="spiral-map-label" x="210" y="66" text-anchor="end">RIGHT 90 deg</text>
+        <text class="spiral-map-label" x="110" y="216" text-anchor="middle">UNDERSIDE 180 deg</text>
+        ${progressionPolyline}
         ${markerSvg}
+        <g class="spiral-map-tiptop" aria-label="Tip top at 180 degrees underside">
+          <circle cx="110" cy="203" r="4.7"></circle>
+          <text x="110" y="201" text-anchor="middle">TIP TOP</text>
+        </g>
+        ${undersideGroupLabel}
       </svg>
     `;
   }
@@ -622,12 +727,14 @@ function renderSpiralGuideMapper(){
   if(rowsHost){
     rowsHost.innerHTML=spiral.guides.map((guide,index)=>{
       const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay);
+      const isStripper=index===spiralStripperIndex(spiral.guideCount);
       return `
-        <article class="spiral-guide-row" data-spiral-row="${index}">
+        <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}" data-spiral-row="${index}">
           <header class="spiral-guide-row__head">
             <strong>Guide ${index+1}</strong>
             <span>${labels.rotationText}</span>
           </header>
+          ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
           <div class="spiral-guide-row__fields">
             <label>
               <span>Position From Tip</span>
@@ -1147,12 +1254,32 @@ function bindWorkshopCalculatorControls(){
   });
 
   const spiralGuideCountInput=$('workshopSpiralGuideCount');
+  const spiralTransitionInput=$('workshopSpiralTransitionGuides');
+  const spiralOffsetStartInput=$('workshopSpiralOffsetStart');
   bindWorkshopCalculatorInput(spiralGuideCountInput,()=>{
     const spiral=workshopToolsState.spiral;
     const parsed=Number(spiralGuideCountInput.value);
     if(!Number.isFinite(parsed))return;
     spiral.guideCount=clampSpiralGuideCount(parsed);
     syncSpiralGuidesLength();
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(spiralTransitionInput,()=>{
+    const spiral=workshopToolsState.spiral;
+    const parsed=Number(spiralTransitionInput.value);
+    if(!Number.isFinite(parsed))return;
+    spiral.transitionGuides=clampSpiralTransitionGuides(parsed,spiral.guideCount);
+    syncSpiralGuidesLength({resetAngles:true});
+    renderWorkshopCalculator();
+  });
+  bindWorkshopCalculatorInput(spiralOffsetStartInput,()=>{
+    const spiral=workshopToolsState.spiral;
+    const parsed=Number(spiralOffsetStartInput.value);
+    if(!Number.isFinite(parsed))return;
+    spiral.offsetStartAngle=Math.max(0,Math.min(179.9,parsed));
+    if(spiral.method==='offset'){
+      syncSpiralGuidesLength({resetAngles:true});
+    }
     renderWorkshopCalculator();
   });
 
@@ -1184,6 +1311,9 @@ function bindWorkshopCalculatorControls(){
       }else if(field==='angle'){
         const next=Number(input.value);
         if(Number.isFinite(next))guide.angleDeg=clampSpiralAngle(next);
+        if(index===spiralStripperIndex(spiral.guideCount) && spiral.method==='offset'){
+          spiral.offsetStartAngle=Math.max(0,Math.min(179.9,guide.angleDeg));
+        }
       }
       renderWorkshopCalculator();
     };
@@ -1206,7 +1336,7 @@ function bindWorkshopCalculatorControls(){
 
   bindWorkshopToolEnterFlow(['workshopDcDiameter','workshopDcCircumference']);
   bindWorkshopToolEnterFlow(['workshopGripDiameter','workshopGripStartDiameter','workshopGripEndDiameter','workshopGripLength','workshopGripCoverWidth','workshopGripAllowance']);
-  bindWorkshopToolEnterFlow(['workshopSpiralGuideCount']);
+  bindWorkshopToolEnterFlow(['workshopSpiralGuideCount','workshopSpiralTransitionGuides','workshopSpiralOffsetStart']);
 
   renderWorkshopCalculator();
 }

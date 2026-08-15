@@ -205,7 +205,7 @@
             <div class="workshop-tool-head">
               <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
                 <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-                <span>Workshop</span>
+                <span>WORKSHOP</span>
               </button>
               <h3>Spiral Guide Mapper</h3>
               <p>Map each guide rotation into a physical offset around the blank.</p>
@@ -216,9 +216,21 @@
                 <span>Number of Guides</span>
                 <input id="workshopSpiralGuideCount" type="number" inputmode="numeric" min="1" max="20" step="1" autocomplete="off" />
               </label>
-              <div class="workshop-tool-stack-actions">
-                <button id="workshopSpiralImportBtn" class="ghost-action full" type="button">Import From Guide Spacing</button>
-              </div>
+              <label>
+                <span>Transition Guides</span>
+                <input id="workshopSpiralTransitionGuides" type="number" inputmode="numeric" min="0" max="18" step="1" autocomplete="off" />
+              </label>
+            </div>
+
+            <div id="workshopSpiralOffsetStartWrap" class="workshop-tool-fields" hidden>
+              <label>
+                <span>Offset Start Angle</span>
+                <input id="workshopSpiralOffsetStart" type="number" inputmode="decimal" min="0" max="179.9" step="0.1" autocomplete="off" />
+              </label>
+            </div>
+
+            <div class="workshop-tool-stack-actions">
+              <button id="workshopSpiralImportBtn" class="ghost-action full" type="button">Import From Guide Spacing</button>
             </div>
 
             <div class="workshop-tool-unit-row" role="group" aria-label="Spiral method">
