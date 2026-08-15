@@ -483,6 +483,9 @@ function autoSpiralTransitionGuides(guideCount){
 function spiralStripperIndex(guideCount){
   return Math.max(0,clampSpiralGuideCount(guideCount)-1);
 }
+function spiralDisplayGuideNumber(index,guideCount){
+  return Math.max(1,clampSpiralGuideCount(guideCount)-index);
+}
 function spiralGuideFallbackPositionMm(index){
   return Math.max(0,120+(index*180));
 }
@@ -640,7 +643,7 @@ function renderSpiralGuideMapper(){
 
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
-    visualDirection.textContent=`STRIPPER G${spiral.guideCount} - ${spiral.direction.toUpperCase()} SIDE`;
+    visualDirection.textContent=`STRIPPER G1 - ${spiral.direction.toUpperCase()} SIDE`;
   }
 
   const visualCanvas=$('workshopSpiralVisualCanvas');
@@ -667,10 +670,11 @@ function renderSpiralGuideMapper(){
       }
       markerPoints.push({index,x,y});
       const isStripper=index===spiralStripperIndex(spiral.guideCount);
+      const displayGuideNumber=spiralDisplayGuideNumber(index,spiral.guideCount);
       return `
-        <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" aria-label="Guide ${index+1}${isStripper?' stripper':''}">
+        <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}">
           <circle cx="${formatDecimal(x,2)}" cy="${formatDecimal(y,2)}" r="8.5"></circle>
-          <text x="${formatDecimal(x,2)}" y="${formatDecimal(y+0.5,2)}" text-anchor="middle" dominant-baseline="middle">${index+1}</text>
+          <text x="${formatDecimal(x,2)}" y="${formatDecimal(y+0.5,2)}" text-anchor="middle" dominant-baseline="middle">${displayGuideNumber}</text>
         </g>
       `;
     }).join('');
@@ -710,13 +714,17 @@ function renderSpiralGuideMapper(){
 
   const rowsHost=$('workshopSpiralGuideRows');
   if(rowsHost){
-    rowsHost.innerHTML=spiral.guides.map((guide,index)=>{
+    const displayIndexes=Array.from({length:spiral.guides.length},(_,offset)=>spiralStripperIndex(spiral.guideCount)-offset);
+    rowsHost.innerHTML=displayIndexes.map((index)=>{
+      const guide=spiral.guides[index];
+      if(!guide)return '';
       const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay);
       const isStripper=index===spiralStripperIndex(spiral.guideCount);
+      const displayGuideNumber=spiralDisplayGuideNumber(index,spiral.guideCount);
       return `
         <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}" data-spiral-row="${index}">
           <header class="spiral-guide-row__head">
-            <strong>Guide ${index+1}</strong>
+            <strong>Guide ${displayGuideNumber}</strong>
             <span>${labels.rotationText}</span>
           </header>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
