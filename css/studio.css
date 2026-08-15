@@ -3480,6 +3480,13 @@ body.component-sheet-open .workshop-back-to-top{
   color:rgba(214,210,200,.76);
 }
 
+.workshop-tool-note--emphasis{
+  margin-top:-4px;
+  text-align:right;
+  color:rgba(var(--kl-red-rgb),.82);
+  font-weight:600;
+}
+
 .workshop-tool-launch{
   display:grid;
   gap:6px;

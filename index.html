@@ -172,23 +172,26 @@
 
             <div class="workshop-tool-fields">
               <label><span>Optional Material Allowance (%)</span><input id="workshopGripAllowance" type="number" inputmode="decimal" min="0" step="0.1" /></label>
+              <p class="workshop-tool-note">Adds extra length on top of the theoretical wrap length, for trimming, overlap and waste.</p>
             </div>
 
             <div class="workshop-tool-result workshop-tool-result--primary">
               <span>Material Required</span>
               <strong id="workshopGripMaterialRequired">0 mm</strong>
             </div>
+            <p class="workshop-tool-note workshop-tool-note--emphasis">Cut to this length &mdash; includes your allowance.</p>
 
             <div class="workshop-tool-details" aria-live="polite">
               <div><span>Number of Revolutions</span><strong id="workshopGripRevolutions">0</strong></div>
-              <div><span>Spiral Wrap Length</span><strong id="workshopGripSpiralLength">0 mm</strong></div>
+              <div><span>Theoretical Wrap Length</span><strong id="workshopGripSpiralLength">0 mm</strong></div>
               <div><span>Start Cut Angle</span><strong id="workshopGripStartCutAngle">0 deg</strong></div>
               <div id="workshopGripFinishCutAngleRow" hidden><span>Finish Cut Angle</span><strong id="workshopGripFinishCutAngle">0 deg</strong></div>
-              <div id="workshopGripAverageCutAngleRow" hidden><span>Average Cut Angle</span><strong id="workshopGripAverageCutAngle">0 deg</strong></div>
+              <div id="workshopGripAverageCutAngleRow" hidden><span>Cut Angle Difference</span><strong id="workshopGripAverageCutAngle">0 deg</strong></div>
             </div>
 
             <div id="workshopGripPrintActions" class="workshop-tool-print-actions" hidden>
               <button id="workshopGripPrintTemplateBtn" class="ghost-action full" type="button">Print Cut Template</button>
+              <p class="workshop-tool-note">Prints at 100% / actual size, with a calibration line to verify scale.</p>
             </div>
 
             <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>

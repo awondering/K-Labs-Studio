@@ -574,7 +574,7 @@ function buildGripCutEndGuideSvg(options){
       <line x1="${formatDecimal(widthMarkerX,2)}" y1="${formatDecimal(topY,2)}" x2="${formatDecimal(widthMarkerX,2)}" y2="${formatDecimal(bottomY,2)}" class="guide-width"/>
       <line x1="${formatDecimal(widthMarkerX-2.1,2)}" y1="${formatDecimal(topY,2)}" x2="${formatDecimal(widthMarkerX+2.1,2)}" y2="${formatDecimal(topY,2)}" class="guide-width"/>
       <line x1="${formatDecimal(widthMarkerX-2.1,2)}" y1="${formatDecimal(bottomY,2)}" x2="${formatDecimal(widthMarkerX+2.1,2)}" y2="${formatDecimal(bottomY,2)}" class="guide-width"/>
-      <text x="${formatDecimal(widthMarkerX-2.8,2)}" y="${formatDecimal((topY+bottomY)/2,2)}" class="guide-label" text-anchor="end">MATERIAL WIDTH</text>
+      <text x="${formatDecimal(widthMarkerX-2.8,2)}" y="${formatDecimal((topY+bottomY)/2,2)}" class="guide-label" text-anchor="end">COVERING WIDTH</text>
 
       <line x1="${formatDecimal(arrowStartX,2)}" y1="${formatDecimal(arrowY,2)}" x2="${formatDecimal(arrowEndX,2)}" y2="${formatDecimal(arrowY,2)}" class="guide-arrow" marker-end="url(#arrowhead-${escapeHtml(String(title).toLowerCase().replace(/\s+/g,'-'))})"/>
       <text x="${formatDecimal(arrowStartX,2)}" y="${formatDecimal(arrowY-1.6,2)}" class="guide-label">WRAP DIRECTION</text>
@@ -599,7 +599,7 @@ function openGripCutTemplatePrint(){
     summaryRows.push({label:'Grip Diameter',value:template.gripDiameterText});
   }
   summaryRows.push({label:'Grip Length',value:template.gripLengthText});
-  summaryRows.push({label:'Material Width',value:template.coveringWidthText});
+  summaryRows.push({label:'Covering Width',value:template.coveringWidthText});
   summaryRows.push({label:'Material Required',value:template.requiredLengthText});
   summaryRows.push({label:'Allowance',value:template.allowanceText});
   summaryRows.push({label:'Start Cut Angle',value:gripCutAngleLabel(template.startCutAngle)});
@@ -807,7 +807,8 @@ function renderGripCoveringTool(){
   }
 
   const requiredMm=spiralWrapLengthMm*(1+(state.allowancePercent/100));
-  const averageCutAngle=(startCutAngle+finishCutAngle)/2;
+  // Sanity check only: how much the cut angle actually changes across the taper (not a third angle to cut).
+  const cutAngleDifference=Math.abs(startCutAngle-finishCutAngle);
 
   const requiredEl=$('workshopGripMaterialRequired');
   const revolutionsEl=$('workshopGripRevolutions');
@@ -815,8 +816,8 @@ function renderGripCoveringTool(){
   const startCutEl=$('workshopGripStartCutAngle');
   const finishCutEl=$('workshopGripFinishCutAngle');
   const finishCutRow=$('workshopGripFinishCutAngleRow');
-  const averageCutEl=$('workshopGripAverageCutAngle');
-  const averageCutRow=$('workshopGripAverageCutAngleRow');
+  const angleDifferenceEl=$('workshopGripAverageCutAngle');
+  const angleDifferenceRow=$('workshopGripAverageCutAngleRow');
   const printActions=$('workshopGripPrintActions');
 
   if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32});
@@ -827,8 +828,8 @@ function renderGripCoveringTool(){
   if(finishCutRow)finishCutRow.hidden=!showFinishCutAngle;
   if(finishCutEl)finishCutEl.textContent=gripCutAngleLabel(finishCutAngle);
 
-  if(averageCutRow)averageCutRow.hidden=!showFinishCutAngle;
-  if(averageCutEl)averageCutEl.textContent=gripCutAngleLabel(averageCutAngle);
+  if(angleDifferenceRow)angleDifferenceRow.hidden=!showFinishCutAngle;
+  if(angleDifferenceEl)angleDifferenceEl.textContent=`${formatDecimal(cutAngleDifference,1)} deg`;
 
   const hasAngleOutput=state.lengthMm>0 && state.coverWidthMm>0 && Number.isFinite(startCutAngle) && startCutAngle>0;
   if(printActions)printActions.hidden=!hasAngleOutput;
@@ -843,7 +844,6 @@ function renderGripCoveringTool(){
     coverWidthMm:state.coverWidthMm,
     startCutAngle,
     finishCutAngle,
-    averageCutAngle,
     coveringWidthText:formatWorkshopMeasurementValue(state.coverWidthMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
     gripLengthText:formatWorkshopMeasurementValue(state.lengthMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
     requiredLengthText:formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32}),
