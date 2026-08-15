@@ -174,7 +174,6 @@ const workshopToolsState={
     method:'progressive',
     direction:'left',
     guideCount:5,
-    transitionGuides:Math.max(0,Math.min(3,5-2)),
     offsetStartAngle:20,
     guides:[],
   },
@@ -474,21 +473,12 @@ function normalizeSpiralDirection(value){
 function clampSpiralGuideCount(value){
   return Math.max(1,Math.min(20,Math.round(numberOrZero(value)||1)));
 }
-function clampSpiralTransitionGuides(value,guideCount){
-  const total=clampSpiralGuideCount(guideCount);
-  const maxTransition=Math.max(0,total-2);
-  return Math.max(0,Math.min(maxTransition,Math.round(numberOrZero(value)||0)));
-}
 function clampSpiralAngle(value){
   return Math.max(0,Math.min(180,numberOrZero(value)));
 }
-function defaultSpiralTransitionGuides(method,guideCount){
+function autoSpiralTransitionGuides(guideCount){
   const total=clampSpiralGuideCount(guideCount);
-  const maxTransition=Math.max(0,total-2);
-  if(normalizeSpiralMethod(method)==='acute'){
-    return Math.max(0,Math.min(1,maxTransition));
-  }
-  return Math.max(0,Math.min(3,maxTransition));
+  return Math.max(0,Math.min(3,total-2));
 }
 function spiralStripperIndex(guideCount){
   return Math.max(0,clampSpiralGuideCount(guideCount)-1);
@@ -503,21 +493,10 @@ function setSpiralGuideCount(nextCount){
   spiral.guideCount=clamped;
   syncSpiralGuidesLength();
 }
-function setSpiralTransitionGuides(nextCount){
-  const spiral=workshopToolsState.spiral;
-  const clamped=clampSpiralTransitionGuides(nextCount,spiral.guideCount);
-  if(spiral.transitionGuides===clamped)return;
-  spiral.transitionGuides=clamped;
-  syncSpiralGuidesLength({resetAngles:true});
-}
 function applySpiralCountDelta(target,delta){
-  if(target==='transitionGuides'){
-    setSpiralTransitionGuides(workshopToolsState.spiral.transitionGuides+delta);
-    return;
-  }
   setSpiralGuideCount(workshopToolsState.spiral.guideCount+delta);
 }
-function buildSpiralPresetAngles(method,guideCount,transitionGuides,offsetStartAngle){
+function buildSpiralPresetAngles(method,guideCount,offsetStartAngle){
   const total=clampSpiralGuideCount(guideCount);
   const mode=normalizeSpiralMethod(method);
   const stripperIndex=spiralStripperIndex(total);
@@ -531,7 +510,7 @@ function buildSpiralPresetAngles(method,guideCount,transitionGuides,offsetStartA
   }
 
   const startAngle=mode==='offset'?Math.max(0,Math.min(179.9,numberOrZero(offsetStartAngle)||20)):0;
-  const transitionCount=clampSpiralTransitionGuides(transitionGuides,total);
+  const transitionCount=autoSpiralTransitionGuides(total);
   const segments=Math.max(1,transitionCount+1);
   for(let step=0;step<=segments;step+=1){
     const guideIndex=stripperIndex-step;
@@ -549,17 +528,9 @@ function syncSpiralGuidesLength(options){
   spiral.direction=normalizeSpiralDirection(spiral.direction);
   const nextCount=clampSpiralGuideCount(spiral.guideCount);
   spiral.guideCount=nextCount;
-  if(settings.resetTransition===true){
-    spiral.transitionGuides=defaultSpiralTransitionGuides(spiral.method,nextCount);
-  }else{
-    spiral.transitionGuides=clampSpiralTransitionGuides(spiral.transitionGuides,nextCount);
-  }
-  if(spiral.method==='acute'){
-    spiral.transitionGuides=defaultSpiralTransitionGuides('acute',nextCount);
-  }
   spiral.offsetStartAngle=Math.max(0,Math.min(179.9,numberOrZero(spiral.offsetStartAngle)||20));
   const current=Array.isArray(spiral.guides)?spiral.guides:[];
-  const defaults=buildSpiralPresetAngles(spiral.method,nextCount,spiral.transitionGuides,spiral.offsetStartAngle);
+  const defaults=buildSpiralPresetAngles(spiral.method,nextCount,spiral.offsetStartAngle);
   const next=[];
   for(let index=0;index<nextCount;index+=1){
     const existing=current[index]&&typeof current[index]==='object'?current[index]:{};
@@ -592,7 +563,7 @@ function setSpiralMethod(method){
       spiral.offsetStartAngle=Math.max(0,Math.min(179.9,clampSpiralAngle(stripper.angleDeg)||spiral.offsetStartAngle));
     }
   }
-  syncSpiralGuidesLength({resetAngles:true,resetTransition:true});
+  syncSpiralGuidesLength({resetAngles:true});
 }
 function spiralVisualAngleDegrees(angleDeg,direction){
   const angle=clampSpiralAngle(angleDeg);
@@ -623,9 +594,8 @@ function importSpiralFromGuideSpacing(){
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
   if(!rows.length)return;
   spiral.guideCount=rows.length;
-  spiral.transitionGuides=clampSpiralTransitionGuides(spiral.transitionGuides,rows.length);
   const existing=Array.isArray(spiral.guides)?spiral.guides:[];
-  const defaults=buildSpiralPresetAngles(spiral.method,rows.length,spiral.transitionGuides,spiral.offsetStartAngle);
+  const defaults=buildSpiralPresetAngles(spiral.method,rows.length,spiral.offsetStartAngle);
   spiral.guides=rows.map((row,index)=>{
     const previous=existing[index]&&typeof existing[index]==='object'?existing[index]:{};
     const existingAngle=Number(previous.angleDeg);
@@ -657,22 +627,13 @@ function renderSpiralGuideMapper(){
 
   const guideCountValue=$('workshopSpiralGuideCountValue');
   if(guideCountValue)guideCountValue.textContent=String(spiral.guideCount);
-  const transitionValue=$('workshopSpiralTransitionGuidesValue');
-  if(transitionValue)transitionValue.textContent=String(spiral.transitionGuides);
 
   const canDecreaseGuideCount=spiral.guideCount>1;
   const canIncreaseGuideCount=spiral.guideCount<20;
-  const maxTransition=Math.max(0,spiral.guideCount-2);
-  const canDecreaseTransition=spiral.transitionGuides>0;
-  const canIncreaseTransition=spiral.transitionGuides<maxTransition;
   const guideDecrement=$('workshopSpiralGuideCountDecrement');
   const guideIncrement=$('workshopSpiralGuideCountIncrement');
-  const transitionDecrement=$('workshopSpiralTransitionDecrement');
-  const transitionIncrement=$('workshopSpiralTransitionIncrement');
   if(guideDecrement)guideDecrement.disabled=!canDecreaseGuideCount;
   if(guideIncrement)guideIncrement.disabled=!canIncreaseGuideCount;
-  if(transitionDecrement)transitionDecrement.disabled=!canDecreaseTransition;
-  if(transitionIncrement)transitionIncrement.disabled=!canIncreaseTransition;
 
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
