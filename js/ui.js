@@ -175,6 +175,7 @@ const workshopToolsState={
     direction:'left',
     guideCount:5,
     offsetStartAngle:20,
+    showPhysicalOffsets:false,
     guides:[],
   },
 };
@@ -655,6 +656,13 @@ function renderSpiralGuideMapper(){
   const guideCountValue=$('workshopSpiralGuideCountValue');
   if(guideCountValue)guideCountValue.textContent=String(spiral.guideCount);
 
+  const showOffsetsToggle=$('workshopSpiralOffsetsToggle');
+  const showPhysicalOffsets=!!spiral.showPhysicalOffsets;
+  if(showOffsetsToggle){
+    showOffsetsToggle.classList.toggle('active',showPhysicalOffsets);
+    showOffsetsToggle.setAttribute('aria-pressed',showPhysicalOffsets?'true':'false');
+  }
+
   const canDecreaseGuideCount=spiral.guideCount>1;
   const canIncreaseGuideCount=spiral.guideCount<20;
   const guideDecrement=$('workshopSpiralGuideCountDecrement');
@@ -745,6 +753,11 @@ function renderSpiralGuideMapper(){
       const isStripper=index===spiralStripperIndex(spiral.guideCount);
       const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
       const displayGuideNumber=spiralDisplayGuideNumber(index,spiral.guideCount);
+      const angle=clampSpiralAngle(guide.angleDeg);
+      const isReferenceAngle=angle<=0.05 || angle>=179.95;
+      const showOdField=showPhysicalOffsets && !isReferenceAngle;
+      const showOffsetRow=showPhysicalOffsets && !isReferenceAngle;
+      const referenceText=angle>=179.95?'UNDERSIDE':'TOP LINE';
       return `
         <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}" data-spiral-row="${index}">
           <header class="spiral-guide-row__head">
@@ -752,15 +765,15 @@ function renderSpiralGuideMapper(){
             <span>${labels.rotationText}</span>
           </header>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
-          <div class="spiral-guide-row__fields">
+          <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             <label>
               <span>Position From Tip</span>
               <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="position" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.positionMm,spiral.unit,spiral.imperialDisplay))}" />
             </label>
-            <label>
+            ${showOdField?`<label>
               <span>Blank OD</span>
               <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay))}" />
-            </label>
+            </label>`:''}
             <label>
               <span>Rotation</span>
               <input type="number" inputmode="decimal" min="0" max="180" step="0.1" autocomplete="off" data-spiral-field="angle" data-guide-index="${index}" value="${escapeHtml(formatDecimal(guide.angleDeg,1))}" />
@@ -768,7 +781,8 @@ function renderSpiralGuideMapper(){
           </div>
           <div class="spiral-guide-row__details">
             <div><span>Direction</span><strong>${labels.directionText}</strong></div>
-            <div><span>Offset From Top</span><strong>${labels.offsetText}</strong></div>
+            ${showOffsetRow?`<div><span>Offset From Top</span><strong>${labels.offsetText}</strong></div>`:''}
+            ${showPhysicalOffsets && isReferenceAngle?`<div><span>Reference</span><strong>${referenceText}</strong></div>`:''}
           </div>
         </article>
       `;
@@ -1269,6 +1283,15 @@ function bindWorkshopCalculatorControls(){
     workshopToolsState.spiral.direction=normalizeSpiralDirection(button.getAttribute('data-spiral-direction'));
     renderWorkshopCalculator();
   });
+
+  const spiralOffsetsToggle=$('workshopSpiralOffsetsToggle');
+  if(spiralOffsetsToggle && spiralOffsetsToggle.getAttribute('data-spiral-offset-toggle-bound')!=='true'){
+    spiralOffsetsToggle.setAttribute('data-spiral-offset-toggle-bound','true');
+    spiralOffsetsToggle.addEventListener('click',()=>{
+      workshopToolsState.spiral.showPhysicalOffsets=!workshopToolsState.spiral.showPhysicalOffsets;
+      renderWorkshopCalculator();
+    });
+  }
 
   const spiralOffsetStartInput=$('workshopSpiralOffsetStart');
   const spiralCountButtons=Array.from(panel.querySelectorAll('[data-spiral-count-action][data-spiral-count-target]'));
