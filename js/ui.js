@@ -568,11 +568,30 @@ function setSpiralMethod(method){
   }
   syncSpiralGuidesLength({resetAngles:true});
 }
-function spiralVisualAngleDegrees(angleDeg,direction){
-  const angle=clampSpiralAngle(angleDeg);
-  return normalizeSpiralDirection(direction)==='right'?(-90+angle):(-90-angle);
+function oppositeSpiralDirection(direction){
+  return normalizeSpiralDirection(direction)==='right'?'left':'right';
 }
-function spiralOffsetLabel(guide,direction,unit,imperialDisplay){
+function spiralGuideDirectionForPresentation(direction,options){
+  const settings=options&&typeof options==='object'?options:{};
+  const normalizedDirection=normalizeSpiralDirection(direction);
+  const method=normalizeSpiralMethod(settings.method);
+  const angle=clampSpiralAngle(settings.angleDeg);
+  if(method==='offset' && settings.isStripper===true && angle<179.95){
+    return oppositeSpiralDirection(normalizedDirection);
+  }
+  return normalizedDirection;
+}
+function spiralVisualAngleDegrees(angleDeg,direction,options){
+  const angle=clampSpiralAngle(angleDeg);
+  const renderDirection=spiralGuideDirectionForPresentation(direction,{
+    method:options&&options.method,
+    isStripper:options&&options.isStripper,
+    angleDeg:angle,
+  });
+  return renderDirection==='right'?(-90+angle):(-90-angle);
+}
+function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
+  const settings=options&&typeof options==='object'?options:{};
   const diameterMm=Math.max(0.01,numberOrZero(guide&&guide.odMm));
   const angle=clampSpiralAngle(guide&&guide.angleDeg);
   const circumferenceMm=Math.PI*diameterMm;
@@ -584,7 +603,12 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay){
       directionText:'UNDERSIDE',
     };
   }
-  const side=normalizeSpiralDirection(direction)==='right'?'RIGHT':'LEFT';
+  const guideDirection=spiralGuideDirectionForPresentation(direction,{
+    method:settings.method,
+    isStripper:settings.isStripper,
+    angleDeg:angle,
+  });
+  const side=guideDirection==='right'?'RIGHT':'LEFT';
   return {
     offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:64})} ${side} OF TOP LINE`,
     rotationText:`${formatDecimal(angle,1)} deg ${side}`,
@@ -643,7 +667,7 @@ function renderSpiralGuideMapper(){
 
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
-    visualDirection.textContent=`STRIPPER G1 - ${spiral.direction.toUpperCase()} SIDE`;
+    visualDirection.textContent=`STRIPPER G1 · ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
   const visualCanvas=$('workshopSpiralVisualCanvas');
@@ -659,7 +683,8 @@ function renderSpiralGuideMapper(){
     const undersideCount=undersideIndexes.length;
     const markerPoints=[];
     const markerSvg=spiral.guides.map((guide,index)=>{
-      const visualAngle=(spiralVisualAngleDegrees(guide.angleDeg,spiral.direction)*Math.PI)/180;
+      const isStripper=index===spiralStripperIndex(spiral.guideCount);
+      const visualAngle=(spiralVisualAngleDegrees(guide.angleDeg,spiral.direction,{method:spiral.method,isStripper})*Math.PI)/180;
       let x=110+(Math.cos(visualAngle)*68);
       let y=110+(Math.sin(visualAngle)*68);
       if(clampSpiralAngle(guide.angleDeg)>=179.95){
@@ -669,7 +694,6 @@ function renderSpiralGuideMapper(){
         y=178;
       }
       markerPoints.push({index,x,y});
-      const isStripper=index===spiralStripperIndex(spiral.guideCount);
       const displayGuideNumber=spiralDisplayGuideNumber(index,spiral.guideCount);
       return `
         <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}">
@@ -718,8 +742,8 @@ function renderSpiralGuideMapper(){
     rowsHost.innerHTML=displayIndexes.map((index)=>{
       const guide=spiral.guides[index];
       if(!guide)return '';
-      const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay);
       const isStripper=index===spiralStripperIndex(spiral.guideCount);
+      const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
       const displayGuideNumber=spiralDisplayGuideNumber(index,spiral.guideCount);
       return `
         <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}" data-spiral-row="${index}">
