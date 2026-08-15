@@ -500,6 +500,15 @@ function setSpiralGuideCount(nextCount){
 function applySpiralCountDelta(target,delta){
   setSpiralGuideCount(workshopToolsState.spiral.guideCount+delta);
 }
+function setSpiralGuideAngle(index,nextAngle){
+  const spiral=workshopToolsState.spiral;
+  if(!Number.isFinite(index) || !spiral.guides[index])return;
+  const guide=spiral.guides[index];
+  guide.angleDeg=clampSpiralAngle(nextAngle);
+  if(index===spiralStripperIndex(spiral.guideCount) && spiral.method==='offset'){
+    spiral.offsetStartAngle=Math.max(0,Math.min(179.9,guide.angleDeg));
+  }
+}
 function buildSpiralPresetAngles(method,guideCount,offsetStartAngle){
   const total=clampSpiralGuideCount(guideCount);
   const mode=normalizeSpiralMethod(method);
@@ -776,11 +785,17 @@ function renderSpiralGuideMapper(){
             </label>`:''}
             <label>
               <span>Rotation</span>
-              <input type="number" inputmode="decimal" min="0" max="180" step="0.1" autocomplete="off" data-spiral-field="angle" data-guide-index="${index}" value="${escapeHtml(formatDecimal(guide.angleDeg,1))}" />
+              <div class="spiral-rotation-control" role="group" aria-label="Guide ${displayGuideNumber} rotation control">
+                <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">−</button>
+                <div class="spiral-rotation-control__value-wrap">
+                  <input class="spiral-rotation-control__value" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="angle" data-guide-index="${index}" value="${escapeHtml(formatDecimal(guide.angleDeg,1))}" aria-label="Guide ${displayGuideNumber} rotation value" />
+                  <span class="spiral-rotation-control__unit" aria-hidden="true">°</span>
+                </div>
+                <button class="layout-control-card__button" type="button" data-spiral-angle-action="increment" data-guide-index="${index}" aria-label="Increase guide ${displayGuideNumber} rotation by 5 degrees">+</button>
+              </div>
             </label>
           </div>
           <div class="spiral-guide-row__details">
-            <div><span>Direction</span><strong>${labels.directionText}</strong></div>
             ${showOffsetRow?`<div><span>Offset From Top</span><strong>${labels.offsetText}</strong></div>`:''}
             ${showPhysicalOffsets && isReferenceAngle?`<div><span>Reference</span><strong>${referenceText}</strong></div>`:''}
           </div>
@@ -1401,13 +1416,21 @@ function bindWorkshopCalculatorControls(){
         if(Number.isFinite(next) && next>0)guide.odMm=next;
       }else if(field==='angle'){
         const next=Number(input.value);
-        if(Number.isFinite(next))guide.angleDeg=clampSpiralAngle(next);
-        if(index===spiralStripperIndex(spiral.guideCount) && spiral.method==='offset'){
-          spiral.offsetStartAngle=Math.max(0,Math.min(179.9,guide.angleDeg));
-        }
+        if(Number.isFinite(next))setSpiralGuideAngle(index,next);
       }
       renderWorkshopCalculator();
     };
+    panel.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-spiral-angle-action][data-guide-index]');
+      if(!button)return;
+      const index=Number(button.getAttribute('data-guide-index'));
+      const action=button.getAttribute('data-spiral-angle-action')||'';
+      const guide=workshopToolsState.spiral.guides[index];
+      if(!Number.isFinite(index) || !guide)return;
+      const delta=action==='increment'?5:-5;
+      setSpiralGuideAngle(index,numberOrZero(guide.angleDeg)+delta);
+      renderWorkshopCalculator();
+    });
     panel.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
     panel.addEventListener('input',(event)=>{
       const target=event.target;
