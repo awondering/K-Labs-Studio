@@ -644,8 +644,10 @@ function syncSpiralGuidePositionsFromLayout(rows){
   const nextRows=Array.isArray(rows)?rows:[];
   if(!nextRows.length)return;
   const spiral=workshopToolsState.spiral;
-  spiral.guideCount=nextRows.length;
-  syncSpiralGuidesLength();
+  const nextCount=nextRows.length;
+  const countChanged=spiral.guideCount!==nextCount || !Array.isArray(spiral.guides) || spiral.guides.length!==nextCount;
+  spiral.guideCount=nextCount;
+  syncSpiralGuidesLength(countChanged?{resetAngles:true}:undefined);
   spiral.guides.forEach((guide,index)=>{
     const row=nextRows[index];
     if(row)guide.positionMm=Math.max(0,numberOrZero(row.cum));
