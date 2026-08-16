@@ -722,7 +722,8 @@ function renderSpiralMapperVisual(spiral){
   const markerPoints=[];
   const markerSvg=guides.map((guide,index)=>{
     const isStripper=index===stripperIndex;
-    const visualAngle=(spiralVisualAngleDegrees(guide.angleDeg,spiral.direction,{method:spiral.method,isStripper})*Math.PI)/180;
+    const visualAngleDegrees=spiralVisualAngleDegrees(guide.angleDeg,spiral.direction,{method:spiral.method,isStripper});
+    const visualAngle=(visualAngleDegrees*Math.PI)/180;
     let x=110+(Math.cos(visualAngle)*68);
     let y=110+(Math.sin(visualAngle)*68);
     if(clampSpiralAngle(guide.angleDeg)>=179.95){
@@ -733,10 +734,13 @@ function renderSpiralMapperVisual(spiral){
     }
     markerPoints.push({index,x,y});
     const displayGuideNumber=guides.length-index;
+    const markerRotation=visualAngleDegrees+90;
     return `
-      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}">
-        <circle cx="${formatDecimal(x,2)}" cy="${formatDecimal(y,2)}" r="8.5"></circle>
-        <text x="${formatDecimal(x,2)}" y="${formatDecimal(y+0.5,2)}" text-anchor="middle" dominant-baseline="middle">${displayGuideNumber}</text>
+      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}">
+        <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
+        <ellipse class="spiral-map-marker__ring" cx="0" cy="-16" rx="7" ry="4.2"></ellipse>
+        <circle class="spiral-map-marker__core" cx="0" cy="0" r="7.5"></circle>
+        <text x="0" y="0.5" transform="rotate(${-markerRotation.toFixed(2)} 0 0.5)" text-anchor="middle" dominant-baseline="middle">${displayGuideNumber}</text>
       </g>
     `;
   }).join('');

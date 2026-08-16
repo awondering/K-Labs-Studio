@@ -6110,6 +6110,24 @@ textarea::-moz-selection,
   stroke-width:1;
 }
 
+.spiral-map-marker__stem{
+  stroke:rgba(250,241,230,.78);
+  stroke-width:1.6;
+  stroke-linecap:round;
+}
+
+.spiral-map-marker__ring{
+  fill:rgba(7,8,10,.72);
+  stroke:rgba(250,241,230,.84);
+  stroke-width:1.3;
+}
+
+.spiral-map-marker__core{
+  fill:rgba(var(--kl-red-rgb),.86);
+  stroke:rgba(250,241,230,.7);
+  stroke-width:1;
+}
+
 .spiral-map-marker text{
   fill:#fff4ec;
   font-size:7.7px;
@@ -6120,6 +6138,11 @@ textarea::-moz-selection,
   fill:rgba(var(--kl-red-rgb),.94);
   stroke:rgba(255,245,232,.95);
   stroke-width:1.2;
+}
+
+.spiral-map-marker--stripper .spiral-map-marker__ring{
+  fill:rgba(255,245,232,.12);
+  stroke:rgba(255,245,232,.98);
 }
 
 .spiral-map-tiptop circle{
