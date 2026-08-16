@@ -1245,21 +1245,76 @@ function openGripCutTemplatePrint(){
 </body>
 </html>`;
 
-  const printWindow=window.open('about:blank','_blank','width=980,height=1240');
-  if(!printWindow || !printWindow.document){
-    openInfoDialog('Print Blocked','Allow pop-ups for this site, then try Print Cut Template again.');
-    return;
+  let previewSheet=$('gripTemplatePreviewSheet');
+  if(!previewSheet){
+    previewSheet=document.createElement('div');
+    previewSheet.id='gripTemplatePreviewSheet';
+    previewSheet.className='component-sheet grip-template-preview-sheet';
+    previewSheet.hidden=true;
+    document.body.appendChild(previewSheet);
   }
-  try{
-    printWindow.document.open();
-    printWindow.document.write(printHtml);
-    printWindow.document.close();
-  }catch(_error){
-    try{printWindow.close();}catch{}
-    openInfoDialog('Print Unavailable','Could not render the print template window. Check pop-up permissions and try again.');
-    return;
-  }
-  try{printWindow.focus();}catch{}
+  previewSheet.innerHTML=`
+    <div class="component-sheet__scrim" data-grip-template-action="close"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Grip wrap cut template preview">
+      <header class="component-sheet__header">
+        <h2>Cut Template Preview</h2>
+        <button class="component-sheet__close" type="button" data-grip-template-action="close" aria-label="Close template preview">×</button>
+      </header>
+      <div class="component-sheet__body grip-template-preview__body">
+        <div class="grip-template-preview__actions">
+          <button class="ghost-action" type="button" data-grip-template-action="close">Back</button>
+          <button class="primary-action" type="button" data-grip-template-action="print">Print Template</button>
+        </div>
+        <main class="grip-template-preview__sheet">
+          <div class="grip-template-preview__brand">K-Labs Studio</div>
+          <h3>Grip Wrap Cut Template</h3>
+          <p class="grip-template-preview__instruction">Print at 100% / Actual Size.</p>
+          <section class="grip-template-preview__summary" aria-label="Measurement summary">${summaryHtml}</section>
+          ${calibrationLineHtml}
+          <section class="grip-template-preview__guides" aria-label="1 to 1 cut geometry guide">
+            <article class="grip-template-preview__guide"><h4>Start End Template (1:1)</h4>${startGuideSvg}</article>
+            ${template.profile==='tapered'?`<article class="grip-template-preview__guide"><h4>Finish End Template (1:1)</h4>${finishGuideSvg}</article>`:''}
+          </section>
+          <ol class="grip-template-preview__instructions">${instructionsHtml.replace(/^<ol class="instructions">|<\/ol>$/g,'')}</ol>
+        </main>
+      </div>
+    </section>
+  `;
+  const closePreview=()=>{
+    previewSheet.hidden=true;
+    unlockModalLayer({restoreFocus:true});
+  };
+  const printTemplate=()=>{
+    const printFrame=document.createElement('iframe');
+    printFrame.className='grip-template-print-frame';
+    printFrame.setAttribute('aria-hidden','true');
+    printFrame.addEventListener('load',()=>{
+      window.requestAnimationFrame(()=>{
+        const printWindow=printFrame.contentWindow;
+        if(!printWindow)return;
+        const removeFrame=()=>window.setTimeout(()=>printFrame.remove(),0);
+        printWindow.addEventListener('afterprint',removeFrame,{once:true});
+        try{
+          printWindow.focus();
+          printWindow.print();
+        }catch(_error){
+          printFrame.remove();
+          openInfoDialog('Print Unavailable','Could not open the system print dialog. Try again after closing this preview.');
+        }
+      });
+    },{once:true});
+    document.body.appendChild(printFrame);
+    printFrame.srcdoc=printHtml;
+  };
+  previewSheet.onclick=(event)=>{
+    const action=event.target.closest('[data-grip-template-action]');
+    if(!action)return;
+    const type=action.getAttribute('data-grip-template-action');
+    if(type==='print')printTemplate();
+    else closePreview();
+  };
+  previewSheet.hidden=false;
+  lockModalLayer(document.activeElement);
 }
 function renderGripCoveringTool(){
   const panel=$('workshopToolsPanel');
