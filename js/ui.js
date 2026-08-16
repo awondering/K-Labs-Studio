@@ -540,6 +540,11 @@ function buildSpiralPresetAngles(method,guideCount,offsetStartAngle,guides){
   const mode=normalizeSpiralMethod(method);
   const stripperIndex=spiralStripperIndex(total);
   const angles=Array.from({length:total},()=>180);
+  if(mode==='acute'){
+    angles[stripperIndex]=0;
+    if(stripperIndex-1>=0)angles[stripperIndex-1]=90;
+    return angles;
+  }
   const startAngle=mode==='offset'?clampSpiralStripperAngle(offsetStartAngle):0;
   const transitionCount=autoSpiralTransitionGuides(total);
   const segments=Math.max(1,transitionCount+1);
@@ -652,6 +657,13 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
       offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - UNDERSIDE`,
       rotationText:'180 deg - UNDERSIDE',
       directionText:'UNDERSIDE',
+    };
+  }
+  if(angle<=0.05){
+    return {
+      offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - TOP LINE`,
+      rotationText:'0 deg - TOP LINE',
+      directionText:'TOP LINE',
     };
   }
   const guideDirection=spiralGuideDirectionForPresentation(direction,{
