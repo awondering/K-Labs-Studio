@@ -640,6 +640,17 @@ function importSpiralFromGuideSpacing(){
     };
   });
 }
+function syncSpiralGuidePositionsFromLayout(rows){
+  const nextRows=Array.isArray(rows)?rows:[];
+  if(!nextRows.length)return;
+  const spiral=workshopToolsState.spiral;
+  spiral.guideCount=nextRows.length;
+  syncSpiralGuidesLength();
+  spiral.guides.forEach((guide,index)=>{
+    const row=nextRows[index];
+    if(row)guide.positionMm=Math.max(0,numberOrZero(row.cum));
+  });
+}
 function renderSpiralGuideMapper(){
   const card=$('workshopToolSpiral');
   if(!card)return;
@@ -9376,6 +9387,12 @@ function bindSettingsControls(){
 }
 function render(){
   const r=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+  const nextWorkshopIndex=Math.max(0,Math.min(state.workshopIndex,Math.max(0,r.rows.length-1)));
+  if(state.workshopIndex!==nextWorkshopIndex){
+    state.workshopIndex=nextWorkshopIndex;
+    save();
+  }
+  syncSpiralGuidePositionsFromLayout(r.rows);
   const appEl=$('app');
   if(appEl){appEl.classList.toggle('locked',!!state.locked);}
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
