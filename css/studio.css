@@ -6151,10 +6151,65 @@ textarea::-moz-selection,
 .spiral-guide-row{
   display:grid;
   gap:6px;
-  padding:8px;
+  padding:5px 7px;
   border-radius:11px;
   border:1px solid rgba(214,210,200,.14);
   background:rgba(255,255,255,.02);
+}
+
+.spiral-guide-row--expanded{
+  border-color:rgba(var(--kl-red-rgb),.58);
+  box-shadow:inset 0 0 0 1px rgba(var(--kl-red-rgb),.18);
+}
+
+.spiral-guide-row__summary{
+  display:grid;
+  grid-template-columns:auto auto minmax(76px,1fr) auto;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  min-height:30px;
+  padding:2px 1px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#f1eadf;
+  text-align:left;
+  cursor:pointer;
+}
+
+.spiral-guide-row__summary:focus-visible{
+  outline:1px solid rgba(var(--kl-red-rgb),.72);
+  outline-offset:2px;
+}
+
+.spiral-guide-row__summary strong{
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.spiral-guide-row__summary span{
+  overflow:hidden;
+  color:rgba(214,210,200,.72);
+  font-size:9px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.spiral-guide-row__summary span:nth-of-type(2),
+.spiral-guide-row__summary span:last-child{
+  color:#efe9de;
+  font-size:10px;
+  letter-spacing:.03em;
+  text-transform:none;
+}
+
+.spiral-guide-row__edit--collapsed{
+  display:none;
 }
 
 .spiral-guide-row--stripper{
@@ -6334,6 +6389,25 @@ textarea::-moz-selection,
 
   .spiral-mapper-visual__canvas svg{
     width:min(230px,100%);
+  }
+
+  .spiral-guide-row__summary{
+    grid-template-columns:auto auto minmax(64px,1fr) auto;
+    gap:6px;
+    min-height:28px;
+  }
+
+  .spiral-guide-row__summary strong{
+    font-size:10px;
+  }
+
+  .spiral-guide-row__summary span{
+    font-size:8px;
+  }
+
+  .spiral-guide-row__summary span:nth-of-type(2),
+  .spiral-guide-row__summary span:last-child{
+    font-size:9px;
   }
 }
 /* K-Labs Studio — Supabase sign-in screen */

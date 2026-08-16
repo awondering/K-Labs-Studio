@@ -176,6 +176,7 @@ const workshopToolsState={
     guideCount:5,
     offsetStartAngle:20,
     showPhysicalOffsets:false,
+    expandedGuideIndex:-1,
     guides:[],
   },
 };
@@ -662,6 +663,10 @@ function renderSpiralGuideMapper(){
   spiral.method=normalizeSpiralMethod(spiral.method);
   spiral.direction=normalizeSpiralDirection(spiral.direction);
   syncSpiralGuidesLength();
+  const expandedGuideIndex=Number(spiral.expandedGuideIndex);
+  spiral.expandedGuideIndex=Number.isInteger(expandedGuideIndex) && expandedGuideIndex>=0 && expandedGuideIndex<spiral.guides.length
+    ?expandedGuideIndex
+    :-1;
 
   const offsetWrap=$('workshopSpiralOffsetStartWrap');
   const offsetInput=$('workshopSpiralOffsetStart');
@@ -793,14 +798,19 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const showOdField=showPhysicalOffsets && !isReferenceAngle;
       const showOffsetRow=showPhysicalOffsets && !isReferenceAngle;
       const referenceText=angle>=179.95?'UNDERSIDE':'TOP LINE';
+      const isExpanded=index===spiral.expandedGuideIndex;
+      const guideType=isStripper?'STRIPPER':isReferenceAngle?'RUNNING':'TRANSITION';
       return `
-        <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}" data-spiral-row="${index}">
-          <header class="spiral-guide-row__head">
+        <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}${isExpanded?' spiral-guide-row--expanded':''}" data-spiral-row="${index}">
+          <button class="spiral-guide-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}">
             <strong>Guide ${displayGuideNumber}</strong>
+            <span>${guideType}</span>
+            <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,{decimalsMetric:1,decimalsImperial:2})}</span>
             <span>${labels.rotationText}</span>
-          </header>
+          </button>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
-          <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
+          <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
+            <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             <label>
               <span>Position From Tip</span>
               <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="position" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.positionMm,spiral.unit,spiral.imperialDisplay))}" />
@@ -820,10 +830,11 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
                 <button class="layout-control-card__button" type="button" data-spiral-angle-action="increment" data-guide-index="${index}" aria-label="Increase guide ${displayGuideNumber} rotation by 5 degrees">+</button>
               </div>
             </label>
-          </div>
-          <div class="spiral-guide-row__details">
-            ${showOffsetRow?`<div><span>Offset From Top</span><strong>${labels.offsetText}</strong></div>`:''}
-            ${showPhysicalOffsets && isReferenceAngle?`<div><span>Reference</span><strong>${referenceText}</strong></div>`:''}
+            </div>
+            <div class="spiral-guide-row__details">
+              ${showOffsetRow?`<div><span>Offset From Top</span><strong>${labels.offsetText}</strong></div>`:''}
+              ${showPhysicalOffsets && isReferenceAngle?`<div><span>Reference</span><strong>${referenceText}</strong></div>`:''}
+            </div>
           </div>
         </article>
       `;
@@ -1481,6 +1492,14 @@ function bindWorkshopCalculatorControls(){
       renderWorkshopCalculator();
     };
     panel.addEventListener('click',(event)=>{
+      const summary=event.target.closest('[data-spiral-expand-index]');
+      if(summary){
+        const index=Number(summary.getAttribute('data-spiral-expand-index'));
+        const spiral=workshopToolsState.spiral;
+        spiral.expandedGuideIndex=spiral.expandedGuideIndex===index?-1:index;
+        renderWorkshopCalculator();
+        return;
+      }
       const button=event.target.closest('[data-spiral-angle-action][data-guide-index]');
       if(!button)return;
       const index=Number(button.getAttribute('data-guide-index'));
