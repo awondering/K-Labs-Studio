@@ -710,40 +710,36 @@ function renderSpiralMapperVisual(spiral){
   if(!visualCanvas)return;
   const guides=Array.isArray(spiral.guides)?spiral.guides:[];
   const stripperIndex=Math.max(0,guides.length-1);
-  const undersideIndexes=guides
-    .map((guide,index)=>({index,isUnder:clampSpiralAngle(guide.angleDeg)>=179.95}))
-    .filter((entry)=>entry.isUnder)
-    .map((entry)=>entry.index);
-  const undersideOrderByIndex={};
-  undersideIndexes.forEach((index,order)=>{
-    undersideOrderByIndex[index]=order;
-  });
-  const undersideCount=undersideIndexes.length;
+  const undersideCount=guides.filter((guide)=>clampSpiralAngle(guide.angleDeg)>=179.95).length;
+  const selectedIndex=Number.isInteger(spiral.expandedGuideIndex)?spiral.expandedGuideIndex:-1;
   const markerPoints=[];
-  const markerSvg=guides.map((guide,index)=>{
+  const markerEntries=guides.map((guide,index)=>{
     const isStripper=index===stripperIndex;
+    const isSelected=index===selectedIndex;
     const visualAngleDegrees=spiralVisualAngleDegrees(guide.angleDeg,spiral.direction,{method:spiral.method,isStripper});
     const visualAngle=(visualAngleDegrees*Math.PI)/180;
     let x=110+(Math.cos(visualAngle)*68);
     let y=110+(Math.sin(visualAngle)*68);
     if(clampSpiralAngle(guide.angleDeg)>=179.95){
-      const order=Number(undersideOrderByIndex[index]||0);
-      const spread=(order-((undersideCount-1)/2))*10;
-      x=110+spread;
+      x=110;
       y=178;
     }
     markerPoints.push({index,x,y});
     const displayGuideNumber=guides.length-index;
     const markerRotation=visualAngleDegrees+90;
     return `
-      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}">
+      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}" aria-pressed="${isSelected?'true':'false'}">
         <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
         <ellipse class="spiral-map-marker__ring" cx="0" cy="-16" rx="7" ry="4.2"></ellipse>
-        <circle class="spiral-map-marker__core" cx="0" cy="0" r="7.5"></circle>
-        <text x="0" y="0.5" transform="rotate(${-markerRotation.toFixed(2)} 0 0.5)" text-anchor="middle" dominant-baseline="middle">${displayGuideNumber}</text>
+        <circle class="spiral-map-marker__core" cx="0" cy="0" r="${isSelected?'9':'4.5'}"></circle>
+        ${isSelected?`<text x="0" y="0.5" transform="rotate(${-markerRotation.toFixed(2)} 0 0.5)" text-anchor="middle" dominant-baseline="middle">${displayGuideNumber}</text>`:''}
       </g>
     `;
-  }).join('');
+  });
+  if(selectedIndex>=0 && selectedIndex<markerEntries.length){
+    markerEntries.push(markerEntries.splice(selectedIndex,1)[0]);
+  }
+  const markerSvg=markerEntries.filter(Boolean).join('');
 
   const progressionPoints=[];
   for(let index=stripperIndex;index>=0;index-=1){
@@ -1496,6 +1492,15 @@ function bindWorkshopCalculatorControls(){
       renderWorkshopCalculator();
     };
     panel.addEventListener('click',(event)=>{
+      const marker=event.target.closest('[data-guide-index].spiral-map-marker');
+      if(marker){
+        const index=Number(marker.getAttribute('data-guide-index'));
+        if(Number.isFinite(index)){
+          workshopToolsState.spiral.expandedGuideIndex=index;
+          renderWorkshopCalculator();
+        }
+        return;
+      }
       const summary=event.target.closest('[data-spiral-expand-index]');
       if(summary){
         const index=Number(summary.getAttribute('data-spiral-expand-index'));

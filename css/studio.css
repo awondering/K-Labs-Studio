@@ -6134,6 +6134,37 @@ textarea::-moz-selection,
   font-weight:700;
 }
 
+.spiral-map-marker{
+  cursor:pointer;
+}
+
+.spiral-map-marker:focus-visible{
+  outline:none;
+}
+
+.spiral-map-marker__core{
+  fill:rgba(var(--kl-red-rgb),.62);
+  stroke:rgba(250,241,230,.62);
+  stroke-width:1;
+}
+
+.spiral-map-marker--selected .spiral-map-marker__core{
+  fill:var(--kl-red-base);
+  stroke:#fff5e9;
+  stroke-width:1.4;
+  filter:drop-shadow(0 0 4px var(--kl-red-glow));
+}
+
+.spiral-map-marker--selected .spiral-map-marker__ring,
+.spiral-map-marker--selected .spiral-map-marker__stem{
+  stroke:#fff5e9;
+  stroke-width:1.7;
+}
+
+.spiral-map-marker--selected .spiral-map-marker__ring{
+  fill:rgba(var(--kl-red-rgb),.24);
+}
+
 .spiral-map-marker--stripper circle{
   fill:rgba(var(--kl-red-rgb),.94);
   stroke:rgba(255,245,232,.95);
