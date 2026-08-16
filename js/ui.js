@@ -2,9 +2,9 @@ const $=id=>document.getElementById(id);
 function normalizeLayoutState(input){
   const raw=input&&typeof input==='object'?input:{};
   return {
-    firstGuide:clampValue(raw.firstGuide,50,300),
+    firstGuide:clampMeasurementValue(raw.firstGuide,50,300),
     guideCount:clampValue(raw.guideCount,5,20),
-    targetStripper:clampValue(raw.targetStripper,500,2500),
+    targetStripper:clampMeasurementValue(raw.targetStripper,500,2500),
     locked:false,
     workshopIndex:Math.max(0,clampValue(raw.workshopIndex,0,1000))
   };
@@ -82,6 +82,7 @@ let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
+const CORE_MEASUREMENT_FORMAT={decimalsMetric:3,decimalsImperial:3,forceDecimal:true};
 let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
@@ -204,8 +205,7 @@ function normalizeDateFormat(value){
   return DATE_FORMAT_VALUES.includes(next)?next:'dd/mm/yyyy';
 }
 function normalizeImperialDisplay(value){
-  const next=String(value||'').trim().toLowerCase();
-  return IMPERIAL_DISPLAY_VALUES.includes(next)?next:'fractional';
+  return 'decimal';
 }
 function loadChoicePickerFavourites(){
   const stored=Store.get(CHOICE_PICKER_FAVOURITES_KEY,{});
@@ -337,13 +337,10 @@ function formatMeasurementNumber(valueMm,options){
   const settings=options&&typeof options==='object'?options:{};
   if(activeMeasurementUnits()==='imperial'){
     const inchesValue=mmToInches(valueMm);
-    if(activeImperialDisplay()==='fractional' && settings.forceDecimal!==true){
-      return formatImperialFractionInches(inchesValue,settings.maxImperialDenominator===undefined?32:settings.maxImperialDenominator);
-    }
-    const decimals=settings.decimalsImperial===undefined?2:settings.decimalsImperial;
-    return numberOrZero(inchesValue).toFixed(Math.max(0,decimals));
+    const decimals=settings.decimalsImperial===undefined?3:settings.decimalsImperial;
+    return formatDecimal(inchesValue,decimals);
   }
-  return formatDecimal(valueMm,settings.decimalsMetric===undefined?1:settings.decimalsMetric);
+  return formatDecimal(valueMm,settings.decimalsMetric===undefined?3:settings.decimalsMetric);
 }
 function formatMeasurementValue(valueMm,options){
   return `${formatMeasurementNumber(valueMm,options)} ${measurementUnitSuffix()}`;
@@ -387,22 +384,18 @@ function parseWorkshopMeasurementMm(rawValue,unit,fallbackMm,allowZero){
 function formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options){
   const settings=options&&typeof options==='object'?options:{};
   const normalizedUnit=normalizeWorkshopUnit(unit);
-  const normalizedImperialDisplay=normalizeWorkshopImperialDisplay(imperialDisplay);
   if(normalizedUnit==='imperial'){
     const inchesValue=mmToInches(valueMm);
-    if(normalizedImperialDisplay==='fractional' && settings.forceDecimal!==true){
-      return formatImperialFractionInches(inchesValue,settings.maxImperialDenominator===undefined?32:settings.maxImperialDenominator);
-    }
-    const decimals=settings.decimalsImperial===undefined?2:settings.decimalsImperial;
+    const decimals=settings.decimalsImperial===undefined?3:settings.decimalsImperial;
     return formatDecimal(inchesValue,decimals);
   }
-  return formatDecimal(valueMm,settings.decimalsMetric===undefined?1:settings.decimalsMetric);
+  return formatDecimal(valueMm,settings.decimalsMetric===undefined?3:settings.decimalsMetric);
 }
 function formatWorkshopMeasurementValue(valueMm,unit,imperialDisplay,options){
   return `${formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options)} ${workshopUnitSuffix(unit)}`;
 }
 function workshopMeasurementInputText(valueMm,unit,imperialDisplay){
-  return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:2,maxImperialDenominator:32});
+  return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT);
 }
 function syncWorkshopToggleButtons(panel,selector,attribute,selectedValue){
   if(!panel)return;
@@ -689,6 +682,33 @@ function syncSpiralGuidePositionsFromLayout(rows){
     if(row)guide.positionMm=Math.max(0,numberOrZero(row.cum));
   });
 }
+function syncSpiralWithGuideLayout(){
+  const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+  syncSpiralGuidePositionsFromLayout(layout.rows);
+}
+function captureSpiralGeometry(){
+  const spiral=workshopToolsState.spiral;
+  return {
+    guideCount:spiral.guideCount,
+    guides:(Array.isArray(spiral.guides)?spiral.guides:[]).map((guide)=>({
+      positionMm:guide.positionMm,
+      odMm:guide.odMm,
+      angleDeg:guide.angleDeg,
+    })),
+  };
+}
+function restoreSpiralGeometry(snapshot){
+  if(!snapshot)return;
+  const spiral=workshopToolsState.spiral;
+  spiral.guideCount=snapshot.guideCount;
+  spiral.guides=snapshot.guides.map((guide)=>({...guide}));
+  renderSpiralGuideMapper();
+}
+function renderMeasurementPresentation(){
+  const spiralGeometry=captureSpiralGeometry();
+  render({preserveSpiralGeometry:true});
+  restoreSpiralGeometry(spiralGeometry);
+}
 function renderSpiralGuideMapper(){
   const card=$('workshopToolSpiral');
   if(!card)return;
@@ -697,7 +717,6 @@ function renderSpiralGuideMapper(){
   spiral.imperialDisplay=activeImperialDisplay();
   spiral.method=normalizeSpiralMethod(spiral.method);
   spiral.direction=normalizeSpiralDirection(spiral.direction);
-  syncSpiralGuidesLength();
   const expandedGuideIndex=Number(spiral.expandedGuideIndex);
   spiral.expandedGuideIndex=Number.isInteger(expandedGuideIndex) && expandedGuideIndex>=0 && expandedGuideIndex<spiral.guides.length
     ?expandedGuideIndex
@@ -8106,6 +8125,7 @@ function nextBuildNumber(){
   return 'BUILD-'+seq;
 }
 function clampValue(value,min,max){const parsed=Number(value);if(!Number.isFinite(parsed))return min;return Math.min(max,Math.max(min,Math.round(parsed)))}
+function clampMeasurementValue(value,min,max){const parsed=Number(value);if(!Number.isFinite(parsed))return min;return Math.min(max,Math.max(min,parsed))}
 function buildWheels(){return null}
 function isLayoutLocked(){return !!state.locked;}
 function setLayoutLocked(nextLocked){
@@ -8199,7 +8219,9 @@ function setControlValue(field,rawValue,options){
   if(isLayoutLocked() && !opts.force)return;
   const parsed=field==='guideCount'?Number(rawValue):parseMeasurementInputValue(rawValue);
   if(!Number.isFinite(parsed))return;
-  const nextValue=clampValue(parsed,cfg.min,cfg.max);
+  const nextValue=field==='guideCount'
+    ?clampValue(parsed,cfg.min,cfg.max)
+    :clampMeasurementValue(parsed,cfg.min,cfg.max);
   if(state[cfg.key]===nextValue){
     if(opts.persist){save();}
     return;
@@ -8211,6 +8233,7 @@ function setControlValue(field,rawValue,options){
     pendingControlPersist=false;
     save();
   }
+  syncSpiralWithGuideLayout();
   render();
 }
 function changeControlValue(field,direction,options){
@@ -8299,7 +8322,7 @@ function bindLayoutControls(){
         return;
       }
       const stateValue=state[controlMeta[field].key];
-      const value=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,{decimalsMetric:1,decimalsImperial:2});
+      const value=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,CORE_MEASUREMENT_FORMAT);
       if(el.textContent!==value){el.textContent=value;}
       const range=document.createRange();
       range.selectNodeContents(el);
@@ -8317,8 +8340,7 @@ function bindLayoutControls(){
         if(/[^0-9]/.test(event.data)){event.preventDefault();}
         return;
       }
-      const fractionalActive=activeMeasurementUnits()==='imperial' && activeImperialDisplay()==='fractional';
-      const disallowed=fractionalActive?/[^0-9./\s-]/:/[^0-9.-]/;
+      const disallowed=/[^0-9.-]/;
       if(disallowed.test(event.data)){event.preventDefault();}
     });
     el.addEventListener('keydown',(event)=>{
@@ -8332,7 +8354,7 @@ function bindLayoutControls(){
       if(event.key==='Escape'){
         event.preventDefault();
         const stateValue=state[controlMeta[field].key];
-        el.textContent=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,{decimalsMetric:1,decimalsImperial:2});
+        el.textContent=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,CORE_MEASUREMENT_FORMAT);
         el.blur();
       }
     });
@@ -9027,7 +9049,7 @@ function loadBlank(i){
   if(!b)return;
   state.firstGuide=b.fg;state.guideCount=b.gc;state.targetStripper=b.ts;state.locked=false;state.workshopIndex=0;
   applyBlankToQuote(b);
-  save();saveQuoteCurrent();render();goScreen('layoutScreen');
+  save();saveQuoteCurrent();syncSpiralWithGuideLayout();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
   const demoKey='demo softbait';
@@ -9100,6 +9122,7 @@ function loadDemoBuild(){
   save();
   saveQuoteCurrent();
   renderBlanks();
+  syncSpiralWithGuideLayout();
   render();
   goScreen('workshopScreen');
 }
@@ -9437,7 +9460,7 @@ function bindSettingsControls(){
       studioSettings.measurementUnits=next;
       saveStudioSettings();
       syncSettingsPreferenceControls();
-      render();
+      renderMeasurementPresentation();
       renderWorkshopQuote();
       renderBlanks();
       renderBuilds();
@@ -9452,7 +9475,7 @@ function bindSettingsControls(){
       studioSettings.imperialDisplay=next;
       saveStudioSettings();
       syncSettingsPreferenceControls();
-      render();
+      renderMeasurementPresentation();
       renderWorkshopQuote();
       renderBlanks();
     });
@@ -9472,21 +9495,20 @@ function bindSettingsControls(){
   });
   syncSettingsPreferenceControls();
 }
-function render(){
+function render(options){
   const r=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   const nextWorkshopIndex=Math.max(0,Math.min(state.workshopIndex,Math.max(0,r.rows.length-1)));
   if(state.workshopIndex!==nextWorkshopIndex){
     state.workshopIndex=nextWorkshopIndex;
     save();
   }
-  syncSpiralGuidePositionsFromLayout(r.rows);
   const appEl=$('app');
   if(appEl){appEl.classList.toggle('locked',!!state.locked);}
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
     const field=el.getAttribute('data-field');
     if(field && controlMeta[field] && document.activeElement!==el){
       const value=state[controlMeta[field].key];
-      el.textContent=field==='guideCount'?String(value):formatMeasurementNumber(value,{decimalsMetric:1,decimalsImperial:2});
+      el.textContent=field==='guideCount'?String(value):formatMeasurementNumber(value,CORE_MEASUREMENT_FORMAT);
     }
     const editable=!state.locked;
     el.setAttribute('contenteditable',editable?'true':'false');
@@ -9505,17 +9527,17 @@ function render(){
   const guideSpacingCards=$('guideSpacingCards');
   if(guideSpacingCards){
     guideSpacingCards.innerHTML=r.rows.map((row,i)=>`
-      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}. Spacing ${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}" aria-current="${i===state.workshopIndex?'true':'false'}">
+      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,CORE_MEASUREMENT_FORMAT)}. Spacing ${formatMeasurementValue(row.spacing,CORE_MEASUREMENT_FORMAT)}" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
           <span class="guide-spacing-row__guide-name">Guide ${row.g}</span>
         </div>
         <div class="guide-spacing-row__meta">
           <small>Position</small>
-          <span class="guide-spacing-row__position-value">${formatMeasurementValue(row.cum,{decimalsMetric:1,decimalsImperial:2})}</span>
+          <span class="guide-spacing-row__position-value">${formatMeasurementValue(row.cum,CORE_MEASUREMENT_FORMAT)}</span>
         </div>
         <div class="guide-spacing-row__spacing">
           <span class="guide-spacing-row__spacing-label">Spacing</span>
-          <strong class="guide-spacing-row__spacing-value">${formatMeasurementValue(row.spacing,{decimalsMetric:1,decimalsImperial:2})}</strong>
+          <strong class="guide-spacing-row__spacing-value">${formatMeasurementValue(row.spacing,CORE_MEASUREMENT_FORMAT)}</strong>
         </div>
       </article>
     `).join('');
@@ -9557,4 +9579,5 @@ bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
+syncSpiralWithGuideLayout();
 window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,prepareStudioLanding:prepareStudioLandingEntry};
