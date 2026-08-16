@@ -6176,6 +6176,47 @@ textarea::-moz-selection,
   stroke:rgba(255,245,232,.98);
 }
 
+.spiral-map-marker--underside-member{
+  pointer-events:none;
+}
+
+.spiral-map-underside-stack .spiral-map-marker__stem{
+  stroke:rgba(250,241,230,.88);
+  stroke-width:1.8;
+}
+
+.spiral-map-underside-stack .spiral-map-marker__ring{
+  fill:rgba(7,8,10,.78);
+  stroke:rgba(250,241,230,.9);
+  stroke-width:1.4;
+}
+
+.spiral-map-underside-stack .spiral-map-marker__core{
+  fill:rgba(var(--kl-red-rgb),.88);
+  stroke:rgba(250,241,230,.76);
+  stroke-width:1.1;
+}
+
+.spiral-map-underside-count{
+  fill:#fff4ec;
+  font-size:7.4px;
+  font-weight:700;
+  letter-spacing:.02em;
+}
+
+.spiral-map-underside-selection circle{
+  fill:var(--kl-red-base);
+  stroke:#fff5e9;
+  stroke-width:1.4;
+  filter:drop-shadow(0 0 4px var(--kl-red-glow));
+}
+
+.spiral-map-underside-selection text{
+  fill:#fff4ec;
+  font-size:7.7px;
+  font-weight:700;
+}
+
 .spiral-map-tiptop circle{
   fill:#e8dfd1;
   stroke:rgba(14,16,18,.85);

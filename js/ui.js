@@ -745,23 +745,33 @@ function renderSpiralMapperVisual(spiral){
   if(!visualCanvas)return;
   const guides=Array.isArray(spiral.guides)?spiral.guides:[];
   const stripperIndex=Math.max(0,guides.length-1);
-  const undersideCount=guides.filter((guide)=>clampSpiralAngle(guide.angleDeg)>=179.95).length;
+  const undersideIndexes=guides
+    .map((guide,index)=>clampSpiralAngle(guide.angleDeg)>=179.95?index:-1)
+    .filter((index)=>index>=0);
+  const undersideIndexSet=new Set(undersideIndexes);
+  const undersideCount=undersideIndexes.length;
   const selectedIndex=Number.isInteger(spiral.expandedGuideIndex)?spiral.expandedGuideIndex:-1;
   const markerPoints=[];
   const markerEntries=guides.map((guide,index)=>{
     const isStripper=index===stripperIndex;
     const isSelected=index===selectedIndex;
+    const isUnderside=undersideIndexSet.has(index);
     const visualAngleDegrees=spiralVisualAngleDegrees(guide.angleDeg,spiral.direction,{method:spiral.method,isStripper});
     const visualAngle=(visualAngleDegrees*Math.PI)/180;
     let x=110+(Math.cos(visualAngle)*68);
     let y=110+(Math.sin(visualAngle)*68);
-    if(clampSpiralAngle(guide.angleDeg)>=179.95){
+    if(isUnderside){
       x=110;
       y=178;
     }
     markerPoints.push({index,x,y});
     const displayGuideNumber=guides.length-index;
     const markerRotation=visualAngleDegrees+90;
+    if(isUnderside){
+      return `
+        <g class="spiral-map-marker spiral-map-marker--underside-member${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)})" aria-label="Guide ${displayGuideNumber} running guide at 180 degrees underside" aria-pressed="${isSelected?'true':'false'}"></g>
+      `;
+    }
     return `
       <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}" aria-pressed="${isSelected?'true':'false'}">
         <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
@@ -785,8 +795,19 @@ function renderSpiralMapperVisual(spiral){
     ?`<polyline class="spiral-map-path" points="${progressionPoints.join(' ')}"></polyline>`
     :'';
 
-  const undersideGroupLabel=undersideCount>1
-    ?`<text class="spiral-map-cluster" x="110" y="191" text-anchor="middle">${undersideCount} guides at 180 deg</text>`
+  const undersideStackMarker=undersideCount
+    ?`<g class="spiral-map-underside-stack" transform="translate(110 178)" aria-label="${undersideCount} running guide${undersideCount===1?'':'s'} at 180 degrees underside">
+        <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
+        <ellipse class="spiral-map-marker__ring" cx="0" cy="-16" rx="7" ry="4.2"></ellipse>
+        <circle class="spiral-map-marker__core" cx="0" cy="0" r="4.8"></circle>
+        ${undersideCount>1?`<text class="spiral-map-underside-count" x="14" y="5">x${undersideCount}</text>`:''}
+      </g>`
+    :'';
+  const selectedUndersideMarker=undersideIndexSet.has(selectedIndex)
+    ?`<g class="spiral-map-underside-selection" transform="translate(110 178)">
+        <circle cx="0" cy="0" r="9"></circle>
+        <text x="0" y=".5" text-anchor="middle" dominant-baseline="middle">${guides.length-selectedIndex}</text>
+      </g>`
     :'';
 
   visualCanvas.innerHTML=`
@@ -797,14 +818,15 @@ function renderSpiralMapperVisual(spiral){
       <text class="spiral-map-label" x="110" y="14" text-anchor="middle">TOP 0 deg</text>
       <text class="spiral-map-label" x="10" y="66" text-anchor="start">LEFT 90 deg</text>
       <text class="spiral-map-label" x="210" y="66" text-anchor="end">RIGHT 90 deg</text>
-      <text class="spiral-map-label" x="110" y="216" text-anchor="middle">UNDERSIDE 180 deg</text>
+      <text class="spiral-map-label spiral-map-label--underside" x="110" y="216" text-anchor="middle">UNDERSIDE 180 deg</text>
       ${progressionPolyline}
       ${markerSvg}
+      ${undersideStackMarker}
+      ${selectedUndersideMarker}
       <g class="spiral-map-tiptop" aria-label="Tip top at 180 degrees underside">
         <circle cx="110" cy="203" r="4.7"></circle>
         <text x="110" y="201" text-anchor="middle">TIP TOP</text>
       </g>
-      ${undersideGroupLabel}
     </svg>
   `;
   assertSpiralMapperMarkerCount(visualCanvas,guides.length);
