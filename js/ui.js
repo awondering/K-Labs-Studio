@@ -897,6 +897,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <span>${guideType}</span>
             <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT)}</span>
             <span>${labels.rotationText}</span>
+            <span class="spiral-guide-row__disclosure" aria-hidden="true">⌄</span>
           </button>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
