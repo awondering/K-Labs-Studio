@@ -144,7 +144,10 @@
       const marker = markers[index];
       marker.hidden = false;
       marker.dataset.guideIndex = String(index);
-      marker.setAttribute('aria-label', `Guide ${row.g}: ${row.cum.toFixed(1)} mm`);
+      const measurementText = window.KLABS_MEASUREMENTS && typeof window.KLABS_MEASUREMENTS.formatValue === 'function'
+        ? window.KLABS_MEASUREMENTS.formatValue(row.cum)
+        : `${row.cum.toFixed(1)} mm`;
+      marker.setAttribute('aria-label', `Guide ${row.g}: ${measurementText}`);
       marker.setAttribute('aria-pressed', String(index === activeIndex));
       setMarkerTransform(marker, x, y);
     });

@@ -397,6 +397,13 @@ function formatWorkshopMeasurementValue(valueMm,unit,imperialDisplay,options){
 function workshopMeasurementInputText(valueMm,unit,imperialDisplay){
   return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT);
 }
+function blankMeasurementInputText(valueMm){
+  return formatMeasurementNumber(valueMm,CORE_MEASUREMENT_FORMAT);
+}
+function parseBlankMeasurementInput(rawValue,fallbackMm){
+  const parsed=parseMeasurementInputValue(rawValue);
+  return Number.isFinite(parsed)?parsed:fallbackMm;
+}
 function syncWorkshopToggleButtons(panel,selector,attribute,selectedValue){
   if(!panel)return;
   panel.querySelectorAll(selector).forEach((button)=>{
@@ -427,6 +434,13 @@ function syncWorkshopMeasurementInput(input,valueMm,unit,imperialDisplay,placeho
   if(Number.isFinite(placeholderMm)){
     input.placeholder=workshopMeasurementInputText(placeholderMm,unit,imperialDisplay);
   }
+}
+function refreshWorkshopMeasurementLabels(){
+  const suffix=measurementUnitSuffix();
+  document.querySelectorAll('[data-measurement-label]').forEach((label)=>{
+    const base=label.getAttribute('data-measurement-label')||'';
+    label.textContent=`${base} (${suffix})`;
+  });
 }
 function taperSpiralWrapLengthMm(startDiameterMm,endDiameterMm,gripLengthMm,materialWidthMm){
   const length=Math.max(0,numberOrZero(gripLengthMm));
@@ -635,7 +649,7 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
   const offsetMm=(circumferenceMm*angle)/360;
   if(angle>=179.95){
     return {
-      offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:64})} - UNDERSIDE`,
+      offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - UNDERSIDE`,
       rotationText:'180 deg - UNDERSIDE',
       directionText:'UNDERSIDE',
     };
@@ -647,7 +661,7 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
   });
   const side=guideDirection==='right'?'RIGHT':'LEFT';
   return {
-    offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:64})} ${side} OF TOP LINE`,
+    offsetText:`${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} ${side} OF TOP LINE`,
     rotationText:`${formatDecimal(angle,1)} deg ${side}`,
     directionText:`${side} SIDE`,
   };
@@ -881,14 +895,14 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
           <button class="spiral-guide-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}">
             <strong>Guide ${displayGuideNumber}</strong>
             <span>${guideType}</span>
-            <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,{decimalsMetric:1,decimalsImperial:2})}</span>
+            <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT)}</span>
             <span>${labels.rotationText}</span>
           </button>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             <label>
-              <span>Position From Tip</span>
+              <span>Position From Tip (${workshopUnitSuffix(spiral.unit)})</span>
               <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="position" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.positionMm,spiral.unit,spiral.imperialDisplay))}" />
             </label>
             ${showOdField?`<label>
@@ -1007,8 +1021,8 @@ function renderDiameterCircumferenceTool(){
   if(primaryLabel)primaryLabel.textContent=showingDiameter?'Diameter':'Circumference';
   if(primaryValue){
     primaryValue.textContent=showingDiameter
-      ? formatWorkshopMeasurementValue(state.diameterMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32})
-      : formatWorkshopMeasurementValue(circumferenceMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32});
+      ? formatWorkshopMeasurementValue(state.diameterMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT)
+      : formatWorkshopMeasurementValue(circumferenceMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
   }
 
   const metricLine=$('workshopDcMetricLine');
@@ -1118,8 +1132,8 @@ function openGripCutTemplatePrint(){
     materialWidthMm:template.coverWidthMm,
     mirror:true,
   }):'';
-  const calibrationLengthLabel=template.unit==='imperial'?'2 in':'50 mm';
-  const calibrationLengthMm=template.unit==='imperial'?50.8:50;
+  const calibrationLengthLabel=template.unit==='imperial'?'50 mm / 1.969 in':'50 mm';
+  const calibrationLengthMm=50;
   const calibrationLineHtml=`<div class="calibration"><p><strong>${escapeHtml(calibrationLengthLabel)} CHECK LINE</strong> <span>MEASURE THIS AFTER PRINTING</span></p><div class="calibration-line" style="width:${formatDecimal(calibrationLengthMm,2)}mm"></div></div>`;
   const instructionsHtml=`<ol class="instructions"><li>Print at 100% / Actual Size.</li><li>Measure the calibration line before use; if it is wrong, do not use this template.</li><li>Align your material edge to the REFERENCE EDGE line.</li><li>Mark and cut on the labelled CUT LINE.</li><li>Follow the WRAP DIRECTION arrow when starting the wrap.</li><li>Material Required includes the entered allowance.</li></ol>`;
   const printHtml=`<!doctype html>
@@ -1317,9 +1331,9 @@ function renderGripCoveringTool(){
   const angleDifferenceRow=$('workshopGripAverageCutAngleRow');
   const printActions=$('workshopGripPrintActions');
 
-  if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32});
+  if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
   if(revolutionsEl)revolutionsEl.textContent=formatDecimal(revolutions,2);
-  if(spiralEl)spiralEl.textContent=formatWorkshopMeasurementValue(spiralWrapLengthMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32});
+  if(spiralEl)spiralEl.textContent=formatWorkshopMeasurementValue(spiralWrapLengthMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
   if(startCutEl)startCutEl.textContent=gripCutAngleLabel(startCutAngle);
 
   if(finishCutRow)finishCutRow.hidden=!showFinishCutAngle;
@@ -1335,15 +1349,15 @@ function renderGripCoveringTool(){
     unit:state.unit,
     imperialDisplay:state.imperialDisplay,
     gripTypeLabel:state.profile==='tapered'?'Tapered Grip':'Straight Grip',
-    gripDiameterText:formatWorkshopMeasurementValue(state.straightDiameterMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
-    startDiameterText:formatWorkshopMeasurementValue(state.startDiameterMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
-    endDiameterText:formatWorkshopMeasurementValue(state.endDiameterMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
+    gripDiameterText:formatWorkshopMeasurementValue(state.straightDiameterMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
+    startDiameterText:formatWorkshopMeasurementValue(state.startDiameterMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
+    endDiameterText:formatWorkshopMeasurementValue(state.endDiameterMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
     coverWidthMm:state.coverWidthMm,
     startCutAngle,
     finishCutAngle,
-    coveringWidthText:formatWorkshopMeasurementValue(state.coverWidthMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
-    gripLengthText:formatWorkshopMeasurementValue(state.lengthMm,state.unit,state.imperialDisplay,{decimalsMetric:2,decimalsImperial:3,maxImperialDenominator:32}),
-    requiredLengthText:formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,{decimalsMetric:1,decimalsImperial:3,maxImperialDenominator:32}),
+    coveringWidthText:formatWorkshopMeasurementValue(state.coverWidthMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
+    gripLengthText:formatWorkshopMeasurementValue(state.lengthMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
+    requiredLengthText:formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
     allowanceText:`${formatDecimal(state.allowancePercent,1)}%`,
     dateText:formatDateDisplay(new Date(),{includeTime:false}),
   }:null;
@@ -1351,6 +1365,7 @@ function renderGripCoveringTool(){
   syncWorkshopToggleButtons(panel,'[data-grip-profile]','data-grip-profile',state.profile);
 }
 function renderWorkshopCalculator(){
+  refreshWorkshopMeasurementLabels();
   renderWorkshopToolVisibility();
   renderDiameterCircumferenceTool();
   renderGripCoveringTool();
@@ -4611,9 +4626,9 @@ function normalizeBlank(input){
   blank.cost=numberOrZero(blank.cost);
   blank.sku=String(blank.sku||'').trim();
   blank.notes=String(blank.notes||'').trim();
-  blank.fg=clampValue(blank.fg,50,300);
+  blank.fg=clampMeasurementValue(blank.fg,50,300);
   blank.gc=clampValue(blank.gc,5,20);
-  blank.ts=clampValue(blank.ts,500,2500);
+  blank.ts=clampMeasurementValue(blank.ts,500,2500);
   blank.archived=!!blank.archived;
   return blank;
 }
@@ -4796,7 +4811,7 @@ function selectedBlankSummaryMarkup(blank){
 }
 function selectedBlankEditMarkup(blank){
   const value=(key)=>escapeHtml(String(blank&&blank[key]||''));
-  const numberValue=(key)=>escapeHtml(String(numberOrZero(blank&&blank[key])));
+  const numberValue=(key)=>escapeHtml(key==='fg' || key==='ts'?blankMeasurementInputText(blank&&blank[key]):String(numberOrZero(blank&&blank[key])));
   return `
     <div class="selected-blank-card selected-blank-card--edit" data-selected-blank-state="edit">
       <div class="selected-blank-card__head"><p class="eyebrow">SELECTED BLANK</p><strong>Edit Blank</strong></div>
@@ -4811,9 +4826,9 @@ function selectedBlankEditMarkup(blank){
         <label><span>Blank Cost</span><input data-selected-blank-field="cost" type="number" inputmode="decimal" min="0" step="0.01" value="${numberValue('cost')}" /></label>
         <label><span>SKU</span><input data-selected-blank-field="sku" type="text" value="${value('sku')}" /></label>
         <label class="blank-editor-grid__full"><span>Notes</span><textarea data-selected-blank-field="notes" rows="2">${value('notes')}</textarea></label>
-        <label><span>First Guide (mm)</span><input data-selected-blank-field="fg" type="number" min="50" max="300" step="1" value="${numberValue('fg')}" /></label>
+        <label><span>First Guide (${measurementUnitSuffix()})</span><input data-selected-blank-field="fg" type="text" inputmode="decimal" value="${numberValue('fg')}" /></label>
         <label><span>Guide Count</span><input data-selected-blank-field="gc" type="number" min="5" max="20" step="1" value="${numberValue('gc')}" /></label>
-        <label class="blank-editor-grid__full"><span>Target Stripper (mm)</span><input data-selected-blank-field="ts" type="number" min="500" max="2500" step="1" value="${numberValue('ts')}" /></label>
+        <label class="blank-editor-grid__full"><span>Target Stripper (${measurementUnitSuffix()})</span><input data-selected-blank-field="ts" type="text" inputmode="decimal" value="${numberValue('ts')}" /></label>
       </div>
       <div class="quote-preview-actions selected-blank-card__edit-actions">
         <button type="button" class="ghost-action" data-selected-blank-action="cancel">Cancel</button>
@@ -4934,7 +4949,11 @@ function cancelSelectedBlankEdit(){
 }
 function updateSelectedBlankDraftField(field,value){
   if(!selectedBlankEditState || !selectedBlankEditState.draft)return;
-  if(field==='cost' || field==='fg' || field==='gc' || field==='ts'){
+  if(field==='fg' || field==='ts'){
+    selectedBlankEditState.draft[field]=parseBlankMeasurementInput(value,selectedBlankEditState.draft[field]);
+    return;
+  }
+  if(field==='cost' || field==='gc'){
     selectedBlankEditState.draft[field]=numberOrZero(value);
     return;
   }
@@ -8424,13 +8443,7 @@ function workshopInputMap(){
   ];
 }
 function measurementPlaceholderValue(valueMm){
-  if(activeMeasurementUnits()==='imperial'){
-    if(activeImperialDisplay()==='fractional'){
-      return `${formatMeasurementNumber(valueMm,{maxImperialDenominator:32})} in`;
-    }
-    return `${formatMeasurementNumber(valueMm,{decimalsImperial:2,forceDecimal:true})} in`;
-  }
-  return `${Math.round(numberOrZero(valueMm))} mm`;
+  return formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT);
 }
 function refreshMeasurementPlaceholders(){
   const rearGrip=measurementPlaceholderValue(280);
@@ -8943,9 +8956,9 @@ function ensureBlankEditorSheet(){
           <label><span>Blank Cost</span><input id="blankEditorCost" type="number" min="0" step="0.01" /></label>
           <label><span>SKU</span><input id="blankEditorSku" type="text" /></label>
           <label class="blank-editor-grid__full"><span>Notes</span><textarea id="blankEditorNotes" rows="2"></textarea></label>
-          <label><span>First Guide (mm)</span><input id="blankEditorFg" type="number" min="50" max="300" step="1" /></label>
+          <label><span id="blankEditorFgLabel">First Guide (mm)</span><input id="blankEditorFg" type="text" inputmode="decimal" /></label>
           <label><span>Guide Count</span><input id="blankEditorGc" type="number" min="5" max="20" step="1" /></label>
-          <label class="blank-editor-grid__full"><span>Target Stripper (mm)</span><input id="blankEditorTs" type="number" min="500" max="2500" step="1" /></label>
+          <label class="blank-editor-grid__full"><span id="blankEditorTsLabel">Target Stripper (mm)</span><input id="blankEditorTs" type="text" inputmode="decimal" /></label>
         </div>
         <div class="quote-preview-actions">
           <button id="blankEditorCancel" type="button" class="ghost-action">Cancel</button>
@@ -8978,9 +8991,11 @@ function openBlankEditor(blankId){
   if($('blankEditorCost'))$('blankEditorCost').value=String(numberOrZero(blank.cost));
   if($('blankEditorSku'))$('blankEditorSku').value=blank.sku;
   if($('blankEditorNotes'))$('blankEditorNotes').value=blank.notes;
-  if($('blankEditorFg'))$('blankEditorFg').value=String(blank.fg);
+  if($('blankEditorFg'))$('blankEditorFg').value=blankMeasurementInputText(blank.fg);
+  if($('blankEditorFgLabel'))$('blankEditorFgLabel').textContent=`First Guide (${measurementUnitSuffix()})`;
   if($('blankEditorGc'))$('blankEditorGc').value=String(blank.gc);
-  if($('blankEditorTs'))$('blankEditorTs').value=String(blank.ts);
+  if($('blankEditorTs'))$('blankEditorTs').value=blankMeasurementInputText(blank.ts);
+  if($('blankEditorTsLabel'))$('blankEditorTsLabel').textContent=`Target Stripper (${measurementUnitSuffix()})`;
   $('blankEditorSheet').hidden=false;
   lockModalLayer(document.activeElement);
 }
@@ -9005,9 +9020,9 @@ function saveBlankEditor(){
     cost:$('blankEditorCost')?$('blankEditorCost').value:0,
     sku:$('blankEditorSku')?$('blankEditorSku').value:'',
     notes:$('blankEditorNotes')?$('blankEditorNotes').value:'',
-    fg:$('blankEditorFg')?$('blankEditorFg').value:105,
+    fg:parseBlankMeasurementInput($('blankEditorFg')&&$('blankEditorFg').value,105),
     gc:$('blankEditorGc')?$('blankEditorGc').value:9,
-    ts:$('blankEditorTs')?$('blankEditorTs').value:1260,
+    ts:parseBlankMeasurementInput($('blankEditorTs')&&$('blankEditorTs').value,1260),
     archived:existing?existing.archived:false,
   });
   if(!blank.model){
@@ -9580,4 +9595,5 @@ bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
 syncSpiralWithGuideLayout();
+window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
 window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,prepareStudioLanding:prepareStudioLandingEntry};
