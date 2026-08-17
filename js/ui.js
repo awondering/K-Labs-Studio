@@ -2694,11 +2694,25 @@ function allStudioSupplierNames(taxonomy){
   const values=(taxonomy&&Array.isArray(taxonomy.suppliers)?taxonomy.suppliers:[]).map((item)=>String(item.name||'').trim()).filter(Boolean);
   return Array.from(new Set(values.map((name)=>name))).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
 }
+const BOGUS_TAXONOMY_NAME_KEYS=['category missing','subcategory missing','supplier missing','select category','select subcategory','select supplier','undefined','null','n/a','none','new component'];
+function isBogusTaxonomyName(name){
+  return BOGUS_TAXONOMY_NAME_KEYS.includes(normalizeNameKey(name));
+}
+// Strings like "EVA 50MM 29MM" describe a product variant, not a library category.
+function looksLikeComponentSpecificationName(name){
+  const text=String(name||'').trim();
+  if(!text)return false;
+  if(/\d\s*(mm|cm|in|inch|")\b/i.test(text))return true;
+  return /^[\d\s.,\-x/]+$/.test(text);
+}
+function isInvalidLibraryCategoryName(name){
+  return isBogusTaxonomyName(name) || looksLikeComponentSpecificationName(name);
+}
 function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
   componentLibraryRecords().forEach((record)=>{
     const categoryName=String(record&&record.category||'').trim();
     const categoryKey=normalizeNameKey(categoryName);
-    if(categoryKey){
+    if(categoryKey && !isInvalidLibraryCategoryName(categoryName)){
       let category=findExistingCategoryByAlias(categoryMap,categoryName);
       if(!category){
         category={id:studioTaxonomyId('cat'),name:categoryName,subcategories:[]};
@@ -2718,12 +2732,12 @@ function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
   });
   getCustomCategoryNames().forEach((name)=>{
     const key=normalizeNameKey(name);
-    if(!key || findExistingCategoryByAlias(categoryMap,name))return;
+    if(!key || isInvalidLibraryCategoryName(name) || findExistingCategoryByAlias(categoryMap,name))return;
     categoryMap.set(key,{id:studioTaxonomyId('cat'),name:String(name).trim(),subcategories:[]});
   });
   getCustomSupplierNames().forEach((name)=>{
     const key=normalizeNameKey(name);
-    if(!key || supplierMap.has(key))return;
+    if(!key || isBogusTaxonomyName(name) || supplierMap.has(key))return;
     supplierMap.set(key,{id:studioTaxonomyId('sup'),name:String(name).trim()});
   });
 }
@@ -3190,27 +3204,33 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
     }).join('')
     :'<p class="studio-taxonomy-list__empty">No suppliers yet.</p>';
   const addMarkup=mode==='add'?`
-    <section class="studio-taxonomy-editor" aria-label="Add supplier">
-      <h3>ADD SUPPLIER</h3>
-      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" placeholder="Supplier name" /></label>
-      <div class="studio-taxonomy-editor__actions">
-        <button class="primary-action" type="button" data-taxonomy-action="supplier-add">ADD SUPPLIER</button>
-        <button class="ghost-action" type="button" data-taxonomy-ui-action="supplier-cancel">Cancel</button>
-      </div>
-    </section>
+    <div class="studio-taxonomy-modal">
+      <div class="studio-taxonomy-modal__scrim" data-taxonomy-ui-action="supplier-cancel"></div>
+      <section class="studio-taxonomy-editor studio-taxonomy-editor--modal" role="dialog" aria-modal="true" aria-label="Add supplier">
+        <h3>ADD SUPPLIER</h3>
+        <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" placeholder="Supplier name" /></label>
+        <div class="studio-taxonomy-editor__actions">
+          <button class="primary-action" type="button" data-taxonomy-action="supplier-add">ADD SUPPLIER</button>
+          <button class="ghost-action" type="button" data-taxonomy-ui-action="supplier-cancel">Cancel</button>
+        </div>
+      </section>
+    </div>
   `:'';
   const showSaved=mode==='edit' && selectedSupplier && studioSupplierEditContext.savedFlash;
   const saveButtonClass=showSaved?'ghost-action studio-taxonomy-editor__save is-saved':'ghost-action studio-taxonomy-editor__save';
   const saveButtonLabel=showSaved?'✓ SAVED':'SAVE';
   const editMarkup=mode==='edit' && selectedSupplier?`
-    <section class="studio-taxonomy-editor" aria-label="Edit supplier">
-      <h3>${escapeHtml(String(selectedSupplier.name||'').toUpperCase())}</h3>
-      <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" value="${escapeHtml(selectedSupplier.name)}" /></label>
-      <div class="studio-taxonomy-editor__actions">
-        <button id="studioTaxonomySupplierSaveBtn" class="${saveButtonClass}" type="button" data-taxonomy-action="supplier-rename" disabled>${saveButtonLabel}</button>
-        <button class="ghost-action" type="button" data-taxonomy-ui-action="supplier-cancel">Cancel</button>
-      </div>
-    </section>
+    <div class="studio-taxonomy-modal">
+      <div class="studio-taxonomy-modal__scrim" data-taxonomy-ui-action="supplier-cancel"></div>
+      <section class="studio-taxonomy-editor studio-taxonomy-editor--modal" role="dialog" aria-modal="true" aria-label="Edit supplier">
+        <h3>${escapeHtml(String(selectedSupplier.name||'').toUpperCase())}</h3>
+        <label class="studio-taxonomy-form-field"><span>Name</span><input id="studioTaxonomySupplierName" type="text" value="${escapeHtml(selectedSupplier.name)}" /></label>
+        <div class="studio-taxonomy-editor__actions">
+          <button id="studioTaxonomySupplierSaveBtn" class="${saveButtonClass}" type="button" data-taxonomy-action="supplier-rename" disabled>${saveButtonLabel}</button>
+          <button class="ghost-action" type="button" data-taxonomy-ui-action="supplier-cancel">Cancel</button>
+        </div>
+      </section>
+    </div>
   `:'';
   return `
     <section class="studio-taxonomy-section" aria-label="Suppliers">
@@ -3351,6 +3371,61 @@ function studioMoveArrayRow(rows,index,direction){
   rows[index]=swapped;
   return true;
 }
+function studioRejectInvalidCategoryName(name){
+  if(isBogusTaxonomyName(name)){
+    openInfoDialog('Invalid Category Name','Enter a descriptive category name.');
+    return true;
+  }
+  if(looksLikeComponentSpecificationName(name)){
+    openInfoDialog('Looks Like A Specification',`"${String(name).trim()}" looks like a size or spec. Add it as a component or subcategory instead of a top-level category.`);
+    return true;
+  }
+  return false;
+}
+function studioTaxonomyRenameCategoryByName(fromName,toName){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const fromKey=normalizeNameKey(fromName);
+  const next=String(toName||'').trim();
+  if(!fromKey || !next)return false;
+  const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===fromKey);
+  if(!target)return false;
+  if(taxonomy.categories.some((item)=>item.id!==target.id && normalizeNameKey(item.name)===normalizeNameKey(next)))return false;
+  target.name=next;
+  saveStudioComponentTaxonomy();
+  return true;
+}
+function studioTaxonomyRemoveCategoryByName(name){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const key=normalizeNameKey(name);
+  if(!key)return false;
+  const next=taxonomy.categories.filter((item)=>normalizeNameKey(item.name)!==key);
+  if(next.length===taxonomy.categories.length)return false;
+  taxonomy.categories=next;
+  saveStudioComponentTaxonomy();
+  return true;
+}
+function studioTaxonomyRenameSupplierByName(fromName,toName){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const fromKey=normalizeNameKey(fromName);
+  const next=String(toName||'').trim();
+  if(!fromKey || !next)return false;
+  const target=taxonomy.suppliers.find((item)=>normalizeNameKey(item.name)===fromKey);
+  if(!target)return false;
+  if(taxonomy.suppliers.some((item)=>item.id!==target.id && normalizeNameKey(item.name)===normalizeNameKey(next)))return false;
+  target.name=next;
+  saveStudioComponentTaxonomy();
+  return true;
+}
+function studioTaxonomyRemoveSupplierByName(name){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const key=normalizeNameKey(name);
+  if(!key)return false;
+  const next=taxonomy.suppliers.filter((item)=>normalizeNameKey(item.name)!==key);
+  if(next.length===taxonomy.suppliers.length)return false;
+  taxonomy.suppliers=next;
+  saveStudioComponentTaxonomy();
+  return true;
+}
 function refreshStudioComponentAndTaxonomyViews(){
   renderStudioComponentsLibrary();
   if(studioScreenView==='taxonomy'){
@@ -3370,6 +3445,7 @@ function handleStudioTaxonomyAction(action){
   const nextSupplierName=String(supplierNameInput&&supplierNameInput.value||'').trim();
   if(action==='category-add'){
     if(!nextCategoryName){openInfoDialog('Category Name Required','Enter a category name to add.');return;}
+    if(studioRejectInvalidCategoryName(nextCategoryName))return;
     if(studioCategoryByName(nextCategoryName)){openInfoDialog('Category Exists','A category with this name already exists.');return;}
     const created={id:studioTaxonomyId('cat'),name:nextCategoryName,subcategories:[]};
     studioComponentTaxonomyState.categories.push(created);
@@ -3381,6 +3457,7 @@ function handleStudioTaxonomyAction(action){
   if(action==='category-rename'){
     if(!category){openInfoDialog('Select Category','Choose a category to rename.');return;}
     if(!nextCategoryName){openInfoDialog('Category Name Required','Enter a new category name.');return;}
+    if(studioRejectInvalidCategoryName(nextCategoryName))return;
     const existing=studioCategoryByName(nextCategoryName);
     if(existing && existing.id!==category.id){openInfoDialog('Category Exists','Another category already uses this name.');return;}
     const oldName=category.name;
@@ -3558,7 +3635,7 @@ function handleStudioTaxonomyAction(action){
   refreshStudioComponentAndTaxonomyViews();
 }
 function studioCategoryNamesForLibrary(taxonomy,records){
-  const hasUnassignedRecords=(records||[]).some((record)=>!normalizeNameKey(record&&record.category));
+  const hasUnassignedRecords=(records||[]).some((record)=>!normalizeNameKey(record&&record.category) || isInvalidLibraryCategoryName(record&&record.category));
   const promotedComponentKeys=new Set((records||[])
     .filter((record)=>!normalizeNameKey(record&&record.category))
     .map((record)=>normalizeNameKey(record&&record.name))
@@ -3578,7 +3655,7 @@ function studioCategoryNamesForLibrary(taxonomy,records){
       })
       .filter(Boolean)
       .concat((records||[]).map((item)=>String(item&&item.category||'').trim()).filter(Boolean))
-  ));
+  )).filter((name)=>!isInvalidLibraryCategoryName(name));
   if(hasUnassignedRecords && !categoryNames.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
     categoryNames.push(UNASSIGNED_COMPONENT_CATEGORY);
   }
@@ -3809,7 +3886,7 @@ function renderStudioComponentsLibrary(){
 
   if(studioLibraryPath.level==='category'){
     if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
-      const unassignedRecords=records.filter((record)=>!normalizeNameKey(record&&record.category) && studioComponentMatchesSearch(record,queryKey));
+      const unassignedRecords=records.filter((record)=>(!normalizeNameKey(record&&record.category) || isInvalidLibraryCategoryName(record&&record.category)) && studioComponentMatchesSearch(record,queryKey));
       if(!unassignedRecords.length){
         list.innerHTML='<p class="studio-components-list__empty">No unassigned components found.</p>';
       }else{
@@ -3848,18 +3925,18 @@ function renderStudioComponentsLibrary(){
         const supplier=String(record&&record.supplier||'').trim();
         const buyValue=record&&record.unitCost!==undefined?numberOrZero(record.unitCost):(record&&record.cost!==undefined?numberOrZero(record.cost):undefined);
         const sellValue=record&&record.unitPrice!==undefined?numberOrZero(record.unitPrice):undefined;
-        const pricingBits=[];
-        if(buyValue!==undefined)pricingBits.push(`Buy $${buyValue.toFixed(2)}`);
-        if(sellValue!==undefined)pricingBits.push(`Sell $${sellValue.toFixed(2)}`);
+        const priceBits=[];
+        if(buyValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--buy">BUY $${buyValue.toFixed(2)}</span>`);
+        if(sellValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--sell">SELL $${sellValue.toFixed(2)}</span>`);
         const secondaryParts=[];
         if(supplier)secondaryParts.push(supplier);
-        if(pricingBits.length)secondaryParts.push(pricingBits.join(' · '));
         if(trackStock){
           const stockValue=componentLibraryStockValue(record);
           secondaryParts.push(`In Stock ${stockValue===undefined?0:stockValue}`);
         }
         const secondary=secondaryParts.join(' • ');
-        return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}</button>`;
+        const pricingMarkup=priceBits.length?`<span class="studio-components-price-row">${priceBits.join('')}</span>`:'';
+        return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}${pricingMarkup}</button>`;
       }).join('');
     }
     return;
@@ -4100,6 +4177,7 @@ function bindStudioComponentsPanel(){
           const input=$('studioLibraryCategoryName');
           const nextName=String(input&&input.value||'').trim();
           if(!nextName){openInfoDialog('Category Name Required','Enter a category name.');return;}
+          if(studioRejectInvalidCategoryName(nextName))return;
           if(taxonomy.categories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName))){openInfoDialog('Category Exists','A category with this name already exists.');return;}
           taxonomy.categories.push({id:studioTaxonomyId('cat'),name:nextName,subcategories:[]});
           saveStudioComponentTaxonomy();
@@ -4114,6 +4192,7 @@ function bindStudioComponentsPanel(){
           const nextName=String(input&&input.value||'').trim();
           if(!sourceName)return;
           if(!nextName){openInfoDialog('Category Name Required','Enter a category name.');return;}
+          if(studioRejectInvalidCategoryName(nextName))return;
           const duplicate=taxonomy.categories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName) && normalizeNameKey(item.name)!==normalizeNameKey(sourceName));
           if(duplicate){openInfoDialog('Category Exists','A category with this name already exists.');return;}
           const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
@@ -4320,7 +4399,11 @@ function bindStudioTaxonomyPanel(){
       if(action==='subcategory-open-add')setStudioTaxonomySectionMode('subcategories','add');
       if(action==='subcategory-cancel')setStudioTaxonomySectionMode('subcategories','browse');
       if(action==='supplier-open-add')setStudioTaxonomySectionMode('suppliers','add');
-      if(action==='supplier-cancel')setStudioTaxonomySectionMode('suppliers','browse');
+      if(action==='supplier-cancel'){
+        setStudioTaxonomySectionMode('suppliers','browse');
+        clearStudioSupplierSavedTimer();
+        studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
+      }
       renderStudioTaxonomyManager();
       return;
     }
@@ -5484,6 +5567,7 @@ function ensureChoicePicker(){
     const customInput=$('choicePickerCustomInput');
     const name=(customInput?customInput.value:'').trim();
     if(!name)return;
+    if(activeChoicePicker.type==='category' && studioRejectInvalidCategoryName(name))return;
     if(activeChoiceEditor.mode==='rename'){
       const renamed=renameCustomChoice(activeChoiceEditor.originalName,name,activeChoiceEditor.blankId||'');
       if(renamed){
@@ -6152,6 +6236,8 @@ function addCustomChoice(name,options){
       upsertComponentLibraryRecord(name,context.sourceComponent&&typeof context.sourceComponent==='object'?context.sourceComponent:{category:name});
     }
   }
+  resyncStudioComponentTaxonomyWithRecords();
+  refreshStudioComponentAndTaxonomyViews();
 }
 function isDefaultChoiceName(type,name){
   const defaults=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES);
@@ -6198,7 +6284,13 @@ function renameCustomChoice(fromName,toName,blankId){
   saveArchivedChoiceNames(type,archived);
   if(type==='category'){
     renameComponentLibraryRecord(fromName,toName);
+    studioRenameCategory(fromName,toName);
+    studioTaxonomyRenameCategoryByName(fromName,toName);
+  }else if(type==='supplier'){
+    studioRenameSupplier(fromName,toName);
+    studioTaxonomyRenameSupplierByName(fromName,toName);
   }
+  refreshStudioComponentAndTaxonomyViews();
   return true;
 }
 function removeCustomChoice(optionName){
@@ -6213,7 +6305,13 @@ function removeCustomChoice(optionName){
   saveArchivedChoiceNames(type,archived);
   if(type==='category'){
     removeComponentLibraryRecord(optionName);
+    studioReassignUsedCategoryToUnassigned(optionName);
+    studioTaxonomyRemoveCategoryByName(optionName);
+  }else if(type==='supplier'){
+    studioReassignUsedSupplierToUnassigned(optionName);
+    studioTaxonomyRemoveSupplierByName(optionName);
   }
+  refreshStudioComponentAndTaxonomyViews();
 }
 function getChoiceValue(type,item){
   return type==='supplier'?(item&&item.supplier)||'':(item&&item.category)||'';
