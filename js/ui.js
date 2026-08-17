@@ -1903,6 +1903,47 @@ function normalizePricingDriver(value){
   if(next==='final' || next==='profit' || next==='markup')return next;
   return 'markup';
 }
+const PRICING_DRIVER_FIELDS=[
+  {driver:'final',inputId:'quoteTotal',fieldId:'quoteTotalField',hint:'Editing Final Customer Price. Target Profit and Markup % recalculate.'},
+  {driver:'profit',inputId:'quoteProfit',fieldId:'quoteProfitField',hint:'Editing Target Profit. Final Customer Price and Markup % recalculate.'},
+  {driver:'markup',inputId:'quoteMarkupPercent',fieldId:'quoteMarkupPercentField',hint:'Editing Markup %. Final Customer Price and Target Profit recalculate.'}
+];
+function quoteTaxAvailable(){
+  return activeTaxEnabled() && quote.taxEnabled!==false;
+}
+function updatePricingDriverUi(){
+  const activeDriver=normalizePricingDriver(quote.pricingDriver);
+  document.querySelectorAll('[data-pricing-driver]').forEach((button)=>{
+    const selected=button.getAttribute('data-pricing-driver')===activeDriver;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  PRICING_DRIVER_FIELDS.forEach((config)=>{
+    const isActive=config.driver===activeDriver;
+    const input=$(config.inputId);
+    if(input){
+      input.readOnly=!isActive;
+      input.tabIndex=isActive?0:-1;
+    }
+    const field=$(config.fieldId);
+    if(field)field.classList.toggle('quote-field--muted',!isActive);
+  });
+  const hint=$('quotePricingDriverHint');
+  if(hint){
+    const config=PRICING_DRIVER_FIELDS.find((item)=>item.driver===activeDriver);
+    hint.textContent=config?config.hint:'';
+  }
+}
+function setPricingDriver(driver){
+  const next=normalizePricingDriver(driver);
+  if(normalizePricingDriver(quote.pricingDriver)!==next){
+    quote.pricingDriver=next;
+    syncQuotePricing(next);
+    saveQuoteCurrent();
+    markQuoteDirty();
+  }
+  updateQuoteSummary();
+}
 function syncQuotePricing(driver){
   enforceSingleSourceComponents();
   syncQuoteBlankFromComponents();
@@ -4665,7 +4706,7 @@ function quoteMaths(){
   const markupAmount=numberOrZero(quote.targetProfit);
   const subtotal=numberOrZero(quote.finalCustomerPrice);
   const gstRate=Math.max(0,numberOrZero(quote.gstRate));
-  const taxActive=(quote.taxEnabled!==false) && (quote.includeGst!==false);
+  const taxActive=quoteTaxAvailable() && (quote.includeGst!==false);
   const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
   const profit=markupAmount;
@@ -8734,6 +8775,7 @@ function bindWorkshopQuoteBuilder(){
     const input=$(config.id);
     if(!input)return;
     const onPricingUpdate=()=>{
+      if(normalizePricingDriver(quote.pricingDriver)!==config.driver)return;
       quote[config.key]=numberOrZero(input.value);
       syncQuotePricing(config.driver);
       saveQuoteCurrent();
@@ -8742,6 +8784,11 @@ function bindWorkshopQuoteBuilder(){
     };
     input.addEventListener('input',onPricingUpdate);
     input.addEventListener('change',onPricingUpdate);
+  });
+  document.querySelectorAll('[data-pricing-driver]').forEach((button)=>{
+    if(button.getAttribute('data-pricing-driver-bound')==='true')return;
+    button.setAttribute('data-pricing-driver-bound','true');
+    button.addEventListener('click',()=>setPricingDriver(button.getAttribute('data-pricing-driver')));
   });
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput){
@@ -8991,7 +9038,7 @@ function updateQuoteSummary(){
   if($('quoteMarkupPercent') && document.activeElement!==$('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
   if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
-  const taxAvailable=quote.taxEnabled!==false;
+  const taxAvailable=quoteTaxAvailable();
   const showTaxDetails=taxAvailable && quote.includeGst!==false;
   if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
   if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
@@ -9001,6 +9048,7 @@ function updateQuoteSummary(){
   if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
   if(gstStatus){gstStatus.textContent='';}
   ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
+  updatePricingDriverUi();
   updateWorkshopSectionVisibility();
 }
 function ensureBlankEditorSheet(){
