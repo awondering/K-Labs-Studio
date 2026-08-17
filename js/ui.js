@@ -2549,11 +2549,18 @@ function renderStudioScreenMode(){
   if(components)components.hidden=!showComponents;
   if(taxonomy)taxonomy.hidden=!showTaxonomy;
 }
+function resetStudioScreenScrollMemory(){
+  if(window.KLABS_NAV && typeof window.KLABS_NAV.forgetScreenScroll==='function'){
+    window.KLABS_NAV.forgetScreenScroll('workshopScreen');
+  }
+}
 function showStudioLanding(){
+  resetStudioScreenScrollMemory();
   studioScreenView='landing';
   renderStudioScreenMode();
 }
 function showStudioWorkflow(){
+  resetStudioScreenScrollMemory();
   studioScreenView='workflow';
   renderStudioScreenMode();
 }
@@ -2585,9 +2592,6 @@ function showStudioTaxonomyManager(){
   setStudioTaxonomySectionMode('suppliers','browse');
   renderStudioScreenMode();
   renderStudioTaxonomyManager();
-}
-function prepareStudioLandingEntry(){
-  showStudioLanding();
 }
 function studioTaxonomyId(prefix){
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
@@ -9664,4 +9668,4 @@ bindBlankLibraryControls();
 bindSettingsControls();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,prepareStudioLanding:prepareStudioLandingEntry};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
