@@ -9663,15 +9663,6 @@ function syncSettingsPreferenceControls(){
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
-  const imperialDisplayGroup=$('settingsImperialDisplayGroup');
-  if(imperialDisplayGroup){
-    imperialDisplayGroup.hidden=activeMeasurementUnits()!=='imperial';
-  }
-  document.querySelectorAll('[data-settings-imperial-display]').forEach((button)=>{
-    const selected=button.getAttribute('data-settings-imperial-display')===activeImperialDisplay();
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
     const selected=button.getAttribute('data-settings-date-format')===activeDateFormat();
     button.classList.toggle('active',selected);
@@ -9744,20 +9735,6 @@ function bindSettingsControls(){
       renderWorkshopQuote();
       renderBlanks();
       renderBuilds();
-    });
-  });
-  document.querySelectorAll('[data-settings-imperial-display]').forEach((button)=>{
-    if(button.getAttribute('data-settings-bound')==='true')return;
-    button.setAttribute('data-settings-bound','true');
-    button.addEventListener('click',()=>{
-      const next=normalizeImperialDisplay(button.getAttribute('data-settings-imperial-display'));
-      if(studioSettings.imperialDisplay===next)return;
-      studioSettings.imperialDisplay=next;
-      saveStudioSettings();
-      syncSettingsPreferenceControls();
-      renderMeasurementPresentation();
-      renderWorkshopQuote();
-      renderBlanks();
     });
   });
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
