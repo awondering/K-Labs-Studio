@@ -9884,6 +9884,13 @@ function bindHomeActions(){
   }
 }
 function bindBuildsControls(){
+  const returnStudioBtn=$('buildsReturnStudioBtn');
+  if(returnStudioBtn && returnStudioBtn.getAttribute('data-builds-return-studio-bound')!=='true'){
+    returnStudioBtn.setAttribute('data-builds-return-studio-bound','true');
+    returnStudioBtn.addEventListener('click',()=>{
+      enterStudio();
+    });
+  }
   const searchInput=$('buildsSearchInput');
   if(searchInput){
     searchInput.addEventListener('input',()=>{
