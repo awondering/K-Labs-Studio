@@ -1038,6 +1038,11 @@ function prepareWorkshopLandingEntry(){
   workshopLandingReturnFocusTool='';
   workshopToolsState.activeTool='list';
 }
+// Single Studio-entry pathway: preserves whatever active build/landing context already exists (see onScreenChange), never forces a fresh draft.
+function enterStudio(){
+  preserveWorkshopQuoteOnEntry=false;
+  goScreen('workshopScreen');
+}
 function openWorkshopTool(tool){
   if(tool==='guide-spacing'){
     goScreen('layoutScreen');
@@ -8889,7 +8894,7 @@ function bindWorkshopQuoteBuilder(){
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
     newQuoteEntryBtn.addEventListener('click',()=>{
-      openCustomerFinderSheet('new-build');
+      startNewBuildFlow();
     });
   }
   const findCustomerEntryBtn=$('findCustomerEntryBtn');
@@ -9509,9 +9514,7 @@ function bindHomeActions(){
   if(enterBtn && enterBtn.getAttribute('data-home-bound')!=='true'){
     enterBtn.setAttribute('data-home-bound','true');
     enterBtn.addEventListener('click',()=>{
-      preserveWorkshopQuoteOnEntry=false;
-      showStudioLanding();
-      goScreen('workshopScreen');
+      enterStudio();
     });
   }
 }
@@ -9838,4 +9841,4 @@ bindBlankLibraryControls();
 bindSettingsControls();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};

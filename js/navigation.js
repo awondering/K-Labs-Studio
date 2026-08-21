@@ -116,6 +116,10 @@ document.addEventListener('click',(event)=>{
 		if(menuNav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
 		}
+		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.enterStudio==='function'){
+			window.KLABS_UI.enterStudio();
+			return;
+		}
 		safeGoScreen(menuNav.dataset.nav);
 		return;
 	}
@@ -123,6 +127,10 @@ document.addEventListener('click',(event)=>{
 	if(nav){
 		if(nav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
+		}
+		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.enterStudio==='function'){
+			window.KLABS_UI.enterStudio();
+			return;
 		}
 		safeGoScreen(nav.dataset.nav);
 	}
