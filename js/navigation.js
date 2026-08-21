@@ -16,8 +16,22 @@ function activeNavTargetForScreen(screenId){
 	return screenId;
 }
 
+// Remembers where the user was reading on each screen so bottom-nav round trips resume in place.
+const screenScrollPositions=new Map();
+
+function rememberActiveScreenScroll(){
+	const active=document.querySelector('.screen.active');
+	if(!active)return;
+	screenScrollPositions.set(active.id,window.scrollY||window.pageYOffset||0);
+}
+
+function forgetScreenScroll(id){
+	screenScrollPositions.delete(id);
+}
+
 function goScreen(id){
 	const activeNavId=activeNavTargetForScreen(id);
+	rememberActiveScreenScroll();
 	document.querySelectorAll('.screen').forEach((screen)=>screen.classList.toggle('active',screen.id===id));
 	document.querySelectorAll('[data-nav]').forEach((button)=>button.classList.toggle('active',button.dataset.nav===activeNavId));
 	syncHomeScreenClass(id);
@@ -29,7 +43,11 @@ function goScreen(id){
 	const menuSheet=document.getElementById('navMenuSheet');
 	if(menuSheet){menuSheet.hidden=true;}
 	document.body.classList.remove('nav-menu-open');
-	scrollTo(0,0);
+	const restoreY=screenScrollPositions.get(id)||0;
+	scrollTo(0,restoreY);
+	if(restoreY>0){
+		requestAnimationFrame(()=>scrollTo(0,restoreY));
+	}
 }
 
 function ensureNavMenu(){
@@ -95,9 +113,6 @@ document.addEventListener('click',(event)=>{
 	}
 	const menuNav=event.target.closest('#navMenuSheet [data-nav]');
 	if(menuNav){
-		if(menuNav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareStudioLanding==='function'){
-			window.KLABS_UI.prepareStudioLanding();
-		}
 		if(menuNav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
 		}
@@ -106,9 +121,6 @@ document.addEventListener('click',(event)=>{
 	}
 	const nav=event.target.closest('[data-nav]');
 	if(nav){
-		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareStudioLanding==='function'){
-			window.KLABS_UI.prepareStudioLanding();
-		}
 		if(nav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
 		}
@@ -119,6 +131,8 @@ document.addEventListener('click',(event)=>{
 document.addEventListener('keydown',(event)=>{
 	if(event.key==='Escape'){closeNavMenu();}
 });
+
+window.KLABS_NAV={forgetScreenScroll};
 
 const initialActiveScreen=document.querySelector('.screen.active');
 syncHomeScreenClass(initialActiveScreen?initialActiveScreen.id:'homeScreen');

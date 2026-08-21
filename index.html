@@ -541,9 +541,18 @@
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
             <label id="quoteLabourCostField"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
             <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
+            <div id="quotePricingDriverField" class="quote-grid__full quote-pricing-driver" role="group" aria-label="Pricing driver">
+              <span class="quote-pricing-driver__label">Pricing Driver</span>
+              <div class="quote-pricing-driver__options">
+                <button class="ghost-action quote-pricing-driver__button" type="button" data-pricing-driver="final" aria-pressed="false">PRICE</button>
+                <button class="ghost-action quote-pricing-driver__button" type="button" data-pricing-driver="profit" aria-pressed="false">PROFIT</button>
+                <button class="ghost-action quote-pricing-driver__button" type="button" data-pricing-driver="markup" aria-pressed="true">MARKUP</button>
+              </div>
+              <p id="quotePricingDriverHint" class="quote-pricing-driver__hint" aria-live="polite"></p>
+            </div>
             <label id="quoteMarkupPercentField"><span>Markup %</span><input id="quoteMarkupPercent" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
             <label id="quoteProfitField"><span>Target Profit</span><input id="quoteProfit" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            <label><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label id="quoteTotalField"><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteIncludeGstField" class="quote-gst-toggle"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
             <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
             <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
