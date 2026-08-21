@@ -69,6 +69,7 @@ let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuot
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
+let buildsStatusFilter='active';
 let activeBuildRowMenu='';
 let customerFinderSearch='';
 let customerFinderSelectedKey='';
@@ -2211,7 +2212,8 @@ function newQuoteTemplate(){
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'active'
+    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
+    depositEnabled:false,depositType:'percent',depositValue:0
   };
 }
 function normalizeAddressText(value){
@@ -2562,7 +2564,12 @@ function normalizeQuoteMode(value){
 }
 function normalizeQuoteStatus(value){
   const normalized=String(value||'').trim().toLowerCase();
-  return normalized==='complete' || normalized==='accepted'?'complete':'active';
+  if(normalized==='complete' || normalized==='accepted')return 'complete';
+  if(normalized==='quote')return 'quote';
+  return 'active';
+}
+function normalizeDepositType(value){
+  return String(value||'').trim().toLowerCase()==='fixed'?'fixed':'percent';
 }
 function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
@@ -2574,6 +2581,9 @@ function normalizeQuote(inputQuote){
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
+  merged.depositEnabled=!!(inputQuote&&inputQuote.depositEnabled);
+  merged.depositType=normalizeDepositType(inputQuote&&inputQuote.depositType);
+  merged.depositValue=Math.max(0,numberOrZero(inputQuote&&inputQuote.depositValue));
   merged.estimatedCompletionDate=String(inputQuote&&inputQuote.estimatedCompletionDate||'').trim();
   const incomingGstRate=(inputQuote&&inputQuote.gstRate);
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
@@ -4906,6 +4916,17 @@ function quoteMaths(){
   const total=subtotal;
   const profit=markupAmount;
   return{materialCost,labourCost,internalBuildCost,markupAmount,subtotal,gst,total,profit,markupPercent:numberOrZero(quote.markupPercent),taxRate:gstRate};
+}
+// Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
+function depositMaths(){
+  const math=quoteMaths();
+  const total=Math.max(0,numberOrZero(math.total));
+  const enabled=!!quote.depositEnabled;
+  const type=normalizeDepositType(quote.depositType);
+  const rawValue=Math.max(0,numberOrZero(quote.depositValue));
+  const depositAmount=enabled?Math.min(total,type==='fixed'?rawValue:(total*rawValue/100)):0;
+  const remainingBalance=Math.max(0,total-depositAmount);
+  return{...math,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance};
 }
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -7381,17 +7402,25 @@ function toggleCustomerFinderCustomerMenu(){
 }
 function customerFinderBuildRowMenuMarkup(entry){
   const lifecycle=buildLifecycleStatusKey(entry&&entry.record);
-  const toggleLabel=lifecycle==='complete'?'Mark Active':'Mark Complete';
-  const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  return `<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Build actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="${toggleAction}" data-customer-open-source="${source}" data-customer-open-index="${index}">${toggleLabel}</button><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="rename" data-customer-open-source="${source}" data-customer-open-index="${index}">Rename Build</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-build-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">Delete Build</button></div>`;
+  const confirmItem=lifecycle==='quote'
+    ?`<button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="confirm-build" data-customer-open-source="${source}" data-customer-open-index="${index}">Confirm Build</button>`
+    :'';
+  const toggleItem=lifecycle==='quote'
+    ?''
+    :(()=>{
+      const toggleLabel=lifecycle==='complete'?'Mark Active':'Mark Complete';
+      const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
+      return `<button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="${toggleAction}" data-customer-open-source="${source}" data-customer-open-index="${index}">${toggleLabel}</button>`;
+    })();
+  return `<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Build actions">${confirmItem}${toggleItem}<button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="rename" data-customer-open-source="${source}" data-customer-open-index="${index}">Rename Build</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-build-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">Delete Build</button></div>`;
 }
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
   const title=specificationValue(record.buildName)||'Untitled Job';
   const lifecycle=buildLifecycleStatusKey(record);
-  const statusLabel=lifecycle==='complete'?'COMPLETE':'ACTIVE';
+  const statusLabel=buildLifecycleLabel(lifecycle).toUpperCase();
   const editedAtIso=record.updatedAt||record.savedAt||'';
   const editedAtText=editedAtIso?formatDateDisplay(editedAtIso,{includeTime:true}):'Unknown date';
   const completedAtIso=record.completedAt||record.updatedAt||record.savedAt||'';
@@ -7953,6 +7982,22 @@ function ensureCustomerFinderSheet(){
         }
         return;
       }
+      if(action==='confirm-build'){
+        closeCustomerFinderBuildRowMenu();
+        openConfirmDialog({
+          title:'Confirm Build',
+          message:'Confirm this quote as an active build?',
+          actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Build',kind:'primary'}]
+        },(confirmAction)=>{
+          if(confirmAction!=='confirm')return;
+          if(saveBuildLifecycleStatusBySource(source,index,'active')){
+            renderCustomerFinder();
+            renderBuilds();
+            flashWorkshopStatus('Build confirmed \u2014 now Active');
+          }
+        });
+        return;
+      }
       if(action==='rename'){
         closeCustomerFinderSheet();
         openSavedBuildRecord(source,index,{openAtTop:true});
@@ -8057,11 +8102,10 @@ function savedBuildDisplayCustomerName(record){
 }
 function buildLifecycleStatusKey(record){
   const rawStatus=specificationValue((record&&record.quoteStatus)||(record&&record.status));
-  const normalized=normalizeQuoteStatus(rawStatus);
-  return normalized==='complete'?'complete':'active';
+  return normalizeQuoteStatus(rawStatus);
 }
 function savedBuildDisplayStatus(record){
-  return buildLifecycleStatusKey(record)==='complete'?'Complete':'Active';
+  return buildLifecycleLabel(buildLifecycleStatusKey(record));
 }
 function savedBuildDisplayDate(value){
   return formatDateDisplay(value,{includeTime:true});
@@ -8083,9 +8127,17 @@ function savedBuildRowMenuMarkup(entry){
   const lifecycle=buildLifecycleStatusKey(entry.record);
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
-  const toggleLabel=lifecycle==='complete'?'Mark Active':'Mark Complete';
-  const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
-  return `<div class="saved-build-card__menu" role="menu" aria-label="Build actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-build-action="${toggleAction}" data-build-source="${source}" data-build-index="${index}">${toggleLabel}</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-build-action="delete" data-build-source="${source}" data-build-index="${index}">Delete</button></div>`;
+  const confirmItem=lifecycle==='quote'
+    ?`<button class="saved-build-card__menu-item" type="button" role="menuitem" data-build-action="confirm-build" data-build-source="${source}" data-build-index="${index}">Confirm Build</button>`
+    :'';
+  const toggleItem=lifecycle==='quote'
+    ?''
+    :(()=>{
+      const toggleLabel=lifecycle==='complete'?'Mark Active':'Mark Complete';
+      const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
+      return `<button class="saved-build-card__menu-item" type="button" role="menuitem" data-build-action="${toggleAction}" data-build-source="${source}" data-build-index="${index}">${toggleLabel}</button>`;
+    })();
+  return `<div class="saved-build-card__menu" role="menu" aria-label="Build actions">${confirmItem}${toggleItem}<button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-build-action="delete" data-build-source="${source}" data-build-index="${index}">Delete</button></div>`;
 }
 function savedBuildRowMarkup(entry){
   const record=entry.record;
@@ -8106,7 +8158,7 @@ function savedBuildRowMarkup(entry){
   return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small>${estimatedCompletionText?`<small>Est. ${escapeHtml(estimatedCompletionText)}</small>`:''}</div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
 }
 function isBuildEntryInStatusFilter(entry){
-  return buildLifecycleStatusKey(entry&&entry.record)==='active';
+  return buildLifecycleStatusKey(entry&&entry.record)===buildsStatusFilter;
 }
 function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
@@ -8114,7 +8166,7 @@ function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
   const target=records[numericIndex]&&typeof records[numericIndex]==='object'?records[numericIndex]:{};
-  const nextStatus=nextLifecycle==='complete'?'complete':'active';
+  const nextStatus=nextLifecycle==='complete'?'complete':nextLifecycle==='quote'?'quote':'active';
   const nowIso=new Date().toISOString();
   const nextRecord={
     ...target,
@@ -8129,7 +8181,9 @@ function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   return true;
 }
 function buildLifecycleLabel(lifecycle){
-  return lifecycle==='complete'?'Complete':'Active';
+  if(lifecycle==='complete')return 'Complete';
+  if(lifecycle==='quote')return 'Quote';
+  return 'Active';
 }
 function currentBuildLifecycleStatus(){
   return buildLifecycleStatusKey(quote);
@@ -8162,10 +8216,15 @@ function updateWorkshopBuildActionsUi(){
   if(statusEl){
     statusEl.textContent=statusLabel;
     statusEl.classList.toggle('workshop-build-actions-status-value--complete',lifecycle==='complete');
-    statusEl.classList.toggle('workshop-build-actions-status-value--active',lifecycle!=='complete');
+    statusEl.classList.toggle('workshop-build-actions-status-value--active',lifecycle==='active');
+    statusEl.classList.toggle('workshop-build-actions-status-value--quote',lifecycle==='quote');
   }
+  const isQuote=lifecycle==='quote';
+  const confirmBtn=$('confirmBuildBtn');
+  if(confirmBtn)confirmBtn.hidden=!isQuote;
   const toggleButton=$('toggleCurrentBuildStatusBtn');
   if(toggleButton){
+    toggleButton.hidden=isQuote;
     toggleButton.textContent=lifecycle==='complete'?'Mark Active':'Mark Complete';
   }
   const menuToggle=$('currentBuildActionsToggleStatus');
@@ -8191,7 +8250,8 @@ function updateWorkshopBuildOverview(){
   if(statusEl){
     statusEl.textContent=buildLifecycleLabel(lifecycle).toUpperCase();
     statusEl.classList.toggle('saved-build-card__status--complete',lifecycle==='complete');
-    statusEl.classList.toggle('saved-build-card__status--active',lifecycle!=='complete');
+    statusEl.classList.toggle('saved-build-card__status--active',lifecycle==='active');
+    statusEl.classList.toggle('saved-build-card__status--quote',lifecycle==='quote');
   }
   const dueEl=$('quoteBuilderOverviewDue');
   if(dueEl){
@@ -8214,7 +8274,7 @@ function ensureCurrentBuildReference(){
   markQuoteSaved();
   return savedRef;
 }
-function setCurrentBuildLifecycle(nextLifecycle){
+function setCurrentBuildLifecycle(nextLifecycle,options){
   const target=ensureCurrentBuildReference();
   if(!target)return false;
   if(!saveBuildLifecycleStatusBySource(target.source,target.index,nextLifecycle))return false;
@@ -8228,12 +8288,29 @@ function setCurrentBuildLifecycle(nextLifecycle){
   renderWorkshopQuote();
   renderBuilds();
   renderCustomerFinder();
-  flashWorkshopStatus(nextLifecycle==='complete'?'Build marked complete':'Build marked active');
+  const defaultMessage=nextLifecycle==='complete'?'Build marked complete':nextLifecycle==='active'?'Build marked active':'Saved as Quote';
+  flashWorkshopStatus((options&&options.message)||defaultMessage);
   return true;
 }
 function toggleCurrentBuildLifecycle(){
   const current=currentBuildLifecycleStatus();
+  if(current==='quote')return false;
   return setCurrentBuildLifecycle(current==='complete'?'active':'complete');
+}
+// Confirm Build: QUOTE -> ACTIVE on the same record. Flushes any unsaved edits first so nothing is silently discarded.
+function confirmCurrentBuildAsActive(){
+  if(currentBuildLifecycleStatus()!=='quote')return;
+  openConfirmDialog({
+    title:'Confirm Build',
+    message:'Confirm this quote as an active build?',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Build',kind:'primary'}]
+  },(action)=>{
+    if(action!=='confirm')return;
+    if(hasUnsavedQuoteChanges){
+      persistCurrentQuoteRecord();
+    }
+    setCurrentBuildLifecycle('active',{message:'Build confirmed \u2014 now Active'});
+  });
 }
 function focusBuildNameField(){
   const input=$('quoteBuildName');
@@ -8243,6 +8320,11 @@ function focusBuildNameField(){
   try{input.select();}catch{}
 }
 function handleCurrentBuildAction(action){
+  if(action==='confirm-build'){
+    closeCurrentBuildActionsMenu();
+    confirmCurrentBuildAsActive();
+    return;
+  }
   if(action==='toggle-status'){
     toggleCurrentBuildLifecycle();
     closeCurrentBuildActionsMenu();
@@ -8335,6 +8417,16 @@ function openSavedBuildRecord(source,index,options){
 function renderBuilds(){
   const host=$('buildCards');
   if(!host)return;
+  document.querySelectorAll('[data-builds-status-filter]').forEach((button)=>{
+    const selected=button.getAttribute('data-builds-status-filter')===buildsStatusFilter;
+    button.classList.toggle('active',selected);
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  const isQuoteTab=buildsStatusFilter==='quote';
+  const titleEl=$('buildsScreenTitle');
+  const subtitleEl=$('buildsScreenSubtitle');
+  if(titleEl)titleEl.textContent=isQuoteTab?'Quotes':'Active Builds';
+  if(subtitleEl)subtitleEl.textContent=isQuoteTab?'Quotes waiting to be confirmed as active builds.':'Continue rods currently in progress.';
   const query=String(buildsSearch||'').trim();
   const terms=savedBuildSearchTerms(query);
   const records=savedBuildRecords()
@@ -8363,7 +8455,9 @@ function renderBuilds(){
         });
       }
     }else{
-      host.innerHTML='<section class="saved-builds-empty"><h3>No active builds yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+      host.innerHTML=isQuoteTab
+        ?'<section class="saved-builds-empty"><h3>No quotes yet.</h3><p>Quotes you create will appear here until confirmed.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>'
+        :'<section class="saved-builds-empty"><h3>No active builds yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
     }
     const emptyButton=$('savedBuildsEmptyNewBuildBtn');
     if(emptyButton){
@@ -8433,6 +8527,94 @@ function closeConfirmDialog(action){
   if(sheet)sheet.hidden=true;
   unlockModalLayer({restoreFocus:true});
   if(handler)handler(action||'cancel');
+}
+// Customer-facing quote presentation: never include internal cost/supplier/markup/profit data, only purchasing-relevant info.
+function customerQuoteSummaryMarkup(){
+  const math=depositMaths();
+  const customerName=specificationValue(quote.customerName)||'Customer';
+  const rodDescription=customerSafeText(specificationValue(quote.buildName))||customerSafeText(blankSpecificationSummary())||'Custom Rod Build';
+  const specRows=customerSpecificationRows();
+  const parts=customerIncludedParts();
+  const dueRaw=specificationValue(quote.estimatedCompletionDate);
+  const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'To be confirmed';
+  const notesText=customerRequestText(quote.notes);
+  const pricingRows=math.depositEnabled
+    ?`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div><div><span>Deposit Required</span><strong>${currency(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currency(math.remainingBalance)}</strong></div>`
+    :`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div>`;
+  return `
+    <div class="view-quote">
+      <div class="view-quote__row"><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
+      <div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>
+      ${specRows.length?`<div class="view-quote__specs">${specificationRowsMarkup(specRows)}</div>`:''}
+      ${customerIncludedPartsMarkup(parts)}
+      <div class="view-quote__pricing">${pricingRows}</div>
+      <div class="view-quote__row"><span>Estimated Completion</span><strong>${escapeHtml(dueText)}</strong></div>
+      ${notesText?`<div class="view-quote__notes"><span>Customer Notes</span><p>${escapeHtml(notesText)}</p></div>`:''}
+    </div>
+  `;
+}
+function ensureViewQuoteSheet(){
+  if($('viewQuoteSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='viewQuoteSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-view-quote-action="close"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer quote">
+      <header class="component-sheet__header">
+        <h2>Customer Quote</h2>
+        <button class="component-sheet__close" type="button" data-view-quote-action="close" aria-label="Close customer quote">×</button>
+      </header>
+      <div class="component-sheet__body">
+        <div id="viewQuoteBody"></div>
+        <div class="quote-preview-actions">
+          <button id="viewQuoteEmailBtn" type="button" class="ghost-action">Email Quote</button>
+          <button id="viewQuoteCloseBtn" type="button" class="primary-action">Close</button>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    const action=event.target.closest('[data-view-quote-action]');
+    if(action){closeViewQuote();return;}
+    if(event.target.closest('#viewQuoteCloseBtn')){closeViewQuote();return;}
+    if(event.target.closest('#viewQuoteEmailBtn')){emailCurrentQuote();}
+  });
+}
+function openViewQuote(){
+  ensureViewQuoteSheet();
+  const body=$('viewQuoteBody');
+  if(body)body.innerHTML=customerQuoteSummaryMarkup();
+  const sheet=$('viewQuoteSheet');
+  if(!sheet)return;
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
+}
+function closeViewQuote(){
+  const sheet=$('viewQuoteSheet');
+  if(sheet)sheet.hidden=true;
+  unlockModalLayer({restoreFocus:true});
+}
+// No email-sending backend exists yet; hand the customer-safe summary to the device's own mail client rather than faking a "sent" state.
+function emailCurrentQuote(){
+  const math=depositMaths();
+  const customerName=specificationValue(quote.customerName)||'Customer';
+  const email=specificationValue(quote.email);
+  const dueRaw=specificationValue(quote.estimatedCompletionDate);
+  const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'to be confirmed';
+  const lines=[`Hi ${customerName},`,'','Here is your rod build quote:',`Total Price: ${currency(math.total)}`];
+  if(math.depositEnabled){
+    lines.push(`Deposit Required: ${currency(math.depositAmount)}`);
+    lines.push(`Balance Remaining: ${currency(math.remainingBalance)}`);
+  }
+  lines.push(`Estimated Completion: ${dueText}`);
+  const notesText=customerRequestText(quote.notes);
+  if(notesText){lines.push('',notesText);}
+  const subject=`Your Rod Build Quote${specificationValue(quote.buildName)?` \u2014 ${quote.buildName}`:''}`;
+  const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
+  window.location.href=mailto;
 }
 function requestDeleteBlank(blank){
   const refs=blankReferenceSummary(blank);
@@ -9069,6 +9251,40 @@ function bindWorkshopQuoteBuilder(){
       quoteTaxRateInput.blur();
     });
   }
+  const depositEnabledInput=$('quoteDepositEnabled');
+  if(depositEnabledInput && depositEnabledInput.getAttribute('data-deposit-bound')!=='true'){
+    depositEnabledInput.setAttribute('data-deposit-bound','true');
+    const onDepositToggle=()=>{
+      quote.depositEnabled=depositEnabledInput.checked;
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    depositEnabledInput.addEventListener('input',onDepositToggle);
+    depositEnabledInput.addEventListener('change',onDepositToggle);
+  }
+  document.querySelectorAll('[data-deposit-type]').forEach((button)=>{
+    if(button.getAttribute('data-deposit-type-bound')==='true')return;
+    button.setAttribute('data-deposit-type-bound','true');
+    button.addEventListener('click',()=>{
+      quote.depositType=normalizeDepositType(button.getAttribute('data-deposit-type'));
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    });
+  });
+  const depositValueInput=$('quoteDepositValue');
+  if(depositValueInput && depositValueInput.getAttribute('data-deposit-value-bound')!=='true'){
+    depositValueInput.setAttribute('data-deposit-value-bound','true');
+    const onDepositValueUpdate=()=>{
+      quote.depositValue=Math.max(0,numberOrZero(depositValueInput.value));
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    depositValueInput.addEventListener('input',onDepositValueUpdate);
+    depositValueInput.addEventListener('change',onDepositValueUpdate);
+  }
   bindBuildSpecificationInputs();
   const componentsList=$('quoteComponentsList');
   if(componentsList){
@@ -9170,6 +9386,27 @@ function bindWorkshopQuoteBuilder(){
     toggleStatusBtn.setAttribute('data-build-status-bound','true');
     toggleStatusBtn.addEventListener('click',()=>{
       toggleCurrentBuildLifecycle();
+    });
+  }
+  const confirmBuildBtn=$('confirmBuildBtn');
+  if(confirmBuildBtn && confirmBuildBtn.getAttribute('data-confirm-build-bound')!=='true'){
+    confirmBuildBtn.setAttribute('data-confirm-build-bound','true');
+    confirmBuildBtn.addEventListener('click',()=>{
+      confirmCurrentBuildAsActive();
+    });
+  }
+  const viewQuoteBtn=$('viewQuoteBtn');
+  if(viewQuoteBtn && viewQuoteBtn.getAttribute('data-view-quote-bound')!=='true'){
+    viewQuoteBtn.setAttribute('data-view-quote-bound','true');
+    viewQuoteBtn.addEventListener('click',()=>{
+      openViewQuote();
+    });
+  }
+  const emailQuoteBtn=$('emailQuoteBtn');
+  if(emailQuoteBtn && emailQuoteBtn.getAttribute('data-email-quote-bound')!=='true'){
+    emailQuoteBtn.setAttribute('data-email-quote-bound','true');
+    emailQuoteBtn.addEventListener('click',()=>{
+      emailCurrentQuote();
     });
   }
   const currentBuildActionsMenuBtn=$('currentBuildActionsMenuBtn');
@@ -9297,7 +9534,37 @@ function updateQuoteSummary(){
   if(gstStatus){gstStatus.textContent='';}
   ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
   updatePricingDriverUi();
+  updateDepositFields();
   updateWorkshopSectionVisibility();
+}
+// Deposit fields are optional and independent of build status; kept in sync with the live pricing math.
+function updateDepositFields(){
+  const enabledInput=$('quoteDepositEnabled');
+  if(enabledInput && document.activeElement!==enabledInput)enabledInput.checked=!!quote.depositEnabled;
+  const enabled=!!quote.depositEnabled;
+  const typeField=$('quoteDepositTypeField');
+  const valueField=$('quoteDepositValueField');
+  const amountField=$('quoteDepositAmountField');
+  const balanceField=$('quoteBalanceRemainingField');
+  if(typeField)typeField.hidden=!enabled;
+  if(valueField)valueField.hidden=!enabled;
+  if(amountField)amountField.hidden=!enabled;
+  if(balanceField)balanceField.hidden=!enabled;
+  if(!enabled)return;
+  const math=depositMaths();
+  syncWorkshopToggleButtons(document,'[data-deposit-type]','data-deposit-type',math.depositType);
+  const valueLabel=$('quoteDepositValueLabel');
+  const valueInput=$('quoteDepositValue');
+  if(valueLabel)valueLabel.textContent=math.depositType==='fixed'?'Deposit Amount ($)':'Deposit %';
+  if(valueInput && document.activeElement!==valueInput)valueInput.value=numberOrZero(math.depositValue).toFixed(math.depositType==='fixed'?2:1);
+  if(amountField){
+    const amountInput=$('quoteDepositAmount');
+    if(amountInput)amountInput.value=currency(math.depositAmount);
+  }
+  if(balanceField){
+    const balanceInput=$('quoteBalanceRemaining');
+    if(balanceInput)balanceInput.value=currency(math.remainingBalance);
+  }
 }
 function ensureBlankEditorSheet(){
   if($('blankEditorSheet'))return;
@@ -9646,6 +9913,17 @@ function bindBuildsControls(){
       startNewBuildFlow();
     });
   }
+  document.querySelectorAll('[data-builds-status-filter]').forEach((button)=>{
+    if(button.getAttribute('data-builds-status-filter-bound')==='true')return;
+    button.setAttribute('data-builds-status-filter-bound','true');
+    button.addEventListener('click',()=>{
+      const next=button.getAttribute('data-builds-status-filter')==='quote'?'quote':'active';
+      if(buildsStatusFilter===next)return;
+      buildsStatusFilter=next;
+      closeSavedBuildRowMenu();
+      renderBuilds();
+    });
+  });
   const host=$('buildCards');
   if(host){
     host.addEventListener('click',(event)=>{
@@ -9678,6 +9956,22 @@ function bindBuildsControls(){
           renderCustomerFinder();
           flashWorkshopStatus('Build marked active');
         }
+        return;
+      }
+      if(action==='confirm-build'){
+        closeSavedBuildRowMenu();
+        openConfirmDialog({
+          title:'Confirm Build',
+          message:'Confirm this quote as an active build?',
+          actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Build',kind:'primary'}]
+        },(confirmAction)=>{
+          if(confirmAction!=='confirm')return;
+          if(saveBuildLifecycleStatusBySource(source,index,'active')){
+            renderBuilds();
+            renderCustomerFinder();
+            flashWorkshopStatus('Build confirmed \u2014 now Active');
+          }
+        });
         return;
       }
       if(action==='delete'){requestDeleteSavedBuildRecord(source,index);}

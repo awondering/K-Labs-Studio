@@ -574,6 +574,17 @@
             <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
             <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
+            <label id="quoteDepositEnabledField" class="quote-gst-toggle"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
+            <div id="quoteDepositTypeField" class="quote-grid__full quote-pricing-driver" role="group" aria-label="Deposit type" hidden>
+              <span class="quote-pricing-driver__label">Deposit Type</span>
+              <div class="quote-pricing-driver__options">
+                <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="percent" aria-pressed="true">PERCENT</button>
+                <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="fixed" aria-pressed="false">FIXED $</button>
+              </div>
+            </div>
+            <label id="quoteDepositValueField" hidden><span id="quoteDepositValueLabel">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
+            <label id="quoteDepositAmountField" hidden><span>Deposit Amount</span><input id="quoteDepositAmount" type="text" readonly /></label>
+            <label id="quoteBalanceRemainingField" hidden><span>Balance Remaining</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
           </div>
         </article>
 
@@ -593,7 +604,12 @@
                 <span>Status</span>
                 <strong id="workshopBuildLifecycleStatus" class="workshop-build-actions-status-value">Active</strong>
               </div>
+              <button id="confirmBuildBtn" class="primary-action workshop-build-actions-confirm" type="button" hidden>Confirm Build</button>
               <button id="toggleCurrentBuildStatusBtn" class="ghost-action workshop-build-actions-status-toggle" type="button">Mark Complete</button>
+              <div class="workshop-build-actions-quote-row">
+                <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
+                <button id="emailQuoteBtn" class="ghost-action" type="button">Email Quote</button>
+              </div>
               <div class="workshop-build-actions-row">
                 <span>Saved</span>
                 <div class="workshop-build-actions-row-end">
@@ -614,7 +630,11 @@
     </section>
 
     <section class="screen" id="buildsScreen">
-      <div class="screen-head"><h1>Active Builds</h1><p class="subtle">Continue rods currently in progress.</p></div>
+      <div class="screen-head"><h1 id="buildsScreenTitle">Active Builds</h1><p id="buildsScreenSubtitle" class="subtle">Continue rods currently in progress.</p></div>
+      <div class="saved-builds-status-tabs" role="tablist" aria-label="Build status">
+        <button class="ghost-action saved-builds-status-tab active" type="button" data-builds-status-filter="active" aria-pressed="true">Active</button>
+        <button class="ghost-action saved-builds-status-tab" type="button" data-builds-status-filter="quote" aria-pressed="false">Quotes</button>
+      </div>
       <div class="blank-library-controls saved-builds-controls">
         <input id="buildsSearchInput" class="component-sheet__search" type="search" placeholder="Search customer or build" autocomplete="off" />
         <button id="savedBuildsNewBuildBtn" class="primary-action" type="button">New Build</button>
