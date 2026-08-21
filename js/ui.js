@@ -505,6 +505,7 @@ function setSpiralGuideCount(nextCount){
   const spiral=workshopToolsState.spiral;
   const clamped=clampSpiralGuideCount(nextCount);
   if(spiral.guideCount===clamped)return;
+  markGuideDataDirty();
   const existing=Array.isArray(spiral.guides)?spiral.guides:[];
   const layout=calcGuideLayout(+state.firstGuide,clamped,+state.targetStripper);
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
@@ -525,6 +526,7 @@ function applySpiralCountDelta(target,delta){
 function setSpiralGuideAngle(index,nextAngle){
   const spiral=workshopToolsState.spiral;
   if(!Number.isFinite(index) || !spiral.guides[index])return;
+  markGuideDataDirty();
   const isStripper=index===spiral.guides.length-1;
   const guide=spiral.guides[index];
   guide.angleDeg=isStripper
@@ -620,6 +622,7 @@ function syncSpiralGuidesLength(options){
 function setSpiralMethod(method){
   const spiral=workshopToolsState.spiral;
   const nextMethod=normalizeSpiralMethod(method);
+  markGuideDataDirty();
   spiral.method=nextMethod;
   if(nextMethod==='offset' && spiral.guides.length){
     const stripper=spiral.guides[spiralStripperIndex(spiral.guideCount)];
@@ -688,6 +691,7 @@ function importSpiralFromGuideSpacing(){
   const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
   if(!rows.length)return;
+  markGuideDataDirty();
   spiral.guideCount=rows.length;
   const existing=Array.isArray(spiral.guides)?spiral.guides:[];
   const defaults=buildSpiralPresetAngles(spiral.method,rows.length,spiral.offsetStartAngle,rows.map((row)=>({positionMm:row&&row.cum})));
@@ -705,6 +709,7 @@ function resetSpiralGuideMapper(){
   const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
   const existing=Array.isArray(spiral.guides)?spiral.guides:[];
+  markGuideDataDirty();
   spiral.method=SPIRAL_MAPPER_DEFAULT_STATE.method;
   spiral.direction=SPIRAL_MAPPER_DEFAULT_STATE.direction;
   spiral.offsetStartAngle=SPIRAL_MAPPER_DEFAULT_STATE.offsetStartAngle;
@@ -739,6 +744,51 @@ function syncSpiralGuidePositionsFromLayout(rows){
 function syncSpiralWithGuideLayout(){
   const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   syncSpiralGuidePositionsFromLayout(layout.rows);
+}
+// Guide count/positions stay Guide Spacing's own numbers (firstGuide/targetStripper regenerate identical positions);
+// only the orientation method/direction/per-guide angles need to be captured here for build persistence.
+function captureGuideSpecificationSnapshot(){
+  const spiral=workshopToolsState.spiral;
+  const guides=Array.isArray(spiral.guides)?spiral.guides:[];
+  return {
+    guideCount:clampValue(state.guideCount,5,20),
+    firstGuideMm:clampMeasurementValue(state.firstGuide,50,300),
+    targetStripperMm:clampMeasurementValue(state.targetStripper,500,2500),
+    spiralMethod:normalizeSpiralMethod(spiral.method),
+    spiralDirection:normalizeSpiralDirection(spiral.direction),
+    spiralOffsetStartAngle:clampSpiralStripperAngle(spiral.offsetStartAngle),
+    spiralAngles:guides.map((guide)=>clampSpiralAngle(guide&&guide.angleDeg)),
+  };
+}
+function normalizeGuideSpecification(inputSpec){
+  const spec=inputSpec&&typeof inputSpec==='object'?inputSpec:{};
+  const hasGuideCount=Number.isFinite(Number(spec.guideCount));
+  return {
+    guideCount:hasGuideCount?clampValue(spec.guideCount,5,20):null,
+    firstGuideMm:Number.isFinite(Number(spec.firstGuideMm))?clampMeasurementValue(spec.firstGuideMm,50,300):null,
+    targetStripperMm:Number.isFinite(Number(spec.targetStripperMm))?clampMeasurementValue(spec.targetStripperMm,500,2500):null,
+    spiralMethod:spec.spiralMethod?normalizeSpiralMethod(spec.spiralMethod):'',
+    spiralDirection:spec.spiralDirection?normalizeSpiralDirection(spec.spiralDirection):'',
+    spiralOffsetStartAngle:Number.isFinite(Number(spec.spiralOffsetStartAngle))?clampSpiralStripperAngle(spec.spiralOffsetStartAngle):null,
+    spiralAngles:Array.isArray(spec.spiralAngles)?spec.spiralAngles.map((value)=>clampSpiralAngle(value)):[],
+  };
+}
+// Restores a saved build's Guide Spacing + Guide Orientation into the live workshop tools; no-ops for older builds with no stored specification.
+function applyGuideSpecificationSnapshot(spec){
+  const source=spec&&typeof spec==='object'?spec:null;
+  if(!source || !Number.isFinite(source.guideCount))return;
+  state.guideCount=clampValue(source.guideCount,5,20);
+  if(Number.isFinite(source.firstGuideMm))state.firstGuide=clampMeasurementValue(source.firstGuideMm,50,300);
+  if(Number.isFinite(source.targetStripperMm))state.targetStripper=clampMeasurementValue(source.targetStripperMm,500,2500);
+  const spiral=workshopToolsState.spiral;
+  spiral.method=normalizeSpiralMethod(source.spiralMethod);
+  spiral.direction=normalizeSpiralDirection(source.spiralDirection);
+  spiral.offsetStartAngle=clampSpiralStripperAngle(source.spiralOffsetStartAngle);
+  syncSpiralWithGuideLayout();
+  const angles=Array.isArray(source.spiralAngles)?source.spiralAngles:[];
+  if(angles.length===spiral.guides.length){
+    spiral.guides.forEach((guide,index)=>{guide.angleDeg=clampSpiralAngle(angles[index]);});
+  }
 }
 function captureSpiralGeometry(){
   const spiral=workshopToolsState.spiral;
@@ -1481,6 +1531,7 @@ function renderWorkshopCalculator(){
   renderDiameterCircumferenceTool();
   renderGripCoveringTool();
   renderSpiralGuideMapper();
+  renderGuideSpecificationSummary();
 }
 function bindWorkshopCalculatorControls(){
   const panel=$('workshopToolsPanel');
@@ -1567,6 +1618,7 @@ function bindWorkshopCalculatorControls(){
 
   bindWorkshopToggleButtons(panel,'[data-spiral-direction]',(button)=>{
     workshopToolsState.spiral.direction=normalizeSpiralDirection(button.getAttribute('data-spiral-direction'));
+    markGuideDataDirty();
     renderWorkshopCalculator();
   });
 
@@ -1657,6 +1709,7 @@ function bindWorkshopCalculatorControls(){
     if(spiral.method==='offset'){
       syncSpiralGuidesLength({resetAngles:true});
     }
+    markGuideDataDirty();
     renderWorkshopCalculator();
   });
 
@@ -1700,6 +1753,7 @@ function bindWorkshopCalculatorControls(){
         const next=Number(raw);
         if(Number.isFinite(next))setSpiralGuideAngle(index,next);
       }
+      markGuideDataDirty();
       renderWorkshopCalculator();
     };
     panel.addEventListener('click',(event)=>{
@@ -2155,6 +2209,7 @@ function newQuoteTemplate(){
     addressLine1:'',addressLine2:'',suburbLocality:'',cityTown:'',regionState:'',postcode:'',country:'New Zealand',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
+    guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
     labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'active'
   };
@@ -2541,6 +2596,7 @@ function normalizeQuote(inputQuote){
   merged.postcode=normalizeAddressText(inputQuote&&inputQuote.postcode);
   merged.country=normalizeAddressText(inputQuote&&inputQuote.country)||'New Zealand';
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
+  merged.guideSpecification=normalizeGuideSpecification(inputQuote&&inputQuote.guideSpecification);
   migrateBlankWorkflow(merged);
   const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
   const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
@@ -2610,6 +2666,10 @@ function markQuoteDirty(){
 function markQuoteSaved(){
   hasUnsavedQuoteChanges=false;
   updateQuoteActionPriority();
+}
+// Only dirty the active build from Workshop-tool edits when there's a real in-progress build/customer context (avoids phantom autosaved builds from standalone tool use).
+function markGuideDataDirty(){
+  if(quoteHasMeaningfulDraft(quote))markQuoteDirty();
 }
 function flashWorkshopStatus(message,options){
   const settings={pending:false,duration:1700,...(options||{})};
@@ -7046,7 +7106,7 @@ function quoteForPersistence(currentQuote){
   const persistedComponents=normalizeUniqueComponents(rawComponents,{keepDraftRows:false})
     .filter((component)=>componentRowHasMeaningfulData(component) && !pendingComponentDraftRows.has(component))
     .map(normalizeComponent);
-  return normalizeQuote({...source,components:persistedComponents});
+  return normalizeQuote({...source,components:persistedComponents,guideSpecification:captureGuideSpecificationSnapshot()});
 }
 function savedQuoteRecords(){
   const records=Store.get('klabs-workshop-quotes',[]);
@@ -8253,7 +8313,10 @@ function openSavedBuildRecord(source,index,options){
   closeCurrentBuildActionsMenu();
   setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
+  applyGuideSpecificationSnapshot(quote.guideSpecification);
+  save();
   saveQuoteCurrent();
+  render();
   markQuoteSaved();
   showStudioWorkflow();
   renderWorkshopQuote();
@@ -8509,6 +8572,7 @@ function setControlValue(field,rawValue,options){
     return;
   }
   state[cfg.key]=nextValue;
+  markGuideDataDirty();
   if(opts.persist===false){
     pendingControlPersist=true;
   }else{
@@ -8742,6 +8806,40 @@ function renderBuildSpecificationInputs(){
     if(document.activeElement===el)return;
     el.value=quote.buildSpecifications[field.key]||'';
   });
+  renderGuideSpecificationSummary();
+}
+const GUIDE_ORIENTATION_METHOD_LABELS={standard:'Standard / Conventional',acute:'Acute',progressive:'Progressive',offset:'Offset'};
+function guideOrientationMethodLabel(method){
+  return GUIDE_ORIENTATION_METHOD_LABELS[normalizeSpiralMethod(method)]||GUIDE_ORIENTATION_METHOD_LABELS.progressive;
+}
+// Build Specification's Guide section is a live read-out of Guide Spacing + Guide Orientation — no separate guide data is stored/edited here.
+function renderGuideSpecificationSummary(){
+  const countEl=$('guideSpecCount');
+  const methodEl=$('guideSpecMethod');
+  const directionRow=$('guideSpecDirectionRow');
+  const directionEl=$('guideSpecDirection');
+  const stripperEl=$('guideSpecStripperPosition');
+  const rowsHost=$('guideSpecRows');
+  if(!countEl && !methodEl && !rowsHost)return;
+  const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+  const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
+  const spiral=workshopToolsState.spiral;
+  const guides=Array.isArray(spiral.guides)?spiral.guides:[];
+  const method=normalizeSpiralMethod(spiral.method);
+  const showDirection=method!=='standard';
+  if(countEl)countEl.textContent=`${rows.length}`;
+  if(methodEl)methodEl.textContent=guideOrientationMethodLabel(method);
+  if(directionRow)directionRow.hidden=!showDirection;
+  if(directionEl)directionEl.textContent=normalizeSpiralDirection(spiral.direction)==='right'?'Right':'Left';
+  if(stripperEl)stripperEl.textContent=formatMeasurementValue(+state.targetStripper,CORE_MEASUREMENT_FORMAT);
+  if(rowsHost){
+    rowsHost.innerHTML=rows.map((row,index)=>{
+      const guide=guides[index];
+      const angle=guide?clampSpiralAngle(guide.angleDeg):NaN;
+      const angleText=Number.isFinite(angle)?`${formatDecimal(angle,1)}\u00b0`:'\u2014';
+      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${formatMeasurementValue(row.cum,CORE_MEASUREMENT_FORMAT)}</strong><em>${angleText}</em></div>`;
+    }).join('');
+  }
 }
 function workshopTopUiOffset(){
   const candidates=['.topbar','.live-build-status','.offline-ready-status'];
@@ -9781,6 +9879,7 @@ function render(options){
   if($('layoutTargetStripperMeta'))$('layoutTargetStripperMeta').textContent=units;
   refreshMeasurementPlaceholders();
   renderWorkshopCalculator();
+  renderGuideSpecificationSummary();
   document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
     button.disabled=!!state.locked;
   });

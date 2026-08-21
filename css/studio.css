@@ -3760,6 +3760,120 @@ body.component-sheet-open .workshop-back-to-top{
   color:#f7f2ea;
 }
 
+.guide-specification{
+  display:grid;
+  gap:8px;
+  border:1px solid rgba(214,210,200,.2);
+  border-radius:12px;
+  padding:12px 13px;
+  background:rgba(255,255,255,.03);
+}
+
+.guide-specification__head{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:4px 10px;
+}
+
+.guide-specification__title{
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#f2ede4;
+}
+
+.guide-specification__source{
+  font-size:9px;
+  letter-spacing:.05em;
+  color:rgba(214,210,200,.6);
+}
+
+.guide-specification__summary{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px 12px;
+}
+
+.guide-specification__summary > div{
+  display:grid;
+  gap:2px;
+}
+
+.guide-specification__summary span{
+  font-size:9px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(214,210,200,.72);
+}
+
+.guide-specification__summary strong{
+  font-size:14px;
+  color:#f5efe5;
+  font-variant-numeric:tabular-nums;
+}
+
+.guide-specification__details{
+  border-top:1px solid rgba(214,210,200,.14);
+  padding-top:8px;
+}
+
+.guide-specification__details summary{
+  cursor:pointer;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:rgba(223,216,205,.86);
+}
+
+.guide-specification__rows{
+  display:grid;
+  gap:5px;
+  margin-top:8px;
+  max-height:240px;
+  overflow-y:auto;
+}
+
+.guide-specification__row{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:8px;
+  align-items:baseline;
+  font-size:11px;
+  color:rgba(223,216,205,.86);
+  padding:5px 0;
+  border-bottom:1px solid rgba(214,210,200,.1);
+}
+
+.guide-specification__row span{
+  letter-spacing:.04em;
+  color:rgba(214,210,200,.72);
+}
+
+.guide-specification__row strong{
+  font-variant-numeric:tabular-nums;
+  color:#f5efe5;
+  text-align:right;
+}
+
+.guide-specification__row em{
+  font-style:normal;
+  font-variant-numeric:tabular-nums;
+  color:rgba(var(--kl-red-rgb),.86);
+  text-align:right;
+  min-width:44px;
+}
+
+@media (max-width:520px){
+  .guide-specification__summary{
+    grid-template-columns:1fr;
+  }
+  .guide-specification__row{
+    font-size:10.5px;
+  }
+}
+
 .workshop-tool-details{
   display:grid;
   gap:7px;
