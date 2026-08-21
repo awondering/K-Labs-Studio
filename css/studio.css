@@ -6321,6 +6321,10 @@ textarea::-moz-selection,
   grid-template-columns:repeat(3,minmax(0,1fr));
 }
 
+#workshopToolSpiral .workshop-tool-unit-row[data-spiral-method-row="true"]{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+
 #workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"]{
   grid-template-columns:repeat(2,minmax(0,1fr));
 }
@@ -6573,6 +6577,10 @@ textarea::-moz-selection,
 }
 
 .spiral-map-marker--underside-member{
+  opacity:.94;
+}
+
+.spiral-map-marker--topside-member{
   opacity:.94;
 }
 
@@ -6854,6 +6862,7 @@ textarea::-moz-selection,
   }
 
   #workshopToolSpiral .workshop-tool-unit-row,
+  #workshopToolSpiral .workshop-tool-unit-row[data-spiral-method-row="true"],
   #workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"],
   #workshopToolSpiral .spiral-guide-row__fields{
     grid-template-columns:1fr;

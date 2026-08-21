@@ -476,7 +476,7 @@ function gripCutAngleLabel(cutAngleDeg){
 }
 function normalizeSpiralMethod(value){
   const next=String(value||'').trim().toLowerCase();
-  return next==='acute' || next==='offset'?next:'progressive';
+  return next==='acute' || next==='offset' || next==='standard'?next:'progressive';
 }
 function normalizeSpiralDirection(value){
   return String(value||'').trim().toLowerCase()==='right'?'right':'left';
@@ -542,6 +542,9 @@ function buildSpiralPresetAngles(method,guideCount,offsetStartAngle,guides){
   const mode=normalizeSpiralMethod(method);
   const stripperIndex=spiralStripperIndex(total);
   const angles=Array.from({length:total},()=>180);
+  if(mode==='standard'){
+    return angles.map(()=>0);
+  }
   if(mode==='acute'){
     angles[stripperIndex]=0;
     if(stripperIndex-1>=0)angles[stripperIndex-1]=90;
@@ -802,9 +805,15 @@ function renderSpiralGuideMapper(){
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
 
+  const directionRow=card.querySelector('[data-spiral-direction-row]');
+  const showDirection=spiral.method!=='standard';
+  if(directionRow)directionRow.hidden=!showDirection;
+
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
-    visualDirection.textContent=`STRIPPER G1 · ${spiral.direction.toUpperCase()} TRANSITION`;
+    visualDirection.textContent=spiral.method==='standard'
+      ?'STANDARD · NO TRANSITION'
+      :`STRIPPER G1 · ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
   renderSpiralMapperVisual(spiral);
@@ -820,15 +829,23 @@ function renderSpiralMapperVisual(spiral){
     .filter((index)=>index>=0);
   const undersideIndexSet=new Set(undersideIndexes);
   const undersideCount=undersideIndexes.length;
-  // Underside guides share the same 180 deg point; fan them out slightly so every guide stays a distinct, clickable marker instead of one hidden under another.
+  const topsideIndexes=guides
+    .map((guide,index)=>clampSpiralAngle(guide.angleDeg)<=0.05?index:-1)
+    .filter((index)=>index>=0);
+  const topsideIndexSet=new Set(topsideIndexes);
+  const topsideCount=topsideIndexes.length;
+  // Guides sharing the same 0/180 deg point (e.g. every guide in Standard mode) fan out slightly so each stays a distinct, clickable marker instead of one hidden under another.
   const undersideRankByIndex=new Map(undersideIndexes.map((guideIndex,rank)=>[guideIndex,rank]));
   const undersideFanStep=undersideCount>1?Math.min(7,60/(undersideCount-1)):0;
+  const topsideRankByIndex=new Map(topsideIndexes.map((guideIndex,rank)=>[guideIndex,rank]));
+  const topsideFanStep=topsideCount>1?Math.min(7,60/(topsideCount-1)):0;
   const selectedIndex=Number.isInteger(spiral.expandedGuideIndex)?spiral.expandedGuideIndex:-1;
   const markerPoints=[];
   const markerEntries=guides.map((guide,index)=>{
     const isStripper=index===stripperIndex;
     const isSelected=index===selectedIndex;
     const isUnderside=undersideIndexSet.has(index);
+    const isTopside=!isUnderside && topsideIndexSet.has(index);
     const visualAngleDegrees=spiralVisualAngleDegrees(guide.angleDeg,spiral.direction,{method:spiral.method,isStripper});
     const visualAngle=(visualAngleDegrees*Math.PI)/180;
     let x=110+(Math.cos(visualAngle)*68);
@@ -837,13 +854,17 @@ function renderSpiralMapperVisual(spiral){
       const rank=undersideRankByIndex.get(index)||0;
       x=110+((rank-((undersideCount-1)/2))*undersideFanStep);
       y=178;
+    }else if(isTopside){
+      const rank=topsideRankByIndex.get(index)||0;
+      x=110+((rank-((topsideCount-1)/2))*topsideFanStep);
+      y=42;
     }
     markerPoints.push({index,x,y});
     const displayGuideNumber=guides.length-index;
-    const markerRotation=isUnderside?0:visualAngleDegrees+90;
-    const undersideLabel=isUnderside?' running guide at 180 degrees underside':'';
+    const markerRotation=(isUnderside||isTopside)?0:visualAngleDegrees+90;
+    const sharedLabel=isUnderside?' running guide at 180 degrees underside':isTopside?' running guide at 0 degrees top line':'';
     return `
-      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isUnderside?' spiral-map-marker--underside-member':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}${undersideLabel}" aria-pressed="${isSelected?'true':'false'}">
+      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isUnderside?' spiral-map-marker--underside-member':''}${isTopside?' spiral-map-marker--topside-member':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}${sharedLabel}" aria-pressed="${isSelected?'true':'false'}">
         <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
         <ellipse class="spiral-map-marker__ring" cx="0" cy="-16" rx="7" ry="4.2"></ellipse>
         <circle class="spiral-map-marker__core" cx="0" cy="0" r="${isSelected?'9':'4.5'}"></circle>
@@ -868,6 +889,9 @@ function renderSpiralMapperVisual(spiral){
   const undersideCountLabel=undersideCount>1
     ?`<text class="spiral-map-underside-count" x="110" y="193" text-anchor="middle">&#215;${undersideCount}</text>`
     :'';
+  const topsideCountLabel=topsideCount>1
+    ?`<text class="spiral-map-underside-count" x="110" y="57" text-anchor="middle">&#215;${topsideCount}</text>`
+    :'';
 
   visualCanvas.innerHTML=`
     <svg viewBox="0 0 220 220" role="img" aria-label="Spiral mapper reference">
@@ -881,6 +905,7 @@ function renderSpiralMapperVisual(spiral){
       ${progressionPolyline}
       ${markerSvg}
       ${undersideCountLabel}
+      ${topsideCountLabel}
       <g class="spiral-map-tiptop" aria-label="Tip top at 180 degrees underside">
         <circle cx="110" cy="203" r="4.7"></circle>
         <text x="110" y="201" text-anchor="middle">TIP TOP</text>
