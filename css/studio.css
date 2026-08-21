@@ -6225,6 +6225,30 @@ textarea::-moz-selection,
   color:rgba(225,218,205,.82);
 }
 
+.spiral-reset-row{
+  display:flex;
+  justify-content:flex-end;
+  margin:-6px 0 2px;
+}
+
+#workshopToolSpiral .spiral-reset-action{
+  width:auto;
+  min-height:30px;
+  padding:0 12px;
+  border-radius:999px;
+  font-size:9px;
+  letter-spacing:.06em;
+  border-color:rgba(214,210,200,.14);
+  color:rgba(225,218,205,.62);
+  background:transparent;
+}
+
+#workshopToolSpiral .spiral-reset-action:hover,
+#workshopToolSpiral .spiral-reset-action:focus-visible{
+  color:rgba(225,218,205,.9);
+  border-color:rgba(214,210,200,.3);
+}
+
 #workshopToolSpiral .spiral-count-grid{
   display:grid;
   grid-template-columns:1fr;
@@ -6426,24 +6450,7 @@ textarea::-moz-selection,
 }
 
 .spiral-map-marker--underside-member{
-  pointer-events:none;
-}
-
-.spiral-map-underside-stack .spiral-map-marker__stem{
-  stroke:rgba(250,241,230,.88);
-  stroke-width:1.8;
-}
-
-.spiral-map-underside-stack .spiral-map-marker__ring{
-  fill:rgba(7,8,10,.78);
-  stroke:rgba(250,241,230,.9);
-  stroke-width:1.4;
-}
-
-.spiral-map-underside-stack .spiral-map-marker__core{
-  fill:rgba(var(--kl-red-rgb),.88);
-  stroke:rgba(250,241,230,.76);
-  stroke-width:1.1;
+  opacity:.94;
 }
 
 .spiral-map-underside-count{
@@ -6451,19 +6458,6 @@ textarea::-moz-selection,
   font-size:7.4px;
   font-weight:700;
   letter-spacing:.02em;
-}
-
-.spiral-map-underside-selection circle{
-  fill:var(--kl-red-base);
-  stroke:#fff5e9;
-  stroke-width:1.4;
-  filter:drop-shadow(0 0 4px var(--kl-red-glow));
-}
-
-.spiral-map-underside-selection text{
-  fill:#fff4ec;
-  font-size:7.7px;
-  font-weight:700;
 }
 
 .spiral-map-tiptop circle{

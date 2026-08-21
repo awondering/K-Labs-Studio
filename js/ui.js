@@ -150,6 +150,8 @@ const choicePickerViewportState={
 const customerFinderViewportState={
   keyboardActive:false,
 };
+// Single source of truth for the Spiral Guide Mapper's "sensible known default" (also the Reset target).
+const SPIRAL_MAPPER_DEFAULT_STATE={method:'progressive',direction:'left',offsetStartAngle:20};
 const workshopToolsState={
   activeTool:'list',
   diameter:{
@@ -172,10 +174,10 @@ const workshopToolsState={
   spiral:{
     unit:'metric',
     imperialDisplay:'fractional',
-    method:'progressive',
-    direction:'left',
+    method:SPIRAL_MAPPER_DEFAULT_STATE.method,
+    direction:SPIRAL_MAPPER_DEFAULT_STATE.direction,
     guideCount:5,
-    offsetStartAngle:20,
+    offsetStartAngle:SPIRAL_MAPPER_DEFAULT_STATE.offsetStartAngle,
     showPhysicalOffsets:false,
     expandedGuideIndex:-1,
     guides:[],
@@ -695,6 +697,29 @@ function importSpiralFromGuideSpacing(){
     };
   });
 }
+function resetSpiralGuideMapper(){
+  const spiral=workshopToolsState.spiral;
+  const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+  const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
+  const existing=Array.isArray(spiral.guides)?spiral.guides:[];
+  spiral.method=SPIRAL_MAPPER_DEFAULT_STATE.method;
+  spiral.direction=SPIRAL_MAPPER_DEFAULT_STATE.direction;
+  spiral.offsetStartAngle=SPIRAL_MAPPER_DEFAULT_STATE.offsetStartAngle;
+  spiral.expandedGuideIndex=-1;
+  if(rows.length){
+    spiral.guideCount=clampSpiralGuideCount(rows.length);
+    spiral.guides=rows.map((row,index)=>{
+      const previous=existing[index]&&typeof existing[index]==='object'?existing[index]:{};
+      return {
+        positionMm:Math.max(0,numberOrZero(row&&row.cum)),
+        odMm:Math.max(0.01,numberOrZero(previous.odMm)||10),
+        angleDeg:180,
+      };
+    });
+  }
+  // Force-recompute every angle from the Progressive preset (discards any custom/offset edits).
+  syncSpiralGuidesLength({resetAngles:true});
+}
 function syncSpiralGuidePositionsFromLayout(rows){
   const nextRows=Array.isArray(rows)?rows:[];
   if(!nextRows.length)return;
@@ -795,6 +820,9 @@ function renderSpiralMapperVisual(spiral){
     .filter((index)=>index>=0);
   const undersideIndexSet=new Set(undersideIndexes);
   const undersideCount=undersideIndexes.length;
+  // Underside guides share the same 180 deg point; fan them out slightly so every guide stays a distinct, clickable marker instead of one hidden under another.
+  const undersideRankByIndex=new Map(undersideIndexes.map((guideIndex,rank)=>[guideIndex,rank]));
+  const undersideFanStep=undersideCount>1?Math.min(7,60/(undersideCount-1)):0;
   const selectedIndex=Number.isInteger(spiral.expandedGuideIndex)?spiral.expandedGuideIndex:-1;
   const markerPoints=[];
   const markerEntries=guides.map((guide,index)=>{
@@ -806,19 +834,16 @@ function renderSpiralMapperVisual(spiral){
     let x=110+(Math.cos(visualAngle)*68);
     let y=110+(Math.sin(visualAngle)*68);
     if(isUnderside){
-      x=110;
+      const rank=undersideRankByIndex.get(index)||0;
+      x=110+((rank-((undersideCount-1)/2))*undersideFanStep);
       y=178;
     }
     markerPoints.push({index,x,y});
     const displayGuideNumber=guides.length-index;
-    const markerRotation=visualAngleDegrees+90;
-    if(isUnderside){
-      return `
-        <g class="spiral-map-marker spiral-map-marker--underside-member${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)})" aria-label="Guide ${displayGuideNumber} running guide at 180 degrees underside" aria-pressed="${isSelected?'true':'false'}"></g>
-      `;
-    }
+    const markerRotation=isUnderside?0:visualAngleDegrees+90;
+    const undersideLabel=isUnderside?' running guide at 180 degrees underside':'';
     return `
-      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}" aria-pressed="${isSelected?'true':'false'}">
+      <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isUnderside?' spiral-map-marker--underside-member':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}${undersideLabel}" aria-pressed="${isSelected?'true':'false'}">
         <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
         <ellipse class="spiral-map-marker__ring" cx="0" cy="-16" rx="7" ry="4.2"></ellipse>
         <circle class="spiral-map-marker__core" cx="0" cy="0" r="${isSelected?'9':'4.5'}"></circle>
@@ -840,19 +865,8 @@ function renderSpiralMapperVisual(spiral){
     ?`<polyline class="spiral-map-path" points="${progressionPoints.join(' ')}"></polyline>`
     :'';
 
-  const undersideStackMarker=undersideCount
-    ?`<g class="spiral-map-underside-stack" transform="translate(110 178)" aria-label="${undersideCount} running guide${undersideCount===1?'':'s'} at 180 degrees underside">
-        <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
-        <ellipse class="spiral-map-marker__ring" cx="0" cy="-16" rx="7" ry="4.2"></ellipse>
-        <circle class="spiral-map-marker__core" cx="0" cy="0" r="4.8"></circle>
-        ${undersideCount>1?`<text class="spiral-map-underside-count" x="14" y="5">x${undersideCount}</text>`:''}
-      </g>`
-    :'';
-  const selectedUndersideMarker=undersideIndexSet.has(selectedIndex)
-    ?`<g class="spiral-map-underside-selection" transform="translate(110 178)">
-        <circle cx="0" cy="0" r="9"></circle>
-        <text x="0" y=".5" text-anchor="middle" dominant-baseline="middle">${guides.length-selectedIndex}</text>
-      </g>`
+  const undersideCountLabel=undersideCount>1
+    ?`<text class="spiral-map-underside-count" x="110" y="193" text-anchor="middle">&#215;${undersideCount}</text>`
     :'';
 
   visualCanvas.innerHTML=`
@@ -866,8 +880,7 @@ function renderSpiralMapperVisual(spiral){
       <text class="spiral-map-label spiral-map-label--underside" x="110" y="216" text-anchor="middle">UNDERSIDE 180 deg</text>
       ${progressionPolyline}
       ${markerSvg}
-      ${undersideStackMarker}
-      ${selectedUndersideMarker}
+      ${undersideCountLabel}
       <g class="spiral-map-tiptop" aria-label="Tip top at 180 degrees underside">
         <circle cx="110" cy="203" r="4.7"></circle>
         <text x="110" y="201" text-anchor="middle">TIP TOP</text>
@@ -1622,6 +1635,15 @@ function bindWorkshopCalculatorControls(){
     spiralImportBtn.setAttribute('data-spiral-import-bound','true');
     spiralImportBtn.addEventListener('click',()=>{
       importSpiralFromGuideSpacing();
+      renderWorkshopCalculator();
+    });
+  }
+
+  const spiralResetBtn=$('workshopSpiralResetBtn');
+  if(spiralResetBtn && spiralResetBtn.getAttribute('data-spiral-reset-bound')!=='true'){
+    spiralResetBtn.setAttribute('data-spiral-reset-bound','true');
+    spiralResetBtn.addEventListener('click',()=>{
+      resetSpiralGuideMapper();
       renderWorkshopCalculator();
     });
   }
