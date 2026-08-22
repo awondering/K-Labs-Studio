@@ -67,6 +67,7 @@ function ensureNavMenu(){
 					<div class="component-sheet__list nav-menu-list">
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="homeScreen">Home</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopScreen">Studio</button></div>
+						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="buildsScreen">Active Builds</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="workshopLandingScreen">Workshop</button></div>
 						<div class="component-sheet__row"><button class="component-sheet__option" type="button" data-nav="settingsScreen">Settings</button></div>
 				</div>
@@ -120,6 +121,10 @@ document.addEventListener('click',(event)=>{
 			window.KLABS_UI.enterStudio();
 			return;
 		}
+		if(menuNav.dataset.nav==='buildsScreen' && window.KLABS_UI && typeof window.KLABS_UI.openActiveBuildsList==='function'){
+			window.KLABS_UI.openActiveBuildsList();
+			return;
+		}
 		safeGoScreen(menuNav.dataset.nav);
 		return;
 	}
@@ -130,6 +135,10 @@ document.addEventListener('click',(event)=>{
 		}
 		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.enterStudio==='function'){
 			window.KLABS_UI.enterStudio();
+			return;
+		}
+		if(nav.dataset.nav==='buildsScreen' && window.KLABS_UI && typeof window.KLABS_UI.openActiveBuildsList==='function'){
+			window.KLABS_UI.openActiveBuildsList();
 			return;
 		}
 		safeGoScreen(nav.dataset.nav);

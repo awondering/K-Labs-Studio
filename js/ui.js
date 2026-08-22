@@ -1092,7 +1092,23 @@ function prepareWorkshopLandingEntry(){
 // Single Studio-entry pathway: preserves whatever active build/landing context already exists (see onScreenChange), never forces a fresh draft.
 function enterStudio(){
   preserveWorkshopQuoteOnEntry=false;
+  // Re-tapping Studio while already viewing an open saved Active Build resets that tab to its landing page (only the
+  // displayed screen, never activeSavedBuildRef/quote) - matches tapping an already-active tab back to its root.
+  // Arriving at Studio from elsewhere (e.g. returning from Edit Guide Layout) still resumes the in-progress build.
+  const alreadyOnStudio=!!(document.getElementById('workshopScreen') && document.getElementById('workshopScreen').classList.contains('active'));
+  if(alreadyOnStudio && activeSavedBuildRef && studioScreenView==='workflow'){
+    showStudioLanding();
+  }
   goScreen('workshopScreen');
+}
+// Always leaves any individually open build and shows the full, freshly-loaded Active Builds list.
+// Deliberately does not clear activeSavedBuildRef/quote so contextual workflows (e.g. Edit Guide Layout) can still identify the build.
+function openActiveBuildsList(){
+  closeCurrentBuildActionsMenu();
+  if(studioScreenView==='workflow'){
+    showStudioLanding();
+  }
+  goScreen('buildsScreen');
 }
 function openWorkshopTool(tool){
   if(tool==='guide-spacing'){
@@ -2704,6 +2720,7 @@ function renderStudioScreenMode(){
   const workflow=$('studioWorkflowPanel');
   const components=$('studioComponentsPanel');
   const taxonomy=$('studioTaxonomyPanel');
+  const returnBtn=$('activeBuildReturnBtn');
   const showWorkflow=studioScreenView==='workflow';
   const showComponents=studioScreenView==='components';
   const showTaxonomy=studioScreenView==='taxonomy';
@@ -2711,6 +2728,8 @@ function renderStudioScreenMode(){
   if(workflow)workflow.hidden=!showWorkflow;
   if(components)components.hidden=!showComponents;
   if(taxonomy)taxonomy.hidden=!showTaxonomy;
+  // Only shown when the open workflow is an actual saved Active Build (see activeSavedBuildRef), not a fresh unsaved draft.
+  if(returnBtn)returnBtn.hidden=!(showWorkflow && !!activeSavedBuildRef);
 }
 function resetStudioScreenScrollMemory(){
   if(window.KLABS_NAV && typeof window.KLABS_NAV.forgetScreenScroll==='function'){
@@ -9161,7 +9180,7 @@ function bindWorkshopQuoteBuilder(){
         return;
       }
       if(action==='open-builds'){
-        goScreen('buildsScreen');
+        openActiveBuildsList();
         return;
       }
       if(action==='customers'){
@@ -9177,6 +9196,13 @@ function bindWorkshopQuoteBuilder(){
   }
   bindStudioComponentsPanel();
   bindStudioTaxonomyPanel();
+  const activeBuildReturnBtn=$('activeBuildReturnBtn');
+  if(activeBuildReturnBtn && activeBuildReturnBtn.getAttribute('data-active-build-return-bound')!=='true'){
+    activeBuildReturnBtn.setAttribute('data-active-build-return-bound','true');
+    activeBuildReturnBtn.addEventListener('click',()=>{
+      openActiveBuildsList();
+    });
+  }
   const newQuoteEntryBtn=$('newQuoteEntryBtn');
   if(newQuoteEntryBtn && newQuoteEntryBtn.getAttribute('data-new-quote-bound')!=='true'){
     newQuoteEntryBtn.setAttribute('data-new-quote-bound','true');
@@ -10248,4 +10274,4 @@ bindBlankLibraryControls();
 bindSettingsControls();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
