@@ -8969,6 +8969,13 @@ function refreshMeasurementPlaceholders(){
   if(foreGripInput)foreGripInput.placeholder=`e.g. ${foreGrip}`;
 }
 function bindBuildSpecificationInputs(){
+  const editGuideLayoutBtn=$('editGuideLayoutBtn');
+  if(editGuideLayoutBtn && editGuideLayoutBtn.getAttribute('data-guide-layout-bound')!=='true'){
+    editGuideLayoutBtn.setAttribute('data-guide-layout-bound','true');
+    editGuideLayoutBtn.addEventListener('click',()=>{
+      goScreen('layoutScreen');
+    });
+  }
   BUILD_SPEC_FIELDS.forEach((field)=>{
     const el=$(field.id);
     if(!el)return;

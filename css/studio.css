@@ -3914,7 +3914,33 @@ body.component-sheet-open .workshop-back-to-top{
   color:#f2ede4;
 }
 
+.guide-specification__edit{
+  min-height:32px;
+  padding:0 2px;
+  border:0;
+  background:transparent;
+  color:rgba(223,216,205,.84);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+
+.guide-specification__edit span{
+  margin-left:2px;
+  color:rgba(var(--kl-red-rgb),.9);
+  font-size:14px;
+  line-height:0;
+}
+
+.guide-specification__edit:hover,
+.guide-specification__edit:focus-visible{
+  color:#f2ede4;
+}
+
 .guide-specification__source{
+  flex-basis:100%;
   font-size:9px;
   letter-spacing:.05em;
   color:rgba(214,210,200,.6);
@@ -3996,6 +4022,12 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 @media (max-width:520px){
+  .guide-specification__head{
+    align-items:center;
+  }
+  .guide-specification__edit{
+    min-height:40px;
+  }
   .guide-specification__summary{
     grid-template-columns:1fr;
   }
