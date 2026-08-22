@@ -186,6 +186,11 @@ const workshopToolsState={
 };
 let gripCutTemplateSnapshot=null;
 let workshopLandingReturnFocusTool='';
+// '' = Guide Spacing opened normally from Workshop; 'build' = opened contextually from an open build's Rod Specification.
+let layoutEntryOrigin='';
+function clearLayoutEntryOrigin(){
+  layoutEntryOrigin='';
+}
 
 function save(){
   Store.set('klabs-studio-state',{
@@ -1083,11 +1088,35 @@ function isWorkshopLandingScreenActive(){
 function goToWorkshopLandingScreen(){
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
   workshopToolsState.activeTool='list';
+  clearLayoutEntryOrigin();
   goScreen('workshopLandingScreen');
+}
+// Reflects whether Guide Spacing was entered from an open build (layoutEntryOrigin) in the layoutScreen return control's label/behavior.
+function syncLayoutReturnControl(){
+  const button=document.querySelector('[data-workshop-return-landing]');
+  if(!button)return;
+  const label=button.querySelector('span:last-child');
+  const fromBuild=layoutEntryOrigin==='build';
+  if(label)label.textContent=fromBuild?'BACK TO BUILD':'Workshop';
+  button.setAttribute('aria-label',fromBuild?'Save and return to the build being edited':'Return to Workshop landing screen');
+}
+// Saves live Guide Spacing/Guide Orientation edits to the originating build (existing save mechanism), then reopens it with Rod Specification expanded and the Guide Specification card in view.
+function returnToOriginatingBuildFromGuideLayout(){
+  clearQuoteAutosaveTimer();
+  if(quoteHasMeaningfulDraft(quote)){
+    persistCurrentQuoteRecord();
+    markQuoteSaved();
+  }
+  clearLayoutEntryOrigin();
+  showStudioWorkflow();
+  renderWorkshopQuote();
+  goScreen('workshopScreen');
+  focusWorkshopSection('workshopBuildSpecsBody');
 }
 function prepareWorkshopLandingEntry(){
   workshopLandingReturnFocusTool='';
   workshopToolsState.activeTool='list';
+  clearLayoutEntryOrigin();
 }
 // Single Studio-entry pathway: preserves whatever active build/landing context already exists (see onScreenChange), never forces a fresh draft.
 function enterStudio(){
@@ -1112,6 +1141,7 @@ function openActiveBuildsList(){
 }
 function openWorkshopTool(tool){
   if(tool==='guide-spacing'){
+    clearLayoutEntryOrigin();
     goScreen('layoutScreen');
     return;
   }
@@ -4603,6 +4633,7 @@ function finalizeDeletedCurrentBuild(){
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
+  clearLayoutEntryOrigin();
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
@@ -4698,6 +4729,7 @@ function beginFreshQuote(options){
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
+  clearLayoutEntryOrigin();
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
@@ -4734,6 +4766,7 @@ function startFreshQuoteForCustomer(record,options){
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
+  clearLayoutEntryOrigin();
   quote=normalizeQuote(next);
   saveQuoteCurrent();
   markQuoteSaved();
@@ -8412,6 +8445,7 @@ function openSavedBuildRecord(source,index,options){
   if(!selected)return;
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
+  clearLayoutEntryOrigin();
   setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
   applyGuideSpecificationSnapshot(quote.guideSpecification);
@@ -8810,7 +8844,11 @@ function bindLayoutControls(){
   if(returnLandingButton && returnLandingButton.getAttribute('data-workshop-return-bound')!=='true'){
     returnLandingButton.setAttribute('data-workshop-return-bound','true');
     returnLandingButton.addEventListener('click',()=>{
-      goToWorkshopLandingScreen();
+      if(layoutEntryOrigin==='build'){
+        returnToOriginatingBuildFromGuideLayout();
+      }else{
+        goToWorkshopLandingScreen();
+      }
     });
   }
 
@@ -8992,6 +9030,7 @@ function bindBuildSpecificationInputs(){
   if(editGuideLayoutBtn && editGuideLayoutBtn.getAttribute('data-guide-layout-bound')!=='true'){
     editGuideLayoutBtn.setAttribute('data-guide-layout-bound','true');
     editGuideLayoutBtn.addEventListener('click',()=>{
+      layoutEntryOrigin='build';
       goScreen('layoutScreen');
     });
   }
@@ -9732,6 +9771,7 @@ function loadBlank(i){
   if(!b)return;
   state.firstGuide=b.fg;state.guideCount=b.gc;state.targetStripper=b.ts;state.locked=false;state.workshopIndex=0;
   applyBlankToQuote(b);
+  clearLayoutEntryOrigin();
   save();saveQuoteCurrent();syncSpiralWithGuideLayout();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
@@ -10048,6 +10088,9 @@ function onScreenChange(screenId){
     if(searchInput && searchInput.value!==buildsSearch){searchInput.value=buildsSearch;}
     closeSavedBuildRowMenu();
     renderBuilds();
+  }
+  if(screenId==='layoutScreen'){
+    syncLayoutReturnControl();
   }
   if(screenId==='workshopScreen'){
     closeCurrentBuildActionsMenu();
