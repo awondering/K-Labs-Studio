@@ -844,6 +844,7 @@ function renderSpiralGuideMapper(){
   if(showOffsetsToggle){
     showOffsetsToggle.classList.toggle('active',showPhysicalOffsets);
     showOffsetsToggle.setAttribute('aria-pressed',showPhysicalOffsets?'true':'false');
+    showOffsetsToggle.textContent=showPhysicalOffsets?'Hide Physical Offsets':'Show Physical Offsets';
   }
 
   const canDecreaseGuideCount=spiral.guideCount>1;
@@ -1001,6 +1002,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <span class="spiral-guide-row__disclosure" aria-hidden="true">⌄</span>
           </button>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
+          ${showPhysicalOffsets?`<p class="spiral-guide-row__offset">${labels.offsetText}</p>`:''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             <label>

@@ -7027,6 +7027,16 @@ textarea::-moz-selection,
   font-weight:700;
 }
 
+/* Secondary/informational only - the sacred longitudinal position stays in the summary row above. */
+.spiral-guide-row__offset{
+  margin:0;
+  font-size:9px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  color:rgba(214,210,200,.72);
+  overflow-wrap:anywhere;
+}
+
 .spiral-guide-row__fields{
   display:grid;
   gap:7px;
