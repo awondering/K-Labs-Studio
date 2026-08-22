@@ -692,23 +692,18 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
     directionText:`${side} SIDE`,
   };
 }
+// Guide Spacing's rows are the single authoritative source for count/position; reuses the same reconciliation
+// syncSpiralGuidePositionsFromLayout() already applies on every Guide Spacing edit, so import can never diverge
+// (e.g. force a stale/default guide count) or discard valid existing angles for guides that are still active.
 function importSpiralFromGuideSpacing(){
-  const spiral=workshopToolsState.spiral;
   const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
-  if(!rows.length)return;
+  if(!rows.length){
+    flashWorkshopStatus('Set a valid Guide Spacing result first',{pending:true,duration:2000});
+    return;
+  }
   markGuideDataDirty();
-  spiral.guideCount=rows.length;
-  const existing=Array.isArray(spiral.guides)?spiral.guides:[];
-  const defaults=buildSpiralPresetAngles(spiral.method,rows.length,spiral.offsetStartAngle,rows.map((row)=>({positionMm:row&&row.cum})));
-  spiral.guides=rows.map((row,index)=>{
-    const previous=existing[index]&&typeof existing[index]==='object'?existing[index]:{};
-    return {
-      positionMm:Math.max(0,numberOrZero(row&&row.cum)),
-      odMm:Math.max(0.01,numberOrZero(previous.odMm)||10),
-      angleDeg:defaults[index],
-    };
-  });
+  syncSpiralGuidePositionsFromLayout(rows);
 }
 function resetSpiralGuideMapper(){
   const spiral=workshopToolsState.spiral;
