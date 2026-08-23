@@ -1465,6 +1465,15 @@ body.component-sheet-open .workshop-back-to-top{
   transition:max-height .24s ease,opacity .18s ease,padding-top .18s ease,padding-bottom .18s ease;
 }
 
+/* Keeps browser-driven scrolling (focus, scrollIntoView) clear of the sticky
+   back button and the iPhone safe area. */
+#workshopScreen .quote-component-row,
+#workshopScreen .quote-component-row__editor input,
+#workshopScreen .quote-component-row__editor textarea,
+#workshopScreen .quote-component-row__editor button{
+  scroll-margin-top:calc(66px + var(--safe-top));
+}
+
 #workshopScreen .quote-section--collapsed .quote-section__body{
   max-height:0;
   opacity:0;

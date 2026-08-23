@@ -20,6 +20,7 @@
   --shadow:0 16px 38px rgba(0,0,0,.34);
   --radius:22px;
   --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-top:env(safe-area-inset-top,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{

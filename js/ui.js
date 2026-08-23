@@ -6866,10 +6866,11 @@ function toggleComponentRow(index,options){
   hideComponentRowMenu();
   renderQuoteComponents();
   waitForDomRender(()=>{
-    scrollNewComponentRowIntoView(targetIndex);
+    // Focus first: a focus-driven browser scroll would otherwise cancel our smooth scroll mid-flight.
     if(options&&options.focusDescription){
       focusNewComponentWithRetry(targetIndex,6);
     }
+    scrollNewComponentRowIntoView(targetIndex);
   });
 }
 function bindComponentRowMenus(){
@@ -7063,6 +7064,30 @@ function viewportVisibleBottom(extraSafeSpace){
   const reservedBottom=bottomOverlayDepth()+Math.max(0,numberOrZero(extraSafeSpace));
   return window.innerHeight-reservedBottom;
 }
+function safeAreaInsetTop(){
+  const raw=window.getComputedStyle(document.documentElement).getPropertyValue('--safe-top');
+  return Math.max(0,numberOrZero(parseFloat(raw)));
+}
+function topOverlayDepth(){
+  const selectors=['.workshop-tool-nav-back','.topbar'];
+  let depth=safeAreaInsetTop();
+  selectors.forEach((selector)=>{
+    document.querySelectorAll(selector).forEach((el)=>{
+      if(!el || el.hidden)return;
+      const style=window.getComputedStyle(el);
+      if(style.display==='none' || style.visibility==='hidden')return;
+      if(style.position!=='fixed' && style.position!=='sticky')return;
+      const rect=el.getBoundingClientRect();
+      // Only count overlays currently parked against the top of the viewport.
+      if(rect.height<=0 || rect.top>72)return;
+      depth=Math.max(depth,Math.max(0,rect.bottom));
+    });
+  });
+  return depth;
+}
+function viewportVisibleTop(extraSafeSpace){
+  return topOverlayDepth()+Math.max(0,numberOrZero(extraSafeSpace));
+}
 function nearestScrollableContainer(element){
   let current=element&&element.parentElement;
   while(current && current!==document.body){
@@ -7081,7 +7106,7 @@ function scrollElementFullyIntoView(container,element){
   const rowBottomSafeSpace=120;
   const elementRect=element.getBoundingClientRect();
   const containerRect=isDocumentScroller(container)
-    ? {top:0,bottom:viewportVisibleBottom(rowBottomSafeSpace)}
+    ? {top:viewportVisibleTop(12),bottom:viewportVisibleBottom(rowBottomSafeSpace)}
     : container.getBoundingClientRect();
   const safeBottom=Math.min(containerRect.bottom-safePad,viewportVisibleBottom(rowBottomSafeSpace));
   let delta=0;
@@ -7089,6 +7114,9 @@ function scrollElementFullyIntoView(container,element){
     delta=elementRect.top-(containerRect.top+safePad);
   }else if(elementRect.bottom>safeBottom){
     delta=elementRect.bottom-safeBottom;
+    // Never scroll so far that the target's own top slips under the header.
+    const maxDelta=elementRect.top-(containerRect.top+safePad);
+    if(maxDelta<delta)delta=Math.max(0,maxDelta);
   }
   if(!delta)return;
 
@@ -7106,20 +7134,10 @@ function scrollNewComponentRowIntoView(index){
   scrollElementFullyIntoView(container,row);
   return true;
 }
-function ensureComponentFieldVisible(field){
-  if(!field)return;
-  const rect=field.getBoundingClientRect();
-  const topBound=88;
-  const bottomBound=viewportVisibleBottom(120);
-  if(rect.top<topBound || rect.bottom>bottomBound){
-    field.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
-  }
-}
 function focusNewComponentDescription(index){
   const selector=`#quoteComponentsList [data-component-key="description"][data-component-index="${index}"]`;
   const field=document.querySelector(selector);
   if(!field)return false;
-  ensureComponentFieldVisible(field);
   try{
     field.click();
   }catch{}
@@ -9464,8 +9482,9 @@ function bindWorkshopQuoteBuilder(){
       renderQuoteComponents();
       updateQuoteSummary();
       waitForDomRender(()=>{
-        scrollNewComponentRowIntoView(draftIndex);
+        // Focus first: a focus-driven browser scroll would otherwise cancel our smooth scroll mid-flight.
         focusNewComponentWithRetry(draftIndex,6);
+        scrollNewComponentRowIntoView(draftIndex);
       });
       flashWorkshopStatus('Component added',{
         pending:true,
