@@ -2098,7 +2098,7 @@ function setPricingDriver(driver){
 function syncQuotePricing(driver){
   enforceSingleSourceComponents();
   syncQuoteBlankFromComponents();
-  const componentsTotal=componentRowsForTotals().reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0);
+  const componentsTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const internalCost=componentsTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
   const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
   let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
@@ -2595,7 +2595,7 @@ function normalizeComponent(component){
     customerLabel:(component&&typeof component.customerLabel==='string')?component.customerLabel:'',
     supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
     unit:(component&&typeof component.unit==='string')?component.unit:'',
-    quantity:Number.isFinite(Number(component&&component.quantity))?Number(component.quantity):undefined,
+    quantity:(Number.isFinite(Number(component&&component.quantity)) && Number(component.quantity)>0)?Math.max(1,Math.round(Number(component.quantity))):undefined,
     unitCost:numberOrZero(component&&component.unitCost),
     unitPrice:numberOrZero(component&&component.unitPrice),
     notes:(component&&typeof component.notes==='string')?component.notes:'',
@@ -2654,7 +2654,7 @@ function normalizeQuote(inputQuote){
   migrateBlankWorkflow(merged);
   const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
   const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
-  const internalBuildCost=merged.components.reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
+  const internalBuildCost=merged.components.reduce((sum,item)=>sum+componentRowLineCost(item),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
   if(!hasFinal && !hasProfit){
     merged.targetProfit=internalBuildCost*(merged.markupPercent/100);
     merged.finalCustomerPrice=internalBuildCost+merged.targetProfit;
@@ -4976,7 +4976,7 @@ function unbindChoicePickerViewportHandlers(){
 function quoteMaths(){
   enforceSingleSourceComponents();
   syncQuotePricing();
-  const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+numberOrZero(item&&item.cost),0);
+  const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const materialCost=componentTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const internalBuildCost=materialCost+labourCost;
@@ -6729,7 +6729,19 @@ function setComponentName(index,name){
   saveQuoteCurrent();
 }
 function defaultComponentRow(){
-  return{category:'',subcategory:'',description:'',customerLabel:'',supplier:'',cost:0};
+  return{category:'',subcategory:'',description:'',customerLabel:'',supplier:'',quantity:1,cost:0};
+}
+function clampComponentQuantity(value){
+  const parsed=Math.round(Number(value));
+  if(!Number.isFinite(parsed) || parsed<1)return 1;
+  return Math.min(parsed,999);
+}
+function componentRowQuantity(item){
+  const parsed=Number(item&&item.quantity);
+  return (Number.isFinite(parsed) && parsed>0)?clampComponentQuantity(parsed):1;
+}
+function componentRowLineCost(item){
+  return numberOrZero(item&&item.cost)*componentRowQuantity(item);
 }
 function componentRowIsEffectivelyEmpty(item){
   return !specificationValue(item&&item.category) && !specificationValue(item&&item.description) && numberOrZero(item&&item.cost)<=0;
@@ -6761,6 +6773,10 @@ function componentRowSummaryMetaParts(item){
   }
   if(subcategory){
     parts.push(subcategory);
+  }
+  const quantity=componentRowQuantity(item);
+  if(quantity>1){
+    parts.push(`Qty ${quantity}`);
   }
   return parts;
 }
@@ -6817,7 +6833,7 @@ function componentRowMenuMarkup(item,index){
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><input data-component-index="${index}" data-component-key="subcategory" type="text" placeholder="e.g. EVA Grips" value="${escapeHtml(item.subcategory||'')}" /></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Select category')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><input data-component-index="${index}" data-component-key="subcategory" type="text" placeholder="e.g. EVA Grips" value="${escapeHtml(item.subcategory||'')}" /></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'Select supplier')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="Enter chosen component..." value="${escapeHtml(item.description||'')}" /></label><div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Unit Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
