@@ -1119,11 +1119,10 @@ function prepareWorkshopLandingEntry(){
 // Single Studio-entry pathway: preserves whatever active build/landing context already exists (see onScreenChange), never forces a fresh draft.
 function enterStudio(){
   preserveWorkshopQuoteOnEntry=false;
-  // Re-tapping Studio while already viewing an open saved Active Build resets that tab to its landing page (only the
-  // displayed screen, never activeSavedBuildRef/quote) - matches tapping an already-active tab back to its root.
-  // Arriving at Studio from elsewhere (e.g. returning from Edit Guide Layout) still resumes the in-progress build.
-  const alreadyOnStudio=!!(document.getElementById('workshopScreen') && document.getElementById('workshopScreen').classList.contains('active'));
-  if(alreadyOnStudio && activeSavedBuildRef && studioScreenView==='workflow'){
+  // Navigating to the Studio tab always lands on its root, so the Active Builds tile stays reachable after a build
+  // was opened. Only the displayed screen is reset - activeSavedBuildRef/quote are untouched, and an unsaved
+  // New Build draft (no activeSavedBuildRef) still resumes where it left off.
+  if(activeSavedBuildRef && studioScreenView==='workflow'){
     showStudioLanding();
   }
   goScreen('workshopScreen');
@@ -6743,6 +6742,17 @@ function componentRowQuantity(item){
 function componentRowLineCost(item){
   return numberOrZero(item&&item.cost)*componentRowQuantity(item);
 }
+function setComponentRowQuantity(index,value){
+  const row=quote.components[index];
+  if(!row)return;
+  const next=clampComponentQuantity(value);
+  if(componentRowQuantity(row)===next && row.quantity===next)return;
+  row.quantity=next;
+  saveQuoteCurrent();
+  markQuoteDirty();
+  renderQuoteComponents();
+  updateQuoteSummary();
+}
 function componentRowIsEffectivelyEmpty(item){
   return !specificationValue(item&&item.category) && !specificationValue(item&&item.description) && numberOrZero(item&&item.cost)<=0;
 }
@@ -9429,7 +9439,13 @@ function bindWorkshopQuoteBuilder(){
       const i=Number(input.getAttribute('data-component-index'));
       const key=input.getAttribute('data-component-key');
       if(!quote.components[i] || !key)return;
-      quote.components[i][key]=['cost','unitPrice'].includes(key)?numberOrZero(input.value):input.value;
+      if(key==='quantity'){
+        // Allow a transient empty field while typing; clamp happens here and on change.
+        if(String(input.value).trim()==='')return;
+        quote.components[i].quantity=clampComponentQuantity(input.value);
+      }else{
+        quote.components[i][key]=['cost','unitPrice'].includes(key)?numberOrZero(input.value):input.value;
+      }
       if(isBlankCategory(quote.components[i].category)){
         applyBlankComponentToQuote(quote.components[i]);
       }
@@ -9438,9 +9454,25 @@ function bindWorkshopQuoteBuilder(){
       markQuoteDirty();
       updateQuoteSummary();
     });
+    componentsList.addEventListener('change',(event)=>{
+      const input=event.target.closest('[data-component-key="quantity"]');
+      if(!input)return;
+      const i=Number(input.getAttribute('data-component-index'));
+      if(!quote.components[i])return;
+      const next=clampComponentQuantity(input.value);
+      input.value=String(next);
+      setComponentRowQuantity(i,next);
+    });
     componentsList.addEventListener('click',(event)=>{
       const actionButton=event.target.closest('[data-component-action]');
       const action=actionButton?actionButton.getAttribute('data-component-action'):'';
+      if(action==='quantity-increment' || action==='quantity-decrement'){
+        const i=Number(actionButton.getAttribute('data-component-index'));
+        if(!quote.components[i])return;
+        const step=action==='quantity-increment'?1:-1;
+        setComponentRowQuantity(i,componentRowQuantity(quote.components[i])+step);
+        return;
+      }
       if(action==='open-row' || action==='close-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         toggleComponentRow(i,{focusDescription:false});

@@ -1196,6 +1196,49 @@ body.component-sheet-open .workshop-back-to-top{
   text-align:right;
 }
 
+.quote-component-field--quantity{
+  grid-column:1/2;
+}
+
+.component-quantity{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr) 34px;
+  align-items:center;
+  gap:4px;
+}
+
+.component-quantity__step{
+  min-height:34px;
+  border-radius:9px;
+  border:1px solid rgba(214,210,200,.14);
+  background:linear-gradient(180deg,#17191a,#0d0f10);
+  color:#d7d0c3;
+  font-size:15px;
+  font-weight:700;
+  line-height:1;
+  cursor:pointer;
+}
+
+.component-quantity__step:hover,
+.component-quantity__step:focus-visible{
+  border-color:rgba(214,210,200,.26);
+  color:#ece6d8;
+  outline:none;
+}
+
+.component-quantity__value{
+  min-height:34px;
+  text-align:center;
+  -moz-appearance:textfield;
+  appearance:textfield;
+}
+
+.component-quantity__value::-webkit-outer-spin-button,
+.component-quantity__value::-webkit-inner-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+
 .quote-component-row__editor .quote-component-picker__trigger{
   min-height:32px;
   padding:6px 9px;
