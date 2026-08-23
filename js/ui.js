@@ -1166,6 +1166,10 @@ function openWorkshopTool(tool){
   }
   workshopToolsState.activeTool=tool==='grip'?'grip':tool==='spiral'?'spiral':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
+  if(workshopToolsState.activeTool==='spiral'){
+    // Guide Spacing owns count/longitudinal positions, so adopt its current layout on every open (no-ops with no layout data).
+    syncSpiralWithGuideLayout();
+  }
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
     renderWorkshopCalculator();
