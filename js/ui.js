@@ -189,8 +189,11 @@ let gripCutTemplateSnapshot=null;
 let workshopLandingReturnFocusTool='';
 // '' = Guide Spacing opened normally from Workshop; 'build' = opened contextually from an open build's Rod Specification.
 let layoutEntryOrigin='';
+// Snapshot of activeSavedBuildRef taken at entry, so the return control targets that exact build even if the active ref moves on.
+let layoutEntryBuildRef=null;
 function clearLayoutEntryOrigin(){
   layoutEntryOrigin='';
+  layoutEntryBuildRef=null;
 }
 
 function save(){
@@ -1095,17 +1098,36 @@ function syncLayoutReturnControl(){
   if(!button)return;
   const label=button.querySelector('span:last-child');
   const fromBuild=layoutEntryOrigin==='build';
-  if(label)label.textContent=fromBuild?'BACK TO BUILD':'Workshop';
+  if(label)label.textContent=fromBuild?'RETURN TO BUILD':'Workshop';
   button.setAttribute('aria-label',fromBuild?'Save and return to the build being edited':'Return to Workshop landing screen');
+}
+// Resolves a remembered build reference against current storage by build number (index and savedAt both drift after saves).
+function findSavedBuildTargetByRef(ref){
+  const buildNumber=normalizeNameKey(ref&&ref.buildNumber);
+  if(!buildNumber || String(ref.source||'build')!=='build')return null;
+  const records=savedBuildRecords();
+  const indexed=records[ref.index];
+  if(indexed && normalizeNameKey(indexed.buildNumber)===buildNumber)return {index:ref.index,record:indexed};
+  const found=records.findIndex((record)=>normalizeNameKey(record&&record.buildNumber)===buildNumber);
+  return found>=0?{index:found,record:records[found]}:null;
 }
 // Saves live Guide Spacing/Guide Orientation edits to the originating build (existing save mechanism), then reopens it with Rod Specification expanded and the Guide Specification card in view.
 function returnToOriginatingBuildFromGuideLayout(){
+  const originRef=layoutEntryBuildRef;
   clearQuoteAutosaveTimer();
   if(quoteHasMeaningfulDraft(quote)){
     persistCurrentQuoteRecord();
     markQuoteSaved();
   }
   clearLayoutEntryOrigin();
+  const originBuildNumber=normalizeNameKey(originRef&&originRef.buildNumber);
+  if(originBuildNumber && originBuildNumber!==normalizeNameKey(quote&&quote.buildNumber)){
+    const target=findSavedBuildTargetByRef(originRef);
+    if(target){
+      openSavedBuildRecord(originRef.source||'build',target.index,{focusSection:'workshopBuildSpecsBody'});
+      return;
+    }
+  }
   showStudioWorkflow();
   renderWorkshopQuote();
   goScreen('workshopScreen');
@@ -8504,7 +8526,7 @@ function positionWorkshopScreenAtTop(){
   });
 }
 function openSavedBuildRecord(source,index,options){
-  const settings={openAtTop:false,...(options||{})};
+  const settings={openAtTop:false,focusSection:'',...(options||{})};
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
   clearQuoteAutosaveTimer();
@@ -8529,7 +8551,7 @@ function openSavedBuildRecord(source,index,options){
     },36);
     return;
   }
-  window.setTimeout(()=>focusWorkshopSection(nextWorkshopSectionId()),36);
+  window.setTimeout(()=>focusWorkshopSection(settings.focusSection||nextWorkshopSectionId()),36);
 }
 function renderBuilds(){
   const host=$('buildCards');
@@ -9095,6 +9117,7 @@ function bindBuildSpecificationInputs(){
     editGuideLayoutBtn.setAttribute('data-guide-layout-bound','true');
     editGuideLayoutBtn.addEventListener('click',()=>{
       layoutEntryOrigin='build';
+      layoutEntryBuildRef=activeSavedBuildRef?{...activeSavedBuildRef}:null;
       goScreen('layoutScreen');
     });
   }
