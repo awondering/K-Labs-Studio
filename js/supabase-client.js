@@ -13,6 +13,13 @@ function klabsApplyAuthState(session) {
   const app = document.getElementById("app");
   const accountEmail = document.getElementById("settingsAccountEmail");
 
+  // Account-scoped local settings (e.g. business profile) key off this id.
+  const nextAccountId = session?.user?.id || "";
+  if (window.KLABS_ACCOUNT_ID !== nextAccountId) {
+    window.KLABS_ACCOUNT_ID = nextAccountId;
+    window.KLABS_UI?.onAccountChange?.();
+  }
+
   if (session) {
     authScreen.style.display = "none";
     app.style.display = "";

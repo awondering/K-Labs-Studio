@@ -50,6 +50,7 @@ function findExistingCategoryByAlias(categoryMap,name){
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
+const BUSINESS_PROFILE_STORAGE_PREFIX='klabs-business-profile';
 const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
 const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
@@ -65,6 +66,7 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Builder Notes',visibility:'workshop'}
 ];
 let studioSettings=normalizeStudioSettings(Store.get(SETTINGS_STORAGE_KEY,{}));
+let businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
@@ -243,6 +245,49 @@ function normalizeStudioSettings(settings){
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+}
+// Business profile is per signed-in account: never share a builder's identity or bank details between Studio users.
+function activeAccountKey(){
+  return String(window.KLABS_ACCOUNT_ID||'').trim()||'local';
+}
+function businessProfileStorageKey(){
+  return `${BUSINESS_PROFILE_STORAGE_PREFIX}:${activeAccountKey()}`;
+}
+function normalizeBusinessProfile(profile){
+  const source=profile&&typeof profile==='object'?profile:{};
+  const nextNumber=Math.max(1,Math.round(numberOrZero(source.quoteNextNumber))||1000);
+  return {
+    businessName:String(source.businessName||'').trim(),
+    contactName:String(source.contactName||'').trim(),
+    email:String(source.email||'').trim(),
+    phone:String(source.phone||'').trim(),
+    website:String(source.website||'').trim(),
+    paymentAccountName:String(source.paymentAccountName||'').trim(),
+    paymentAccountNumber:String(source.paymentAccountNumber||'').trim(),
+    quotePrefix:String(source.quotePrefix||'').trim(),
+    quoteNextNumber:nextNumber,
+  };
+}
+function saveBusinessProfile(){
+  Store.set(businessProfileStorageKey(),businessProfile);
+}
+function reloadBusinessProfileForAccount(){
+  businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
+  syncBusinessProfileControls(true);
+}
+function businessProfileHasPaymentDetails(){
+  return !!(businessProfile.paymentAccountName && businessProfile.paymentAccountNumber);
+}
+function formatQuoteNumber(sequence){
+  return `${businessProfile.quotePrefix}${Math.max(1,Math.round(numberOrZero(sequence))||1)}`;
+}
+// Consumes the next sequence number: only ever called for a quote that does not already carry one.
+function assignNextQuoteNumber(){
+  const assigned=formatQuoteNumber(businessProfile.quoteNextNumber);
+  businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(businessProfile.quoteNextNumber))||1000)+1;
+  saveBusinessProfile();
+  syncBusinessProfileControls();
+  return assigned;
 }
 function activeTaxRate(){
   return Math.max(0,numberOrZero(studioSettings&&studioSettings.taxRate)||15);
@@ -2275,6 +2320,7 @@ function homeRodRefreshFromState(triggerSequence){
 function newQuoteTemplate(){
   return{
     buildNumber:'',
+    quoteNumber:'',
     customerName:'',company:'',phone:'',email:'',buildName:'',estimatedCompletionDate:'',notes:'',
     addressLine1:'',addressLine2:'',suburbLocality:'',cityTown:'',regionState:'',postcode:'',country:'New Zealand',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
@@ -2650,6 +2696,7 @@ function normalizeQuote(inputQuote){
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
+  merged.quoteNumber=specificationValue(inputQuote&&inputQuote.quoteNumber);
   merged.depositEnabled=!!(inputQuote&&inputQuote.depositEnabled);
   merged.depositType=normalizeDepositType(inputQuote&&inputQuote.depositType);
   merged.depositValue=Math.max(0,numberOrZero(inputQuote&&inputQuote.depositValue));
@@ -2707,8 +2754,15 @@ function clearQuoteAutosaveTimer(){
   clearTimeout(quoteAutosaveTimer);
   quoteAutosaveTimer=null;
 }
+// Assigned once, then carried unchanged through QUOTE -> ACTIVE -> COMPLETE.
+function ensureCurrentQuoteNumber(){
+  if(specificationValue(quote.quoteNumber))return quote.quoteNumber;
+  quote.quoteNumber=assignNextQuoteNumber();
+  return quote.quoteNumber;
+}
 function persistCurrentQuoteRecord(){
   if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
+  ensureCurrentQuoteNumber();
   saveQuoteCurrent();
   const savedRef=persistBuildRecord(quote);
   if(savedRef){
@@ -4813,6 +4867,8 @@ function startFreshQuoteForCustomer(record,options){
   clearActiveSavedBuildRef();
   clearLayoutEntryOrigin();
   quote=normalizeQuote(next);
+  // A customer-linked build is a real quote, so it takes its customer-facing number straight away.
+  ensureCurrentQuoteNumber();
   saveQuoteCurrent();
   markQuoteSaved();
   showStudioWorkflow();
@@ -8672,6 +8728,14 @@ function closeConfirmDialog(action){
   if(handler)handler(action||'cancel');
 }
 // Customer-facing quote presentation: never include internal cost/supplier/markup/profit data, only purchasing-relevant info.
+function customerQuoteBusinessLines(){
+  return [
+    businessProfile.contactName,
+    businessProfile.phone,
+    businessProfile.email,
+    businessProfile.website,
+  ].map((value)=>specificationValue(value)).filter(Boolean);
+}
 function customerQuoteSummaryMarkup(){
   const math=depositMaths();
   const customerName=specificationValue(quote.customerName)||'Customer';
@@ -8684,8 +8748,19 @@ function customerQuoteSummaryMarkup(){
   const pricingRows=math.depositEnabled
     ?`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div><div><span>Deposit Required</span><strong>${currency(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currency(math.remainingBalance)}</strong></div>`
     :`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div>`;
+  const quoteNumber=specificationValue(quote.quoteNumber);
+  const businessName=specificationValue(businessProfile.businessName);
+  const businessLines=customerQuoteBusinessLines();
+  const businessBlock=(businessName||businessLines.length)
+    ?`<div class="view-quote__business">${businessName?`<strong>${escapeHtml(businessName)}</strong>`:''}${businessLines.map((line)=>`<span>${escapeHtml(line)}</span>`).join('')}</div>`
+    :'';
+  const paymentBlock=businessProfileHasPaymentDetails()
+    ?`<div class="view-quote__payment"><span>Payment Details</span><div><span>Account name</span><strong>${escapeHtml(businessProfile.paymentAccountName)}</strong></div><div><span>Bank account</span><strong>${escapeHtml(businessProfile.paymentAccountNumber)}</strong></div>${quoteNumber?`<div><span>Reference</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}</div>`
+    :'';
   return `
     <div class="view-quote">
+      ${businessBlock}
+      ${quoteNumber?`<div class="view-quote__row"><span>Quote Number</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}
       <div class="view-quote__row"><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
       <div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>
       ${specRows.length?`<div class="view-quote__specs">${specificationRowsMarkup(specRows)}</div>`:''}
@@ -8693,6 +8768,7 @@ function customerQuoteSummaryMarkup(){
       <div class="view-quote__pricing">${pricingRows}</div>
       <div class="view-quote__row"><span>Estimated Completion</span><strong>${escapeHtml(dueText)}</strong></div>
       ${notesText?`<div class="view-quote__notes"><span>Customer Notes</span><p>${escapeHtml(notesText)}</p></div>`:''}
+      ${paymentBlock}
     </div>
   `;
 }
@@ -8747,7 +8823,10 @@ function emailCurrentQuote(){
   const email=specificationValue(quote.email);
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
   const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'to be confirmed';
-  const lines=[`Hi ${customerName},`,'','Here is your rod build quote:',`Total Price: ${currency(math.total)}`];
+  const lines=[`Hi ${customerName},`,'','Here is your rod build quote:'];
+  const quoteNumber=specificationValue(quote.quoteNumber);
+  if(quoteNumber){lines.push(`Quote Number: ${quoteNumber}`);}
+  lines.push(`Total Price: ${currency(math.total)}`);
   if(math.depositEnabled){
     lines.push(`Deposit Required: ${currency(math.depositAmount)}`);
     lines.push(`Balance Remaining: ${currency(math.remainingBalance)}`);
@@ -8755,7 +8834,15 @@ function emailCurrentQuote(){
   lines.push(`Estimated Completion: ${dueText}`);
   const notesText=customerRequestText(quote.notes);
   if(notesText){lines.push('',notesText);}
-  const subject=`Your Rod Build Quote${specificationValue(quote.buildName)?` \u2014 ${quote.buildName}`:''}`;
+  if(businessProfileHasPaymentDetails()){
+    lines.push('','Payment Details',`Account name: ${businessProfile.paymentAccountName}`,`Bank account: ${businessProfile.paymentAccountNumber}`);
+    if(quoteNumber){lines.push(`Reference: ${quoteNumber}`);}
+  }
+  const businessName=specificationValue(businessProfile.businessName);
+  const signOff=[businessName,...customerQuoteBusinessLines()];
+  if(signOff.filter(Boolean).length){lines.push('','Thanks,',...signOff.filter(Boolean));}
+  const subjectParts=[specificationValue(quote.buildName),quoteNumber].filter(Boolean);
+  const subject=`Your Rod Build Quote${subjectParts.length?` \u2014 ${subjectParts.join(' \u00b7 ')}`:''}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -10246,6 +10333,7 @@ function onScreenChange(screenId){
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
     syncSettingsPreferenceControls();
+    syncBusinessProfileControls();
   }
   updateWorkshopBackToTopVisibility();
 }
@@ -10261,7 +10349,56 @@ function syncSettingsPreferenceControls(){
     button.setAttribute('aria-pressed',String(selected));
   });
 }
+const BUSINESS_PROFILE_TEXT_FIELDS=[
+  {id:'settingsBusinessName',key:'businessName'},
+  {id:'settingsBusinessContactName',key:'contactName'},
+  {id:'settingsBusinessEmail',key:'email'},
+  {id:'settingsBusinessPhone',key:'phone'},
+  {id:'settingsBusinessWebsite',key:'website'},
+  {id:'settingsPaymentAccountName',key:'paymentAccountName'},
+  {id:'settingsPaymentAccountNumber',key:'paymentAccountNumber'},
+  {id:'settingsQuotePrefix',key:'quotePrefix'},
+];
+function syncBusinessProfileControls(force){
+  BUSINESS_PROFILE_TEXT_FIELDS.forEach((field)=>{
+    const input=$(field.id);
+    if(input && (force || document.activeElement!==input)){input.value=businessProfile[field.key]||'';}
+  });
+  const nextNumberInput=$('settingsQuoteNextNumber');
+  if(nextNumberInput && (force || document.activeElement!==nextNumberInput)){nextNumberInput.value=String(businessProfile.quoteNextNumber);}
+  const preview=$('settingsQuoteNumberPreview');
+  if(preview)preview.textContent=formatQuoteNumber(businessProfile.quoteNextNumber);
+}
+function bindBusinessProfileControls(){
+  BUSINESS_PROFILE_TEXT_FIELDS.forEach((field)=>{
+    const input=$(field.id);
+    if(!input || input.getAttribute('data-business-profile-bound')==='true')return;
+    input.setAttribute('data-business-profile-bound','true');
+    const commit=()=>{
+      businessProfile[field.key]=String(input.value||'').trim();
+      input.value=businessProfile[field.key];
+      saveBusinessProfile();
+      syncBusinessProfileControls();
+    };
+    input.addEventListener('change',commit);
+    input.addEventListener('blur',commit);
+  });
+  const nextNumberInput=$('settingsQuoteNextNumber');
+  if(nextNumberInput && nextNumberInput.getAttribute('data-business-profile-bound')!=='true'){
+    nextNumberInput.setAttribute('data-business-profile-bound','true');
+    const commitNextNumber=()=>{
+      businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
+      nextNumberInput.value=String(businessProfile.quoteNextNumber);
+      saveBusinessProfile();
+      syncBusinessProfileControls();
+    };
+    nextNumberInput.addEventListener('change',commitNextNumber);
+    nextNumberInput.addEventListener('blur',commitNextNumber);
+  }
+  syncBusinessProfileControls();
+}
 function bindSettingsControls(){
+  bindBusinessProfileControls();
   const taxEnabledInput=$('settingsTaxEnabled');
   if(taxEnabledInput){
     taxEnabledInput.checked=activeTaxEnabled();
@@ -10431,4 +10568,4 @@ bindBlankLibraryControls();
 bindSettingsControls();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:reloadBusinessProfileForAccount,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};

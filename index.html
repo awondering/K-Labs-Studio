@@ -701,6 +701,55 @@
           </div>
         </article>
       </section>
+      <section class="settings-preferences-shell" aria-label="Business">
+        <h2 class="settings-preferences-shell__title">Business</h2>
+
+        <details class="settings-card settings-preference-card settings-disclosure" id="settingsBusinessProfileCard">
+          <summary class="settings-disclosure__summary">
+            <span class="settings-disclosure__copy">
+              <span class="settings-disclosure__title">Business Profile</span>
+              <span class="settings-disclosure__hint">Your customer-facing business identity.</span>
+            </span>
+            <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+          </summary>
+          <div class="settings-field-grid">
+            <label><span>Business Name</span><input id="settingsBusinessName" type="text" autocomplete="organization" placeholder="Business name" /></label>
+            <label><span>Contact Name</span><input id="settingsBusinessContactName" type="text" autocomplete="name" placeholder="Contact name" /></label>
+            <label><span>Email</span><input id="settingsBusinessEmail" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+            <label><span>Phone</span><input id="settingsBusinessPhone" type="tel" autocomplete="tel" placeholder="Phone" /></label>
+            <label><span>Website</span><input id="settingsBusinessWebsite" type="text" inputmode="url" placeholder="www.example.com" /></label>
+          </div>
+        </details>
+
+        <details class="settings-card settings-preference-card settings-disclosure" id="settingsPaymentDetailsCard">
+          <summary class="settings-disclosure__summary">
+            <span class="settings-disclosure__copy">
+              <span class="settings-disclosure__title">Payment Details</span>
+              <span class="settings-disclosure__hint">Shown on customer quotes when both fields are set.</span>
+            </span>
+            <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+          </summary>
+          <div class="settings-field-grid">
+            <label><span>Account Name</span><input id="settingsPaymentAccountName" type="text" placeholder="Account name" /></label>
+            <label><span>Bank Account Number</span><input id="settingsPaymentAccountNumber" type="text" inputmode="numeric" placeholder="00-0000-0000000-00" /></label>
+          </div>
+        </details>
+
+        <details class="settings-card settings-preference-card settings-disclosure" id="settingsQuoteNumberingCard">
+          <summary class="settings-disclosure__summary">
+            <span class="settings-disclosure__copy">
+              <span class="settings-disclosure__title">Quote Numbering</span>
+              <span class="settings-disclosure__hint">Applies to future quotes only.</span>
+            </span>
+            <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+          </summary>
+          <div class="settings-field-grid">
+            <label><span>Quote Prefix</span><input id="settingsQuotePrefix" type="text" placeholder="KL-" /></label>
+            <label><span>Next Quote Number</span><input id="settingsQuoteNextNumber" type="number" inputmode="numeric" min="1" step="1" placeholder="1000" /></label>
+          </div>
+          <p class="settings-field-note">Next quote will be <strong id="settingsQuoteNumberPreview">—</strong>. Existing quotes and builds keep the number they were given.</p>
+        </details>
+      </section>
       <article class="settings-card settings-preference-card settings-account-card" aria-label="Account">
         <header class="settings-preference-card__head">
           <h3>Account</h3>
