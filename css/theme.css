@@ -25,10 +25,12 @@
 html{
   background:#020303;
   scrollbar-gutter:stable both-edges;
+  scroll-padding-bottom:calc(122px + env(safe-area-inset-bottom,0px));
 }
 body{
   margin:0;
   min-height:100vh;
+  min-height:100dvh;
   background:radial-gradient(circle at top,#171b1d 0,#060708 45%,#020303 100%);
   color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;

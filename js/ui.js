@@ -145,6 +145,7 @@ const workshopKeyboardDismissState={
   suppressNavUntil:0,
   preservedScrollY:0,
 };
+const workshopSectionExpandTimers=new WeakMap();
 const choicePickerViewportState={
   keyboardActive:false,
 };
@@ -4682,6 +4683,28 @@ function setWorkshopSectionCollapsed(sectionId,collapsed){
   section.classList.toggle('quote-section--collapsed',!!collapsed);
   const trigger=section.querySelector('[data-collapsible-trigger]');
   if(trigger){trigger.setAttribute('aria-expanded',String(!collapsed));}
+  animateWorkshopSectionBody(body,!!collapsed);
+}
+function animateWorkshopSectionBody(body,collapsed){
+  if(!body || !body.style)return;
+  if(workshopSectionExpandTimers.has(body)){
+    window.clearTimeout(workshopSectionExpandTimers.get(body));
+    workshopSectionExpandTimers.delete(body);
+  }
+  if(collapsed){
+    if(!body.style.maxHeight){
+      body.style.maxHeight=`${body.scrollHeight}px`;
+      void body.offsetHeight;
+    }
+    body.style.maxHeight='';
+    return;
+  }
+  body.style.maxHeight=`${body.scrollHeight}px`;
+  // Release the cap once the open animation finishes so the section can grow with its content.
+  workshopSectionExpandTimers.set(body,window.setTimeout(()=>{
+    workshopSectionExpandTimers.delete(body);
+    body.style.maxHeight='';
+  },280));
 }
 function collapseWorkshopSections(){
   WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{

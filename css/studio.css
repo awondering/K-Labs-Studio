@@ -1456,7 +1456,9 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 #workshopScreen .quote-section--collapsible .quote-section__body{
-  max-height:1600px;
+  /* No height cap when open: tall content (expanded New Component form) must never be clipped.
+     The expand/collapse animation is driven by a temporary inline max-height in js/ui.js. */
+  max-height:none;
   opacity:1;
   overflow:hidden;
   padding:14px 15px 15px;
