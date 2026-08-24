@@ -80,6 +80,7 @@ let customerFinderBuildRowMenu='';
 let customerFinderCustomerMenuOpen=false;
 let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
+let customerFinderCreateInFlight=false;
 let activeCustomerRenameContext={key:'',existingName:''};
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
@@ -7492,6 +7493,8 @@ function resetCustomerFinderNewForm(){
     if(input)input.value='';
   });
   setCustomerFinderNameValidation('');
+  customerFinderCreateInFlight=false;
+  setCustomerFinderCreateButtonState(false);
 }
 function setCustomerFinderNewBuildStep(step){
   customerFinderNewBuildStep=(step==='search' || step==='add')?step:'actions';
@@ -7515,6 +7518,8 @@ function setCustomerFinderNewBuildStep(step){
     return;
   }
   if(customerFinderNewBuildStep==='add'){
+    const body=document.querySelector('.customer-finder__body');
+    if(body)body.scrollTop=0;
     const nameInput=$('customerFinderNewCustomerName');
     if(nameInput){
       try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
@@ -7677,6 +7682,8 @@ function saveCustomerRecordFromDraft(draft){
   return savedRecord;
 }
 function handleCreateCustomerFromNewBuildForm(){
+  // A second tap must never write a second record while the first save is still settling.
+  if(customerFinderCreateInFlight)return;
   const draft=customerFinderDraftFromForm();
   if(!specificationValue(draft.customerName)){
     setCustomerFinderNameValidation('Enter a customer name to continue.');
@@ -7687,15 +7694,25 @@ function handleCreateCustomerFromNewBuildForm(){
     return;
   }
   setCustomerFinderNameValidation('');
-  const savedCustomer=saveCustomerRecordFromDraft(draft);
+  customerFinderCreateInFlight=true;
+  let savedCustomer=null;
+  try{
+    savedCustomer=saveCustomerRecordFromDraft(draft);
+  }catch(error){
+    savedCustomer=null;
+  }
   if(!savedCustomer){
-    setCustomerFinderNameValidation('Customer could not be saved.');
+    customerFinderCreateInFlight=false;
+    setCustomerFinderCreateButtonState(false);
+    setCustomerFinderNameValidation('Customer could not be saved. Check the customer name and try again.');
     return;
   }
   customerFinderSelectedKey=normalizeNameKey(savedCustomer.customerName)||'__no_customer__';
   setCustomerFinderCreateButtonState(true);
   renderCustomerFinder();
+  renderBuilds();
   window.setTimeout(()=>{
+    customerFinderCreateInFlight=false;
     closeCustomerFinderSheet();
     runNewBuildStartAction(()=>{
       startFreshQuoteForCustomer(savedCustomer);
