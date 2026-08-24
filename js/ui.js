@@ -1980,6 +1980,12 @@ function mergeComponentRecord(primary,secondary){
   const primarySupplier=specificationValue(primary&&primary.supplier);
   const secondarySupplier=specificationValue(secondary&&secondary.supplier);
   next.supplier=primarySupplier||secondarySupplier;
+  const primaryBrand=specificationValue(primary&&primary.brand);
+  const secondaryBrand=specificationValue(secondary&&secondary.brand);
+  next.brand=primaryBrand||secondaryBrand;
+  const primaryVariant=specificationValue(primary&&primary.variant);
+  const secondaryVariant=specificationValue(secondary&&secondary.variant);
+  next.variant=primaryVariant||secondaryVariant;
   const primaryLabel=specificationValue(primary&&primary.customerLabel);
   const secondaryLabel=specificationValue(secondary&&secondary.customerLabel);
   next.customerLabel=primaryLabel||secondaryLabel;
@@ -2662,6 +2668,8 @@ function normalizeComponent(component){
   return{
     category,
     subcategory:(component&&typeof component.subcategory==='string')?component.subcategory:'',
+    brand:(component&&typeof component.brand==='string')?component.brand:'',
+    variant:(component&&typeof component.variant==='string')?component.variant:'',
     description:(component&&typeof component.description==='string')?component.description:'',
     customerLabel:(component&&typeof component.customerLabel==='string')?component.customerLabel:'',
     supplier:(component&&typeof component.supplier==='string')?component.supplier:'',
@@ -3090,6 +3098,8 @@ function studioComponentDetailPayloadFromDom(){
     category:String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim(),
     subcategory:String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim(),
     supplier:String(($('studioComponentSupplier')&&$('studioComponentSupplier').value)||'').trim(),
+    brand:String(($('studioComponentBrand')&&$('studioComponentBrand').value)||'').trim(),
+    variant:String(($('studioComponentVariant')&&$('studioComponentVariant').value)||'').trim(),
     specifications:String(($('studioComponentSpecifications')&&$('studioComponentSpecifications').value)||'').trim(),
     notes:String(($('studioComponentNotes')&&$('studioComponentNotes').value)||'').trim(),
     cost:studioComponentCurrencyFieldValue('studioComponentCost'),
@@ -3200,6 +3210,8 @@ function renderStudioComponentDetails(record,options){
   const category=String(record.category||'').trim();
   const subcategory=String(record.subcategory||'').trim();
   const supplier=String(record.supplier||'').trim();
+  const brand=String(record.brand||'').trim();
+  const variant=String(record.variant||'').trim();
   const notes=String(record.notes||'').trim();
   const specifications=studioMergedSpecificationValue(record);
   const stockOnHand=componentLibraryStockValue(record);
@@ -3216,6 +3228,8 @@ function renderStudioComponentDetails(record,options){
       <label class="quote-component-field"><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
       <label class="quote-component-field"><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
       <label class="quote-component-field"><span>Supplier</span><span class="studio-component-details__select-wrap"><select id="studioComponentSupplier">${supplierMarkup}</select></span></label>
+      <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" value="${escapeHtml(brand)}" placeholder="CTS, Fuji, K-Labs" /></label>
+      <label class="quote-component-field"><span>Variant / Model</span><input id="studioComponentVariant" type="text" value="${escapeHtml(variant)}" placeholder="Air 2–4kg, K-Series, Hex" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
@@ -3234,6 +3248,8 @@ function renderStudioComponentDetails(record,options){
       category,
       subcategory,
       supplier,
+      brand,
+      variant,
       specifications,
       notes,
       cost:record.cost===undefined?undefined:numberOrZero(record.cost),
@@ -3269,6 +3285,8 @@ function saveStudioComponentDetails(){
     category:payload.category,
     subcategory:payload.subcategory,
     supplier:payload.supplier,
+    brand:payload.brand,
+    variant:payload.variant,
     // Keep legacy description in sync for backward compatibility paths.
     description:payload.specifications,
     specifications:payload.specifications,
@@ -5983,6 +6001,8 @@ function componentLibraryRecords(){
       category:componentLibraryCategoryValue(record),
       subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
+      brand:String(record.brand||'').trim(),
+      variant:String(record.variant||'').trim(),
       description:String(record.description||'').trim(),
       customerLabel:String(record.customerLabel||'').trim(),
       unit:String(record.unit||'').trim(),
@@ -6004,6 +6024,8 @@ function saveComponentLibraryRecords(records){
       category:componentLibraryCategoryValue(record),
       subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
+      brand:String(record.brand||'').trim(),
+      variant:String(record.variant||'').trim(),
       description:String(record.description||'').trim(),
       customerLabel:String(record.customerLabel||'').trim(),
       unit:String(record.unit||'').trim(),
@@ -6041,6 +6063,8 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     category:categoryValue,
     subcategory:String(item.subcategory||'').trim(),
     supplier:String(item.supplier||'').trim(),
+    brand:String(item.brand||'').trim(),
+    variant:String(item.variant||'').trim(),
     description:String(item.description||'').trim(),
     customerLabel:String(item.customerLabel||'').trim(),
     unit:String(item.unit||'').trim(),
