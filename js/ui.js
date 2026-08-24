@@ -2424,15 +2424,17 @@ function firstSavedComponentByCategory(categoryMatchers){
 }
 function blankSpecificationSummary(){
   const blankComponent=firstSavedComponentByCategory('blank')||firstComponentByCategory('blank');
-  const details=[];
-  const blankName=specificationValue(blankComponent&&blankComponent.blankName)||specificationValue(blankComponent&&blankComponent.description)||specificationValue(quote.blankName);
+  const brand=specificationValue(blankComponent&&blankComponent.brand)||specificationValue(blankComponent&&blankComponent.blankMaker)||specificationValue(blankComponent&&blankComponent.supplier)||specificationValue(quote.blankMaker);
+  const variant=specificationValue(blankComponent&&blankComponent.variant)||specificationValue(blankComponent&&blankComponent.blankName)||specificationValue(blankComponent&&blankComponent.description)||specificationValue(quote.blankName)||specificationValue(blankComponent&&blankComponent.blankSeries);
   const blankLength=specificationValue(blankComponent&&blankComponent.blankLength)||specificationValue(quote.blankLength);
   const blankPower=specificationValue(blankComponent&&blankComponent.blankPower)||specificationValue(quote.blankPower);
   const blankAction=specificationValue(blankComponent&&blankComponent.blankAction)||specificationValue(quote.blankAction);
-  if(blankName)details.push(blankName);
-  if(blankLength)details.push(blankLength);
-  if(blankPower)details.push(blankPower);
-  if(blankAction)details.push(blankAction);
+  const legacySpecs=[blankLength,blankPower,blankAction].filter(Boolean);
+  const specifications=specificationValue(blankComponent&&blankComponent.specifications)
+    || specificationValue(blankComponent&&blankComponent.blankNotes)
+    || specificationValue(quote.blankNotes)
+    || (legacySpecs.length?legacySpecs.join(' • '):'');
+  const details=[brand,variant,specifications].filter(Boolean);
   return details.join(' • ');
 }
 function customerPreviewLines(){
@@ -8763,7 +8765,7 @@ function customerQuoteBusinessLines(){
 function customerQuoteSummaryMarkup(){
   const math=depositMaths();
   const customerName=specificationValue(quote.customerName)||'Customer';
-  const rodDescription=customerSafeText(specificationValue(quote.buildName))||customerSafeText(blankSpecificationSummary())||'Custom Rod Build';
+  const rodDescription=customerSafeText(specificationValue(quote.buildName))||'Custom Rod Build';
   const specRows=customerSpecificationRows();
   const parts=customerIncludedParts();
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
