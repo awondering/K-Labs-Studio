@@ -7578,6 +7578,104 @@ function handleAddCustomerForNewBuild(){
     startFreshQuoteForCustomer({});
   });
 }
+function setCustomerFinderCreateButtonState(saved){
+  const button=$('customerFinderSubmitNewCustomerBtn');
+  if(!button)return;
+  const isSaved=!!saved;
+  button.textContent=isSaved?'✓ SAVED':'CREATE CUSTOMER';
+  button.disabled=isSaved;
+  button.classList.toggle('is-saved',isSaved);
+}
+function saveCustomerRecordFromDraft(draft){
+  const source=draft&&typeof draft==='object'?draft:{};
+  const customerName=String(source.customerName||'').trim();
+  if(!customerName)return null;
+  const normalizedCustomerName=normalizeNameKey(customerName);
+  const persistedQuote=normalizeQuote({
+    ...newQuoteTemplate(),
+    customerName,
+    company:String(source.company||'').trim(),
+    phone:String(source.phone||'').trim(),
+    email:String(source.email||'').trim(),
+    addressLine1:String(source.addressLine1||'').trim(),
+    addressLine2:String(source.addressLine2||'').trim(),
+    suburbLocality:String(source.suburbLocality||'').trim(),
+    cityTown:String(source.cityTown||'').trim(),
+    regionState:String(source.regionState||'').trim(),
+    postcode:String(source.postcode||'').trim(),
+    country:String(source.country||'').trim()||'New Zealand',
+    quoteMode:'internal',
+    quoteStatus:'quote',
+  });
+  const quoteRecords=savedQuoteRecords();
+  const existingQuoteIndex=quoteRecords.findIndex((record)=>{
+    if(!record)return false;
+    return !!normalizeNameKey(record&&record.customerName) && normalizeNameKey(record.customerName)===normalizedCustomerName;
+  });
+  if(existingQuoteIndex>=0){
+    const existing=normalizeQuote(quoteRecords[existingQuoteIndex]);
+    const merged=normalizeQuote({
+      ...existing,
+      ...persistedQuote,
+      customerName,
+      company:persistedQuote.company,
+      phone:persistedQuote.phone,
+      email:persistedQuote.email,
+      addressLine1:persistedQuote.addressLine1,
+      addressLine2:persistedQuote.addressLine2,
+      suburbLocality:persistedQuote.suburbLocality,
+      cityTown:persistedQuote.cityTown,
+      regionState:persistedQuote.regionState,
+      postcode:persistedQuote.postcode,
+      country:persistedQuote.country,
+      updatedAt:new Date().toISOString(),
+      savedAt:specificationValue(existing.savedAt)||new Date().toISOString(),
+    });
+    quoteRecords.splice(existingQuoteIndex,1);
+    quoteRecords.unshift(merged);
+    Store.set('klabs-workshop-quotes',quoteRecords);
+    return merged;
+  }
+  const buildRecords=savedBuildRecords();
+  const existingBuildIndex=buildRecords.findIndex((record)=>{
+    if(!record)return false;
+    return !!normalizeNameKey(record&&record.customerName) && normalizeNameKey(record.customerName)===normalizedCustomerName;
+  });
+  if(existingBuildIndex>=0){
+    const existing=normalizeQuote(buildRecords[existingBuildIndex]);
+    const merged=normalizeQuote({
+      ...existing,
+      ...persistedQuote,
+      customerName,
+      company:persistedQuote.company,
+      phone:persistedQuote.phone,
+      email:persistedQuote.email,
+      addressLine1:persistedQuote.addressLine1,
+      addressLine2:persistedQuote.addressLine2,
+      suburbLocality:persistedQuote.suburbLocality,
+      cityTown:persistedQuote.cityTown,
+      regionState:persistedQuote.regionState,
+      postcode:persistedQuote.postcode,
+      country:persistedQuote.country,
+      updatedAt:new Date().toISOString(),
+      savedAt:specificationValue(existing.savedAt)||new Date().toISOString(),
+    });
+    buildRecords.splice(existingBuildIndex,1);
+    buildRecords.unshift(merged);
+    Store.set('klabs-workshop-builds',buildRecords);
+    return merged;
+  }
+  const nowIso=new Date().toISOString();
+  const savedRecord=normalizeQuote({
+    ...persistedQuote,
+    createdAt:nowIso,
+    savedAt:nowIso,
+    updatedAt:nowIso,
+  });
+  quoteRecords.unshift(savedRecord);
+  Store.set('klabs-workshop-quotes',quoteRecords);
+  return savedRecord;
+}
 function handleCreateCustomerFromNewBuildForm(){
   const draft=customerFinderDraftFromForm();
   if(!specificationValue(draft.customerName)){
@@ -7589,11 +7687,21 @@ function handleCreateCustomerFromNewBuildForm(){
     return;
   }
   setCustomerFinderNameValidation('');
-  closeCustomerFinderSheet();
-  runNewBuildStartAction(()=>{
-    startFreshQuoteForCustomer(draft);
-    flashWorkshopStatus('Customer linked');
-  });
+  const savedCustomer=saveCustomerRecordFromDraft(draft);
+  if(!savedCustomer){
+    setCustomerFinderNameValidation('Customer could not be saved.');
+    return;
+  }
+  customerFinderSelectedKey=normalizeNameKey(savedCustomer.customerName)||'__no_customer__';
+  setCustomerFinderCreateButtonState(true);
+  renderCustomerFinder();
+  window.setTimeout(()=>{
+    closeCustomerFinderSheet();
+    runNewBuildStartAction(()=>{
+      startFreshQuoteForCustomer(savedCustomer);
+      flashWorkshopStatus('Customer saved');
+    });
+  },220);
 }
 function customerFinderPrimaryRecord(group){
   const selected=(group && Array.isArray(group.entries))?group.entries:[];
@@ -8090,7 +8198,7 @@ function ensureCustomerFinderSheet(){
           <label class="customer-finder__new-form-full"><span>Country</span><input id="customerFinderNewCountry" type="text" placeholder="Country" autocomplete="country-name" /></label>
           <div class="customer-finder__new-form-actions">
             <button class="ghost-action" type="button" data-customer-finder-action="back-to-actions">Back</button>
-            <button class="primary-action" type="button" data-customer-finder-action="submit-new">Start Build</button>
+            <button id="customerFinderSubmitNewCustomerBtn" class="primary-action" type="button" data-customer-finder-action="submit-new">CREATE CUSTOMER</button>
           </div>
         </form>
       </div>

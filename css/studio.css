@@ -1869,6 +1869,17 @@ body.component-sheet-open .workshop-back-to-top{
   margin-top:4px;
 }
 
+.customer-finder__new-form-actions .primary-action.is-saved{
+  background:rgba(216,210,197,.22);
+  border-color:rgba(216,210,197,.4);
+  color:#efe8dc;
+}
+
+.customer-finder__new-form-actions .primary-action:disabled{
+  cursor:default;
+  opacity:1;
+}
+
 .customer-finder__layout{
   display:grid;
   grid-template-columns:minmax(240px,300px) minmax(0,1fr);
