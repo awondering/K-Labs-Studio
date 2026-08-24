@@ -8951,32 +8951,58 @@ function closeViewQuote(){
   unlockModalLayer({restoreFocus:true});
 }
 // No email-sending backend exists yet; hand the customer-safe summary to the device's own mail client rather than faking a "sent" state.
+function formatCustomerEmailLongDate(value){
+  if(!value)return 'To be confirmed';
+  const date=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(date.getTime()))return 'To be confirmed';
+  try{
+    return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'long',year:'numeric'}).format(date);
+  }catch{
+    return 'To be confirmed';
+  }
+}
 function emailCurrentQuote(){
   const math=depositMaths();
   const customerName=specificationValue(quote.customerName)||'Customer';
+  const customerFirstName=customerName.split(/\s+/).filter(Boolean)[0]||'there';
   const email=specificationValue(quote.email);
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
-  const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'to be confirmed';
-  const lines=[`Hi ${customerName},`,'','Here is your rod build quote:'];
+  const dueText=dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed';
+  const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
   const quoteNumber=specificationValue(quote.quoteNumber);
-  if(quoteNumber){lines.push(`Quote Number: ${quoteNumber}`);}
-  lines.push(`Total Price: ${currency(math.total)}`);
-  if(math.depositEnabled){
-    lines.push(`Deposit Required: ${currency(math.depositAmount)}`);
-    lines.push(`Balance Remaining: ${currency(math.remainingBalance)}`);
-  }
-  lines.push(`Estimated Completion: ${dueText}`);
-  const notesText=customerRequestText(quote.notes);
-  if(notesText){lines.push('',notesText);}
+  const lines=[
+    `Hi ${customerFirstName},`,
+    '',
+    `Thank you for choosing ${businessName} for your custom rod build.`,
+    '',
+    `Custom Rod Build — ${quoteNumber||'Quote'}`,
+    '',
+    `Total: ${currency(math.total)}`,
+    `Deposit required: ${currency(math.depositAmount)}`,
+    `Balance remaining: ${currency(math.remainingBalance)}`,
+    `Estimated completion: ${dueText}`,
+  ];
   if(businessProfileHasPaymentDetails()){
-    lines.push('','Payment Details',`Account name: ${businessProfile.paymentAccountName}`,`Bank account: ${businessProfile.paymentAccountNumber}`);
-    if(quoteNumber){lines.push(`Reference: ${quoteNumber}`);}
+    lines.push(
+      '',
+      'Payment Details',
+      `Account name: ${businessProfile.paymentAccountName}`,
+      `Bank account: ${businessProfile.paymentAccountNumber}`,
+      `Reference: ${quoteNumber||'Quote'}`
+    );
   }
-  const businessName=specificationValue(businessProfile.businessName);
-  const signOff=[businessName,...customerQuoteBusinessLines()];
-  if(signOff.filter(Boolean).length){lines.push('','Thanks,',...signOff.filter(Boolean));}
-  const subjectParts=[specificationValue(quote.buildName),quoteNumber].filter(Boolean);
-  const subject=`Your Rod Build Quote${subjectParts.length?` \u2014 ${subjectParts.join(' \u00b7 ')}`:''}`;
+  lines.push('', 'Once the deposit has been received, your build will be confirmed.');
+  const businessProfileLines=[
+    businessName,
+    specificationValue(businessProfile.contactName),
+    specificationValue(businessProfile.phone),
+    specificationValue(businessProfile.email),
+    specificationValue(businessProfile.website),
+  ].filter(Boolean);
+  if(businessProfileLines.length){
+    lines.push('', ...businessProfileLines);
+  }
+  const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
