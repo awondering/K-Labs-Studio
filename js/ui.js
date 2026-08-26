@@ -6952,7 +6952,12 @@ function componentRowMenuMarkup(item,index){
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
-  const category=studioCategoryByName(categoryName);
+  const categoryKey=normalizeNameKey(categoryName);
+  // Read straight from the persisted taxonomy store (same key the Components library writes to) so this
+  // never depends on an in-memory taxonomy cache being fresh; fall back to the harvesting lookup for
+  // legacy data that only exists on component records and was never given its own taxonomy entry.
+  const persistedTaxonomy=normalizeStudioComponentTaxonomy(Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null));
+  const category=(categoryKey&&persistedTaxonomy.categories.find((item)=>normalizeNameKey(item.name)===categoryKey))||studioCategoryByName(categoryName);
   const subcategories=category&&Array.isArray(category.subcategories)?category.subcategories:[];
   const currentKey=normalizeNameKey(currentSubcategory);
   const matchesExisting=subcategories.some((item)=>normalizeNameKey(item.name)===currentKey);
