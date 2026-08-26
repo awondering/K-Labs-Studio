@@ -6952,17 +6952,14 @@ function componentRowMenuMarkup(item,index){
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
-  const categoryKey=normalizeNameKey(categoryName);
-  // Read straight from the persisted taxonomy store (same key the Components library writes to) so this
-  // never depends on an in-memory taxonomy cache being fresh; fall back to the harvesting lookup for
-  // legacy data that only exists on component records and was never given its own taxonomy entry.
-  const persistedTaxonomy=normalizeStudioComponentTaxonomy(Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null));
-  const category=(categoryKey&&persistedTaxonomy.categories.find((item)=>normalizeNameKey(item.name)===categoryKey))||studioCategoryByName(categoryName);
-  const subcategories=category&&Array.isArray(category.subcategories)?category.subcategories:[];
+  // Reuse the exact same aggregation the Components library screen renders from (taxonomy entries
+  // plus any subcategory values actually present on saved component records) so this can never drift
+  // from what the Components library visibly shows for the same category.
+  const subcategoryNames=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),categoryName);
   const currentKey=normalizeNameKey(currentSubcategory);
-  const matchesExisting=subcategories.some((item)=>normalizeNameKey(item.name)===currentKey);
+  const matchesExisting=subcategoryNames.some((name)=>normalizeNameKey(name)===currentKey);
   const options=['<option value="">No Subcategory</option>']
-    .concat(subcategories.map((item)=>`<option value="${escapeAttributeValue(item.name)}"${normalizeNameKey(item.name)===currentKey?' selected':''}>${escapeHtml(item.name)}</option>`));
+    .concat(subcategoryNames.map((name)=>`<option value="${escapeAttributeValue(name)}"${normalizeNameKey(name)===currentKey?' selected':''}>${escapeHtml(name)}</option>`));
   // Preserve legacy free-text subcategories not present in the current library taxonomy.
   if(currentSubcategory && !matchesExisting){
     options.push(`<option value="${escapeAttributeValue(currentSubcategory)}" selected>${escapeHtml(currentSubcategory)}</option>`);
