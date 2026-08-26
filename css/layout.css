@@ -43,6 +43,8 @@
 .quote-component-row span{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#777a74}
 .quote-component-row input{width:100%;min-height:34px;padding:8px 9px;border-radius:9px;border:1px solid rgba(214,210,200,.1);background:linear-gradient(180deg,#0f1213,#090b0c);color:#d7d0c3;font-size:11px;font-weight:600;outline:none}
 .quote-component-row input:focus{border-color:rgba(186,31,44,.2)}
+.quote-component-row select{width:100%;min-height:34px;padding:8px 9px;border-radius:9px;border:1px solid rgba(214,210,200,.1);background:linear-gradient(180deg,#0f1213,#090b0c);color:#d7d0c3;font-size:11px;font-weight:600;outline:none}
+.quote-component-row select:focus{border-color:rgba(186,31,44,.2)}
 .quote-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .quote-actions-row .ghost-action{min-height:40px;font-size:12px}
 .quote-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
