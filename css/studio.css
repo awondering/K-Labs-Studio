@@ -1258,6 +1258,11 @@ body.component-sheet-open .workshop-back-to-top{
   grid-column:1/-1;
 }
 
+.quote-component-field--category,
+.quote-component-field--supplier{
+  grid-column:1/-1;
+}
+
 .quote-component-field--cost{
   grid-column:2/-1;
   justify-self:end;
@@ -5615,9 +5620,14 @@ textarea::-moz-selection,
 #workshopScreen .quote-grid input,
 #workshopScreen .quote-grid textarea,
 #workshopScreen .quote-component-row input,
+#workshopScreen .quote-component-row select,
 #workshopScreen .quote-component-picker__trigger{
   min-height:32px;
   padding:7px 8px;
+}
+
+#workshopScreen .quote-component-picker__select-wrap select{
+  padding-right:24px;
 }
 
 #workshopScreen .quote-grid textarea{
