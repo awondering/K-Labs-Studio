@@ -1,4 +1,4 @@
-const APP_SHELL_VERSION='build089-v110';
+const APP_SHELL_VERSION='build090-v111';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
 const LEGACY_CACHE_PREFIX='klabs-studio-build';

@@ -112,6 +112,8 @@ let choicePickerViewportBound=false;
 let choicePickerViewportRaf=0;
 let customerFinderViewportBound=false;
 let customerFinderViewportRaf=0;
+let viewQuoteViewportBound=false;
+let viewQuoteViewportRaf=0;
 let workshopKeyboardDismissGuardBound=false;
 let workshopInputFocusStabilityBound=false;
 let workshopBackToTopBound=false;
@@ -9010,6 +9012,81 @@ function ensureViewQuoteSheet(){
     if(event.target.closest('#viewQuoteEmailBtn')){emailCurrentQuote();}
   });
 }
+// Same visualViewport-driven sizing pattern as choicePickerSheet/customerFinderSheet, so the sheet's
+// available height always matches Safari's real (chrome-adjusted) viewport rather than a stale 100dvh.
+function clearViewQuoteViewportStyles(){
+  const sheet=$('viewQuoteSheet');
+  if(!sheet)return;
+  sheet.style.removeProperty('--component-sheet-vv-left');
+  sheet.style.removeProperty('--component-sheet-vv-width');
+  sheet.style.removeProperty('--component-sheet-vv-top');
+  sheet.style.removeProperty('--component-sheet-vv-height');
+  sheet.style.removeProperty('--component-sheet-panel-max-width');
+  sheet.style.removeProperty('--component-sheet-panel-max-height');
+}
+function scheduleViewQuoteViewportSync(delayMs){
+  if(viewQuoteViewportRaf){
+    cancelAnimationFrame(viewQuoteViewportRaf);
+    viewQuoteViewportRaf=0;
+  }
+  const runSync=()=>{syncViewQuoteViewport();};
+  if(numberOrZero(delayMs)>0){
+    window.setTimeout(()=>{
+      viewQuoteViewportRaf=requestAnimationFrame(runSync);
+    },delayMs);
+    return;
+  }
+  viewQuoteViewportRaf=requestAnimationFrame(runSync);
+}
+function syncViewQuoteViewport(){
+  const sheet=$('viewQuoteSheet');
+  if(!sheet || sheet.hidden){
+    clearViewQuoteViewportStyles();
+    return;
+  }
+  const vv=window.visualViewport||null;
+  const viewportWidth=Math.max(0,Math.round(vv?vv.width:window.innerWidth));
+  const viewportLeft=Math.max(0,Math.round(vv?vv.offsetLeft:0));
+  const viewportHeight=Math.max(0,Math.round(vv?vv.height:window.innerHeight));
+  const viewportTop=Math.max(0,Math.round(vv?vv.offsetTop:0));
+  const sideGap=12;
+  const panelMaxWidth=Math.min(920,Math.max(260,viewportWidth-(sideGap*2)));
+  const panelMaxHeight=Math.max(220,viewportHeight-24);
+  sheet.style.setProperty('--component-sheet-vv-left',`${viewportLeft}px`);
+  sheet.style.setProperty('--component-sheet-vv-width',`${viewportWidth}px`);
+  sheet.style.setProperty('--component-sheet-vv-top',`${viewportTop}px`);
+  sheet.style.setProperty('--component-sheet-vv-height',`${viewportHeight}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-width',`${panelMaxWidth}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-height',`${panelMaxHeight}px`);
+}
+function bindViewQuoteViewportHandlers(){
+  if(viewQuoteViewportBound)return;
+  viewQuoteViewportBound=true;
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.addEventListener('resize',scheduleViewQuoteViewportSync);
+    vv.addEventListener('scroll',scheduleViewQuoteViewportSync);
+  }
+  window.addEventListener('resize',scheduleViewQuoteViewportSync);
+  window.addEventListener('orientationchange',scheduleViewQuoteViewportSync);
+  scheduleViewQuoteViewportSync();
+}
+function unbindViewQuoteViewportHandlers(){
+  if(!viewQuoteViewportBound)return;
+  viewQuoteViewportBound=false;
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.removeEventListener('resize',scheduleViewQuoteViewportSync);
+    vv.removeEventListener('scroll',scheduleViewQuoteViewportSync);
+  }
+  window.removeEventListener('resize',scheduleViewQuoteViewportSync);
+  window.removeEventListener('orientationchange',scheduleViewQuoteViewportSync);
+  if(viewQuoteViewportRaf){
+    cancelAnimationFrame(viewQuoteViewportRaf);
+    viewQuoteViewportRaf=0;
+  }
+  clearViewQuoteViewportStyles();
+}
 function openViewQuote(){
   ensureViewQuoteSheet();
   const body=$('viewQuoteBody');
@@ -9017,11 +9094,17 @@ function openViewQuote(){
   const sheet=$('viewQuoteSheet');
   if(!sheet)return;
   sheet.hidden=false;
+  // Reset scroll so a previous close-mid-scroll can't leave the reopened sheet stuck part-way down.
+  const sheetBody=sheet.querySelector('.component-sheet__body');
+  if(sheetBody)sheetBody.scrollTop=0;
   lockModalLayer(document.activeElement);
+  bindViewQuoteViewportHandlers();
+  scheduleViewQuoteViewportSync(40);
 }
 function closeViewQuote(){
   const sheet=$('viewQuoteSheet');
   if(sheet)sheet.hidden=true;
+  unbindViewQuoteViewportHandlers();
   unlockModalLayer({restoreFocus:true});
 }
 // No email-sending backend exists yet; hand the customer-safe summary to the device's own mail client rather than faking a "sent" state.

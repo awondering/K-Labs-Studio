@@ -2747,7 +2747,7 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 #viewQuoteSheet .component-sheet__panel{
-  max-height:min(100%,calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 10px));
+  max-height:var(--component-sheet-panel-max-height,min(100%,calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 10px)));
 }
 
 #viewQuoteSheet .component-sheet__body{
