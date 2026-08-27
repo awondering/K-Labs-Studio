@@ -1147,6 +1147,18 @@ function syncLayoutReturnControl(){
   if(label)label.textContent=fromBuild?'RETURN TO BUILD':'Workshop';
   button.setAttribute('aria-label',fromBuild?'Save and return to the build being edited':'Return to Workshop landing screen');
 }
+// Mirrors syncLayoutReturnControl for the currently visible Workshop tool card (Diameter/Grip/Spiral), so
+// Guide Orientation (Spiral) also offers "Return to Build" when reached from Guide Spacing's Active Build context.
+function syncWorkshopToolBackControl(){
+  const activeCard=document.querySelector('.workshop-tool-card:not([hidden])');
+  const button=activeCard&&activeCard.querySelector('[data-workshop-tool-back]');
+  if(!button)return;
+  const label=button.querySelector('span:last-child');
+  const fromBuild=layoutEntryOrigin==='build';
+  const defaultLabel=button.getAttribute('data-workshop-tool-back-label')||'Workshop';
+  if(label)label.textContent=fromBuild?'RETURN TO BUILD':defaultLabel;
+  button.setAttribute('aria-label',fromBuild?'Save and return to the build being edited':'Return to Workshop landing screen');
+}
 // Resolves a remembered build reference against current storage by build number (index and savedAt both drift after saves).
 function findSavedBuildTargetByRef(ref){
   const buildNumber=normalizeNameKey(ref&&ref.buildNumber);
@@ -1661,10 +1673,23 @@ function bindWorkshopCalculatorControls(){
     });
   });
   panel.querySelectorAll('[data-workshop-tool-back]').forEach((button)=>{
+    const label=button.querySelector('span:last-child');
+    if(label)button.setAttribute('data-workshop-tool-back-label',label.textContent||'');
     button.addEventListener('click',()=>{
+      if(layoutEntryOrigin==='build'){
+        returnToOriginatingBuildFromGuideLayout();
+        return;
+      }
       goToWorkshopLandingScreen();
     });
   });
+
+  const openGuideSpacingFromSpiralButton=$('openGuideSpacingFromSpiralBtn');
+  if(openGuideSpacingFromSpiralButton && openGuideSpacingFromSpiralButton.getAttribute('data-guide-spacing-link-bound')!=='true'){
+    openGuideSpacingFromSpiralButton.setAttribute('data-guide-spacing-link-bound','true');
+    // Deliberately does not clear layoutEntryOrigin/layoutEntryBuildRef, mirroring Guide Spacing's own link to Guide Orientation.
+    openGuideSpacingFromSpiralButton.addEventListener('click',()=>goScreen('layoutScreen'));
+  }
 
   const diameterInput=$('workshopDcDiameter');
   const circumferenceInput=$('workshopDcCircumference');
@@ -9238,6 +9263,14 @@ function bindLayoutControls(){
     });
   }
 
+  const openOrientationButton=$('openGuideOrientationBtn');
+  if(openOrientationButton && openOrientationButton.getAttribute('data-guide-orientation-bound')!=='true'){
+    openOrientationButton.setAttribute('data-guide-orientation-bound','true');
+    // Deliberately does not clear layoutEntryOrigin/layoutEntryBuildRef, so the same Active Build context
+    // carries over from Guide Spacing to Guide Orientation (Spiral tool).
+    openOrientationButton.addEventListener('click',()=>openWorkshopTool('spiral'));
+  }
+
   const statusBadge=$('layoutStatusBadge');
   if(statusBadge && statusBadge.getAttribute('data-layout-lock-bound')!=='true'){
     statusBadge.setAttribute('data-layout-lock-bound','true');
@@ -10522,6 +10555,7 @@ function onScreenChange(screenId){
   }
   if(screenId==='workshopLandingScreen'){
     renderWorkshopCalculator();
+    syncWorkshopToolBackControl();
     const selector=workshopLandingReturnFocusTool==='grip'
       ?'[data-workshop-tool-open="grip"]'
       :workshopLandingReturnFocusTool==='spiral'
