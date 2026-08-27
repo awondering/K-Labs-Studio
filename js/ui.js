@@ -6630,7 +6630,7 @@ function getChoiceValue(type,item){
   return type==='supplier'?(item&&item.supplier)||'':(item&&item.category)||'';
 }
 function setChoiceValue(type,index,value){
-  if(!quote.components[index])return;
+  if(!quote.components[index])return false;
   if(type==='supplier'){
     quote.components[index].supplier=value;
   }else{
@@ -6640,9 +6640,12 @@ function setChoiceValue(type,index,value){
       syncQuoteBlankFromComponents();
     }
   }
-  enforceSingleSourceComponents();
+  // enforceSingleSourceComponents can merge this row into an existing same-category row,
+  // which shifts/removes array indices; callers must re-render rather than patch context.index in that case.
+  const merged=enforceSingleSourceComponents();
   saveQuoteCurrent();
   markQuoteDirty();
+  return merged;
 }
 function applyBlankSelectionToBuildCosts(blank,targetIndex){
   const selected=normalizeBlank(blank);
@@ -6695,7 +6698,18 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
       openChoicePicker('blank',context.index,document.activeElement);
       return;
     }
-    setChoiceValue(context.type,context.index,selectedName);
+    const merged=setChoiceValue(context.type,context.index,selectedName);
+    if(merged){
+      // The picked category already exists on another row; enforceSingleSourceComponents merged this
+      // row into it, so context.index no longer points at the edited row - re-render from the true
+      // post-merge index instead of patching a stale row (was leaving the Subcategory field on an
+      // orphaned/blank draft row that never received the selected category).
+      const mergedIndex=quote.components.findIndex((item)=>normalizeNameKey(item.category)===normalizeNameKey(selectedName));
+      expandedComponentRowIndex=mergedIndex>=0?mergedIndex:expandedComponentRowIndex;
+      renderQuoteComponents();
+      updateQuoteSummary();
+      return;
+    }
     if(context.type==='category'){
       applyComponentLibraryRecordToRow(context.index,selectedName);
       syncComponentRowEditorInputs(context.index);
