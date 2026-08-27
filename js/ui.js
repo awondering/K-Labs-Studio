@@ -6952,10 +6952,13 @@ function componentRowMenuMarkup(item,index){
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
-  // Reuse the exact same aggregation the Components library screen renders from (taxonomy entries
-  // plus any subcategory values actually present on saved component records) so this can never drift
+  // Resolve the persisted taxonomy category record first (self-heals a stale in-memory taxonomy cache),
+  // then reuse the exact same aggregation the Components library screen renders from (taxonomy entries
+  // plus any subcategory values present on saved component records) so this can never drift
   // from what the Components library visibly shows for the same category.
-  const subcategoryNames=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),categoryName);
+  const persistedCategory=studioCategoryByName(categoryName);
+  const resolvedCategoryName=persistedCategory?persistedCategory.name:categoryName;
+  const subcategoryNames=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),resolvedCategoryName);
   const currentKey=normalizeNameKey(currentSubcategory);
   const matchesExisting=subcategoryNames.some((name)=>normalizeNameKey(name)===currentKey);
   const options=['<option value="">No Subcategory</option>']
