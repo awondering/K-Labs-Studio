@@ -9426,11 +9426,7 @@ function bindLayoutControls(){
   if(returnLandingButton && returnLandingButton.getAttribute('data-workshop-return-bound')!=='true'){
     returnLandingButton.setAttribute('data-workshop-return-bound','true');
     returnLandingButton.addEventListener('click',()=>{
-      if(layoutEntryOrigin==='build'){
-        returnToOriginatingBuildFromGuideLayout();
-      }else{
-        goToWorkshopLandingScreen();
-      }
+      goToWorkshopLandingScreen();
     });
   }
 
