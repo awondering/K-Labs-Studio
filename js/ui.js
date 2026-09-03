@@ -3930,16 +3930,12 @@ function handleStudioTaxonomyAction(action){
     supplier.name=nextSupplierName;
     studioRenameSupplier(oldName,nextSupplierName);
     saveStudioComponentTaxonomy();
-    studioSupplierEditContext.baseline=nextSupplierName;
-    studioSupplierEditContext.savedFlash=true;
     clearStudioSupplierSavedTimer();
+    studioSupplierContextMenu='';
+    studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
+    setStudioTaxonomySectionMode('suppliers','browse');
     refreshStudioComponentAndTaxonomyViews();
-    studioSupplierEditContext.savedTimer=window.setTimeout(()=>{
-      studioSupplierEditContext.savedFlash=false;
-      studioSupplierEditContext.savedTimer=0;
-      setStudioTaxonomySectionMode('suppliers','browse');
-      renderStudioTaxonomyManager();
-    },700);
+    flashWorkshopStatus('Supplier saved');
     return;
   }
   if(action==='supplier-delete'){
