@@ -8310,10 +8310,6 @@ function ensureCustomerFinderSheet(){
         <div id="customerFinderSearchBlock" hidden>
           <div id="customerFinderRootView" class="customer-finder__root-view">
             <div id="customerFinderBrowseHead" class="customer-finder__browse-head">
-              <button class="workshop-tool-nav-back customer-finder__studio-back" type="button" data-customer-finder-action="back-to-studio" aria-label="Return to Studio">
-                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-                <span>Studio</span>
-              </button>
               <h3>Customers</h3>
               <p>Find and manage customers.</p>
             </div>
@@ -8366,10 +8362,6 @@ function ensureCustomerFinderSheet(){
         if(customerFinderIntent==='new-build'){
           setCustomerFinderNewBuildStep('actions');
         }
-        return;
-      }
-      if(action==='back-to-studio'){
-        closeCustomerFinderSheet();
         return;
       }
       if(action==='back-to-list'){

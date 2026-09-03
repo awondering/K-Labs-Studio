@@ -1806,8 +1806,7 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 .customer-finder__start-actions .primary-action,
-.customer-finder__start-actions .ghost-action,
-.customer-finder__back{
+.customer-finder__start-actions .ghost-action{
   width:100%;
 }
 
@@ -1818,10 +1817,6 @@ body.component-sheet-open .workshop-back-to-top{
   min-height:0;
   flex:1;
   overflow:hidden;
-}
-
-.customer-finder__back{
-  justify-self:start;
 }
 
 .customer-finder__new-form{
@@ -2073,11 +2068,6 @@ body.component-sheet-open .workshop-back-to-top{
 .customer-finder__browse-head{
   display:grid;
   gap:4px;
-}
-
-.customer-finder__studio-back{
-  justify-self:start;
-  min-height:30px;
 }
 
 .customer-finder__browse-head h3{
