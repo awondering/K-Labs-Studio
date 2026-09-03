@@ -2999,7 +2999,7 @@ function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
     const categoryName=String(record&&record.category||'').trim();
     const categoryKey=normalizeNameKey(categoryName);
     if(categoryKey && !isInvalidLibraryCategoryName(categoryName)){
-      let category=findExistingCategoryByAlias(categoryMap,categoryName);
+      let category=categoryMap.get(categoryKey);
       if(!category){
         category={id:studioTaxonomyId('cat'),name:categoryName,subcategories:[]};
         categoryMap.set(categoryKey,category);
@@ -3018,7 +3018,7 @@ function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
   });
   getCustomCategoryNames().forEach((name)=>{
     const key=normalizeNameKey(name);
-    if(!key || isInvalidLibraryCategoryName(name) || findExistingCategoryByAlias(categoryMap,name))return;
+    if(!key || isInvalidLibraryCategoryName(name) || categoryMap.has(key))return;
     categoryMap.set(key,{id:studioTaxonomyId('cat'),name:String(name).trim(),subcategories:[]});
   });
   getCustomSupplierNames().forEach((name)=>{
@@ -3312,6 +3312,7 @@ function saveStudioComponentDetails(){
     return;
   }
   const sourceRecord={
+    categoryId:'',
     category:payload.category,
     subcategory:payload.subcategory,
     supplier:payload.supplier,
@@ -3328,6 +3329,9 @@ function saveStudioComponentDetails(){
   if(normalizeNameKey(originalName) && normalizeNameKey(originalName)!==normalizeNameKey(nextName)){
     removeComponentLibraryRecord(originalName);
   }
+  const taxonomyForSave=ensureStudioComponentTaxonomyLoaded();
+  const categoryForSave=(taxonomyForSave.categories||[]).find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceRecord.category));
+  sourceRecord.categoryId=categoryForSave&&categoryForSave.id||'';
   upsertComponentLibraryRecord(nextName,sourceRecord);
   ensureStudioComponentTaxonomyLoaded();
   const nextCategoryKey=normalizeNameKey(sourceRecord.category);
@@ -3566,6 +3570,33 @@ function studioReassignUsedCategoryToUnassigned(categoryName){
     });
   });
 }
+function studioCountCategoryUsageById(category){
+  if(!category)return 0;
+  const categoryId=String(category.id||'').trim();
+  const categoryKey=normalizeNameKey(category.name);
+  return componentLibraryRecords().filter((record)=>{
+    const recordCategoryId=String(record&&record.categoryId||'').trim();
+    if(recordCategoryId)return recordCategoryId===categoryId;
+    return normalizeNameKey(record&&record.category)===categoryKey;
+  }).length + (Array.isArray(category.subcategories)?category.subcategories.length:0);
+}
+function studioRenameCategoryById(categoryId,oldName,newName){
+  const targetId=String(categoryId||'').trim();
+  const oldKey=normalizeNameKey(oldName);
+  const next=String(newName||'').trim();
+  const nextKey=normalizeNameKey(next);
+  if(!targetId || !oldKey || !nextKey || oldKey===nextKey)return false;
+  studioUpdateComponents((records)=>{
+    records.forEach((record)=>{
+      const recordCategoryId=String(record&&record.categoryId||'').trim();
+      if((recordCategoryId && recordCategoryId===targetId) || (!recordCategoryId && normalizeNameKey(record.category)===oldKey)){
+        record.category=next;
+        record.categoryId=targetId;
+      }
+    });
+  });
+  return true;
+}
 function studioReassignUsedSubcategoryToUnassigned(categoryName,subcategoryName){
   const categoryKey=normalizeNameKey(categoryName);
   const subKey=normalizeNameKey(subcategoryName);
@@ -3727,6 +3758,10 @@ function refreshStudioComponentAndTaxonomyViews(){
   if(studioScreenView==='taxonomy'){
     renderStudioTaxonomyManager();
   }
+  const picker=$('choicePickerSheet');
+  if(picker && !picker.hidden){
+    renderChoicePickerOptions($('choicePickerSearch')&&$('choicePickerSearch').value||'');
+  }
 }
 function handleStudioTaxonomyAction(action){
   ensureStudioComponentTaxonomyLoaded();
@@ -3758,29 +3793,38 @@ function handleStudioTaxonomyAction(action){
     if(existing && existing.id!==category.id){openInfoDialog('Category Exists','Another category already uses this name.');return;}
     const oldName=category.name;
     category.name=nextCategoryName;
-    studioRenameCategory(oldName,nextCategoryName);
+    studioRenameCategoryById(category.id,oldName,nextCategoryName);
     setStudioTaxonomySectionMode('categories','edit');
     saveStudioComponentTaxonomy();
   }
   if(action==='category-delete'){
     if(!category){openInfoDialog('Select Category','Choose a category to delete.');return;}
-    const usage=studioCountCategoryUsage(category.name);
+    const usage=studioCountCategoryUsageById(category);
+    if(usage>0){
+      setStudioTaxonomySectionMode('categories','browse');
+      refreshStudioComponentAndTaxonomyViews();
+      openInfoDialog('Category In Use','Move the assigned components and subcategories before deleting this category.');
+      return;
+    }
     const deleteNow=()=>{
       studioComponentTaxonomyState.categories=studioComponentTaxonomyState.categories.filter((item)=>item.id!==category.id);
+      if(studioLibraryPath.categoryId===category.id || studioLibraryEditor.targetId===category.id){
+        studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+        studioLibraryEditor={type:'',mode:'',targetName:'',targetId:''};
+      }
+      if(studioComponentTaxonomySelection.category===category.id){
+        studioComponentTaxonomySelection.category='';
+        studioComponentTaxonomySelection.subcategory='';
+      }
       saveStudioComponentTaxonomy();
       refreshStudioComponentAndTaxonomyViews();
     };
     openConfirmDialog({
-      title:usage>0?'Category In Use':'Delete Category',
-      message:usage>0
-        ?`${usage} component(s) use this category. Continue and set affected components to Unassigned?`
-        :'Delete this category?',
-      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:usage>0?'Unassign & Delete':'Delete',kind:'danger'}]
+      title:'Delete Category',
+      message:'Delete this category?',
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]
     },(choice)=>{
       if(choice!=='delete')return;
-      if(usage>0){
-        studioReassignUsedCategoryToUnassigned(category.name);
-      }
       setStudioTaxonomySectionMode('categories','browse');
       deleteNow();
     });
@@ -3932,25 +3976,10 @@ function handleStudioTaxonomyAction(action){
 }
 function studioCategoryNamesForLibrary(taxonomy,records){
   const hasUnassignedRecords=(records||[]).some((record)=>!normalizeNameKey(record&&record.category) || isInvalidLibraryCategoryName(record&&record.category));
-  const promotedComponentKeys=new Set((records||[])
-    .filter((record)=>!normalizeNameKey(record&&record.category))
-    .map((record)=>normalizeNameKey(record&&record.name))
-    .filter(Boolean));
-  const promotedCategoryKeys=new Set((Array.isArray(Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]))?Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]):[])
-    .map((record)=>{
-      const rawCategory=String(record&&record.category||'').trim();
-      return rawCategory && !componentLibraryCategoryValue(record)?normalizeNameKey(rawCategory):'';
-    })
-    .filter(Boolean));
   const categoryNames=Array.from(new Set(
     (taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[])
       .map((item)=>String(item.name||'').trim())
-      .filter((name)=>{
-        const key=normalizeNameKey(name);
-        return !promotedComponentKeys.has(key) && !promotedCategoryKeys.has(key);
-      })
-      .filter(Boolean)
-      .concat((records||[]).map((item)=>String(item&&item.category||'').trim()).filter(Boolean))
+        .filter(Boolean)
   )).filter((name)=>!isInvalidLibraryCategoryName(name));
   if(hasUnassignedRecords && !categoryNames.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
     categoryNames.push(UNASSIGNED_COMPONENT_CATEGORY);
@@ -3994,6 +4023,13 @@ function studioCategorySelectionByName(categoryName){
   studioComponentTaxonomySelection.subcategory='';
   return category;
 }
+function studioCategorySelectionById(categoryId){
+  const category=studioCategoryById(String(categoryId||'').trim());
+  if(!category)return null;
+  studioComponentTaxonomySelection.category=category.id;
+  studioComponentTaxonomySelection.subcategory='';
+  return category;
+}
 function studioSubcategorySelectionByName(categoryName,subcategoryName){
   const category=studioCategoryByName(categoryName);
   if(!category)return null;
@@ -4004,11 +4040,13 @@ function studioSubcategorySelectionByName(categoryName,subcategoryName){
   return {category,subcategory};
 }
 function studioCategoryContextMenuMarkup(categoryName){
+  const category=studioCategoryByName(categoryName);
+  const categoryId=category&&category.id||'';
   return `<div class="studio-components-row-menu" role="menu" aria-label="Category actions">
-    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-rename" data-studio-library-name="${escapeAttributeValue(categoryName)}">Rename</button>
-    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-up" data-studio-library-name="${escapeAttributeValue(categoryName)}">Move Up</button>
-    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-down" data-studio-library-name="${escapeAttributeValue(categoryName)}">Move Down</button>
-    <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-library-menu-action="category-delete" data-studio-library-name="${escapeAttributeValue(categoryName)}">Delete</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-rename" data-studio-library-id="${escapeAttributeValue(categoryId)}">Rename</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-up" data-studio-library-id="${escapeAttributeValue(categoryId)}">Move Up</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-down" data-studio-library-id="${escapeAttributeValue(categoryId)}">Move Down</button>
+    <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-library-menu-action="category-delete" data-studio-library-id="${escapeAttributeValue(categoryId)}">Delete</button>
   </div>`;
 }
 function studioSubcategoryContextMenuMarkup(subcategoryName){
@@ -4153,6 +4191,12 @@ function renderStudioComponentsLibrary(){
     return;
   }
   if(isCategoryEdit){
+    if(!studioCategoryById(studioLibraryEditor.targetId)){
+      studioLibraryEditor={type:'',mode:'',targetName:'',targetId:''};
+      studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+      renderStudioComponentsLibrary();
+      return;
+    }
     details.innerHTML=`<div class="studio-component-details__head"><h2>RENAME CATEGORY</h2><p>Update the category name.</p></div><div class="studio-component-details__fields"><label><span>Category Name</span><input id="studioLibraryCategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="category-rename">Save</button><button class="ghost-action" type="button" data-studio-library-action="editor-cancel">Cancel</button></div>`;
     return;
   }
@@ -4167,12 +4211,13 @@ function renderStudioComponentsLibrary(){
   }
 
   if(studioLibraryPath.level==='categories'){
-    const visibleCategories=categoryNames.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
+      const visibleCategories=(taxonomy.categories||[]).filter((category)=>categoryNames.includes(category.name) && (!queryKey || category.name.toLowerCase().includes(queryKey)));
     if(!visibleCategories.length){
       list.innerHTML='<p class="studio-components-list__empty">No categories found.</p>';
     }else{
-      list.innerHTML=visibleCategories.map((name)=>{
-        const menuKey=normalizeNameKey(name);
+      list.innerHTML=visibleCategories.map((category)=>{
+        const name=category.name;
+        const menuKey=category.id;
         const menuOpen=isStudioLibraryContextMenuOpen('category',menuKey);
         return `<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button><button class="studio-components-list__menu-trigger" type="button" aria-label="Category actions" data-studio-library-menu-toggle="category" data-studio-library-menu-key="${escapeAttributeValue(menuKey)}">&hellip;</button>${menuOpen?studioCategoryContextMenuMarkup(name):''}</article>`;
       }).join('');
@@ -4364,13 +4409,19 @@ function bindStudioComponentsPanel(){
       const menuActionButton=event.target.closest('[data-studio-library-menu-action]');
       if(menuActionButton){
         const action=String(menuActionButton.getAttribute('data-studio-library-menu-action')||'');
+        const categoryId=String(menuActionButton.getAttribute('data-studio-library-id')||'').trim();
         const name=String(menuActionButton.getAttribute('data-studio-library-name')||'').trim();
         closeStudioLibraryContextMenu();
         if(action.startsWith('category-')){
-          const category=studioCategorySelectionByName(name);
-          if(!category){openInfoDialog('Category Missing','The selected category was not found.');renderStudioComponentsLibrary();return;}
+          const category=studioCategorySelectionById(categoryId);
+          if(!category){
+            studioLibraryEditor={type:'',mode:'',targetName:'',targetId:''};
+            studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+            renderStudioComponentsLibrary();
+            return;
+          }
           if(action==='category-rename'){
-            studioLibraryEditor={type:'category',mode:'edit',targetName:category.name};
+            studioLibraryEditor={type:'category',mode:'edit',targetName:category.name,targetId:category.id};
             renderStudioComponentsLibrary();
             return;
           }
@@ -4479,26 +4530,32 @@ function bindStudioComponentsPanel(){
           saveStudioComponentTaxonomy();
           studioLibraryEditor={type:'',mode:'',targetName:''};
           studioLibraryPath={level:'category',categoryId:nextName,subcategoryId:''};
-          renderStudioComponentsLibrary();
+          refreshStudioComponentAndTaxonomyViews();
           return;
         }
         if(action==='category-rename'){
           const sourceName=String(studioLibraryEditor.targetName||'').trim();
+          const sourceId=String(studioLibraryEditor.targetId||'').trim();
           const input=$('studioLibraryCategoryName');
           const nextName=String(input&&input.value||'').trim();
           if(!sourceName)return;
           if(!nextName){openInfoDialog('Category Name Required','Enter a category name.');return;}
           if(studioRejectInvalidCategoryName(nextName))return;
-          const duplicate=taxonomy.categories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(nextName) && normalizeNameKey(item.name)!==normalizeNameKey(sourceName));
+          const duplicate=taxonomy.categories.some((item)=>item.id!==sourceId && normalizeNameKey(item.name)===normalizeNameKey(nextName));
           if(duplicate){openInfoDialog('Category Exists','A category with this name already exists.');return;}
-          const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceName));
-          if(!target){openInfoDialog('Category Missing','The selected category was not found.');return;}
+          const target=taxonomy.categories.find((item)=>item.id===sourceId);
+          if(!target){
+            studioLibraryEditor={type:'',mode:'',targetName:'',targetId:''};
+            studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+            renderStudioComponentsLibrary();
+            return;
+          }
           target.name=nextName;
-          studioRenameCategory(sourceName,nextName);
+          studioRenameCategoryById(target.id,sourceName,nextName);
           if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceName))studioLibraryPath.categoryId=nextName;
           saveStudioComponentTaxonomy();
           studioLibraryEditor={type:'',mode:'',targetName:''};
-          renderStudioComponentsLibrary();
+          refreshStudioComponentAndTaxonomyViews();
           return;
         }
         if(action==='subcategory-add'){
@@ -6028,6 +6085,7 @@ function componentLibraryRecords(){
     .filter((record)=>record&&typeof record==='object')
     .map((record)=>({
       name:String(record.name||'').trim(),
+      categoryId:String(record.categoryId||'').trim(),
       category:componentLibraryCategoryValue(record),
       subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
@@ -6051,6 +6109,7 @@ function saveComponentLibraryRecords(records){
     .filter((record)=>record&&typeof record==='object'&&normalizeNameKey(record.name))
     .map((record)=>({
       name:String(record.name||'').trim(),
+      categoryId:String(record.categoryId||'').trim(),
       category:componentLibraryCategoryValue(record),
       subcategory:String(record.subcategory||'').trim(),
       supplier:String(record.supplier||'').trim(),
@@ -6090,6 +6149,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const resolvedCost=unitCost!==undefined?unitCost:rowCost;
   const nextRecord={
     name:normalizedName,
+    categoryId:String(item.categoryId||'').trim(),
     category:categoryValue,
     subcategory:String(item.subcategory||'').trim(),
     supplier:String(item.supplier||'').trim(),
@@ -6623,8 +6683,9 @@ function renameCustomChoice(fromName,toName,blankId){
   }
   saveArchivedChoiceNames(type,archived);
   if(type==='category'){
+    const category=studioCategoryByName(fromName);
     renameComponentLibraryRecord(fromName,toName);
-    studioRenameCategory(fromName,toName);
+    if(category)studioRenameCategoryById(category.id,fromName,toName);
     studioTaxonomyRenameCategoryByName(fromName,toName);
   }else if(type==='supplier'){
     studioRenameSupplier(fromName,toName);
@@ -6844,6 +6905,14 @@ function requestDeleteChoice(optionName,optionId){
     if(!blank)return;
     requestDeleteBlank(blank);
     return;
+  }
+  if(activeChoicePicker.type==='category'){
+    const category=studioCategoryById(optionId)||studioCategoryByName(optionName);
+    if(category && studioCountCategoryUsageById(category)>0){
+      openInfoDialog('Category In Use','Move the assigned components and subcategories before deleting this category.');
+      refreshStudioComponentAndTaxonomyViews();
+      return;
+    }
   }
   const refs=choiceReferences(activeChoicePicker.type,optionName);
   if(refs.referenced){
@@ -10881,7 +10950,6 @@ function render(options){
 }
 seedStarterComponentsLibrary();
 assignStarterComponentSuppliers();
-mergeDuplicateCategoryAliasesOnce();
 cleanupPlaceholderComponentRecordsOnce();
 loadChoicePickerFavourites();
 bindLayoutControls();
