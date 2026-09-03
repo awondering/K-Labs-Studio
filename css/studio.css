@@ -6239,10 +6239,13 @@ textarea::-moz-selection,
 }
 
 .saved-build-card__menu{
-  position:absolute;
-  right:0;
-  top:46px;
+  position:fixed;
+  left:8px;
+  top:8px;
   min-width:160px;
+  max-width:calc(100vw - 16px);
+  max-height:calc(100dvh - 16px);
+  overflow:auto;
   padding:6px;
   display:grid;
   gap:4px;
@@ -6251,6 +6254,10 @@ textarea::-moz-selection,
   background:var(--ds-surface);
   box-shadow:0 12px 26px rgba(0,0,0,.28);
   z-index:2;
+}
+
+#buildsScreen.active:has(.saved-build-card__menu){
+  animation:none;
 }
 
 .saved-build-card__menu-item{
@@ -6469,8 +6476,7 @@ textarea::-moz-selection,
   }
 
   .saved-build-card__menu{
-    right:0;
-    left:auto;
+    max-width:calc(100vw - 16px);
   }
 
   .saved-builds-empty__actions{

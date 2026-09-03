@@ -8593,6 +8593,29 @@ function toggleSavedBuildRowMenu(source,index){
   const key=savedBuildMenuKey(source,index);
   activeBuildRowMenu=activeBuildRowMenu===key?'':key;
 }
+function positionSavedBuildRowMenu(){
+  if(!activeBuildRowMenu)return;
+  const parts=activeBuildRowMenu.split('::');
+  const source=parts[0]||'';
+  const index=parts[1]||'';
+  const trigger=document.querySelector(`[data-build-action="toggle-menu"][data-build-source="${CSS.escape(source)}"][data-build-index="${CSS.escape(index)}"]`);
+  const menu=document.querySelector(`[data-build-row-menu][data-build-source="${CSS.escape(source)}"][data-build-index="${CSS.escape(index)}"]`);
+  if(!trigger || !menu)return;
+  const triggerRect=trigger.getBoundingClientRect();
+  const menuRect=menu.getBoundingClientRect();
+  const inset=Math.max(8,Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-gutter'))||8);
+  const viewportWidth=document.documentElement.clientWidth||window.innerWidth;
+  const viewportHeight=document.documentElement.clientHeight||window.innerHeight;
+  const left=Math.max(inset,Math.min(viewportWidth-inset-menuRect.width,triggerRect.right-menuRect.width));
+  const spaceBelow=viewportHeight-triggerRect.bottom-inset;
+  const spaceAbove=triggerRect.top-inset;
+  const opensUpward=spaceBelow<menuRect.height && spaceAbove>=menuRect.height;
+  const top=opensUpward
+    ?Math.max(inset,triggerRect.top-menuRect.height-6)
+    :Math.min(viewportHeight-inset-menuRect.height,triggerRect.bottom+6);
+  menu.style.left=`${left}px`;
+  menu.style.top=`${Math.max(inset,top)}px`;
+}
 function isSavedBuildRowMenuOpen(source,index){
   return activeBuildRowMenu===savedBuildMenuKey(source,index);
 }
@@ -8610,7 +8633,7 @@ function savedBuildRowMenuMarkup(entry){
       const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
       return `<button class="saved-build-card__menu-item" type="button" role="menuitem" data-build-action="${toggleAction}" data-build-source="${source}" data-build-index="${index}">${toggleLabel}</button>`;
     })();
-  return `<div class="saved-build-card__menu" role="menu" aria-label="Build actions">${confirmItem}${toggleItem}<button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-build-action="delete" data-build-source="${source}" data-build-index="${index}">Delete</button></div>`;
+  return `<div class="saved-build-card__menu" data-build-row-menu data-build-source="${source}" data-build-index="${index}" role="menu" aria-label="Build actions">${confirmItem}${toggleItem}<button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-build-action="delete" data-build-source="${source}" data-build-index="${index}">Delete</button></div>`;
 }
 function savedBuildRowMarkup(entry){
   const record=entry.record;
@@ -10609,6 +10632,7 @@ function bindBuildsControls(){
         event.stopPropagation();
         toggleSavedBuildRowMenu(source,index);
         renderBuilds();
+        positionSavedBuildRowMenu();
         return;
       }
       if(action==='mark-complete'){
@@ -10661,6 +10685,8 @@ function bindBuildsControls(){
       closeSavedBuildRowMenu();
       renderBuilds();
     });
+    window.addEventListener('resize',positionSavedBuildRowMenu,{passive:true});
+    window.addEventListener('scroll',positionSavedBuildRowMenu,{passive:true});
   }
 }
 function onScreenChange(screenId){
