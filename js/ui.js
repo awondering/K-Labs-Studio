@@ -10810,6 +10810,9 @@ function bindSettingsControls(){
     const onTaxEnabledChange=()=>{
       studioSettings.taxEnabled=taxEnabledInput.checked;
       saveStudioSettings();
+      // Global tax setting is the single source of truth for Tax/GST visibility: refresh the
+      // live quote summary immediately so no stale Tax/GST row/gap lingers after toggling.
+      updateQuoteSummary();
     };
     taxEnabledInput.addEventListener('input',onTaxEnabledChange);
     taxEnabledInput.addEventListener('change',onTaxEnabledChange);
