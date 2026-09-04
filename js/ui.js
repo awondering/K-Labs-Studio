@@ -3636,6 +3636,235 @@ function studioCountCategoryUsageById(category){
     return normalizeNameKey(record&&record.category)===categoryKey;
   }).length + (Array.isArray(category.subcategories)?category.subcategories.length:0);
 }
+// Component count only (no subcategory count folded in), id-aware like studioCountCategoryUsageById, for
+// the Move/Merge dialog's messaging and confirm-button label.
+function studioCategoryComponentCount(category){
+  if(!category)return 0;
+  const categoryId=String(category.id||'').trim();
+  const categoryKey=normalizeNameKey(category.name);
+  return componentLibraryRecords().filter((record)=>{
+    const recordCategoryId=String(record&&record.categoryId||'').trim();
+    if(recordCategoryId)return recordCategoryId===categoryId;
+    return normalizeNameKey(record&&record.category)===categoryKey;
+  }).length;
+}
+// "Reel Seat" vs "Reel Seats" style near-duplicates: reuses the existing alias-group list plus a light
+// singular/plural fallback, purely to choose "Merge" wording - never to auto-select a destination.
+function categoriesLookLikeDuplicates(nameA,nameB){
+  const keyA=normalizeNameKey(nameA);
+  const keyB=normalizeNameKey(nameB);
+  if(!keyA || !keyB || keyA===keyB)return false;
+  const aliasA=categoryAliasGroupKeyFor(nameA);
+  if(aliasA && aliasA===categoryAliasGroupKeyFor(nameB))return true;
+  const stripTrailingS=(key)=>key.endsWith('s')?key.slice(0,-1):key;
+  return stripTrailingS(keyA)===stripTrailingS(keyB);
+}
+// Every other category is a valid Move/Merge destination; the source category itself is always excluded.
+function studioCandidateMergeDestinationCategories(sourceCategory){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  return taxonomy.categories
+    .filter((item)=>item.id!==(sourceCategory&&sourceCategory.id))
+    .slice()
+    .sort((left,right)=>left.name.localeCompare(right.name,undefined,{sensitivity:'base'}));
+}
+// Moves every component and subcategory out of the source category into the destination, then deletes the
+// source. Everything is computed in memory first and only committed to storage once fully verified, so a
+// failure (e.g. a storage write throwing) rolls back to the pre-operation snapshot instead of leaving a
+// partial move: either both stores end up updated, or neither does.
+function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const sourceCategory=taxonomy.categories.find((item)=>item.id===sourceCategoryId);
+  const destCategory=taxonomy.categories.find((item)=>item.id===destCategoryId);
+  if(!sourceCategory || !destCategory || sourceCategory.id===destCategory.id){
+    return {ok:false,movedCount:0,subcategoryCount:0};
+  }
+
+  const recordsSnapshot=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
+  const taxonomySnapshot=Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null);
+
+  const sourceSubcategoriesSnapshot=(sourceCategory.subcategories||[]).map((item)=>({...item}));
+  const destSubcategories=(destCategory.subcategories||[]).map((item)=>({...item}));
+  const targetSubNameById=new Map();
+  sourceSubcategoriesSnapshot.forEach((sourceSub)=>{
+    const key=normalizeNameKey(sourceSub.name);
+    const existingDestSub=destSubcategories.find((destSub)=>normalizeNameKey(destSub.name)===key);
+    if(existingDestSub){
+      // Destination already has a matching subcategory: merge into it, drop the now-redundant source one.
+      targetSubNameById.set(sourceSub.id,existingDestSub.name);
+    }else{
+      // No match: reparent the source subcategory itself so it's never silently discarded.
+      destSubcategories.push({id:sourceSub.id,name:sourceSub.name});
+      targetSubNameById.set(sourceSub.id,sourceSub.name);
+    }
+  });
+
+  const sourceCategoryKey=normalizeNameKey(sourceCategory.name);
+  const records=componentLibraryRecords();
+  let movedCount=0;
+  records.forEach((record)=>{
+    const recordCategoryId=String(record.categoryId||'').trim();
+    const matchesSource=(recordCategoryId&&recordCategoryId===sourceCategory.id) || (!recordCategoryId && normalizeNameKey(record.category)===sourceCategoryKey);
+    if(!matchesSource)return;
+    movedCount+=1;
+    const recordSubKey=normalizeNameKey(record.subcategory);
+    let targetSubName='';
+    if(recordSubKey){
+      const matchedSourceSub=sourceSubcategoriesSnapshot.find((sourceSub)=>normalizeNameKey(sourceSub.name)===recordSubKey);
+      if(matchedSourceSub){
+        targetSubName=targetSubNameById.get(matchedSourceSub.id)||matchedSourceSub.name;
+      }else{
+        // Off-taxonomy subcategory name found only on the record itself - never discard it silently.
+        const existingDestSub=destSubcategories.find((destSub)=>normalizeNameKey(destSub.name)===recordSubKey);
+        targetSubName=existingDestSub?existingDestSub.name:String(record.subcategory||'').trim();
+        if(!existingDestSub)destSubcategories.push({id:studioTaxonomyId('sub'),name:targetSubName});
+      }
+    }
+    record.category=destCategory.name;
+    record.categoryId=destCategory.id;
+    record.subcategory=targetSubName;
+  });
+
+  // Verify nothing still points at the source category before it is deleted.
+  const stillReferenced=records.some((record)=>{
+    const recordCategoryId=String(record.categoryId||'').trim();
+    return recordCategoryId===sourceCategory.id || normalizeNameKey(record.category)===sourceCategoryKey;
+  });
+  if(stillReferenced)return {ok:false,movedCount:0,subcategoryCount:0};
+
+  const nextCategories=taxonomy.categories
+    .filter((item)=>item.id!==sourceCategory.id)
+    .map((item)=>item.id===destCategory.id?{...item,subcategories:destSubcategories}:item);
+
+  try{
+    saveComponentLibraryRecords(records);
+    studioComponentTaxonomyState={categories:nextCategories,suppliers:taxonomy.suppliers};
+    saveStudioComponentTaxonomy();
+  }catch(error){
+    Store.set(COMPONENT_LIBRARY_STORAGE_KEY,recordsSnapshot);
+    if(taxonomySnapshot)Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,taxonomySnapshot);
+    studioComponentTaxonomyState=null;
+    return {ok:false,movedCount:0,subcategoryCount:0};
+  }
+  return {ok:true,movedCount,subcategoryCount:sourceSubcategoriesSnapshot.length};
+}
+let categoryMergeDialogState={sourceCategoryId:'',destCategoryId:''};
+function ensureCategoryMergeSheet(){
+  if($('categoryMergeSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='categoryMergeSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-category-merge-action="cancel"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Move category contents">
+      <header class="component-sheet__header">
+        <h2 id="categoryMergeTitle">Delete Category</h2>
+        <button class="component-sheet__close" type="button" data-category-merge-action="cancel" aria-label="Close dialog">×</button>
+      </header>
+      <div class="component-sheet__body">
+        <div class="studio-component-details__head"><p id="categoryMergeMessage"></p></div>
+        <div class="studio-component-details__fields">
+          <label><span>Move To</span><select id="categoryMergeDestinationSelect"></select></label>
+        </div>
+        <p id="categoryMergeHint" class="workshop-tool-note"></p>
+        <div id="categoryMergeActions" class="quote-preview-actions"></div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-category-merge-action="cancel"]')){closeCategoryMergeDialog();return;}
+    if(event.target.closest('[data-category-merge-action="confirm"]')){commitCategoryMergeDialog();return;}
+  });
+  const select=$('categoryMergeDestinationSelect');
+  if(select){
+    select.addEventListener('change',()=>{
+      categoryMergeDialogState.destCategoryId=select.value;
+      renderCategoryMergeSheet();
+    });
+  }
+}
+function renderCategoryMergeSheet(){
+  const sourceCategory=studioCategoryById(categoryMergeDialogState.sourceCategoryId);
+  const sheet=$('categoryMergeSheet');
+  if(!sourceCategory || !sheet)return;
+  const componentCount=studioCategoryComponentCount(sourceCategory);
+  const subcategoryCount=(sourceCategory.subcategories||[]).length;
+  const candidates=studioCandidateMergeDestinationCategories(sourceCategory);
+  const titleEl=$('categoryMergeTitle');
+  if(titleEl)titleEl.textContent=`Delete "${sourceCategory.name}"?`;
+  if(!candidates.some((item)=>item.id===categoryMergeDialogState.destCategoryId)){
+    categoryMergeDialogState.destCategoryId='';
+  }
+  const messageEl=$('categoryMergeMessage');
+  if(messageEl){
+    const parts=[];
+    if(componentCount>0)parts.push(`${componentCount} component${componentCount===1?'':'s'}`);
+    if(subcategoryCount>0)parts.push(`${subcategoryCount} subcategor${subcategoryCount===1?'y':'ies'}`);
+    const subject=parts.length?parts.join(' and '):'Nothing';
+    const verb=parts.length===1 && componentCount===1 && subcategoryCount===0?'uses':'use';
+    messageEl.textContent=`${subject} ${verb} this category. Choose where they should be moved before deleting it.`;
+  }
+  const select=$('categoryMergeDestinationSelect');
+  if(select){
+    select.innerHTML='<option value="">Select destination category</option>'+candidates.map((item)=>`<option value="${escapeAttributeValue(item.id)}"${item.id===categoryMergeDialogState.destCategoryId?' selected':''}>${escapeHtml(item.name)}</option>`).join('');
+    select.value=categoryMergeDialogState.destCategoryId||'';
+  }
+  const destCategory=candidates.find((item)=>item.id===categoryMergeDialogState.destCategoryId)||null;
+  const isDuplicate=!!destCategory && categoriesLookLikeDuplicates(sourceCategory.name,destCategory.name);
+  const hintEl=$('categoryMergeHint');
+  if(hintEl)hintEl.textContent=(destCategory && isDuplicate)?`Merge into "${destCategory.name}".`:'';
+  const actionsEl=$('categoryMergeActions');
+  if(actionsEl){
+    const confirmLabel=isDuplicate?'Merge & Delete':`Move ${componentCount} Component${componentCount===1?'':'s'} & Delete`;
+    actionsEl.innerHTML=`<button class="ghost-action" type="button" data-category-merge-action="cancel">Cancel</button><button class="primary-action" type="button" data-category-merge-action="confirm"${destCategory?'':' disabled'}>${escapeHtml(confirmLabel)}</button>`;
+  }
+}
+function openCategoryMergeDialog(category){
+  if(!category)return;
+  const candidates=studioCandidateMergeDestinationCategories(category);
+  if(!candidates.length){
+    openInfoDialog('No Destination Available','Create another category first - then you can move this category\u2019s components and subcategories before deleting it.');
+    return;
+  }
+  ensureCategoryMergeSheet();
+  categoryMergeDialogState={sourceCategoryId:category.id,destCategoryId:''};
+  renderCategoryMergeSheet();
+  $('categoryMergeSheet').hidden=false;
+  lockModalLayer(document.activeElement);
+}
+function closeCategoryMergeDialog(){
+  const sheet=$('categoryMergeSheet');
+  if(sheet)sheet.hidden=true;
+  categoryMergeDialogState={sourceCategoryId:'',destCategoryId:''};
+  unlockModalLayer({restoreFocus:true});
+}
+function commitCategoryMergeDialog(){
+  const sourceCategory=studioCategoryById(categoryMergeDialogState.sourceCategoryId);
+  const destCategory=studioCategoryById(categoryMergeDialogState.destCategoryId);
+  if(!sourceCategory || !destCategory)return;
+  const isDuplicate=categoriesLookLikeDuplicates(sourceCategory.name,destCategory.name);
+  const sourceCategoryId=sourceCategory.id;
+  const sourceCategoryName=sourceCategory.name;
+  const result=studioMoveCategoryContentsAndDelete(sourceCategory.id,destCategory.id);
+  closeCategoryMergeDialog();
+  if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceCategoryName) || studioLibraryEditor.targetId===sourceCategoryId){
+    studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
+    studioLibraryEditor={type:'',mode:'',targetName:'',targetId:''};
+  }
+  if(studioComponentTaxonomySelection.category===sourceCategoryId){
+    studioComponentTaxonomySelection.category='';
+    studioComponentTaxonomySelection.subcategory='';
+  }
+  setStudioTaxonomySectionMode('categories','browse');
+  closeStudioLibraryContextMenu();
+  refreshStudioComponentAndTaxonomyViews();
+  if(result.ok){
+    openInfoDialog(isDuplicate?'Category Merged':'Category Deleted',`${isDuplicate?'Category merged':'Category deleted'} \u2022 ${result.movedCount} component${result.movedCount===1?'':'s'} moved.`);
+  }else{
+    openInfoDialog('Move Failed','Nothing was changed - please try again.');
+  }
+}
 function studioRenameCategoryById(categoryId,oldName,newName){
   const targetId=String(categoryId||'').trim();
   const oldKey=normalizeNameKey(oldName);
@@ -3859,7 +4088,7 @@ function handleStudioTaxonomyAction(action){
     if(usage>0){
       setStudioTaxonomySectionMode('categories','browse');
       refreshStudioComponentAndTaxonomyViews();
-      openInfoDialog('Category In Use','Move the assigned components and subcategories before deleting this category.');
+      openCategoryMergeDialog(category);
       return;
     }
     const deleteNow=()=>{
