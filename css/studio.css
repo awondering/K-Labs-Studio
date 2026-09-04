@@ -3023,6 +3023,58 @@ body.component-sheet-open .workshop-back-to-top{
   font-size:14px;
 }
 
+.view-quote__delivery{
+  display:grid;
+  gap:4px;
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.06);
+  break-inside:avoid;
+}
+
+.view-quote__delivery > span{
+  color:#b8b19f;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.view-quote__delivery div{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
+}
+
+.view-quote__delivery div span{
+  color:#b8b19f;
+  font-size:10px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
+.view-quote__delivery div strong{
+  color:#ece6d8;
+  text-align:right;
+}
+
+.view-quote__delivery p{
+  margin:0;
+  color:#ddd5c7;
+  font-size:12px;
+  line-height:1.4;
+}
+
+.view-quote__confirmation{
+  margin:0;
+  padding-top:8px;
+  border-top:1px solid rgba(255,255,255,.06);
+  color:#b8b19f;
+  font-size:11px;
+  line-height:1.5;
+  break-inside:avoid;
+}
+
 .view-quote__notes{
   display:grid;
   gap:4px;
@@ -3047,6 +3099,7 @@ body.component-sheet-open .workshop-back-to-top{
 @media (max-width:520px){
   .view-quote__row,
   .view-quote__specs div,
+  .view-quote__delivery div,
   .view-quote__pricing div{
     flex-wrap:wrap;
   }

@@ -2465,11 +2465,10 @@ function blankSpecificationSummary(){
   const details=[brand,variant,specifications].filter(Boolean);
   return details.join(' • ');
 }
-function customerPreviewLines(){
+// Single source of truth for the saved customer address lines: reused by the internal customer preview
+// and the customer-facing quote's Delivery section so both read the exact same stored fields.
+function customerAddressLines(){
   const lines=[];
-  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' • ');
-  if(identity)lines.push(identity);
-
   const addressLine1=specificationValue(quote.addressLine1);
   const addressLine2=specificationValue(quote.addressLine2);
   const suburbLocality=specificationValue(quote.suburbLocality);
@@ -2487,6 +2486,12 @@ function customerPreviewLines(){
   if(country)lines.push(country);
 
   return lines;
+}
+function customerPreviewLines(){
+  const lines=[];
+  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' • ');
+  if(identity)lines.push(identity);
+  return lines.concat(customerAddressLines());
 }
 function customerCardSecondarySummary(){
   const company=specificationValue(quote.company);
@@ -9026,6 +9031,22 @@ function customerQuoteBusinessLines(){
     businessProfile.website,
   ].map((value)=>specificationValue(value)).filter(Boolean);
 }
+// Reuses the saved address fields (no separate delivery-data system) and any recorded delivery method;
+// omits cleanly when neither is present so the customer quote never shows blank labels or placeholders.
+function customerQuoteDeliveryMarkup(){
+  const methodText=customerSafeText(quote.deliveryMethod);
+  const addressLines=customerAddressLines();
+  if(!methodText && !addressLines.length)return '';
+  const methodRow=methodText?`<div><span>Method</span><strong>${escapeHtml(methodText)}</strong></div>`:'';
+  const addressBlock=addressLines.length?`<p>${addressLines.map((line)=>escapeHtml(line)).join('<br />')}</p>`:'';
+  return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${addressBlock}</div>`;
+}
+// Deposit is the quote's existing optional setting (no second toggle): wording only reflects whether one is required.
+function customerQuoteConfirmationText(depositEnabled){
+  return depositEnabled
+    ?'Please check the build specification, contact details and delivery details before confirming. Your build will be confirmed and scheduled for production once the required deposit has been received.'
+    :'Please check the build specification, contact details and delivery details before confirming. Once confirmed, your build will be scheduled for production.';
+}
 function customerQuoteSummaryMarkup(){
   const math=depositMaths();
   const customerName=specificationValue(quote.customerName)||'Customer';
@@ -9035,6 +9056,8 @@ function customerQuoteSummaryMarkup(){
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
   const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'To be confirmed';
   const notesText=customerRequestText(quote.notes);
+  const deliveryBlock=customerQuoteDeliveryMarkup();
+  const confirmationText=customerQuoteConfirmationText(math.depositEnabled);
   const pricingRows=math.depositEnabled
     ?`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div><div><span>Deposit Required</span><strong>${currency(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currency(math.remainingBalance)}</strong></div>`
     :`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div>`;
@@ -9055,8 +9078,10 @@ function customerQuoteSummaryMarkup(){
       <div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>
       ${specRows.length?`<div class="view-quote__specs">${specificationRowsMarkup(specRows)}</div>`:''}
       ${customerIncludedPartsMarkup(parts)}
+      ${deliveryBlock}
       <div class="view-quote__pricing">${pricingRows}</div>
       <div class="view-quote__row"><span>Estimated Completion</span><strong>${escapeHtml(dueText)}</strong></div>
+      <p class="view-quote__confirmation">${escapeHtml(confirmationText)}</p>
       ${notesText?`<div class="view-quote__notes"><span>Customer Notes</span><p>${escapeHtml(notesText)}</p></div>`:''}
       ${paymentBlock}
     </div>
