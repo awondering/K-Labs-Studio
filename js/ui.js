@@ -3248,6 +3248,15 @@ function studioComponentListMeta(record){
   const parts=[String(record&&record.category||'').trim(),String(record&&record.subcategory||'').trim(),String(record&&record.supplier||'').trim()].filter(Boolean);
   return parts.length?parts.join(' • '):'No category or supplier';
 }
+// Display-only ordering for the Components list: case-insensitive, locale-aware, numeric-natural (e.g. "Size 2"
+// before "Size 10"), never mutates the underlying records/storage. Array.sort is spec-stable, so equal names
+// keep their existing relative order rather than needing an extra tie-break field the data model doesn't have.
+const STUDIO_COMPONENT_NAME_COLLATOR=new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
+function sortComponentRecordsByName(records){
+  const list=Array.isArray(records)?records.slice():[];
+  list.sort((a,b)=>STUDIO_COMPONENT_NAME_COLLATOR.compare(String((a&&a.name)||'').trim(),String((b&&b.name)||'').trim()));
+  return list;
+}
 function studioComponentMatchesSearch(record,queryKey){
   if(!queryKey)return true;
   const haystack=[
@@ -4166,7 +4175,7 @@ function renderStudioComponentsLibrary(){
     const subcategories=Array.from(new Set(supplierRecords.map((record)=>String(record.subcategory||'').trim()).filter(Boolean)))
       .sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
     const rows=subcategories.map((name)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-subcategory="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button>`);
-    const direct=supplierRecords.filter((record)=>!normalizeNameKey(record.subcategory)).map((record)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-component="${escapeAttributeValue(record.name)}"><strong>${escapeHtml(record.name)}</strong></button>`);
+    const direct=sortComponentRecordsByName(supplierRecords.filter((record)=>!normalizeNameKey(record.subcategory))).map((record)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-component="${escapeAttributeValue(record.name)}"><strong>${escapeHtml(record.name)}</strong></button>`);
     list.innerHTML=rows.concat(direct).join('')||'<p class="studio-components-list__empty">No components found in this category.</p>';
     return;
   }
@@ -4176,7 +4185,8 @@ function renderStudioComponentsLibrary(){
     const categoryKey=normalizeNameKey(studioLibraryPath.categoryId);
     const subcategoryKey=normalizeNameKey(studioLibraryPath.subcategoryId);
     const scopedRecords=records.filter((record)=>normalizeNameKey(record&&record.supplier)===supplierKey && normalizeNameKey(record&&record.category)===categoryKey && normalizeNameKey(record&&record.subcategory)===subcategoryKey && studioComponentMatchesSearch(record,queryKey));
-    list.innerHTML=scopedRecords.length?scopedRecords.map((record)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-component="${escapeAttributeValue(record.name)}"><strong>${escapeHtml(record.name)}</strong>${record.supplier?`<span>${escapeHtml(record.supplier)}</span>`:''}</button>`).join(''):'<p class="studio-components-list__empty">No components found in this subcategory.</p>';
+    const sortedScopedRecords=sortComponentRecordsByName(scopedRecords);
+    list.innerHTML=sortedScopedRecords.length?sortedScopedRecords.map((record)=>`<button class="studio-components-list__item" type="button" data-studio-supplier-open-component="${escapeAttributeValue(record.name)}"><strong>${escapeHtml(record.name)}</strong>${record.supplier?`<span>${escapeHtml(record.supplier)}</span>`:''}</button>`).join(''):'<p class="studio-components-list__empty">No components found in this subcategory.</p>';
     return;
   }
 
@@ -4270,7 +4280,7 @@ function renderStudioComponentsLibrary(){
 
   if(studioLibraryPath.level==='category'){
     if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
-      const unassignedRecords=records.filter((record)=>(!normalizeNameKey(record&&record.category) || isInvalidLibraryCategoryName(record&&record.category)) && studioComponentMatchesSearch(record,queryKey));
+      const unassignedRecords=sortComponentRecordsByName(records.filter((record)=>(!normalizeNameKey(record&&record.category) || isInvalidLibraryCategoryName(record&&record.category)) && studioComponentMatchesSearch(record,queryKey)));
       if(!unassignedRecords.length){
         list.innerHTML='<p class="studio-components-list__empty">No unassigned components found.</p>';
       }else{
@@ -4300,7 +4310,7 @@ function renderStudioComponentsLibrary(){
   if(studioLibraryPath.level==='subcategory'){
     const trackStock=activeTrackComponentStock();
     const scopedRecords=records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId) && normalizeNameKey(item.subcategory)===normalizeNameKey(studioLibraryPath.subcategoryId));
-    const visible=scopedRecords.filter((record)=>studioComponentMatchesSearch(record,queryKey));
+    const visible=sortComponentRecordsByName(scopedRecords.filter((record)=>studioComponentMatchesSearch(record,queryKey)));
     if(!visible.length){
       list.innerHTML='<p class="studio-components-list__empty">No components found in this subcategory.</p>';
     }else{
