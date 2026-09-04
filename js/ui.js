@@ -2195,81 +2195,39 @@ function migrateBlankWorkflow(merged){
     merged.components=[{category:'',description:'',supplier:'',cost:0}];
   }
 }
-function normalizePricingDriver(value){
-  const next=String(value||'').trim().toLowerCase();
-  if(next==='final' || next==='profit' || next==='markup')return next;
-  return 'markup';
-}
-const PRICING_DRIVER_FIELDS=[
-  {driver:'final',inputId:'quoteTotal',fieldId:'quoteTotalField',hint:'Editing Final Customer Price. Target Profit and Markup % recalculate.'},
-  {driver:'profit',inputId:'quoteProfit',fieldId:'quoteProfitField',hint:'Editing Target Profit. Final Customer Price and Markup % recalculate.'},
-  {driver:'markup',inputId:'quoteMarkupPercent',fieldId:'quoteMarkupPercentField',hint:'Editing Markup %. Final Customer Price and Target Profit recalculate.'}
-];
 function quoteTaxAvailable(){
   return activeTaxEnabled() && quote.taxEnabled!==false;
 }
-function updatePricingDriverUi(){
-  const activeDriver=normalizePricingDriver(quote.pricingDriver);
-  document.querySelectorAll('[data-pricing-driver]').forEach((button)=>{
-    const selected=button.getAttribute('data-pricing-driver')===activeDriver;
-    button.classList.toggle('active',selected);
-    button.setAttribute('aria-pressed',String(selected));
-  });
-  PRICING_DRIVER_FIELDS.forEach((config)=>{
-    const isActive=config.driver===activeDriver;
-    const input=$(config.inputId);
-    if(input){
-      input.readOnly=!isActive;
-      input.tabIndex=isActive?0:-1;
-    }
-    const field=$(config.fieldId);
-    if(field)field.classList.toggle('quote-field--muted',!isActive);
-  });
-  const hint=$('quotePricingDriverHint');
-  if(hint){
-    const config=PRICING_DRIVER_FIELDS.find((item)=>item.driver===activeDriver);
-    hint.textContent=config?config.hint:'';
-  }
+// Customer-facing sell value for a component row: qty × Sell Price. A blank/zero Sell Price contributes $0 (never falls back to Buy Price).
+function componentRowSellValue(item){
+  return numberOrZero(item&&item.unitPrice)*componentRowQuantity(item);
 }
-function setPricingDriver(driver){
-  const next=normalizePricingDriver(driver);
-  if(normalizePricingDriver(quote.pricingDriver)!==next){
-    quote.pricingDriver=next;
-    syncQuotePricing(next);
-    saveQuoteCurrent();
-    markQuoteDirty();
-  }
-  updateQuoteSummary();
+// The natural (unadjusted) customer price: sum of every component's qty×SellPrice (this also covers charge line-items
+// such as Freight/Postage/Repair, which are stored as components) plus the existing labour cost model.
+function naturalCustomerPrice(){
+  const componentsSellTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowSellValue(item),0);
+  const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
+  return componentsSellTotal+labourCost;
 }
-function syncQuotePricing(driver){
+// Recomputes the natural price and reapplies the builder's stored manual adjustment (if any) so Final Customer Price
+// keeps moving by a component's Sell Price after quantity/price edits, without discarding a deliberate rounding override.
+function syncQuotePricing(){
   enforceSingleSourceComponents();
   syncQuoteBlankFromComponents();
-  const componentsTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
-  const internalCost=componentsTotal+(numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours));
-  const activeDriver=normalizePricingDriver(driver||quote.pricingDriver);
-  let finalCustomerPrice=numberOrZero(quote.finalCustomerPrice);
-  let targetProfit=numberOrZero(quote.targetProfit);
-  let markupPercent=numberOrZero(quote.markupPercent);
-
-  if(activeDriver==='final'){
-    finalCustomerPrice=Math.max(0,finalCustomerPrice);
-    targetProfit=Math.max(0,finalCustomerPrice-internalCost);
-    markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
-  }else if(activeDriver==='profit'){
-    targetProfit=Math.max(0,targetProfit);
-    finalCustomerPrice=internalCost+targetProfit;
-    markupPercent=internalCost>0?(targetProfit/internalCost)*100:0;
-  }else{
-    markupPercent=Math.max(0,markupPercent);
-    targetProfit=internalCost*(markupPercent/100);
-    finalCustomerPrice=internalCost+targetProfit;
-  }
-
-  quote.pricingDriver=activeDriver;
-  quote.markupPercent=roundMoney(markupPercent);
-  quote.targetProfit=roundMoney(targetProfit);
-  quote.finalCustomerPrice=roundMoney(finalCustomerPrice);
-  quote.marginPercent=quote.markupPercent;
+  const natural=roundMoney(naturalCustomerPrice());
+  quote.naturalCustomerPrice=natural;
+  quote.finalCustomerPrice=roundMoney(natural+numberOrZero(quote.priceAdjustment));
+}
+// Applies a builder-entered Final Customer Price as a deliberate override, storing only the delta from the natural
+// price so future component/labour changes still move the final price by their own natural amount.
+function applyManualFinalCustomerPrice(value){
+  enforceSingleSourceComponents();
+  syncQuoteBlankFromComponents();
+  const natural=roundMoney(naturalCustomerPrice());
+  const nextFinal=Math.max(0,numberOrZero(value));
+  quote.naturalCustomerPrice=natural;
+  quote.priceAdjustment=roundMoney(nextFinal-natural);
+  quote.finalCustomerPrice=roundMoney(natural+quote.priceAdjustment);
 }
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
@@ -2403,7 +2361,7 @@ function newQuoteTemplate(){
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,pricingDriver:'markup',taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
+    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
     depositEnabled:false,depositType:'percent',depositValue:0
   };
 }
@@ -2790,8 +2748,8 @@ function normalizeQuote(inputQuote){
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
-  merged.finalCustomerPrice=numberOrZero(inputQuote&&inputQuote.finalCustomerPrice);
-  merged.pricingDriver=normalizePricingDriver(inputQuote&&inputQuote.pricingDriver);
+  // pricingDriver is obsolete: any legacy value on inputQuote is ignored here and never copied forward.
+  delete merged.pricingDriver;
   merged.blankId=String(inputQuote&&inputQuote.blankId||'');
   merged.blankMaker=String(inputQuote&&inputQuote.blankMaker||'');
   merged.blankSeries=String(inputQuote&&inputQuote.blankSeries||'');
@@ -2809,14 +2767,19 @@ function normalizeQuote(inputQuote){
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
   merged.guideSpecification=normalizeGuideSpecification(inputQuote&&inputQuote.guideSpecification);
   migrateBlankWorkflow(merged);
-  const hasFinal=(inputQuote&&inputQuote.finalCustomerPrice)!==undefined;
-  const hasProfit=(inputQuote&&inputQuote.targetProfit)!==undefined;
-  const internalBuildCost=merged.components.reduce((sum,item)=>sum+componentRowLineCost(item),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours));
-  if(!hasFinal && !hasProfit){
-    merged.targetProfit=internalBuildCost*(merged.markupPercent/100);
-    merged.finalCustomerPrice=internalBuildCost+merged.targetProfit;
-    merged.pricingDriver='markup';
+  // Natural price = qty×SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
+  const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours)));
+  merged.naturalCustomerPrice=naturalPrice;
+  const hasStoredAdjustment=(inputQuote&&inputQuote.priceAdjustment)!==undefined;
+  if(hasStoredAdjustment){
+    merged.priceAdjustment=numberOrZero(inputQuote.priceAdjustment);
+  }else{
+    // Legacy record (old Price/Profit/Markup driver, or no saved price yet): preserve whatever final price it had
+    // by storing the gap to the natural price as the manual adjustment, instead of recomputing/losing that value.
+    const legacyFinal=numberOrZero(inputQuote&&inputQuote.finalCustomerPrice);
+    merged.priceAdjustment=roundMoney(legacyFinal-naturalPrice);
   }
+  merged.finalCustomerPrice=roundMoney(naturalPrice+merged.priceAdjustment);
   merged.marginPercent=merged.markupPercent;
   return merged;
 }
@@ -5444,18 +5407,24 @@ function unbindChoicePickerViewportHandlers(){
 function quoteMaths(){
   enforceSingleSourceComponents();
   syncQuotePricing();
+  // Internal Build Cost stays on the Buy Price basis (qty\u00d7Buy Price + labour) - never the customer Sell Price total.
   const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const materialCost=componentTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const internalBuildCost=materialCost+labourCost;
-  const markupAmount=numberOrZero(quote.targetProfit);
   const subtotal=numberOrZero(quote.finalCustomerPrice);
   const gstRate=Math.max(0,numberOrZero(quote.gstRate));
   const taxActive=quoteTaxAvailable() && (quote.includeGst!==false);
+  // Final Customer Price is treated as GST-inclusive: extract tax first so GST is never counted as profit.
   const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
-  const profit=markupAmount;
-  return{materialCost,labourCost,internalBuildCost,markupAmount,subtotal,gst,total,profit,markupPercent:numberOrZero(quote.markupPercent),taxRate:gstRate};
+  const exclusiveRevenue=total-gst;
+  const profit=exclusiveRevenue-internalBuildCost;
+  const markupPercent=internalBuildCost>0?(profit/internalBuildCost)*100:0;
+  quote.targetProfit=roundMoney(profit);
+  quote.markupPercent=roundMoney(markupPercent);
+  quote.marginPercent=quote.markupPercent;
+  return{materialCost,labourCost,internalBuildCost,subtotal,gst,total,profit,markupPercent,taxRate:gstRate,naturalCustomerPrice:numberOrZero(quote.naturalCustomerPrice),priceAdjustment:numberOrZero(quote.priceAdjustment)};
 }
 // Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
 function depositMaths(){
@@ -7362,7 +7331,7 @@ function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
   return options.join('');
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(item.category,item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label><div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Unit Cost</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Unit Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(item.category,item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label><div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -10160,29 +10129,18 @@ function bindWorkshopQuoteBuilder(){
     el.addEventListener('input',onFieldUpdate);
     el.addEventListener('change',onFieldUpdate);
   });
-  [
-    {id:'quoteTotal',key:'finalCustomerPrice',driver:'final'},
-    {id:'quoteProfit',key:'targetProfit',driver:'profit'},
-    {id:'quoteMarkupPercent',key:'markupPercent',driver:'markup'}
-  ].forEach((config)=>{
-    const input=$(config.id);
-    if(!input)return;
-    const onPricingUpdate=()=>{
-      if(normalizePricingDriver(quote.pricingDriver)!==config.driver)return;
-      quote[config.key]=numberOrZero(input.value);
-      syncQuotePricing(config.driver);
+  // Final Customer Price is the only editable pricing input - Profit and Markup % are read-only calculated outputs.
+  const quoteTotalInput=$('quoteTotal');
+  if(quoteTotalInput){
+    const onFinalPriceUpdate=()=>{
+      applyManualFinalCustomerPrice(quoteTotalInput.value);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
     };
-    input.addEventListener('input',onPricingUpdate);
-    input.addEventListener('change',onPricingUpdate);
-  });
-  document.querySelectorAll('[data-pricing-driver]').forEach((button)=>{
-    if(button.getAttribute('data-pricing-driver-bound')==='true')return;
-    button.setAttribute('data-pricing-driver-bound','true');
-    button.addEventListener('click',()=>setPricingDriver(button.getAttribute('data-pricing-driver')));
-  });
+    quoteTotalInput.addEventListener('input',onFinalPriceUpdate);
+    quoteTotalInput.addEventListener('change',onFinalPriceUpdate);
+  }
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput){
     const onTaxToggle=()=>{
@@ -10505,8 +10463,9 @@ function updateQuoteSummary(){
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
-  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
-  if($('quoteMarkupPercent') && document.activeElement!==$('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
+  // Profit and Markup % are calculated, read-only outputs - always reflect the live math, never user-editable drivers.
+  if($('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
+  if($('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
   if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
   const taxAvailable=quoteTaxAvailable();
@@ -10518,8 +10477,12 @@ function updateQuoteSummary(){
   const gstStatus=$('quoteGstStatus');
   if(gstField){gstField.classList.toggle('quote-field--muted',quote.includeGst===false);}
   if(gstStatus){gstStatus.textContent='';}
+  const priceWarningEl=$('quotePriceWarning');
+  if(priceWarningEl){
+    const missingCount=componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)<=0).length;
+    priceWarningEl.textContent=missingCount>0?`${missingCount} component${missingCount===1?'':'s'} missing a Sell Price - customer price excludes ${missingCount===1?'it':'them'} until entered.`:'';
+  }
   ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
-  updatePricingDriverUi();
   updateDepositFields();
   updateWorkshopSectionVisibility();
 }
@@ -10742,16 +10705,12 @@ function loadDemoBuild(){
     blankSku:demoBlank.sku,
     blankNotes:demoBlank.notes,
     components:[
-      {category:'Guides',supplier:'Fuji',description:'Fuji K-Series guide set',cost:96},
-      {category:'Reel Seat',supplier:'Alps',description:'Alps triangle reel seat',cost:28},
-      {category:'Thread & Finish',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22}
+      {category:'Guides',supplier:'Fuji',description:'Fuji K-Series guide set',cost:96,unitPrice:150},
+      {category:'Reel Seat',supplier:'Alps',description:'Alps triangle reel seat',cost:28,unitPrice:45},
+      {category:'Thread & Finish',supplier:'K-Labs',description:'Thread + finish + trim set',cost:22,unitPrice:35}
     ],
     labourRate:50,
     labourHours:2,
-    markupPercent:20,
-    targetProfit:0,
-    finalCustomerPrice:0,
-    pricingDriver:'markup',
     includeGst:true,
     quoteMode:'internal',
     gstRate:15,
