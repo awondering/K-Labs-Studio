@@ -1187,6 +1187,10 @@ function returnToOriginatingBuildFromGuideLayout(){
       openSavedBuildRecord(originRef.source||'build',target.index,{focusSection:'workshopBuildSpecsBody'});
       return;
     }
+    // Originating build genuinely no longer exists: never guess/open an unrelated build - fall back to Active Builds.
+    openActiveBuildsList();
+    openInfoDialog('Build Not Found','That build is no longer available, so you have been returned to Active Builds. Your guide layout changes were saved to the build you were viewing.');
+    return;
   }
   showStudioWorkflow();
   renderWorkshopQuote();
@@ -9443,6 +9447,12 @@ function bindLayoutControls(){
   if(returnLandingButton && returnLandingButton.getAttribute('data-workshop-return-bound')!=='true'){
     returnLandingButton.setAttribute('data-workshop-return-bound','true');
     returnLandingButton.addEventListener('click',()=>{
+      // Mirrors bindWorkshopCalculatorControls' [data-workshop-tool-back] handling: honour the "RETURN TO BUILD"
+      // label (layoutEntryOrigin==='build') instead of always falling through to the Workshop landing screen.
+      if(layoutEntryOrigin==='build'){
+        returnToOriginatingBuildFromGuideLayout();
+        return;
+      }
       goToWorkshopLandingScreen();
     });
   }
