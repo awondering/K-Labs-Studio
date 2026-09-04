@@ -744,9 +744,9 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
     directionText:`${side} SIDE`,
   };
 }
-// Guide Spacing's rows are the single authoritative source for count/position; reuses the same reconciliation
-// syncSpiralGuidePositionsFromLayout() already applies on every Guide Spacing edit, so import can never diverge
-// (e.g. force a stale/default guide count) or discard valid existing angles for guides that are still active.
+// USE GUIDE SPACING POSITIONS: unlike syncSpiralWithGuideLayout()'s automatic count mirroring (unchanged,
+// used elsewhere), this manual import must never silently overwrite the mapper's own chosen guide count.
+// When the saved Guide Spacing count differs from the mapper's count, the user explicitly chooses which to keep.
 function importSpiralFromGuideSpacing(){
   const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
   const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
@@ -754,8 +754,46 @@ function importSpiralFromGuideSpacing(){
     flashWorkshopStatus('Set a valid Guide Spacing result first',{pending:true,duration:2000});
     return;
   }
+  const spiral=workshopToolsState.spiral;
+  const currentCount=clampSpiralGuideCount(spiral.guideCount);
+  const savedCount=rows.length;
+  if(savedCount===currentCount){
+    applySpiralGuideSpacingImport(rows,currentCount);
+    return;
+  }
+  openConfirmDialog({
+    title:'Guide Count Differs',
+    message:`Guide Spacing has ${savedCount} guide${savedCount===1?'':'s'} saved, but Guide Orientation is set to ${currentCount}. Choose how to import the positions.`,
+    actions:[
+      {id:'update',label:'Update To Guide Spacing Count',kind:'ghost'},
+      {id:'retain',label:'Retain Current Count',kind:'primary'},
+    ]
+  },(action)=>{
+    if(action==='retain'){
+      applySpiralGuideSpacingImport(rows,currentCount);
+    }else if(action==='update'){
+      applySpiralGuideSpacingImport(rows,savedCount);
+    }
+  });
+}
+// Imports positions for an explicitly chosen count (never a silent/default decision); if the saved result has
+// fewer usable positions than required, the mapper is left unchanged with a clear explanatory message.
+function applySpiralGuideSpacingImport(rows,targetCount){
+  const spiral=workshopToolsState.spiral;
+  const count=clampSpiralGuideCount(targetCount);
+  if(rows.length<count){
+    flashWorkshopStatus(`Guide Spacing only has ${rows.length} usable position${rows.length===1?'':'s'} - need ${count}. Mapper left unchanged.`,{pending:true,duration:2600});
+    return;
+  }
   markGuideDataDirty();
-  syncSpiralGuidePositionsFromLayout(rows);
+  const countChanged=spiral.guideCount!==count || !Array.isArray(spiral.guides) || spiral.guides.length!==count;
+  spiral.guideCount=count;
+  syncSpiralGuidesLength(countChanged?{resetAngles:true}:undefined);
+  spiral.guides.forEach((guide,index)=>{
+    const row=rows[index];
+    if(row)guide.positionMm=Math.max(0,numberOrZero(row.cum));
+  });
+  renderWorkshopCalculator();
 }
 function resetSpiralGuideMapper(){
   const spiral=workshopToolsState.spiral;
