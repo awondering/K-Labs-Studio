@@ -5600,7 +5600,10 @@ textarea::-moz-selection,
 }
 
 .studio-size-entry .quote-component-field{
-  flex:1 1 180px;
+  /* Compact, left-aligned size value field: suits "9 mm"–"Medium"-length values
+     without stretching across the card; may shrink on narrow screens. */
+  flex:0 1 auto;
+  width:min(220px,100%);
   min-width:0;
 }
 
