@@ -5559,6 +5559,18 @@ function depositMaths(){
   const remainingBalance=Math.max(0,total-depositAmount);
   return{...math,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance};
 }
+// Switching deposit type converts the stored value so the resulting deposit amount stays financially equivalent.
+// Percentages keep extra decimals (beyond the 1dp display) so repeated toggling does not drift.
+function convertedDepositValueForType(nextType){
+  const type=normalizeDepositType(nextType);
+  const currentType=normalizeDepositType(quote.depositType);
+  const currentValue=Math.max(0,numberOrZero(quote.depositValue));
+  if(type===currentType || !currentValue)return currentValue;
+  const total=Math.max(0,numberOrZero(quoteMaths().total));
+  if(type==='fixed')return roundMoney(total*currentValue/100);
+  if(total<=0)return 0;
+  return Math.round((currentValue/total)*100*1e6)/1e6;
+}
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
@@ -10325,9 +10337,15 @@ function bindWorkshopQuoteBuilder(){
     if(button.getAttribute('data-deposit-type-bound')==='true')return;
     button.setAttribute('data-deposit-type-bound','true');
     button.addEventListener('click',()=>{
-      quote.depositType=normalizeDepositType(button.getAttribute('data-deposit-type'));
+      const nextType=normalizeDepositType(button.getAttribute('data-deposit-type'));
+      if(nextType!==normalizeDepositType(quote.depositType)){
+        quote.depositValue=convertedDepositValueForType(nextType);
+      }
+      quote.depositType=nextType;
       saveQuoteCurrent();
       markQuoteDirty();
+      const valueInput=$('quoteDepositValue');
+      if(valueInput && document.activeElement===valueInput)valueInput.blur();
       updateQuoteSummary();
     });
   });
