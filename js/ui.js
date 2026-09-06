@@ -10980,7 +10980,7 @@ function bindHomeActions(){
   if(enterBtn && enterBtn.getAttribute('data-home-bound')!=='true'){
     enterBtn.setAttribute('data-home-bound','true');
     enterBtn.addEventListener('click',()=>{
-      enterStudio();
+      startNewBuildFlow();
     });
   }
 }
