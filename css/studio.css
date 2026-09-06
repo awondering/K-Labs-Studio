@@ -5608,8 +5608,20 @@ textarea::-moz-selection,
 }
 
 .studio-size-range .quote-component-field{
-  flex:1 1 84px;
+  /* Compact range inputs. The 60px basis keeps each field usable; once the card is
+     too narrow for four fields plus the button, the button wraps to its own row
+     instead of the fields being squeezed into overflow. */
+  flex:1 1 60px;
   min-width:0;
+}
+
+/* Inner range inputs must fill (never exceed) their field, so they can't push
+   the row past the card's right edge on narrow screens. */
+.studio-size-range .quote-component-field input{
+  display:block;
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
 }
 
 .studio-size-entry__btn,
