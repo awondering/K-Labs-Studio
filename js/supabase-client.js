@@ -32,6 +32,8 @@ function klabsApplyAuthState(session) {
     if (accountEmail) accountEmail.textContent = "Signed out";
   }
 
+  window.KLABS_SYNC?.onAuthStateChanged?.(session);
+
   document.body.classList.remove("klabs-auth-resolving");
 }
 

@@ -18,6 +18,17 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
+// Signed-out/never-migrated usage keeps the original bare key (the "anonymous" namespace - preserved
+// forever, never deleted). Each signed-in account gets its own suffixed key so accounts sharing a device
+// can never read, overwrite or upload each other's component library/taxonomy.
+function componentLibraryStorageKey(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  return accountId?`${COMPONENT_LIBRARY_STORAGE_KEY}:${accountId}`:COMPONENT_LIBRARY_STORAGE_KEY;
+}
+function componentTaxonomyStorageKey(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  return accountId?`${COMPONENT_TAXONOMY_STORAGE_KEY}:${accountId}`:COMPONENT_TAXONOMY_STORAGE_KEY;
+}
 // Known singular/plural naming variants for the same logical Components category (e.g. seeded "Grips" vs default "Grip").
 const CATEGORY_NAME_ALIAS_GROUPS=[
   ['Blank','Blanks'],
@@ -3039,31 +3050,135 @@ function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
 }
 function ensureStudioComponentTaxonomyLoaded(){
   if(studioComponentTaxonomyState)return studioComponentTaxonomyState;
-  const stored=Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null);
+  const stored=Store.get(componentTaxonomyStorageKey(),null);
   const taxonomy=normalizeStudioComponentTaxonomy(stored);
   const categoryMap=new Map(taxonomy.categories.map((item)=>[normalizeNameKey(item.name),item]));
   const supplierMap=new Map(taxonomy.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
   harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap);
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
-  Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
+  Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
   return studioComponentTaxonomyState;
 }
 // Re-harvests taxonomy from current component records; used to self-heal a category/supplier lookup miss
 // caused by records changing (e.g. via the build-time Select Component flow) after taxonomy was cached in memory.
 function resyncStudioComponentTaxonomyWithRecords(){
-  const baseline=studioComponentTaxonomyState||normalizeStudioComponentTaxonomy(Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null));
+  const baseline=studioComponentTaxonomyState||normalizeStudioComponentTaxonomy(Store.get(componentTaxonomyStorageKey(),null));
   const categoryMap=new Map(baseline.categories.map((item)=>[normalizeNameKey(item.name),item]));
   const supplierMap=new Map(baseline.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
   harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap);
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
-  Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
+  Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
   return studioComponentTaxonomyState;
 }
 function saveStudioComponentTaxonomy(){
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(studioComponentTaxonomyState);
-  Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,studioComponentTaxonomyState);
+  Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
   saveCustomCategoryNames(allStudioCategoryNames(studioComponentTaxonomyState));
   saveCustomSupplierNames(allStudioSupplierNames(studioComponentTaxonomyState));
+  window.KLABS_SYNC?.notifyTaxonomyChanged?.();
+}
+// Applies a taxonomy object fetched from Supabase as the new in-memory/local-cache taxonomy (cloud is the
+// signed-in source of truth once linked); mirrors ensureStudioComponentTaxonomyLoaded's persistence step only.
+function applyCloudComponentTaxonomy(taxonomy){
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(taxonomy);
+  Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
+  saveCustomCategoryNames(allStudioCategoryNames(studioComponentTaxonomyState));
+  saveCustomSupplierNames(allStudioSupplierNames(studioComponentTaxonomyState));
+}
+// Reads the preserved anonymous/pre-migration taxonomy directly (never the active account namespace); used
+// only to offer a first-time migration decision, never to silently seed/overwrite an account's own cache.
+function readAnonymousComponentTaxonomy(){
+  return normalizeStudioComponentTaxonomy(Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null));
+}
+// One-time backfill for component records saved before cloud sync existed, so migration/reconcile always
+// has a stable id to key off; safe to call every load (no-op once every record already has an id).
+function ensureComponentLibraryIdsBackfilled(){
+  const records=componentLibraryRecords();
+  if(records.some((record)=>!record.id))saveComponentLibraryRecords(records);
+}
+// Called whenever the signed-in account changes (including sign-out): the active component library/taxonomy
+// namespace has switched, so the in-memory taxonomy cache (keyed to the previous namespace) must be dropped
+// and re-loaded fresh, and any visible Components/Taxonomy panel must be redrawn from the new namespace.
+function resetComponentLibraryCacheForAccountChange(){
+  studioComponentTaxonomyState=null;
+  ensureComponentLibraryIdsBackfilled();
+  refreshComponentLibraryViews();
+}
+// Re-renders whichever Components/Taxonomy views are currently visible after a cloud pull replaces local data.
+function refreshComponentLibraryViews(){
+  const workshopScreen=$('workshopScreen');
+  if(!workshopScreen || !workshopScreen.classList.contains('active'))return;
+  if(studioScreenView==='components')renderStudioComponentsLibrary();
+  else if(studioScreenView==='taxonomy')renderStudioTaxonomyManager();
+  else if(studioScreenView==='workflow')renderWorkshopQuote();
+}
+function componentSyncStatusLabel(state){
+  switch(state&&state.status){
+    case 'synced':return 'COMPONENT LIBRARY • SYNCED';
+    case 'syncing':return 'COMPONENT LIBRARY • SYNCING…';
+    case 'error':return 'COMPONENT LIBRARY • SYNC ERROR';
+    default:return 'COMPONENT LIBRARY • LOCAL';
+  }
+}
+// Account section status line: only visible while signed in; a Review/Retry action only appears when
+// there is something actionable (a pending first-sync decision, or a recoverable sync error).
+function renderComponentSyncStatus(state){
+  const line=$('componentSyncStatusLine');
+  const actionBtn=$('componentSyncActionBtn');
+  const signedIn=!!window.KLABS_ACCOUNT_ID;
+  if(line){
+    line.hidden=!signedIn;
+    if(signedIn)line.textContent=componentSyncStatusLabel(state);
+  }
+  if(actionBtn){
+    if(signedIn&&state&&state.status==='migration-pending'){
+      actionBtn.hidden=false;
+      actionBtn.textContent='REVIEW SYNC';
+      actionBtn.setAttribute('data-component-sync-action','review');
+    }else if(signedIn&&state&&state.status==='error'){
+      actionBtn.hidden=false;
+      actionBtn.textContent='RETRY SYNC';
+      actionBtn.setAttribute('data-component-sync-action','retry');
+    }else{
+      actionBtn.hidden=true;
+      actionBtn.removeAttribute('data-component-sync-action');
+    }
+  }
+}
+function bindComponentSyncControls(){
+  const actionBtn=$('componentSyncActionBtn');
+  if(!actionBtn||actionBtn.getAttribute('data-component-sync-bound')==='true')return;
+  actionBtn.setAttribute('data-component-sync-bound','true');
+  actionBtn.addEventListener('click',()=>{
+    const action=actionBtn.getAttribute('data-component-sync-action');
+    if(action==='review')promptComponentLibraryMigration();
+    else if(action==='retry')window.KLABS_SYNC?.retry?.();
+  });
+}
+function onComponentLibraryMigrationPending(){
+  promptComponentLibraryMigration();
+}
+function promptComponentLibraryMigration(){
+  openConfirmDialog({
+    title:'Move your local component library to your account?',
+    message:'This will make your components available on your other signed-in devices.',
+    actions:[
+      {id:'not-now',label:'NOT NOW',kind:'ghost'},
+      {id:'copy',label:'COPY TO ACCOUNT',kind:'primary'},
+    ],
+  },(action)=>{
+    if(action!=='copy'){
+      window.KLABS_SYNC?.notNow?.();
+      return;
+    }
+    window.KLABS_SYNC?.copyToAccount?.().then((result)=>{
+      if(result&&result.ok){
+        openConfirmDialog({title:'Component library synced',message:`Component library synced • ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+      }else{
+        openConfirmDialog({title:'Sync failed',message:(result&&result.error)?result.error:'Could not copy your component library. Your local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+      }
+    });
+  });
 }
 function studioCategoryById(id){
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
@@ -3642,8 +3757,8 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
     return {ok:false,movedCount:0,subcategoryCount:0};
   }
 
-  const recordsSnapshot=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
-  const taxonomySnapshot=Store.get(COMPONENT_TAXONOMY_STORAGE_KEY,null);
+  const recordsSnapshot=Store.get(componentLibraryStorageKey(),[]);
+  const taxonomySnapshot=Store.get(componentTaxonomyStorageKey(),null);
 
   const sourceSubcategoriesSnapshot=(sourceCategory.subcategories||[]).map((item)=>({...item}));
   const destSubcategories=(destCategory.subcategories||[]).map((item)=>({...item}));
@@ -3703,8 +3818,8 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
     studioComponentTaxonomyState={categories:nextCategories,suppliers:taxonomy.suppliers};
     saveStudioComponentTaxonomy();
   }catch(error){
-    Store.set(COMPONENT_LIBRARY_STORAGE_KEY,recordsSnapshot);
-    if(taxonomySnapshot)Store.set(COMPONENT_TAXONOMY_STORAGE_KEY,taxonomySnapshot);
+    Store.set(componentLibraryStorageKey(),recordsSnapshot);
+    if(taxonomySnapshot)Store.set(componentTaxonomyStorageKey(),taxonomySnapshot);
     studioComponentTaxonomyState=null;
     return {ok:false,movedCount:0,subcategoryCount:0};
   }
@@ -6329,12 +6444,13 @@ function componentLibraryCategoryValue(record){
   ].map(normalizeNameKey).filter(Boolean);
   return componentTextKeys.includes(categoryKey)?'':category;
 }
-function componentLibraryRecords(){
-  const stored=Store.get(COMPONENT_LIBRARY_STORAGE_KEY,[]);
+function componentLibraryRecordsFromKey(storageKey){
+  const stored=Store.get(storageKey,[]);
   if(!Array.isArray(stored))return[];
   return stored
     .filter((record)=>record&&typeof record==='object')
     .map((record)=>({
+      id:String(record.id||'').trim(),
       name:String(record.name||'').trim(),
       categoryId:String(record.categoryId||'').trim(),
       category:componentLibraryCategoryValue(record),
@@ -6355,10 +6471,20 @@ function componentLibraryRecords(){
     }))
     .filter((record)=>!!normalizeNameKey(record.name));
 }
+function componentLibraryRecords(){
+  return componentLibraryRecordsFromKey(componentLibraryStorageKey());
+}
+// Reads the preserved anonymous/pre-migration library directly (never the active account namespace); used
+// only to offer a first-time migration decision, never to silently seed/overwrite an account's own cache.
+function readAnonymousComponentLibraryRecords(){
+  return componentLibraryRecordsFromKey(COMPONENT_LIBRARY_STORAGE_KEY);
+}
 function saveComponentLibraryRecords(records){
   const safeRecords=(Array.isArray(records)?records:[])
     .filter((record)=>record&&typeof record==='object'&&normalizeNameKey(record.name))
     .map((record)=>({
+      // Cloud sync needs a stable identity per component that survives renames; backfill once here if missing.
+      id:String(record.id||'').trim()||studioTaxonomyId('comp'),
       name:String(record.name||'').trim(),
       categoryId:String(record.categoryId||'').trim(),
       category:componentLibraryCategoryValue(record),
@@ -6377,7 +6503,8 @@ function saveComponentLibraryRecords(records){
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
     }));
-  Store.set(COMPONENT_LIBRARY_STORAGE_KEY,safeRecords);
+  Store.set(componentLibraryStorageKey(),safeRecords);
+  window.KLABS_SYNC?.notifyComponentsChanged?.();
 }
 function findComponentLibraryRecordByName(name){
   const nameKey=normalizeNameKey(name);
@@ -6399,6 +6526,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const rowCost=componentLibraryCostValue(item);
   const resolvedCost=unitCost!==undefined?unitCost:rowCost;
   const nextRecord={
+    id:String(item.id||'').trim(),
     name:normalizedName,
     categoryId:String(item.categoryId||'').trim(),
     category:categoryValue,
@@ -6420,6 +6548,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
   const records=componentLibraryRecords();
   const existingIndex=records.findIndex((record)=>normalizeNameKey(record.name)===normalizedKey);
   if(existingIndex>=0){
+    if(!nextRecord.id)nextRecord.id=records[existingIndex].id;
     if(nextRecord.stockOnHand===undefined){
       nextRecord.stockOnHand=componentLibraryStockValue(records[existingIndex]);
     }
@@ -6681,6 +6810,7 @@ function duplicateComponentLibraryRecord(fromName,toName){
   const records=componentLibraryRecords().filter((record)=>normalizeNameKey(record.name)!==toKey);
   records.unshift({
     ...existing,
+    id:'', // a duplicate is a distinct component, never reuse the source's cloud sync id
     name:String(toName||'').trim(),
     category:String(toName||'').trim(),
   });
@@ -11235,6 +11365,7 @@ function render(options){
 seedStarterComponentsLibrary();
 assignStarterComponentSuppliers();
 cleanupPlaceholderComponentRecordsOnce();
+ensureComponentLibraryIdsBackfilled();
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();
@@ -11244,6 +11375,7 @@ bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
+bindComponentSyncControls();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:reloadBusinessProfileForAccount,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy};
