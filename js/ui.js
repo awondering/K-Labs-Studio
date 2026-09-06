@@ -3493,18 +3493,17 @@ function renderStudioComponentDetails(record,options){
   const stockOnHand=componentLibraryStockValue(record);
   const trackStock=activeTrackComponentStock();
   const optionMarkup=categorySubcategoryOptionsMarkup(category,subcategory);
-  const supplierMarkup=supplierOptionsMarkup(supplier);
   studioComponentSizeDraft=componentRecordSizeOptions(record);
   details.innerHTML=`
     <div class="studio-component-details__head">
       <p>${isAddMode?'Add this component to your reusable parts library.':'Update this reusable component and save your changes.'}</p>
     </div>
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
+    <input id="studioComponentSupplier" type="hidden" value="${escapeHtml(supplier)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
       <label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
       <label class="quote-component-field"><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
       <label class="quote-component-field"><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
-      <label class="quote-component-field"><span>Supplier</span><span class="studio-component-details__select-wrap"><select id="studioComponentSupplier">${supplierMarkup}</select></span></label>
       <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" value="${escapeHtml(brand)}" placeholder="—" /></label>
       <label class="quote-component-field"><span>Variant / Model</span><input id="studioComponentVariant" type="text" value="${escapeHtml(variant)}" placeholder="—" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
