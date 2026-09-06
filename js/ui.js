@@ -3228,12 +3228,19 @@ function syncStudioTaxonomySelection(){
 function escapeAttributeValue(value){
   return escapeHtml(String(value||''));
 }
+// Display-time only ordering helpers: the stored taxonomy arrays keep their own (manually reorderable) sequence.
+function compareTaxonomyDisplayNames(left,right){
+  return String(left||'').localeCompare(String(right||''),undefined,{sensitivity:'base',numeric:true});
+}
+function sortTaxonomyEntriesForDisplay(entries){
+  return (Array.isArray(entries)?entries.slice():[]).sort((left,right)=>compareTaxonomyDisplayNames(left&&left.name,right&&right.name));
+}
 function categorySubcategoryOptionsMarkup(selectedCategoryName,selectedSubcategoryName){
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
   const selectedCategory=studioCategoryByName(selectedCategoryName);
   const categoryOptions=['<option value="">Unassigned</option>']
-    .concat(taxonomy.categories.map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(selectedCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`));
-  const sourceSubcategories=selectedCategory&&Array.isArray(selectedCategory.subcategories)?selectedCategory.subcategories:[];
+    .concat(sortTaxonomyEntriesForDisplay(taxonomy.categories).map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(selectedCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`));
+  const sourceSubcategories=sortTaxonomyEntriesForDisplay(selectedCategory&&selectedCategory.subcategories);
   const subcategoryOptions=['<option value="">Unassigned</option>']
     .concat(sourceSubcategories.map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.name)}"${normalizeNameKey(subcategory.name)===normalizeNameKey(selectedSubcategoryName)?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
   return {categoryOptions:categoryOptions.join(''),subcategoryOptions:subcategoryOptions.join('')};
@@ -3567,7 +3574,7 @@ function studioTaxonomySectionMarkupSubcategories(taxonomy){
   const selectedSubcategory=selectedCategory && selectedCategory.subcategories.find((item)=>item.id===studioComponentTaxonomySelection.subcategory);
   const selectedSubIndex=selectedCategory?selectedCategory.subcategories.findIndex((item)=>item.id===studioComponentTaxonomySelection.subcategory):-1;
   const categoryOptions=['<option value="">Select category</option>']
-    .concat(taxonomy.categories.map((category)=>`<option value="${escapeAttributeValue(category.id)}"${category.id===studioComponentTaxonomySelection.category?' selected':''}>${escapeHtml(category.name)}</option>`));
+    .concat(sortTaxonomyEntriesForDisplay(taxonomy.categories).map((category)=>`<option value="${escapeAttributeValue(category.id)}"${category.id===studioComponentTaxonomySelection.category?' selected':''}>${escapeHtml(category.name)}</option>`));
   const subcategoryRows=selectedCategory&&selectedCategory.subcategories.length
     ?selectedCategory.subcategories.map((subcategory)=>{
       const active=subcategory.id===studioComponentTaxonomySelection.subcategory;
@@ -4343,7 +4350,7 @@ function studioCategoryNamesForLibrary(taxonomy,records){
   if(hasUnassignedRecords && !categoryNames.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
     categoryNames.push(UNASSIGNED_COMPONENT_CATEGORY);
   }
-  return categoryNames.sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  return categoryNames.sort(compareTaxonomyDisplayNames);
 }
 function studioSubcategoryNamesForLibrary(taxonomy,records,categoryName){
   const categoryKey=normalizeNameKey(categoryName);
@@ -4358,7 +4365,7 @@ function studioSubcategoryNamesForLibrary(taxonomy,records,categoryName){
     .map((item)=>String(item&&item.subcategory||'').trim())
     .filter(Boolean);
   return Array.from(new Set(taxonomySubcategories.concat(recordSubcategories)))
-    .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+    .sort(compareTaxonomyDisplayNames);
 }
 function currentStudioComponentRecord(){
   if(studioComponentDraft)return studioComponentDraft;
@@ -4561,7 +4568,7 @@ function renderStudioComponentsLibrary(){
     return;
   }
   if(isSubcategoryEdit){
-    const taxonomyCategories=ensureStudioComponentTaxonomyLoaded().categories||[];
+    const taxonomyCategories=sortTaxonomyEntriesForDisplay(ensureStudioComponentTaxonomyLoaded().categories);
     const sourceCategoryName=String(studioLibraryEditor.sourceCategory||studioLibraryPath.categoryId||'').trim();
     const categoryOptions=taxonomyCategories
       .map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(sourceCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`)
@@ -4571,7 +4578,7 @@ function renderStudioComponentsLibrary(){
   }
 
   if(studioLibraryPath.level==='categories'){
-      const visibleCategories=(taxonomy.categories||[]).filter((category)=>categoryNames.includes(category.name) && (!queryKey || category.name.toLowerCase().includes(queryKey)));
+      const visibleCategories=sortTaxonomyEntriesForDisplay(taxonomy.categories).filter((category)=>categoryNames.includes(category.name) && (!queryKey || category.name.toLowerCase().includes(queryKey)));
     if(!visibleCategories.length){
       list.innerHTML='<p class="studio-components-list__empty">No categories found.</p>';
     }else{
