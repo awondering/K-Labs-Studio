@@ -155,6 +155,8 @@ let studioTaxonomyUiState={
 let studioComponentTaxonomyState=null;
 let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
 let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
+// Working copy of the open component form's AVAILABLE SIZES list; committed only on save.
+let studioComponentSizeDraft=[];
 let studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
 let activeSavedBuildRef=null;
 const workshopKeyboardDismissState={
@@ -2070,6 +2072,9 @@ function mergeComponentRecord(primary,secondary){
   const primaryLabel=specificationValue(primary&&primary.customerLabel);
   const secondaryLabel=specificationValue(secondary&&secondary.customerLabel);
   next.customerLabel=primaryLabel||secondaryLabel;
+  const primarySize=specificationValue(primary&&primary.selectedSize);
+  const secondarySize=specificationValue(secondary&&secondary.selectedSize);
+  next.selectedSize=primarySize||secondarySize;
   const primaryCost=numberOrZero(primary&&primary.cost);
   const secondaryCost=numberOrZero(secondary&&secondary.cost);
   next.cost=primaryCost>0?primaryCost:secondaryCost;
@@ -2093,15 +2098,17 @@ function normalizeUniqueComponents(components,options){
       return;
     }
     const categoryKey=normalizeNameKey(normalized.category);
-    if(shouldMergeDuplicateComponentCategory(categoryKey) && dedupeIndexByCategory.has(categoryKey)){
-      const existingIndex=dedupeIndexByCategory.get(categoryKey);
+    // Same master component added at two different sizes stays as two distinct build lines.
+    const dedupeKey=`${categoryKey}::${normalizeNameKey(normalized.selectedSize)}`;
+    if(shouldMergeDuplicateComponentCategory(categoryKey) && dedupeIndexByCategory.has(dedupeKey)){
+      const existingIndex=dedupeIndexByCategory.get(dedupeKey);
       next[existingIndex]=mergeComponentRecord(next[existingIndex],normalized);
       return;
     }
     const nextIndex=next.length;
     next.push(normalized);
     if(shouldMergeDuplicateComponentCategory(categoryKey)){
-      dedupeIndexByCategory.set(categoryKey,nextIndex);
+      dedupeIndexByCategory.set(dedupeKey,nextIndex);
     }
   });
   if(keepDraftRows && !next.some((item)=>!componentRowHasMeaningfulData(item))){
@@ -2570,15 +2577,26 @@ function humanizeComponentCode(value){
   });
   return tokens.join(' ');
 }
+function componentRowSizeLabel(item){
+  return specificationValue(item&&item.selectedSize);
+}
+// Appends the build line's snapshot size so every downstream surface shows it consistently.
+function appendComponentSizeLabel(label,item){
+  const size=componentRowSizeLabel(item);
+  if(!size)return label;
+  const base=specificationValue(label);
+  if(!base)return size;
+  return normalizeNameKey(base).includes(normalizeNameKey(size))?base:`${base} - ${size}`;
+}
 function savedComponentDisplayLabel(item){
   const customerLabel=specificationValue(item&&item.customerLabel);
-  if(customerLabel)return customerLabel;
+  if(customerLabel)return appendComponentSizeLabel(customerLabel,item);
   const category=specificationValue(item&&item.category);
   const description=specificationValue(item&&item.description);
   if(description && normalizeNameKey(description)!==normalizeNameKey(category)){
-    return description;
+    return appendComponentSizeLabel(description,item);
   }
-  return category||description;
+  return appendComponentSizeLabel(category||description,item);
 }
 function friendlyComponentCategoryName(category){
   const key=normalizeNameKey(category);
@@ -2655,7 +2673,7 @@ function customerIncludedPartLabel(item){
     }
   }
   if(!label){
-    label=friendlyComponentCategoryName(item&&item.category);
+    label=appendComponentSizeLabel(friendlyComponentCategoryName(item&&item.category),item);
   }
   return customerSafeText(label);
 }
@@ -2725,6 +2743,8 @@ function normalizeComponent(component){
     unitPrice:numberOrZero(component&&component.unitPrice),
     notes:(component&&typeof component.notes==='string')?component.notes:'',
     specifications:(component&&typeof component.specifications==='string')?component.specifications:'',
+    // Snapshot of the size chosen when this line was added; never read back from the master component.
+    selectedSize:(component&&typeof component.selectedSize==='string')?component.selectedSize.trim():'',
     cost:numberOrZero(component&&component.cost),
   };
 }
@@ -3267,6 +3287,7 @@ function studioComponentDetailPayloadFromDom(){
     cost:studioComponentCurrencyFieldValue('studioComponentCost'),
     unitPrice:studioComponentCurrencyFieldValue('studioComponentUnitPrice'),
     stockOnHand,
+    sizeOptions:studioComponentSizeDraft.slice(),
   };
 }
 function studioComponentPayloadSignature(payload){
@@ -3368,12 +3389,96 @@ function studioMergedSpecificationValue(record){
   }
   return specs || details;
 }
+// AVAILABLE SIZES editor for the component form. Generic to any category; stays collapsed until sizes exist.
+function studioComponentSizesSectionMarkup(){
+  const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
+  const chips=sizes.length
+    ? sizes.map((size)=>`<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escapeAttributeValue(size)}" aria-label="Remove size ${escapeAttributeValue(size)}">×</button></span>`).join('')
+    : '<p class="studio-size-list__empty">No sizes added. This component will be added to builds without a size step.</p>';
+  return `
+    <details class="studio-size-section"${sizes.length?' open':''}>
+      <summary class="studio-size-section__summary">AVAILABLE SIZES${sizes.length?` <span class="studio-size-section__count">${sizes.length}</span>`:''}</summary>
+      <p class="studio-size-section__help">Add selectable sizes for this component.</p>
+      <div class="studio-size-list" id="studioComponentSizeList">${chips}</div>
+      <div class="studio-size-entry">
+        <label class="quote-component-field"><span>Add Size</span><input id="studioComponentSizeInput" type="text" placeholder="e.g. 12 mm or Large" /></label>
+        <button class="ghost-action studio-size-entry__btn" type="button" data-size-action="add">Add</button>
+      </div>
+      <div class="studio-size-range">
+        <label class="quote-component-field"><span>From</span><input id="studioComponentSizeFrom" type="number" inputmode="decimal" step="any" placeholder="9" /></label>
+        <label class="quote-component-field"><span>To</span><input id="studioComponentSizeTo" type="number" inputmode="decimal" step="any" placeholder="15" /></label>
+        <label class="quote-component-field"><span>Step</span><input id="studioComponentSizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
+        <label class="quote-component-field"><span>Unit</span><input id="studioComponentSizeUnit" type="text" placeholder="mm" /></label>
+        <button class="ghost-action studio-size-range__btn" type="button" data-size-action="generate">Generate Range</button>
+      </div>
+    </details>
+  `;
+}
+function refreshStudioComponentSizeList(){
+  const list=$('studioComponentSizeList');
+  if(!list)return;
+  const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
+  list.innerHTML=sizes.length
+    ? sizes.map((size)=>`<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escapeAttributeValue(size)}" aria-label="Remove size ${escapeAttributeValue(size)}">×</button></span>`).join('')
+    : '<p class="studio-size-list__empty">No sizes added. This component will be added to builds without a size step.</p>';
+  const count=list.closest('.studio-size-section')?.querySelector('.studio-size-section__count');
+  if(count)count.textContent=String(sizes.length);
+  syncStudioComponentSaveButtonState();
+}
+function addStudioComponentSizeFromInput(){
+  const input=$('studioComponentSizeInput');
+  if(!input)return;
+  const raw=String(input.value||'');
+  const added=raw.split(',').map((part)=>part.trim()).filter(Boolean);
+  if(!added.length)return;
+  studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft.concat(added));
+  input.value='';
+  refreshStudioComponentSizeList();
+}
+// Builds "9 mm, 10 mm, ... 15 mm" from From/To/Step/Unit. Rejects non-finite or non-terminating ranges
+// rather than emitting NaN or looping forever.
+function generateStudioComponentSizeRange(){
+  const from=Number(String(($('studioComponentSizeFrom')&&$('studioComponentSizeFrom').value)||'').trim());
+  const to=Number(String(($('studioComponentSizeTo')&&$('studioComponentSizeTo').value)||'').trim());
+  const rawStep=String(($('studioComponentSizeStep')&&$('studioComponentSizeStep').value)||'').trim();
+  const step=rawStep===''?1:Number(rawStep);
+  const unit=String(($('studioComponentSizeUnit')&&$('studioComponentSizeUnit').value)||'').trim();
+  if(!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(step) || step<=0){
+    openInfoDialog('Check Range','Enter a numeric From, To and a Step greater than zero.');
+    return;
+  }
+  const span=Math.abs(to-from);
+  const count=Math.floor(span/step)+1;
+  if(count>200){
+    openInfoDialog('Range Too Large','That range would create more than 200 sizes. Use a larger step or a smaller range.');
+    return;
+  }
+  const direction=to>=from?1:-1;
+  const generated=[];
+  for(let i=0;i<count;i+=1){
+    const value=from+(direction*step*i);
+    // Trim binary float noise (0.30000000000000004) without changing meaningful precision.
+    const rounded=Number(value.toFixed(6));
+    if(!Number.isFinite(rounded))continue;
+    generated.push(unit?`${rounded} ${unit}`:String(rounded));
+  }
+  if(!generated.length)return;
+  studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft.concat(generated));
+  refreshStudioComponentSizeList();
+}
+function removeStudioComponentSize(value){
+  const key=String(value||'').trim().toLowerCase();
+  if(!key)return;
+  studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft).filter((size)=>size.toLowerCase()!==key);
+  refreshStudioComponentSizeList();
+}
 function renderStudioComponentDetails(record,options){
   const details=$('studioComponentDetails');
   if(!details)return;
   const isAddMode=!!(options&&options.addMode);
   if(!record){
     studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
+    studioComponentSizeDraft=[];
     details.innerHTML='<p class="studio-component-details__empty">Select a component to view details.</p>';
     return;
   }
@@ -3389,6 +3494,7 @@ function renderStudioComponentDetails(record,options){
   const trackStock=activeTrackComponentStock();
   const optionMarkup=categorySubcategoryOptionsMarkup(category,subcategory);
   const supplierMarkup=supplierOptionsMarkup(supplier);
+  studioComponentSizeDraft=componentRecordSizeOptions(record);
   details.innerHTML=`
     <div class="studio-component-details__head">
       <p>${isAddMode?'Add this component to your reusable parts library.':'Update this reusable component and save your changes.'}</p>
@@ -3407,6 +3513,7 @@ function renderStudioComponentDetails(record,options){
       <label class="quote-component-field quote-component-field--description studio-component-details__field--full"><span>Specifications</span><input id="studioComponentSpecifications" type="text" placeholder="80mm x 28mm x 19mm, ID 9mm, Black EVA" value="${escapeHtml(specifications)}" /></label>
       <label class="quote-component-field quote-component-field--description studio-component-details__field--full"><span>Notes</span><input id="studioComponentNotes" type="text" placeholder="Any extra notes..." value="${escapeHtml(notes)}" /></label>
     </div>
+    ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
       ${isAddMode?'':`<button id="studioComponentDeleteBtn" class="ghost-action studio-component-details__delete" type="button">Delete</button>`}
@@ -3426,6 +3533,7 @@ function renderStudioComponentDetails(record,options){
       cost:record.cost===undefined?undefined:numberOrZero(record.cost),
       unitPrice:record.unitPrice===undefined?undefined:numberOrZero(record.unitPrice),
       stockOnHand:trackStock?(stockOnHand===undefined?undefined:numberOrZero(stockOnHand)):undefined,
+      sizeOptions:studioComponentSizeDraft.slice(),
     }),
     savedTimer:0,
     savedFlash:false,
@@ -3466,6 +3574,7 @@ function saveStudioComponentDetails(){
     cost:payload.cost,
     unitPrice:payload.unitPrice,
     stockOnHand:activeTrackComponentStock()?payload.stockOnHand:undefined,
+    sizeOptions:normalizeComponentSizeOptions(payload.sizeOptions),
   };
   if(normalizeNameKey(originalName) && normalizeNameKey(originalName)!==normalizeNameKey(nextName)){
     removeComponentLibraryRecord(originalName);
@@ -4877,6 +4986,12 @@ function bindStudioComponentsPanel(){
       }
       syncStudioComponentSaveButtonState();
     });
+    details.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      if(!event.target.closest('#studioComponentSizeInput'))return;
+      event.preventDefault();
+      addStudioComponentSizeFromInput();
+    });
     details.addEventListener('click',(event)=>{
       const libraryActionButton=event.target.closest('[data-studio-library-action]');
       if(libraryActionButton){
@@ -4974,6 +5089,16 @@ function bindStudioComponentsPanel(){
           renderStudioComponentsLibrary();
           return;
         }
+      }
+
+      const sizeButton=event.target.closest('[data-size-action]');
+      if(sizeButton){
+        event.preventDefault();
+        const sizeAction=sizeButton.getAttribute('data-size-action');
+        if(sizeAction==='add')addStudioComponentSizeFromInput();
+        else if(sizeAction==='generate')generateStudioComponentSizeRange();
+        else if(sizeAction==='remove')removeStudioComponentSize(sizeButton.getAttribute('data-size-value'));
+        return;
       }
 
       const saveButton=event.target.closest('#studioComponentSaveBtn');
@@ -6463,6 +6588,32 @@ function componentLibraryCategoryValue(record){
   ].map(normalizeNameKey).filter(Boolean);
   return componentTextKeys.includes(categoryKey)?'':category;
 }
+// Optional reusable size labels on a master component (e.g. one Winding Check offering 9-15 mm).
+// Order is preserved as entered; callers render via componentSizeOptionsForDisplay for numeric-natural order.
+function normalizeComponentSizeOptions(value){
+  const list=Array.isArray(value)?value:[];
+  const seen=new Set();
+  const next=[];
+  list.forEach((entry)=>{
+    if(entry===null || entry===undefined || typeof entry==='object')return;
+    const label=String(entry).replace(/\s+/g,' ').trim();
+    if(!label)return;
+    const key=label.toLowerCase();
+    if(seen.has(key))return;
+    seen.add(key);
+    next.push(label);
+  });
+  return next;
+}
+function compareComponentSizeLabels(left,right){
+  return String(left||'').localeCompare(String(right||''),undefined,{sensitivity:'base',numeric:true});
+}
+function componentSizeOptionsForDisplay(value){
+  return normalizeComponentSizeOptions(value).sort(compareComponentSizeLabels);
+}
+function componentRecordSizeOptions(record){
+  return componentSizeOptionsForDisplay(record&&record.sizeOptions);
+}
 function componentLibraryRecordsFromKey(storageKey){
   const stored=Store.get(storageKey,[]);
   if(!Array.isArray(stored))return[];
@@ -6487,6 +6638,7 @@ function componentLibraryRecordsFromKey(storageKey){
       notes:String(record.notes||'').trim(),
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
+      sizeOptions:normalizeComponentSizeOptions(record.sizeOptions),
     }))
     .filter((record)=>!!normalizeNameKey(record.name));
 }
@@ -6521,6 +6673,7 @@ function saveComponentLibraryRecords(records){
       notes:String(record.notes||'').trim(),
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
+      sizeOptions:normalizeComponentSizeOptions(record.sizeOptions),
     }));
   Store.set(componentLibraryStorageKey(),safeRecords);
   window.KLABS_SYNC?.notifyComponentsChanged?.();
@@ -6563,6 +6716,8 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     notes:String(item.notes||'').trim(),
     specifications:String(item.specifications||'').trim(),
     cost:resolvedCost,
+    // undefined = caller supplied no size data at all; [] = caller explicitly cleared every size.
+    sizeOptions:item.sizeOptions===undefined?undefined:normalizeComponentSizeOptions(item.sizeOptions),
   };
   const records=componentLibraryRecords();
   const existingIndex=records.findIndex((record)=>normalizeNameKey(record.name)===normalizedKey);
@@ -6571,11 +6726,17 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     if(nextRecord.stockOnHand===undefined){
       nextRecord.stockOnHand=componentLibraryStockValue(records[existingIndex]);
     }
+    // Build-side callers ("Update Library Component") pass a quote row that carries no sizeOptions;
+    // never let that silently wipe the master component's configured sizes.
+    if(nextRecord.sizeOptions===undefined){
+      nextRecord.sizeOptions=normalizeComponentSizeOptions(records[existingIndex].sizeOptions);
+    }
     records[existingIndex]=nextRecord;
   }else{
     if(nextRecord.stockOnHand===undefined && activeTrackComponentStock()){
       nextRecord.stockOnHand=0;
     }
+    if(nextRecord.sizeOptions===undefined)nextRecord.sizeOptions=[];
     records.unshift(nextRecord);
   }
   saveComponentLibraryRecords(records);
@@ -7181,9 +7342,18 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     }
     return;
   }
+  if(context.type==='component-size'){
+    applyComponentSizeSelection(context.index,context.sizeComponent,selectedName);
+    return;
+  }
   if(context.index>=0){
     if(context.type==='category' && isBlankCategory(selectedName)){
       openChoicePicker('blank',context.index,document.activeElement);
+      return;
+    }
+    // A master component with configured sizes must not be added until a size is chosen.
+    if(context.type==='category' && componentRecordSizeOptions(findComponentLibraryRecordByName(selectedName)).length){
+      openComponentSizePicker(context.index,selectedName);
       return;
     }
     const merged=setChoiceValue(context.type,context.index,selectedName);
@@ -7210,9 +7380,35 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     updateQuoteSummary();
   }
 }
+// Commits a component + chosen size onto the build line. The size is set before setChoiceValue so the
+// de-dupe key already includes it and an existing line with a different size is never merged into.
+function applyComponentSizeSelection(index,componentName,size){
+  const row=quote.components[index];
+  const name=String(componentName||'').trim();
+  const selectedSize=String(size||'').trim();
+  if(!row || !name || !selectedSize)return;
+  row.selectedSize=selectedSize;
+  setChoiceValue('category',index,name);
+  const resolvedIndex=quote.components.findIndex((item)=>normalizeNameKey(item&&item.category)===normalizeNameKey(name) && normalizeNameKey(item&&item.selectedSize)===normalizeNameKey(selectedSize));
+  const targetIndex=resolvedIndex>=0?resolvedIndex:index;
+  applyComponentLibraryRecordToRow(targetIndex,name);
+  if(quote.components[targetIndex])quote.components[targetIndex].selectedSize=selectedSize;
+  saveQuoteCurrent();
+  markQuoteDirty();
+  expandedComponentRowIndex=targetIndex;
+  renderQuoteComponents();
+  updateQuoteSummary();
+}
 function recordsForChoiceType(type,query){
   if(type==='supplier')return supplierOptionRecords(query).map((record)=>({...record,id:''}));
   if(type==='blank')return blankOptionRecords(query);
+  if(type==='component-size'){
+    const queryKey=String(query||'').trim().toLowerCase();
+    const record=findComponentLibraryRecordByName(activeChoicePicker.sizeComponent);
+    return componentRecordSizeOptions(record)
+      .filter((size)=>!queryKey || size.toLowerCase().includes(queryKey))
+      .map((size)=>({name:size,id:''}));
+  }
   return componentOptionRecords(query).map((record)=>({...record,id:''}));
 }
 function choiceOptionSecondaryText(type,item){
@@ -7235,6 +7431,9 @@ function currentPickerSelectionContext(){
     };
   }
   const item=quote.components[activeChoicePicker.index]||null;
+  if(activeChoicePicker.type==='component-size'){
+    return {id:'',name:normalizeNameKey(item&&item.selectedSize)};
+  }
   const value=getChoiceValue(activeChoicePicker.type,item);
   return {
     id:'',
@@ -7251,6 +7450,7 @@ function choiceOptionIsSelected(item){
 function choicePickerTitle(type,index){
   if(type==='blank')return 'Select Blank';
   if(type==='supplier')return 'Select Supplier';
+  if(type==='component-size')return 'Select Size';
   const row=quote.components[index]||{};
   const category=normalizeNameKey(row.category);
   if(category.includes('reel'))return 'Select Reel Seat';
@@ -7285,7 +7485,10 @@ function renderChoicePickerOptions(query){
     const secondary=choiceOptionSecondaryText(activeChoicePicker.type,item);
     const selected=choiceOptionIsSelected(item);
     const favourite=choiceRecordIsFavourite(activeChoicePicker.type,item);
-    return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button><div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">★</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div></div>`;
+    const tools=activeChoicePicker.type==='component-size'
+      ? ''
+      : `<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">★</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
+    return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${tools}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup;
 }
@@ -7394,6 +7597,10 @@ function componentRowSupplierLabel(item){
 function componentRowSummaryMetaParts(item){
   if(componentRowIsEffectivelyEmpty(item))return[];
   const parts=[];
+  const size=componentRowSizeLabel(item);
+  if(size){
+    parts.push(`Size ${size}`);
+  }
   const category=componentRowCategoryLabel(item);
   const subcategory=specificationValue(item&&item.subcategory);
   const description=specificationValue(item&&item.description);
@@ -7479,8 +7686,16 @@ function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
   }
   return options.join('');
 }
+// Shown only when this line has a snapshot size, or its master component still offers sizes to pick from.
+function componentRowSizeFieldMarkup(item,index){
+  const size=componentRowSizeLabel(item);
+  const hasMasterSizes=componentRecordSizeOptions(findComponentLibraryRecordByName(item&&item.category)).length>0;
+  if(!size && !hasMasterSizes)return '';
+  const action=hasMasterSizes?` data-component-action="open-size-sheet" data-component-index="${index}"`:' disabled';
+  return `<div class="quote-component-row__fields quote-component-row__fields--size"><label class="quote-component-field quote-component-field--size"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>▾</b></button></label></div>`;
+}
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(item.category,item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label><div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(item.category,item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--supplier"><span>Supplier</span><button class="quote-component-picker__trigger" data-component-action="open-supplier-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.supplier||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label><div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Size, model, specs..." value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -7612,15 +7827,19 @@ function requestUpdateLibraryComponentFromRow(index){
 function openComponentSheet(index){
   openChoicePicker('category',index,document.activeElement);
 }
+// Second step shown only when the chosen master component defines sizeOptions; cancelling adds nothing.
+function openComponentSizePicker(index,componentName){
+  openChoicePicker('component-size',index,document.activeElement,{sizeComponent:componentName});
+}
 function openSupplierSheet(index){
   openChoicePicker('supplier',index,document.activeElement);
 }
 function openBlankSheet(){
   openChoicePicker('blank',-1,document.activeElement);
 }
-function openChoicePicker(type,index,openerEl){
+function openChoicePicker(type,index,openerEl,options){
   ensureChoicePicker();
-  activeChoicePicker={type,index};
+  activeChoicePicker={type,index,sizeComponent:String((options&&options.sizeComponent)||'')};
   choicePickerCategoryFilter='all';
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
@@ -7636,7 +7855,7 @@ function openChoicePicker(type,index,openerEl){
   const addButton=$('choicePickerAdd');
   if(addButton){
     addButton.textContent='Add Component';
-    addButton.hidden=false;
+    addButton.hidden=type==='component-size';
   }
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder='Component name';
   syncChoicePickerFilterControls();
@@ -10425,6 +10644,11 @@ function bindWorkshopQuoteBuilder(){
       if(action==='open-supplier-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('supplier',i,actionButton);
+      }
+      if(action==='open-size-sheet'){
+        const i=Number(actionButton.getAttribute('data-component-index'));
+        const row=quote.components[i];
+        if(row)openComponentSizePicker(i,String(row.category||''));
       }
       if(action==='update-library-component'){
         const i=Number(actionButton.getAttribute('data-component-index'));

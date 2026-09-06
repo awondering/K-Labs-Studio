@@ -31,6 +31,7 @@ alter table public.components add column if not exists cost numeric;
 alter table public.components add column if not exists stock_on_hand numeric;
 alter table public.components add column if not exists specifications text default '';
 alter table public.components add column if not exists notes text default '';
+alter table public.components add column if not exists size_options jsonb not null default '[]'::jsonb;
 alter table public.components add column if not exists created_at timestamptz not null default now();
 alter table public.components add column if not exists updated_at timestamptz not null default now();
 

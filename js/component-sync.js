@@ -96,6 +96,7 @@
     if (record.unitCost !== undefined) score += 1;
     if (record.unitPrice !== undefined) score += 1;
     if (record.stockOnHand !== undefined) score += 1;
+    if (Array.isArray(record.sizeOptions) && record.sizeOptions.length) score += 1;
     return score;
   }
   // Keeps one logical record per duplicate key, preferring whichever side has more real data filled in.
@@ -115,6 +116,31 @@
       }
     });
     return order.map((key) => map.get(key));
+  }
+
+  // size_options is a jsonb array of plain size labels; tolerate a JSON string from older/pg driver paths.
+  function normalizeSyncSizeOptions(value) {
+    let list = value;
+    if (typeof list === "string") {
+      try {
+        list = JSON.parse(list);
+      } catch (err) {
+        list = [];
+      }
+    }
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    const next = [];
+    list.forEach((entry) => {
+      if (entry === null || entry === undefined || typeof entry === "object") return;
+      const label = String(entry).replace(/\s+/g, " ").trim();
+      if (!label) return;
+      const key = label.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      next.push(label);
+    });
+    return next;
   }
 
   function recordToRow(record) {
@@ -138,6 +164,7 @@
       stock_on_hand: record.stockOnHand === undefined ? null : record.stockOnHand,
       specifications: String(record.specifications || ""),
       notes: String(record.notes || ""),
+      size_options: normalizeSyncSizeOptions(record.sizeOptions),
       updated_at: new Date().toISOString(),
     };
   }
@@ -160,6 +187,7 @@
       stockOnHand: row.stock_on_hand === null || row.stock_on_hand === undefined ? undefined : Number(row.stock_on_hand),
       notes: String(row.notes || ""),
       specifications: String(row.specifications || ""),
+      sizeOptions: normalizeSyncSizeOptions(row.size_options),
       cost: row.cost === null || row.cost === undefined ? undefined : Number(row.cost),
     };
   }
