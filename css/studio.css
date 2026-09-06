@@ -3726,7 +3726,7 @@ body.component-sheet-open .workshop-back-to-top{
 #homeScreen .home-living-rod{
   width:min(100%,760px);
   height:40px;
-  margin:0 0 2px;
+  margin:14px 0 12px;
 }
 
 #homeScreen .home-enter-rod-button{
@@ -4680,7 +4680,7 @@ textarea::-moz-selection,
 
   #homeScreen .home-living-rod{
     height:36px;
-    margin:0 0 2px;
+    margin:10px 0 10px;
   }
 
   #homeScreen .home-premium-hero h1{
