@@ -7872,23 +7872,35 @@ function persistComponentDraftCleanup(changed){
   saveQuoteCurrent();
   markQuoteDirty();
 }
-function buildCostsSummaryData(){
-  enforceSingleSourceComponents();
-  const rows=componentRowsForTotals();
-  const componentCount=rows.length;
+function buildSpecSummaryData(){
   const blankComponent=firstSavedComponentByCategory('blank')||firstComponentByCategory('blank');
-  const blankName=specificationValue(blankComponent&&blankComponent.description)||specificationValue(blankComponent&&blankComponent.blankName);
-  if(blankName && componentCount>0){
-    return `${blankName} • ${componentCount} Component${componentCount===1?'':'s'}`;
-  }
-  if(blankName)return blankName;
-  if(componentCount>0)return `${componentCount} Component${componentCount===1?'':'s'} Selected`;
-  return 'Select blank and components';
+  const blankName=specificationValue(blankComponent&&blankComponent.description)
+    ||specificationValue(blankComponent&&blankComponent.blankName)
+    ||specificationValue(quote.blankName)
+    ||specificationValue(blankComponent&&blankComponent.blankSeries)
+    ||specificationValue(blankComponent&&blankComponent.variant);
+  const method=guideOrientationMethodLabel(workshopToolsState&&workshopToolsState.spiral&&workshopToolsState.spiral.method);
+  const guideCount=(()=>{
+    const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+    const rows=layout&&Array.isArray(layout.rows)?layout.rows:[];
+    return rows.length||+state.guideCount||0;
+  })();
+  const parts=[];
+  if(blankName)parts.push(blankName);
+  if(method)parts.push(method);
+  if(guideCount)parts.push(`${guideCount} guide${guideCount===1?'':'s'}`);
+  return parts.length?parts.join(' · '):'Add rod specification';
 }
-function updateBuildCostsSummary(){
-  const textEl=$('workshopBuildCostsSummaryText');
+function updateBuildSpecSummary(){
+  const textEl=$('workshopBuildSpecsSummaryText');
   if(!textEl)return;
-  textEl.textContent=buildCostsSummaryData();
+  textEl.textContent=buildSpecSummaryData();
+}
+function updateComponentsSummary(){
+  const headEl=$('workshopComponentsCountText');
+  if(!headEl)return;
+  const count=componentRowsForTotals().length;
+  headEl.textContent=count>0?`${count} component${count===1?'':'s'} added`:'No components yet';
 }
 function updateBuildPricingSummary(){
   const summaryEl=$('workshopBuildPricingSummaryText');
@@ -10923,6 +10935,9 @@ function bindWorkshopQuoteBuilder(){
   const addComponentBtn=$('addComponentBtn');
   if(addComponentBtn){
     addComponentBtn.addEventListener('click',()=>{
+      // + Add Component opens the existing Active Build Select Category picker on a fresh draft row.
+      // Reuse a pending empty draft if one exists; otherwise append one. The cascade's category,
+      // subcategory, component, saved-size, pricing and stock logic is fully preserved.
       let draftIndex=quote.components.findIndex((item)=>componentRowIsEffectivelyEmpty(item));
       let changed=false;
       if(draftIndex>=0){
@@ -10945,15 +10960,7 @@ function bindWorkshopQuoteBuilder(){
       persistComponentDraftCleanup(changed);
       renderQuoteComponents();
       updateQuoteSummary();
-      waitForDomRender(()=>{
-        // Focus first: a focus-driven browser scroll would otherwise cancel our smooth scroll mid-flight.
-        focusNewComponentWithRetry(draftIndex,6);
-        scrollNewComponentRowIntoView(draftIndex);
-      });
-      flashWorkshopStatus('Component added',{
-        pending:true,
-        duration:1200,
-      });
+      openChoicePicker('category',draftIndex,document.activeElement);
     });
   }
   const toggleStatusBtn=$('toggleCurrentBuildStatusBtn');
@@ -11088,7 +11095,8 @@ function updateWorkshopSectionVisibility(){
 }
 function updateQuoteSummary(){
   const math=quoteMaths();
-  updateBuildCostsSummary();
+  updateBuildSpecSummary();
+  updateComponentsSummary();
   updateBuildPricingSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);

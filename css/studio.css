@@ -1431,15 +1431,74 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 .quote-add-component-btn{
-  width:100%;
   min-height:44px;
   font-size:12px;
   font-weight:800;
   letter-spacing:.06em;
   text-transform:uppercase;
-  border-color:rgba(210,70,82,.62);
+  border:1px solid rgba(210,70,82,.62);
+  border-radius:12px;
   background:linear-gradient(180deg,rgba(186,44,57,.98),rgba(130,24,34,.98));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 9px 18px rgba(0,0,0,.24);
+  color:#f5f1e8;
+  cursor:pointer;
+}
+
+.quote-add-component-btn--inline{
+  width:auto;
+  flex:none;
+  min-height:34px;
+  padding:0 12px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:10px;
+  letter-spacing:.07em;
+}
+
+.quote-add-component-btn__plus{
+  font-size:13px;
+  font-weight:900;
+  line-height:1;
+  color:#ffd7d7;
+}
+
+#workshopScreen .quote-section__components-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:14px 15px 12px;
+}
+
+#workshopScreen .quote-section__components-heading{
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+
+#workshopScreen .quote-section__components-title{
+  margin:0;
+  color:#c8c2b6;
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  font-weight:700;
+}
+
+#workshopScreen .quote-section__components-count{
+  margin:0;
+  color:#98a095;
+  font-size:10px;
+  letter-spacing:.05em;
+}
+
+#workshopComponentsSection{
+  gap:0;
+}
+
+#workshopComponentsSection .quote-components{
+  padding:0 15px 15px;
 }
 
 
@@ -5830,6 +5889,15 @@ textarea::-moz-selection,
 .quote-add-component-btn{
   min-height:40px;
   font-size:11px;
+}
+
+.quote-add-component-btn--inline{
+  min-height:34px;
+  font-size:10px;
+}
+
+#workshopComponentsSection .quote-components{
+  padding:0 12px 12px;
 }
 
 .quote-components{

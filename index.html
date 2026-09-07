@@ -511,8 +511,8 @@
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildSpecsBody">
             <span class="quote-section__toggle-copy">
               <span class="quote-section__toggle-title">Rod Specification</span>
-              <span id="workshopBuildCostsSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildCostsSummaryText">Add blank and components</span>
+              <span id="workshopBuildSpecsSummary" class="quote-section__toggle-summary" aria-live="polite">
+                <span id="workshopBuildSpecsSummaryText">Add rod specification</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
@@ -541,13 +541,18 @@
             <label><span>Fore Grip Length</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
             <label><span>Hook Keeper Position</span><input id="quoteSpecHookKeeperPosition" type="text" placeholder="e.g. Above reel seat" /></label>
             <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Build notes..."></textarea></label>
-            <div id="workshopBuildCostsBody" class="quote-grid__full">
-              <div id="quoteComponentsList" class="quote-components"></div>
-              <div class="quote-actions-row">
-              <button id="addComponentBtn" class="primary-action quote-add-component-btn" type="button">Add Components</button>
-              </div>
-            </div>
           </div>
+        </article>
+
+        <article id="workshopComponentsSection" class="quote-section" aria-label="Components">
+          <div class="quote-section__components-head">
+            <div class="quote-section__components-heading">
+              <h2 class="quote-section__toggle-title quote-section__components-title">Components</h2>
+              <p id="workshopComponentsCountText" class="quote-section__components-count" aria-live="polite">No components yet</p>
+            </div>
+            <button id="addComponentBtn" class="quote-add-component-btn quote-add-component-btn--inline" type="button"><span class="quote-add-component-btn__plus" aria-hidden="true">+</span> Add Component</button>
+          </div>
+          <div id="quoteComponentsList" class="quote-components"></div>
         </article>
 
         <article id="workshopPricingSection" class="quote-section quote-section--collapsible quote-section--collapsed">
