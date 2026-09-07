@@ -2075,6 +2075,9 @@ function mergeComponentRecord(primary,secondary){
   const primarySize=specificationValue(primary&&primary.selectedSize);
   const secondarySize=specificationValue(secondary&&secondary.selectedSize);
   next.selectedSize=primarySize||secondarySize;
+  const primaryLibraryId=specificationValue(primary&&primary.libraryComponentId);
+  const secondaryLibraryId=specificationValue(secondary&&secondary.libraryComponentId);
+  next.libraryComponentId=primaryLibraryId||secondaryLibraryId;
   const primaryCost=numberOrZero(primary&&primary.cost);
   const secondaryCost=numberOrZero(secondary&&secondary.cost);
   next.cost=primaryCost>0?primaryCost:secondaryCost;
@@ -2745,6 +2748,9 @@ function normalizeComponent(component){
     specifications:(component&&typeof component.specifications==='string')?component.specifications:'',
     // Snapshot of the size chosen when this line was added; never read back from the master component.
     selectedSize:(component&&typeof component.selectedSize==='string')?component.selectedSize.trim():'',
+    // Stable link back to the single authoritative Components library record this line was built from.
+    libraryComponentId:(component&&typeof component.libraryComponentId==='string')?component.libraryComponentId.trim():'',
+    stockOnHand:componentLibraryStockValue(component),
     cost:numberOrZero(component&&component.cost),
   };
 }
@@ -6299,19 +6305,31 @@ function categoryOptionNameOrder(customNames){
 function allComponentNameOptions(){
   return categoryOptionNameOrder(getCustomCategoryNames());
 }
+// The build picker is sourced from the Components library records first (the authoritative component
+// data that carries pricing/stock/sizes); legacy category-only names are appended so existing builds,
+// blanks and charge line-items stay selectable.
 function componentOptionRecords(query){
-  const orderedNames=categoryOptionNameOrder(getCustomCategoryNames());
-  const recordByName=new Map(componentLibraryRecords().map((record)=>[normalizeNameKey(record.name),record]));
   const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
-  const all=orderedNames.map((name)=>{
-    const record=recordByName.get(normalizeNameKey(name));
-    return {
-      name,
-      isCustom:!defaultKeys.has(normalizeNameKey(name)),
-      category:String(record&&record.category||name).trim(),
-      supplier:String(record&&record.supplier||'').trim(),
-      description:String(record&&record.description||'').trim(),
-    };
+  const seen=new Set();
+  const all=[];
+  componentLibraryRecords().forEach((record)=>{
+    const key=normalizeNameKey(record.name);
+    if(!key || seen.has(key))return;
+    seen.add(key);
+    all.push({
+      name:record.name,
+      libraryId:String(record.id||'').trim(),
+      isCustom:!defaultKeys.has(key),
+      category:String(record.category||record.name).trim(),
+      supplier:String(record.supplier||'').trim(),
+      description:String(record.description||'').trim(),
+    });
+  });
+  categoryOptionNameOrder(getCustomCategoryNames()).forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(!key || seen.has(key))return;
+    seen.add(key);
+    all.push({name,libraryId:'',isCustom:!defaultKeys.has(key),category:name,supplier:'',description:''});
   });
   const normalized=normalizeNameKey(query);
   const filterKey=normalizeNameKey(choicePickerCategoryFilter);
@@ -6683,6 +6701,22 @@ function findComponentLibraryRecordByName(name){
   const records=componentLibraryRecords();
   return records.find((record)=>normalizeNameKey(record.name)===nameKey)||null;
 }
+// Resolves the one authoritative library record behind a build line: stored id first (survives renames),
+// falling back to the line's component name for rows saved before the id existed.
+function componentLibraryRecordForRow(item){
+  if(!item)return null;
+  const id=String(item.libraryComponentId||'').trim();
+  if(id){
+    const byId=componentLibraryRecords().find((record)=>String(record.id||'').trim()===id);
+    if(byId)return byId;
+  }
+  return findComponentLibraryRecordByName(item.category);
+}
+// The library record's real category, used for taxonomy lookups where the build line stores the component name.
+function componentRowLibraryCategoryName(item){
+  const record=componentLibraryRecordForRow(item);
+  return specificationValue(record&&record.category)||specificationValue(item&&item.category);
+}
 function upsertComponentLibraryRecord(name,sourceComponent){
   const normalizedName=String(name||'').trim();
   const normalizedKey=normalizeNameKey(normalizedName);
@@ -7031,6 +7065,8 @@ function applyComponentLibraryRecordToRow(index,name){
   const record=findComponentLibraryRecordByName(name);
   if(!record)return;
   const row=quote.components[index];
+  row.libraryComponentId=String(record.id||'').trim();
+  if(record.stockOnHand!==undefined)row.stockOnHand=numberOrZero(record.stockOnHand);
   if(specificationValue(record.subcategory))row.subcategory=record.subcategory;
   if(specificationValue(record.supplier))row.supplier=record.supplier;
   if(specificationValue(record.description))row.description=record.description;
@@ -7074,7 +7110,7 @@ function syncComponentRowEditorInputs(index){
   }
   const subcategoryInput=document.querySelector(`#quoteComponentsList [data-component-key="subcategory"][data-component-index="${index}"]`);
   if(subcategoryInput && document.activeElement!==subcategoryInput){
-    subcategoryInput.innerHTML=componentRowSubcategoryOptionsMarkup(row.category,row.subcategory);
+    subcategoryInput.innerHTML=componentRowSubcategoryOptionsMarkup(componentRowLibraryCategoryName(row),row.subcategory);
   }
 }
 function defaultChoiceNameSet(type){
@@ -7386,11 +7422,13 @@ function applyComponentSizeSelection(index,componentName,size){
   const name=String(componentName||'').trim();
   const selectedSize=String(size||'').trim();
   if(!row || !name || !selectedSize)return;
+  // Changing the size of an already-bound line must not reset build-level edits back to library defaults.
+  const alreadyBound=normalizeNameKey(row.category)===normalizeNameKey(name);
   row.selectedSize=selectedSize;
   setChoiceValue('category',index,name);
   const resolvedIndex=quote.components.findIndex((item)=>normalizeNameKey(item&&item.category)===normalizeNameKey(name) && normalizeNameKey(item&&item.selectedSize)===normalizeNameKey(selectedSize));
   const targetIndex=resolvedIndex>=0?resolvedIndex:index;
-  applyComponentLibraryRecordToRow(targetIndex,name);
+  if(!alreadyBound)applyComponentLibraryRecordToRow(targetIndex,name);
   if(quote.components[targetIndex])quote.components[targetIndex].selectedSize=selectedSize;
   saveQuoteCurrent();
   markQuoteDirty();
@@ -7688,13 +7726,13 @@ function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
 // Shown only when this line has a snapshot size, or its master component still offers sizes to pick from.
 function componentRowSizeFieldMarkup(item,index){
   const size=componentRowSizeLabel(item);
-  const hasMasterSizes=componentRecordSizeOptions(findComponentLibraryRecordByName(item&&item.category)).length>0;
+  const hasMasterSizes=componentRecordSizeOptions(componentLibraryRecordForRow(item)).length>0;
   if(!size && !hasMasterSizes)return '';
   const action=hasMasterSizes?` data-component-action="open-size-sheet" data-component-index="${index}"`:' disabled';
   return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>▾</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(item.category,item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Specifications" value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(componentRowLibraryCategoryName(item),item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Specifications" value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -10647,7 +10685,8 @@ function bindWorkshopQuoteBuilder(){
       if(action==='open-size-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         const row=quote.components[i];
-        if(row)openComponentSizePicker(i,String(row.category||''));
+        const record=componentLibraryRecordForRow(row);
+        if(record)openComponentSizePicker(i,String(record.name||''));
       }
       if(action==='update-library-component'){
         const i=Number(actionButton.getAttribute('data-component-index'));
