@@ -6335,6 +6335,8 @@ function componentPickerCategoryStageOptions(query){
       seen.add(key);
       names.push(name);
     });
+  // Render-only ordering (never rewrites the stored/insertion order): alphabetical, case-insensitive, whitespace-trimmed.
+  names.sort((left,right)=>compareTaxonomyDisplayNames(String(left||'').trim(),String(right||'').trim()));
   const normalized=normalizeNameKey(query);
   return names
     .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
@@ -6345,7 +6347,7 @@ function componentPickerSubcategoryStageOptions(categoryName,query){
     componentPickerRecordsForCategory(categoryName)
       .map((record)=>String(record.subcategory||'').trim())
       .filter(Boolean)
-  )).sort(compareTaxonomyDisplayNames);
+  )).sort((left,right)=>compareTaxonomyDisplayNames(left.trim(),right.trim()));
   const normalized=normalizeNameKey(query);
   return names
     .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
@@ -6357,7 +6359,7 @@ function componentPickerComponentStageOptions(categoryName,subcategoryName,query
   return componentPickerRecordsForCategory(categoryName)
     .filter((record)=>!subcategoryKey || normalizeNameKey(record.subcategory)===subcategoryKey)
     .filter((record)=>!normalized || normalizeNameKey(record.name).includes(normalized))
-    .sort((left,right)=>compareTaxonomyDisplayNames(left.name,right.name))
+    .sort((left,right)=>compareTaxonomyDisplayNames(String(left.name||'').trim(),String(right.name||'').trim()))
     .map((record)=>({name:record.name,id:String(record.id||''),isDrill:false,record}));
 }
 function componentPickerStageOptions(query){
