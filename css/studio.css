@@ -7873,3 +7873,67 @@ body.klabs-auth-resolving::after {
   background:linear-gradient(180deg,rgba(46,110,58,.96),rgba(28,72,38,.96));
   color:#eaf6e9;
 }
+
+/* Component Add/Edit form balance after Brand / Variant were retired. Must live at the end of the
+   file: the shared .quote-component-field--cost rules (126px, justify-self:end) and the earlier
+   639px single-column override otherwise win the cascade on this form. */
+.studio-component-details__fields.quote-component-row__fields{
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:10px;
+  align-items:start;
+}
+
+.studio-component-details__fields.quote-component-row__fields > label{
+  grid-column:span 3;
+}
+
+.studio-component-details__fields.quote-component-row__fields > label:first-child,
+.studio-component-details__fields.quote-component-row__fields > .studio-component-details__field--full{
+  grid-column:1 / -1;
+}
+
+.studio-component-details__fields.quote-component-row__fields > .quote-component-field--cost{
+  grid-column:span 2;
+  justify-self:stretch;
+  width:auto;
+  max-width:none;
+}
+
+/* With stock tracking off only Buy/Sell remain, so widen them instead of trailing an empty cell. */
+.studio-component-details__fields.quote-component-row__fields:not(:has(#studioComponentStockOnHand)) > .quote-component-field--cost{
+  grid-column:span 3;
+}
+
+.studio-component-details__fields.quote-component-row__fields > .quote-component-field--cost input{
+  max-width:none;
+}
+
+@media (max-width:639px){
+  .studio-component-details__fields.quote-component-row__fields{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:9px;
+  }
+  .studio-component-details__fields.quote-component-row__fields > label{
+    grid-column:1 / -1;
+  }
+  .studio-component-details__fields.quote-component-row__fields > .quote-component-field--cost{
+    grid-column:span 2;
+  }
+  .studio-component-details__fields.quote-component-row__fields:not(:has(#studioComponentStockOnHand)) > .quote-component-field--cost{
+    grid-column:span 3;
+  }
+  .studio-component-details__fields.quote-component-row__fields > .quote-component-field--cost input{
+    padding-left:8px;
+    padding-right:8px;
+  }
+}
+
+/* Keep Add Size / Generate Range and the save row clear of the floating bottom nav. */
+@media (max-width:760px){
+  .studio-component-details{
+    padding-bottom:calc(24px + var(--safe-bottom));
+  }
+  .studio-size-section{
+    margin-bottom:14px;
+  }
+}
