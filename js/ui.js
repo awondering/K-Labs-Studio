@@ -103,7 +103,7 @@ const CORE_MEASUREMENT_FORMAT={decimalsMetric:3,decimalsImperial:3,forceDecimal:
 let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
-let activeChoicePicker={type:'category',index:-1};
+let activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:''};
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 const choicePickerSessionFavourites={category:new Set(),supplier:new Set()};
@@ -6307,40 +6307,119 @@ function categoryOptionNameOrder(customNames){
 function allComponentNameOptions(){
   return categoryOptionNameOrder(getCustomCategoryNames());
 }
-// The build picker is sourced from the Components library records first (the authoritative component
-// data that carries pricing/stock/sizes); legacy category-only names are appended so existing builds,
-// blanks and charge line-items stay selectable.
-function componentOptionRecords(query){
-  const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
-  const seen=new Set();
-  const all=[];
-  componentLibraryRecords().forEach((record)=>{
-    const key=normalizeNameKey(record.name);
-    if(!key || seen.has(key))return;
-    seen.add(key);
-    all.push({
-      name:record.name,
-      libraryId:String(record.id||'').trim(),
-      isCustom:!defaultKeys.has(key),
-      category:String(record.category||record.name).trim(),
-      supplier:String(record.supplier||'').trim(),
-      description:String(record.description||'').trim(),
-    });
-  });
-  categoryOptionNameOrder(getCustomCategoryNames()).forEach((name)=>{
-    const key=normalizeNameKey(name);
-    if(!key || seen.has(key))return;
-    seen.add(key);
-    all.push({name,libraryId:'',isCustom:!defaultKeys.has(key),category:name,supplier:'',description:''});
-  });
-  const normalized=normalizeNameKey(query);
-  const filterKey=normalizeNameKey(choicePickerCategoryFilter);
+// Active Build "Add Component" is a 3-stage cascade sourced strictly from the current Components
+// library (Category -> Subcategory -> Component), matching the Components screen structure exactly.
+// Non-library pseudo categories (Blank, Freight, Decals, Other, ...) stay one-tap leaves, unchanged.
+function componentPickerRecordsForCategory(categoryName){
+  const key=normalizeNameKey(categoryName);
+  const records=componentLibraryRecords();
+  if(key===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
+    return records.filter((record)=>!normalizeNameKey(record.category) || isInvalidLibraryCategoryName(record.category));
+  }
+  return records.filter((record)=>normalizeNameKey(record.category)===key);
+}
+function componentPickerCategoryHasLibraryRecords(name){
+  const key=normalizeNameKey(name);
+  if(!key)return false;
+  return componentPickerRecordsForCategory(name).length>0;
+}
+function componentPickerCategoryStageOptions(query){
   const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
-  const filtered=all
-    .filter((item)=>!archived.has(normalizeNameKey(item.name)))
-    .filter((item)=>filterKey==='all' || normalizeNameKey(item.category)===filterKey)
-    .filter((item)=>!normalized || normalizeNameKey(item.name).includes(normalized));
-  return sortChoiceRecords('category',filtered);
+  const seen=new Set();
+  const names=[];
+  categoryOptionNameOrder(getCustomCategoryNames())
+    .concat(studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords()))
+    .forEach((name)=>{
+      const key=normalizeNameKey(name);
+      if(!key || seen.has(key) || archived.has(key))return;
+      seen.add(key);
+      names.push(name);
+    });
+  const normalized=normalizeNameKey(query);
+  return names
+    .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
+    .map((name)=>({name,id:'',isDrill:!isBlankCategory(name) && componentPickerCategoryHasLibraryRecords(name)}));
+}
+function componentPickerSubcategoryStageOptions(categoryName,query){
+  const names=Array.from(new Set(
+    componentPickerRecordsForCategory(categoryName)
+      .map((record)=>String(record.subcategory||'').trim())
+      .filter(Boolean)
+  )).sort(compareTaxonomyDisplayNames);
+  const normalized=normalizeNameKey(query);
+  return names
+    .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
+    .map((name)=>({name,id:'',isDrill:true}));
+}
+function componentPickerComponentStageOptions(categoryName,subcategoryName,query){
+  const subcategoryKey=normalizeNameKey(subcategoryName);
+  const normalized=normalizeNameKey(query);
+  return componentPickerRecordsForCategory(categoryName)
+    .filter((record)=>!subcategoryKey || normalizeNameKey(record.subcategory)===subcategoryKey)
+    .filter((record)=>!normalized || normalizeNameKey(record.name).includes(normalized))
+    .sort((left,right)=>compareTaxonomyDisplayNames(left.name,right.name))
+    .map((record)=>({name:record.name,id:String(record.id||''),isDrill:false,record}));
+}
+function componentPickerStageOptions(query){
+  const stage=activeChoicePicker.stage||'category';
+  if(stage==='subcategory')return componentPickerSubcategoryStageOptions(activeChoicePicker.categoryName,query);
+  if(stage==='component')return componentPickerComponentStageOptions(activeChoicePicker.categoryName,activeChoicePicker.subcategoryName,query);
+  return componentPickerCategoryStageOptions(query);
+}
+function componentPickerLeafSecondaryText(record){
+  if(!record)return '';
+  const bits=[];
+  const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
+  const sell=numberOrZero(record.unitPrice);
+  if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} · Sell $${sell.toFixed(2)}`);
+  const sizeCount=componentRecordSizeOptions(record).length;
+  if(sizeCount)bits.push(`${sizeCount} size${sizeCount===1?'':'s'}`);
+  return bits.join(' • ');
+}
+function syncComponentPickerBackButton(){
+  const backButton=$('choicePickerBack');
+  if(!backButton)return;
+  backButton.hidden=!(activeChoicePicker.type==='category' && activeChoicePicker.stage && activeChoicePicker.stage!=='category');
+}
+function advanceComponentPickerStage(name){
+  if(activeChoicePicker.type!=='category')return;
+  if(activeChoicePicker.stage==='category'){
+    activeChoicePicker.categoryName=name;
+    activeChoicePicker.subcategoryName='';
+    const hasSubcategories=componentPickerSubcategoryStageOptions(name,'').length>0;
+    activeChoicePicker.stage=hasSubcategories?'subcategory':'component';
+  }else if(activeChoicePicker.stage==='subcategory'){
+    activeChoicePicker.subcategoryName=name;
+    activeChoicePicker.stage='component';
+  }else{
+    return;
+  }
+  if($('choicePickerSearch'))$('choicePickerSearch').value='';
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(activeChoicePicker.type,activeChoicePicker.index);
+  syncComponentPickerBackButton();
+  renderChoicePickerOptions('');
+}
+function retreatComponentPickerStage(){
+  if(activeChoicePicker.type!=='category')return;
+  if(activeChoicePicker.stage==='component'){
+    const hasSubcategories=componentPickerSubcategoryStageOptions(activeChoicePicker.categoryName,'').length>0;
+    if(hasSubcategories){
+      activeChoicePicker.stage='subcategory';
+    }else{
+      activeChoicePicker.stage='category';
+      activeChoicePicker.categoryName='';
+    }
+    activeChoicePicker.subcategoryName='';
+  }else if(activeChoicePicker.stage==='subcategory'){
+    activeChoicePicker.stage='category';
+    activeChoicePicker.categoryName='';
+  }else{
+    return;
+  }
+  if($('choicePickerSearch'))$('choicePickerSearch').value='';
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(activeChoicePicker.type,activeChoicePicker.index);
+  syncComponentPickerBackButton();
+  renderChoicePickerOptions('');
 }
 function supplierOptionRecords(query){
   const defaults=DEFAULT_SUPPLIER_NAMES.map((name)=>({name,isCustom:false}));
@@ -6370,6 +6449,7 @@ function ensureChoicePicker(){
       <header class="component-sheet__header">
         <h2 id="choicePickerTitle">Select Item</h2>
         <div class="component-sheet__header-actions">
+          <button id="choicePickerBack" class="component-sheet__close" type="button" hidden aria-label="Back">‹</button>
           <button id="choicePickerAdd" class="component-sheet__add component-sheet__add--header" type="button">Add Component</button>
           <button class="component-sheet__close" type="button" data-sheet-action="close" aria-label="Close picker">×</button>
         </div>
@@ -6434,6 +6514,10 @@ function ensureChoicePicker(){
     if(optionRow){
       const selectedName=optionRow.getAttribute('data-choice-row')||'';
       const selectedId=optionRow.getAttribute('data-choice-id')||'';
+      if(optionRow.getAttribute('data-choice-drill')==='true'){
+        advanceComponentPickerStage(selectedName);
+        return;
+      }
       commitChoiceSelection(selectedName,selectedId);
       return;
     }
@@ -6441,6 +6525,10 @@ function ensureChoicePicker(){
     if(optionButton){
       const selectedName=optionButton.getAttribute('data-choice-option')||'';
       const selectedId=optionButton.getAttribute('data-choice-id')||'';
+      if(optionButton.getAttribute('data-choice-drill')==='true'){
+        advanceComponentPickerStage(selectedName);
+        return;
+      }
       commitChoiceSelection(selectedName,selectedId);
       return;
     }
@@ -6478,6 +6566,7 @@ function ensureChoicePicker(){
     renderChoicePickerOptions($('choicePickerSearch').value);
   });
   $('choicePickerAdd').addEventListener('click',startChoicePickerAddFlow);
+  $('choicePickerBack').addEventListener('click',()=>{retreatComponentPickerStage();});
   $('choicePickerCustomCancel').addEventListener('click',()=>{
     const customBox=$('choicePickerCustomBox');
     if(customBox){customBox.hidden=true;}
@@ -7051,7 +7140,9 @@ function componentPickerCategoryOptions(){
 function syncChoicePickerFilterControls(){
   const filter=$('choicePickerCategoryFilter');
   if(!filter)return;
-  const showFilter=activeChoicePicker.type==='category';
+  // Cascade navigation (Category -> Subcategory -> Component) replaces the old flat "All Categories"
+  // filter, so this control stays hidden for the build picker now.
+  const showFilter=false;
   filter.hidden=!showFilter;
   if(!showFilter)return;
   const options=['<option value="all">All Categories</option>']
@@ -7131,8 +7222,10 @@ function startChoiceEditor(mode,originalName){
   customInput.select();
   if(customTitle){customTitle.textContent=mode==='rename'?'Rename Component':'Add Component';}
 }
+// 'category' is the Active Build "Add Component" picker: it is select-only and must never expose
+// library-mutating actions (Rename/Duplicate/Delete). Library editing stays in the Components screens.
 function choicePickerSupportsContextMenu(){
-  return activeChoicePicker.type==='category' || activeChoicePicker.type==='supplier' || activeChoicePicker.type==='blank';
+  return activeChoicePicker.type==='supplier' || activeChoicePicker.type==='blank';
 }
 function hideChoicePickerMenu(){
   const menu=$('choicePickerMenu');
@@ -7467,7 +7560,7 @@ function recordsForChoiceType(type,query){
       .filter((size)=>!queryKey || size.toLowerCase().includes(queryKey))
       .map((size)=>({name:size,id:''}));
   }
-  return componentOptionRecords(query).map((record)=>({...record,id:''}));
+  return componentPickerStageOptions(query);
 }
 function choiceOptionSecondaryText(type,item){
   if(type==='blank'){
@@ -7510,22 +7603,25 @@ function choicePickerTitle(type,index){
   if(type==='supplier')return 'Select Supplier';
   if(type==='subcategory')return 'Select Subcategory';
   if(type==='component-size')return 'Select Size';
-  const row=quote.components[index]||{};
-  const category=normalizeNameKey(row.category);
-  if(category.includes('reel'))return 'Select Reel Seat';
-  if(category.includes('guide'))return 'Select Guide Set';
-  if(category.includes('tip'))return 'Select Tip Top';
-  if(category.includes('grip'))return 'Select Grip';
-  if(category.includes('winding'))return 'Select Winding Checks';
-  if(category.includes('hook'))return 'Select Hook Keeper';
-  if(category.includes('thread') || category.includes('finish'))return 'Select Thread & Finish';
-  if(category.includes('butt'))return 'Select Butt Cap';
+  if(type==='category'){
+    const stage=activeChoicePicker.stage||'category';
+    if(stage==='subcategory')return `${activeChoicePicker.categoryName||'Category'} \u2013 Select Subcategory`;
+    if(stage==='component'){
+      const scope=activeChoicePicker.subcategoryName||activeChoicePicker.categoryName||'';
+      return scope?`${scope} \u2013 Select Component`:'Select Component';
+    }
+    return 'Select Category';
+  }
   return 'Select Component';
 }
 function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
   if(!list)return;
   syncChoicePickerFilterControls();
+  if(activeChoicePicker.type==='category'){
+    renderComponentPickerCascadeOptions(query);
+    return;
+  }
   const records=recordsForChoiceType(activeChoicePicker.type,query);
   const options=activeChoicePicker.type==='blank'?records:records.slice(0,50);
   syncChoicePickerMenuActions();
@@ -7550,6 +7646,29 @@ function renderChoicePickerOptions(query){
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${tools}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup;
+}
+// Renders the Active Build "Add Component" cascade (Category -> Subcategory -> Component). Navigation
+// rows (data-choice-drill) advance the stage; only the final Component row commits a selection.
+function renderComponentPickerCascadeOptions(query){
+  const list=$('choicePickerList');
+  if(!list)return;
+  const options=componentPickerStageOptions(query).slice(0,200);
+  hideChoicePickerMenu();
+  const hasQuery=!!String(query||'').trim();
+  if(!options.length){
+    list.innerHTML=hasQuery
+      ?'<div class="component-sheet__empty">No matching results</div>'
+      :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">◌</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
+    return;
+  }
+  const stage=activeChoicePicker.stage||'category';
+  list.innerHTML=options.map((item)=>{
+    const selected=choiceOptionIsSelected(item);
+    const secondary=stage==='component'?componentPickerLeafSecondaryText(item.record):'';
+    const chevron=item.isDrill?'<span class="component-sheet__row-tools" aria-hidden="true">›</span>':'';
+    const drillAttr=item.isDrill?' data-choice-drill="true"':'';
+    return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr}><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr} type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${chevron}</div>`;
+  }).join('');
 }
 function choiceReferences(type,name){
   const normalized=normalizeNameKey(name);
@@ -7902,7 +8021,13 @@ function openBlankSheet(){
 }
 function openChoicePicker(type,index,openerEl,options){
   ensureChoicePicker();
-  activeChoicePicker={type,index,sizeComponent:String((options&&options.sizeComponent)||'')};
+  activeChoicePicker={
+    type,index,
+    sizeComponent:String((options&&options.sizeComponent)||''),
+    stage:type==='category'?'category':'',
+    categoryName:'',
+    subcategoryName:'',
+  };
   choicePickerCategoryFilter='all';
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
@@ -7918,10 +8043,12 @@ function openChoicePicker(type,index,openerEl,options){
   const addButton=$('choicePickerAdd');
   if(addButton){
     addButton.textContent='Add Component';
-    addButton.hidden=type==='component-size' || type==='subcategory';
+    // The build picker only selects from the existing library; adding/renaming components stays in Components.
+    addButton.hidden=type==='component-size' || type==='subcategory' || type==='category';
   }
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder='Component name';
   syncChoicePickerFilterControls();
+  syncComponentPickerBackButton();
   renderChoicePickerOptions('');
   bindChoicePickerViewportHandlers();
   scheduleChoicePickerViewportSync(40);
@@ -7937,8 +8064,9 @@ function closeComponentSheet(){
   sheet.hidden=true;
   unbindChoicePickerViewportHandlers();
   if($('choicePickerAdd'))$('choicePickerAdd').hidden=false;
-  activeChoicePicker={type:'category',index:-1};
+  activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:''};
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
+  syncComponentPickerBackButton();
   unlockModalLayer({restoreFocus:true});
 }
 function renderQuoteComponents(){
