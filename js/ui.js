@@ -3108,10 +3108,12 @@ function saveStudioComponentTaxonomy(){
 // Applies a taxonomy object fetched from Supabase as the new in-memory/local-cache taxonomy (cloud is the
 // signed-in source of truth once linked); mirrors ensureStudioComponentTaxonomyLoaded's persistence step only.
 function applyCloudComponentTaxonomy(taxonomy){
+  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(taxonomy);
   Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
   saveCustomCategoryNames(allStudioCategoryNames(studioComponentTaxonomyState));
   saveCustomSupplierNames(allStudioSupplierNames(studioComponentTaxonomyState));
+  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
 }
 // Reads the preserved anonymous/pre-migration taxonomy directly (never the active account namespace); used
 // only to offer a first-time migration decision, never to silently seed/overwrite an account's own cache.
@@ -3882,6 +3884,7 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
 
   const recordsSnapshot=Store.get(componentLibraryStorageKey(),[]);
   const taxonomySnapshot=Store.get(componentTaxonomyStorageKey(),null);
+  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
 
   const sourceSubcategoriesSnapshot=(sourceCategory.subcategories||[]).map((item)=>({...item}));
   const destSubcategories=(destCategory.subcategories||[]).map((item)=>({...item}));
@@ -3946,6 +3949,7 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
     studioComponentTaxonomyState=null;
     return {ok:false,movedCount:0,subcategoryCount:0};
   }
+  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   return {ok:true,movedCount,subcategoryCount:sourceSubcategoriesSnapshot.length};
 }
 let categoryMergeDialogState={sourceCategoryId:'',destCategoryId:''};
@@ -4203,8 +4207,10 @@ function studioTaxonomyRenameCategoryByName(fromName,toName){
   const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===fromKey);
   if(!target)return false;
   if(taxonomy.categories.some((item)=>item.id!==target.id && normalizeNameKey(item.name)===normalizeNameKey(next)))return false;
+  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
   target.name=next;
   saveStudioComponentTaxonomy();
+  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   return true;
 }
 function studioTaxonomyRemoveCategoryByName(name){
@@ -4213,8 +4219,10 @@ function studioTaxonomyRemoveCategoryByName(name){
   if(!key)return false;
   const next=taxonomy.categories.filter((item)=>normalizeNameKey(item.name)!==key);
   if(next.length===taxonomy.categories.length)return false;
+  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
   taxonomy.categories=next;
   saveStudioComponentTaxonomy();
+  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   return true;
 }
 function studioTaxonomyRenameSupplierByName(fromName,toName){
@@ -4278,10 +4286,12 @@ function handleStudioTaxonomyAction(action){
     const existing=studioCategoryByName(nextCategoryName);
     if(existing && existing.id!==category.id){openInfoDialog('Category Exists','Another category already uses this name.');return;}
     const oldName=category.name;
+    const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
     category.name=nextCategoryName;
     studioRenameCategoryById(category.id,oldName,nextCategoryName);
     setStudioTaxonomySectionMode('categories','edit');
     saveStudioComponentTaxonomy();
+    archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   }
   if(action==='category-delete'){
     if(!category){openInfoDialog('Select Category','Choose a category to delete.');return;}
@@ -4293,6 +4303,7 @@ function handleStudioTaxonomyAction(action){
       return;
     }
     const deleteNow=()=>{
+      const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
       studioComponentTaxonomyState.categories=studioComponentTaxonomyState.categories.filter((item)=>item.id!==category.id);
       if(studioLibraryPath.categoryId===category.id || studioLibraryEditor.targetId===category.id){
         studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
@@ -4303,6 +4314,7 @@ function handleStudioTaxonomyAction(action){
         studioComponentTaxonomySelection.subcategory='';
       }
       saveStudioComponentTaxonomy();
+      archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
       refreshStudioComponentAndTaxonomyViews();
     };
     openConfirmDialog({
@@ -5039,10 +5051,12 @@ function bindStudioComponentsPanel(){
             renderStudioComponentsLibrary();
             return;
           }
+          const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
           target.name=nextName;
           studioRenameCategoryById(target.id,sourceName,nextName);
           if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceName))studioLibraryPath.categoryId=nextName;
           saveStudioComponentTaxonomy();
+          archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
           studioLibraryEditor={type:'',mode:'',targetName:''};
           refreshStudioComponentAndTaxonomyViews();
           return;
@@ -6294,19 +6308,6 @@ function saveArchivedChoiceNames(type,names){
 function normalizeNameKey(name){
   return String(name||'').trim().toLowerCase();
 }
-function categoryOptionNameOrder(customNames){
-  const defaultOther=DEFAULT_CATEGORY_NAMES.find((name)=>normalizeNameKey(name)==='other')||'Other';
-  const defaultsWithoutOther=DEFAULT_CATEGORY_NAMES.filter((name)=>normalizeNameKey(name)!=='other');
-  const defaultKeys=new Set(DEFAULT_CATEGORY_NAMES.map(normalizeNameKey));
-  const safeCustoms=(customNames||[]).filter((name)=>{
-    const normalized=normalizeNameKey(name);
-    return normalized && normalized!=='other' && !defaultKeys.has(normalized);
-  });
-  return defaultsWithoutOther.concat(safeCustoms,[defaultOther]);
-}
-function allComponentNameOptions(){
-  return categoryOptionNameOrder(getCustomCategoryNames());
-}
 // Active Build "Add Component" is a 3-stage cascade sourced strictly from the current Components
 // library (Category -> Subcategory -> Component), matching the Components screen structure exactly.
 // Non-library pseudo categories (Blank, Freight, Decals, Other, ...) stay one-tap leaves, unchanged.
@@ -6323,18 +6324,71 @@ function componentPickerCategoryHasLibraryRecords(name){
   if(!key)return false;
   return componentPickerRecordsForCategory(name).length>0;
 }
+// True when the authoritative category registry already covers this name - either exactly or via a
+// known singular/plural naming variant (i.e. a renamed or merged twin from CATEGORY_NAME_ALIAS_GROUPS) -
+// so a built-in fallback name can never reintroduce a category that was renamed, merged or deleted in
+// Components. General data-path rule: no per-category special cases.
+function componentPickerRegistryCoversCategory(registryNames,name){
+  const key=normalizeNameKey(name);
+  if(!key)return false;
+  const aliasGroupKey=categoryAliasGroupKeyFor(name);
+  return (Array.isArray(registryNames)?registryNames:[]).some((registryName)=>{
+    if(normalizeNameKey(registryName)===key)return true;
+    return !!aliasGroupKey && categoryAliasGroupKeyFor(registryName)===aliasGroupKey;
+  });
+}
+// Built-in picker defaults that exactly match a registry category (or one of its known naming
+// variants) are suppressed as duplicates. When a Components rename/merge/delete (or a cloud taxonomy
+// pull) leaves such a built-in name uncovered, it is archived so the picker's gap-fill leaves can
+// never resurrect the obsolete category. 'Blank' is exempt: it is a functional build-row entry point
+// that opens the blank-library picker, not just a category label.
+function archiveBuiltInCategoryDefault(name){
+  const key=normalizeNameKey(name);
+  if(!key || isBlankCategory(name))return;
+  const isBuiltIn=DEFAULT_CATEGORY_NAMES.some((defaultName)=>normalizeNameKey(defaultName)===key);
+  if(!isBuiltIn)return;
+  const archived=getArchivedChoiceNames('category');
+  if(archived.some((value)=>normalizeNameKey(value)===key))return;
+  archived.push(String(name||'').trim());
+  saveArchivedChoiceNames('category',archived);
+}
+function builtInCategoryDefaultsCoveredByRegistry(){
+  const registryNames=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  return DEFAULT_CATEGORY_NAMES.filter((name)=>componentPickerRegistryCoversCategory(registryNames,name));
+}
+function archiveNewlyUncoveredBuiltInCategoryDefaults(previouslyCoveredNames){
+  const registryNames=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  (Array.isArray(previouslyCoveredNames)?previouslyCoveredNames:[]).forEach((name)=>{
+    if(!componentPickerRegistryCoversCategory(registryNames,name))archiveBuiltInCategoryDefault(name);
+  });
+}
 function componentPickerCategoryStageOptions(query){
   const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
   const seen=new Set();
   const names=[];
-  categoryOptionNameOrder(getCustomCategoryNames())
-    .concat(studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords()))
-    .forEach((name)=>{
-      const key=normalizeNameKey(name);
-      if(!key || seen.has(key) || archived.has(key))return;
-      seen.add(key);
-      names.push(name);
-    });
+  // Single authoritative source: the current Components category registry - the exact same list the
+  // Components screen renders - so rename/merge/delete in Components propagates here immediately.
+  // The legacy picker archive list never hides a live registry category.
+  const registryNames=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  registryNames.forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(!key || seen.has(key))return;
+    seen.add(key);
+    names.push(name);
+  });
+  // Built-in names survive only as gap-fill quick-add leaves for categories the registry does not
+  // cover at all and that were never explicitly removed - never as a parallel taxonomy that could
+  // resurrect a renamed, merged or deleted category name.
+  DEFAULT_CATEGORY_NAMES.forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(!key || seen.has(key) || archived.has(key))return;
+    // The Blank entry opens the blank-library picker (a functional build row that drives guide
+    // layout), not a taxonomy drill-down, so it stays available even when a "Blanks" product
+    // category covers the alias group in the registry.
+    if(!isBlankCategory(name) && componentPickerRegistryCoversCategory(registryNames,name))return;
+    seen.add(key);
+    names.push(name);
+  });
   // Render-only ordering (never rewrites the stored/insertion order): alphabetical, case-insensitive, whitespace-trimmed.
   names.sort((left,right)=>compareTaxonomyDisplayNames(String(left||'').trim(),String(right||'').trim()));
   const normalized=normalizeNameKey(query);
