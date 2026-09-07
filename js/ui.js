@@ -13,6 +13,8 @@ let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,gu
 const DEFAULT_CATEGORY_NAMES=['Blank','Reel Seat','Grip','Winding Checks','Butt Cap','Hook Keeper','Guides','Tip Top','Thread & Finish','Epoxy','Clear coat','Freight','Decals','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
+// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "—" option).
+const SUBCATEGORY_CLEAR_LABEL='—';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
 const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
@@ -7108,9 +7110,9 @@ function syncComponentRowEditorInputs(index){
   if(supplierTrigger){
     supplierTrigger.textContent=String(row.supplier||'').trim()||'—';
   }
-  const subcategoryInput=document.querySelector(`#quoteComponentsList [data-component-key="subcategory"][data-component-index="${index}"]`);
-  if(subcategoryInput && document.activeElement!==subcategoryInput){
-    subcategoryInput.innerHTML=componentRowSubcategoryOptionsMarkup(componentRowLibraryCategoryName(row),row.subcategory);
+  const subcategoryTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-subcategory-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
+  if(subcategoryTrigger){
+    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'—';
   }
 }
 function defaultChoiceNameSet(type){
@@ -7311,11 +7313,15 @@ function removeCustomChoice(optionName){
   refreshStudioComponentAndTaxonomyViews();
 }
 function getChoiceValue(type,item){
-  return type==='supplier'?(item&&item.supplier)||'':(item&&item.category)||'';
+  if(type==='supplier')return (item&&item.supplier)||'';
+  if(type==='subcategory')return (item&&item.subcategory)||'';
+  return (item&&item.category)||'';
 }
 function setChoiceValue(type,index,value){
   if(!quote.components[index])return false;
-  if(type==='supplier'){
+  if(type==='subcategory'){
+    quote.components[index].subcategory=value;
+  }else if(type==='supplier'){
     quote.components[index].supplier=value;
   }else{
     const wasBlank=isBlankCategory(quote.components[index].category);
@@ -7381,6 +7387,13 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     applyComponentSizeSelection(context.index,context.sizeComponent,selectedName);
     return;
   }
+  if(context.type==='subcategory'){
+    if(context.index<0)return;
+    setChoiceValue('subcategory',context.index,selectedName===SUBCATEGORY_CLEAR_LABEL?'':selectedName);
+    renderQuoteComponents();
+    updateQuoteSummary();
+    return;
+  }
   if(context.index>=0){
     if(context.type==='category' && isBlankCategory(selectedName)){
       openChoicePicker('blank',context.index,document.activeElement);
@@ -7439,6 +7452,14 @@ function applyComponentSizeSelection(index,componentName,size){
 function recordsForChoiceType(type,query){
   if(type==='supplier')return supplierOptionRecords(query).map((record)=>({...record,id:''}));
   if(type==='blank')return blankOptionRecords(query);
+  if(type==='subcategory'){
+    const queryKey=String(query||'').trim().toLowerCase();
+    const row=quote.components[activeChoicePicker.index]||null;
+    return [{name:SUBCATEGORY_CLEAR_LABEL,id:''}]
+      .concat(componentRowSubcategoryNames(componentRowLibraryCategoryName(row),row&&row.subcategory)
+        .filter((name)=>!queryKey || name.toLowerCase().includes(queryKey))
+        .map((name)=>({name,id:''})));
+  }
   if(type==='component-size'){
     const queryKey=String(query||'').trim().toLowerCase();
     const record=findComponentLibraryRecordByName(activeChoicePicker.sizeComponent);
@@ -7487,6 +7508,7 @@ function choiceOptionIsSelected(item){
 function choicePickerTitle(type,index){
   if(type==='blank')return 'Select Blank';
   if(type==='supplier')return 'Select Supplier';
+  if(type==='subcategory')return 'Select Subcategory';
   if(type==='component-size')return 'Select Size';
   const row=quote.components[index]||{};
   const category=normalizeNameKey(row.category);
@@ -7522,7 +7544,7 @@ function renderChoicePickerOptions(query){
     const secondary=choiceOptionSecondaryText(activeChoicePicker.type,item);
     const selected=choiceOptionIsSelected(item);
     const favourite=choiceRecordIsFavourite(activeChoicePicker.type,item);
-    const tools=activeChoicePicker.type==='component-size'
+    const tools=(activeChoicePicker.type==='component-size' || activeChoicePicker.type==='subcategory')
       ? ''
       : `<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">★</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${tools}</div>`;
@@ -7705,23 +7727,24 @@ function componentRowMenuMarkup(item,index){
   const updateAction=componentRowIsEffectivelyEmpty(item)?'':`<button class="component-picker-menu__item" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button>`;
   return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
-function componentRowSubcategoryOptionsMarkup(categoryName,currentSubcategory){
+function componentRowSubcategoryNames(categoryName,currentSubcategory){
   // Resolve the persisted taxonomy category record first (self-heals a stale in-memory taxonomy cache),
   // then reuse the exact same aggregation the Components library screen renders from (taxonomy entries
   // plus any subcategory values present on saved component records) so this can never drift
   // from what the Components library visibly shows for the same category.
   const persistedCategory=studioCategoryByName(categoryName);
   const resolvedCategoryName=persistedCategory?persistedCategory.name:categoryName;
-  const subcategoryNames=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),resolvedCategoryName);
+  const subcategoryNames=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),resolvedCategoryName).slice();
   const currentKey=normalizeNameKey(currentSubcategory);
-  const matchesExisting=subcategoryNames.some((name)=>normalizeNameKey(name)===currentKey);
-  const options=['<option value="">—</option>']
-    .concat(subcategoryNames.map((name)=>`<option value="${escapeAttributeValue(name)}"${normalizeNameKey(name)===currentKey?' selected':''}>${escapeHtml(name)}</option>`));
   // Preserve legacy free-text subcategories not present in the current library taxonomy.
-  if(currentSubcategory && !matchesExisting){
-    options.push(`<option value="${escapeAttributeValue(currentSubcategory)}" selected>${escapeHtml(currentSubcategory)}</option>`);
+  if(currentKey && !subcategoryNames.some((name)=>normalizeNameKey(name)===currentKey)){
+    subcategoryNames.push(String(currentSubcategory));
   }
-  return options.join('');
+  return subcategoryNames;
+}
+function componentRowSubcategoryFieldMarkup(item,index){
+  const value=specificationValue(item&&item.subcategory);
+  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'—')}</span><b>▾</b></button></label>`;
 }
 // Shown only when this line has a snapshot size, or its master component still offers sizes to pick from.
 function componentRowSizeFieldMarkup(item,index){
@@ -7732,7 +7755,7 @@ function componentRowSizeFieldMarkup(item,index){
   return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>▾</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label><label class="quote-component-field quote-component-field--description"><span>Subcategory</span><span class="quote-component-picker__select-wrap"><select data-component-index="${index}" data-component-key="subcategory">${componentRowSubcategoryOptionsMarkup(componentRowLibraryCategoryName(item),item.subcategory)}</select></span></label><label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Specifications" value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Specifications" value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -7868,6 +7891,9 @@ function openComponentSheet(index){
 function openComponentSizePicker(index,componentName){
   openChoicePicker('component-size',index,document.activeElement,{sizeComponent:componentName});
 }
+function openSubcategorySheet(index){
+  openChoicePicker('subcategory',index,document.activeElement);
+}
 function openSupplierSheet(index){
   openChoicePicker('supplier',index,document.activeElement);
 }
@@ -7892,7 +7918,7 @@ function openChoicePicker(type,index,openerEl,options){
   const addButton=$('choicePickerAdd');
   if(addButton){
     addButton.textContent='Add Component';
-    addButton.hidden=type==='component-size';
+    addButton.hidden=type==='component-size' || type==='subcategory';
   }
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder='Component name';
   syncChoicePickerFilterControls();
@@ -10681,6 +10707,10 @@ function bindWorkshopQuoteBuilder(){
       if(action==='open-supplier-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         openChoicePicker('supplier',i,actionButton);
+      }
+      if(action==='open-subcategory-sheet'){
+        const i=Number(actionButton.getAttribute('data-component-index'));
+        openSubcategorySheet(i);
       }
       if(action==='open-size-sheet'){
         const i=Number(actionButton.getAttribute('data-component-index'));
