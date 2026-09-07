@@ -3508,12 +3508,12 @@ function renderStudioComponentDetails(record,options){
     </div>
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
     <input id="studioComponentSupplier" type="hidden" value="${escapeHtml(supplier)}" />
+    <input id="studioComponentBrand" type="hidden" value="${escapeHtml(brand)}" />
+    <input id="studioComponentVariant" type="hidden" value="${escapeHtml(variant)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
       <label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
       <label class="quote-component-field"><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
       <label class="quote-component-field"><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
-      <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" value="${escapeHtml(brand)}" placeholder="—" /></label>
-      <label class="quote-component-field"><span>Variant / Model</span><input id="studioComponentVariant" type="text" value="${escapeHtml(variant)}" placeholder="—" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
