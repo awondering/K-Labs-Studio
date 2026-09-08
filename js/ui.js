@@ -69,7 +69,7 @@ const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
-const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildDetailsBody','workshopBuildSpecsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
+const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildDetailsBody','workshopBuildSpecsBody','quoteComponentsList','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
@@ -5408,6 +5408,12 @@ function collapseWorkshopSections(){
     setWorkshopSectionCollapsed(id,true);
   });
 }
+function expandWorkshopCollapsibleSection(bodyId){
+  if(!WORKSHOP_COLLAPSIBLE_SECTION_IDS.includes(bodyId))return;
+  WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
+    setWorkshopSectionCollapsed(id,id!==bodyId);
+  });
+}
 function workshopHasCustomerData(){
   return !!(
     specificationValue(quote&&quote.customerName)
@@ -9762,12 +9768,29 @@ function positionWorkshopScreenAtTop(){
     },44);
   });
 }
+// Presentation-only reset when landing on an opened build: closes any leftover modal/picker/menu
+// and drops the in-progress component-row editor, without touching saved quote/customer/component data.
+function resetWorkshopEntryTransientState(){
+  expandedComponentRowIndex=-1;
+  closeCurrentBuildActionsMenu();
+  closeSavedBuildRowMenu();
+  closeComponentSheet();
+  closeCustomerFinderSheet();
+  closeViewQuote();
+  closeBlankEditor();
+  const confirmSheetEl=$('confirmSheet');
+  if(confirmSheetEl && !confirmSheetEl.hidden){
+    confirmSheetEl.hidden=true;
+    activeConfirmHandler=null;
+    unlockModalLayer({restoreFocus:false});
+  }
+}
 function openSavedBuildRecord(source,index,options){
   const settings={openAtTop:false,focusSection:'',...(options||{})};
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
   clearQuoteAutosaveTimer();
-  closeCurrentBuildActionsMenu();
+  resetWorkshopEntryTransientState();
   clearLayoutEntryOrigin();
   setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
@@ -9779,10 +9802,13 @@ function openSavedBuildRecord(source,index,options){
   showStudioWorkflow();
   renderWorkshopQuote();
   collapseWorkshopSections();
-  preserveWorkshopQuoteOnEntry=true;
+  // preserveWorkshopQuoteOnEntry also re-expands a section via onScreenChange's focusWorkshopSection
+  // call; only opt into that for the non-openAtTop path, which wants a section auto-focused.
+  preserveWorkshopQuoteOnEntry=!settings.openAtTop;
   goScreen('workshopScreen');
   if(settings.openAtTop){
     // Land on the collapsed build overview rather than forcing the Customer Details form open.
+    collapseWorkshopSections();
     window.setTimeout(()=>{
       positionWorkshopScreenAtTop();
     },36);
@@ -10685,9 +10711,7 @@ function bindWorkshopCollapsibleSections(){
       const wasCollapsed=section.classList.contains('quote-section--collapsed');
       if(!bodyId)return;
       if(wasCollapsed){
-        WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
-          setWorkshopSectionCollapsed(id,id!==bodyId);
-        });
+        expandWorkshopCollapsibleSection(bodyId);
         window.setTimeout(()=>scrollWorkshopSectionIntoView(section),36);
         return;
       }
@@ -10939,7 +10963,11 @@ function bindWorkshopQuoteBuilder(){
   }
   const addComponentBtn=$('addComponentBtn');
   if(addComponentBtn){
-    addComponentBtn.addEventListener('click',()=>{
+    addComponentBtn.addEventListener('click',(event)=>{
+      // Add Component sits next to the collapsible Components toggle; stop it bubbling into that trigger.
+      event.stopPropagation();
+      // Expand Components so the new draft row is visible once the picker closes.
+      expandWorkshopCollapsibleSection('quoteComponentsList');
       // + Add Component opens the existing Active Build Select Category picker on a fresh draft row.
       // Reuse a pending empty draft if one exists; otherwise append one. The cascade's category,
       // subcategory, component, saved-size, pricing and stock logic is fully preserved.
@@ -11529,7 +11557,7 @@ function bindBuildsControls(){
       const action=button.getAttribute('data-build-action')||'';
       const source=button.getAttribute('data-build-source')||'quote';
       const index=Number(button.getAttribute('data-build-index'));
-      if(action==='open'){openSavedBuildRecord(source,index);}
+      if(action==='open'){openSavedBuildRecord(source,index,{openAtTop:true});}
       if(action==='toggle-menu'){
         event.preventDefault();
         event.stopPropagation();

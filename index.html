@@ -544,15 +544,18 @@
           </div>
         </article>
 
-        <article id="workshopComponentsSection" class="quote-section" aria-label="Components">
+        <article id="workshopComponentsSection" class="quote-section quote-section--collapsible quote-section--collapsed" aria-label="Components">
           <div class="quote-section__components-head">
-            <div class="quote-section__components-heading">
-              <h2 class="quote-section__toggle-title quote-section__components-title">Components</h2>
-              <p id="workshopComponentsCountText" class="quote-section__components-count" aria-live="polite">No components yet</p>
-            </div>
+            <button class="quote-section__components-toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="quoteComponentsList">
+              <span class="quote-section__components-heading">
+                <span class="quote-section__toggle-title quote-section__components-title">Components</span>
+                <span id="workshopComponentsCountText" class="quote-section__components-count" aria-live="polite">No components yet</span>
+              </span>
+              <b class="quote-section__chevron" aria-hidden="true">▾</b>
+            </button>
             <button id="addComponentBtn" class="quote-add-component-btn quote-add-component-btn--inline" type="button"><span class="quote-add-component-btn__plus" aria-hidden="true">+</span> Add Component</button>
           </div>
-          <div id="quoteComponentsList" class="quote-components"></div>
+          <div id="quoteComponentsList" class="quote-components quote-section__body"></div>
         </article>
 
         <article id="workshopPricingSection" class="quote-section quote-section--collapsible quote-section--collapsed">

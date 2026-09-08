@@ -1471,6 +1471,20 @@ body.component-sheet-open .workshop-back-to-top{
   padding:14px 15px 12px;
 }
 
+#workshopScreen .quote-section__components-toggle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex:1;
+  min-width:0;
+  border:none;
+  background:transparent;
+  padding:0;
+  text-align:left;
+  cursor:pointer;
+}
+
 #workshopScreen .quote-section__components-heading{
   display:grid;
   gap:3px;
