@@ -3241,6 +3241,17 @@ body.component-sheet-open .workshop-back-to-top{
   background:linear-gradient(180deg,#0a0c0d,#080a0b)!important;
 }
 
+/* Marks whichever of Final Price/Required Profit/Required Margin is the active pricing target -
+   restrained red accent only, no fill/glow, so it reads as emphasis rather than an error state.
+   #workshopScreen + label class keeps specificity above the generic .quote-grid input border rules. */
+#workshopScreen .quote-grid label.quote-field--active-target span{
+  color:rgba(var(--kl-red-rgb),.92);
+}
+
+#workshopScreen .quote-grid label.quote-field--active-target input{
+  border-color:rgba(var(--kl-red-rgb),.4);
+}
+
 .quote-pricing-driver{
   display:grid;
   gap:6px;

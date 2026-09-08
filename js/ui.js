@@ -2232,15 +2232,6 @@ function naturalCustomerPrice(){
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   return componentsSellTotal+labourCost;
 }
-// Recomputes the natural price and reapplies the builder's stored manual adjustment (if any) so Final Customer Price
-// keeps moving by a component's Sell Price after quantity/price edits, without discarding a deliberate rounding override.
-function syncQuotePricing(){
-  enforceSingleSourceComponents();
-  syncQuoteBlankFromComponents();
-  const natural=roundMoney(naturalCustomerPrice());
-  quote.naturalCustomerPrice=natural;
-  quote.finalCustomerPrice=roundMoney(natural+numberOrZero(quote.priceAdjustment));
-}
 // Applies a builder-entered Final Customer Price as a deliberate override, storing only the delta from the natural
 // price so future component/labour changes still move the final price by their own natural amount.
 function applyManualFinalCustomerPrice(value){
@@ -2251,6 +2242,18 @@ function applyManualFinalCustomerPrice(value){
   quote.naturalCustomerPrice=natural;
   quote.priceAdjustment=roundMoney(nextFinal-natural);
   quote.finalCustomerPrice=roundMoney(natural+quote.priceAdjustment);
+  quote.pricingDriver='price';
+}
+// Required Profit/Margin are cost-plus TARGETS (Internal Build Cost, not the sell-price-driven natural price
+// above) - storing the raw entered value here and letting quoteMaths() resolve Final Price from it keeps a
+// single source of truth for the math instead of duplicating the profit/margin formulas in two places.
+function applyManualTargetProfit(value){
+  quote.targetProfit=numberOrZero(value);
+  quote.pricingDriver='profit';
+}
+function applyManualTargetMargin(value){
+  quote.marginPercent=numberOrZero(value);
+  quote.pricingDriver='margin';
 }
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
@@ -2384,7 +2387,7 @@ function newQuoteTemplate(){
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,markupPercent:0,targetProfit:0,finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
+    labourRate:0,labourHours:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
     depositEnabled:false,depositType:'percent',depositValue:0
   };
 }
@@ -2768,6 +2771,11 @@ function normalizeQuoteStatus(value){
 function normalizeDepositType(value){
   return String(value||'').trim().toLowerCase()==='fixed'?'fixed':'percent';
 }
+// 'price' (default) preserves today's natural-sell-price+adjustment behaviour for builds that
+// never touch Required Profit/Margin; 'profit'/'margin' are the restored cost-plus target drivers.
+function normalizePricingDriver(value){
+  return value==='profit' || value==='margin' ? value : 'price';
+}
 function normalizeQuote(inputQuote){
   const base=newQuoteTemplate();
   const merged={...base,...(inputQuote||{})};
@@ -2787,8 +2795,9 @@ function normalizeQuote(inputQuote){
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
-  // pricingDriver is obsolete: any legacy value on inputQuote is ignored here and never copied forward.
-  delete merged.pricingDriver;
+  // pricingDriver tracks which of Final Price/Required Profit/Required Margin the builder most recently
+  // edited, so a later Internal Build Cost change recalculates using their chosen target, not a guess.
+  merged.pricingDriver=normalizePricingDriver(inputQuote&&inputQuote.pricingDriver);
   merged.blankId=String(inputQuote&&inputQuote.blankId||'');
   merged.blankMaker=String(inputQuote&&inputQuote.blankMaker||'');
   merged.blankSeries=String(inputQuote&&inputQuote.blankSeries||'');
@@ -5683,25 +5692,49 @@ function unbindChoicePickerViewportHandlers(){
 }
 function quoteMaths(){
   enforceSingleSourceComponents();
-  syncQuotePricing();
+  syncQuoteBlankFromComponents();
   // Internal Build Cost stays on the Buy Price basis (qty\u00d7Buy Price + labour) - never the customer Sell Price total.
   const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const materialCost=componentTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const internalBuildCost=materialCost+labourCost;
-  const subtotal=numberOrZero(quote.finalCustomerPrice);
   const gstRate=Math.max(0,numberOrZero(quote.gstRate));
   const taxActive=quoteTaxAvailable() && (quote.includeGst!==false);
+  const inclusiveFromExclusive=(exclusive)=>taxActive?exclusive*(100+gstRate)/100:exclusive;
+  const natural=roundMoney(naturalCustomerPrice());
+  quote.naturalCustomerPrice=natural;
+  // pricingDriver is whichever of Final Price/Required Profit/Required Margin the builder most recently
+  // edited; a later Internal Build Cost change (component/labour edit) recalculates from that same target.
+  const driver=normalizePricingDriver(quote.pricingDriver);
+  let finalPrice;
+  if(driver==='profit'){
+    // Required Profit is the net (post-tax) profit target above Internal Build Cost.
+    const exclusiveRevenue=internalBuildCost+numberOrZero(quote.targetProfit);
+    finalPrice=inclusiveFromExclusive(exclusiveRevenue);
+  }else if(driver==='margin'){
+    // True margin (Profit \u00f7 Selling Price), never markup (Profit \u00f7 Cost) - clamp below 100% so the
+    // divide-by-zero/negative-cost blowup at or above 100% margin can never happen.
+    const marginInput=Math.min(99.99,numberOrZero(quote.marginPercent));
+    const exclusiveRevenue=marginInput<100?internalBuildCost/(1-marginInput/100):internalBuildCost;
+    finalPrice=inclusiveFromExclusive(exclusiveRevenue);
+  }else{
+    // 'price' driver: unchanged established path - natural sell-price total plus the builder's stored adjustment.
+    finalPrice=natural+numberOrZero(quote.priceAdjustment);
+  }
+  finalPrice=roundMoney(Math.max(0,finalPrice));
+  quote.finalCustomerPrice=finalPrice;
+  quote.priceAdjustment=roundMoney(finalPrice-natural);
+  const subtotal=finalPrice;
   // Final Customer Price is treated as GST-inclusive: extract tax first so GST is never counted as profit.
   const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
   const exclusiveRevenue=total-gst;
   const profit=exclusiveRevenue-internalBuildCost;
-  const markupPercent=internalBuildCost>0?(profit/internalBuildCost)*100:0;
+  const marginPercent=exclusiveRevenue>0?(profit/exclusiveRevenue)*100:0;
   quote.targetProfit=roundMoney(profit);
-  quote.markupPercent=roundMoney(markupPercent);
-  quote.marginPercent=quote.markupPercent;
-  return{materialCost,labourCost,internalBuildCost,subtotal,gst,total,profit,markupPercent,taxRate:gstRate,naturalCustomerPrice:numberOrZero(quote.naturalCustomerPrice),priceAdjustment:numberOrZero(quote.priceAdjustment)};
+  quote.marginPercent=roundMoney(marginPercent);
+  quote.markupPercent=quote.marginPercent;
+  return{materialCost,labourCost,internalBuildCost,subtotal,gst,total,profit,marginPercent,markupPercent:quote.markupPercent,taxRate:gstRate,naturalCustomerPrice:natural,priceAdjustment:quote.priceAdjustment};
 }
 // Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
 function depositMaths(){
@@ -10794,7 +10827,8 @@ function bindWorkshopQuoteBuilder(){
     el.addEventListener('input',onFieldUpdate);
     el.addEventListener('change',onFieldUpdate);
   });
-  // Final Customer Price is the only editable pricing input - Profit and Markup % are read-only calculated outputs.
+  // Final Customer Price, Required Profit and Required Margin % are all editable pricing targets; whichever
+  // one the builder last touches becomes quote.pricingDriver so a later cost change recalculates from it.
   const quoteTotalInput=$('quoteTotal');
   if(quoteTotalInput){
     const onFinalPriceUpdate=()=>{
@@ -10806,11 +10840,32 @@ function bindWorkshopQuoteBuilder(){
     quoteTotalInput.addEventListener('input',onFinalPriceUpdate);
     quoteTotalInput.addEventListener('change',onFinalPriceUpdate);
   }
+  const quoteProfitInput=$('quoteProfit');
+  if(quoteProfitInput){
+    const onProfitUpdate=()=>{
+      applyManualTargetProfit(quoteProfitInput.value);
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    quoteProfitInput.addEventListener('input',onProfitUpdate);
+    quoteProfitInput.addEventListener('change',onProfitUpdate);
+  }
+  const quoteMarginPercentInput=$('quoteMarginPercent');
+  if(quoteMarginPercentInput){
+    const onMarginUpdate=()=>{
+      applyManualTargetMargin(quoteMarginPercentInput.value);
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    quoteMarginPercentInput.addEventListener('input',onMarginUpdate);
+    quoteMarginPercentInput.addEventListener('change',onMarginUpdate);
+  }
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput){
     const onTaxToggle=()=>{
       quote.includeGst=includeTaxInput.checked;
-      syncQuotePricing();
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -10822,7 +10877,6 @@ function bindWorkshopQuoteBuilder(){
   if(quoteTaxRateInput){
     const onQuoteTaxRateUpdate=()=>{
       quote.gstRate=Math.max(0,numberOrZero(quoteTaxRateInput.value));
-      syncQuotePricing();
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -11144,9 +11198,15 @@ function updateQuoteSummary(){
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
-  // Profit and Markup % are calculated, read-only outputs - always reflect the live math, never user-editable drivers.
-  if($('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
-  if($('quoteMarkupPercent'))$('quoteMarkupPercent').value=numberOrZero(math.markupPercent).toFixed(2);
+  // Required Profit/Margin are editable pricing targets (BUILD "pricingtarget103" restore) - never overwrite
+  // the field the builder is actively typing into, same guard as Final Customer Price/Tax Rate above.
+  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
+  if($('quoteMarginPercent') && document.activeElement!==$('quoteMarginPercent'))$('quoteMarginPercent').value=numberOrZero(math.marginPercent).toFixed(1);
+  const pricingDriver=normalizePricingDriver(quote.pricingDriver);
+  [['quoteTotalField','price'],['quoteProfitField','profit'],['quoteMarginPercentField','margin']].forEach(([id,driverName])=>{
+    const el=$(id);
+    if(el)el.classList.toggle('quote-field--active-target',pricingDriver===driverName);
+  });
   if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
   const taxAvailable=quoteTaxAvailable();
@@ -11160,10 +11220,12 @@ function updateQuoteSummary(){
   if(gstStatus){gstStatus.textContent='';}
   const priceWarningEl=$('quotePriceWarning');
   if(priceWarningEl){
-    const missingCount=componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)<=0).length;
+    // Missing Sell Price only affects the natural sell-price total ('price' driver); it's irrelevant noise
+    // while targeting Required Profit/Margin, which price off Internal Build Cost (Buy Price) instead.
+    const missingCount=pricingDriver==='price'?componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)<=0).length:0;
     priceWarningEl.textContent=missingCount>0?`${missingCount} component${missingCount===1?'':'s'} missing a Sell Price - customer price excludes ${missingCount===1?'it':'them'} until entered.`:'';
   }
-  ['quoteCostBeforeMarginField','quoteMarkupPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
+  ['quoteCostBeforeMarginField','quoteMarginPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
   updateDepositFields();
   updateWorkshopSectionVisibility();
 }
