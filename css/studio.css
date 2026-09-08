@@ -279,7 +279,13 @@ body.home-screen-active #settingsScreen{
 .workshop-back-to-top{
   position:fixed;
   right:max(14px,calc((100vw - var(--app-max-width))/2 + 14px));
-  bottom:calc(108px + var(--safe-bottom));
+  /* --workshop-back-to-top-offset is measured live in js/ui.js from the real bottom-nav depth
+     (already safe-area aware) so this never drifts out of sync with an arbitrary duplicated offset. */
+  bottom:var(--workshop-back-to-top-offset,calc(108px + var(--safe-bottom)));
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
   min-height:40px;
   padding:0 12px;
   border-radius:999px;
@@ -315,6 +321,39 @@ body.home-screen-active #settingsScreen{
 body.component-sheet-open .workshop-back-to-top{
   opacity:0!important;
   pointer-events:none!important;
+}
+
+/* Mobile: compact icon-only control (44-48px touch target) so it reads as a small
+   contextual control, not a large pill competing with the bottom nav or page content. */
+@media (max-width:640px){
+  .workshop-back-to-top{
+    right:14px;
+    width:46px;
+    height:46px;
+    min-height:46px;
+    padding:0;
+    border-radius:50%;
+    border-color:rgba(214,210,200,.18);
+    background:#14171a;
+    color:#cfc9bc;
+    box-shadow:0 4px 10px rgba(0,0,0,.2);
+  }
+
+  .workshop-back-to-top__icon{
+    font-size:18px;
+    line-height:1;
+  }
+
+  .workshop-back-to-top__label{
+    display:none;
+  }
+
+  .workshop-back-to-top:hover,
+  .workshop-back-to-top:focus-visible{
+    border-color:rgba(214,210,200,.32);
+    background:#1a1e21;
+    color:#cfc9bc;
+  }
 }
 
 @media (max-width:720px){

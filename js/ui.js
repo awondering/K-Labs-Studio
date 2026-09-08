@@ -5554,6 +5554,9 @@ function unlockModalLayer(options){
     document.body.classList.remove('component-sheet-open');
     window.scrollTo(0,Math.max(0,lockedScrollY));
     modalLockedScrollY=0;
+    // Restoring scroll position here does not reliably fire a native 'scroll' event (the
+    // page never actually moved while locked), so re-check visibility explicitly.
+    updateWorkshopBackToTopVisibility();
     if(settings.restoreFocus && focusTarget && focusTarget.isConnected!==false && typeof focusTarget.focus==='function'){
       try{
         focusTarget.focus({preventScroll:true});
@@ -8186,6 +8189,9 @@ function renderQuoteComponents(){
     addComponentBtn.hidden=expandedComponentRowIndex>=0;
   }
   shouldAnimateComponentRows=false;
+  // A row opening/closing changes the "is something being edited" state the back-to-top
+  // control must hide for, independent of any scroll change.
+  updateWorkshopBackToTopVisibility();
 }
 function waitForDomRender(callback){
   requestAnimationFrame(()=>requestAnimationFrame(callback));
@@ -10644,9 +10650,12 @@ function scrollWorkshopSectionIntoView(section){
 function updateWorkshopBackToTopVisibility(){
   const button=$('workshopBackToTopBtn');
   if(!button)return;
+  // Keep the control's resting position pinned to the bottom nav's real, safe-area-aware
+  // depth instead of a duplicated guess, so it stays clear of the nav at any screen size.
+  document.documentElement.style.setProperty('--workshop-back-to-top-offset',`${Math.round(bottomOverlayDepth()+10)}px`);
   const workshop=$('workshopScreen');
   const workshopActive=!!(workshop && workshop.classList.contains('active'));
-  const blockedByModal=document.body.classList.contains('component-sheet-open');
+  const blockedByModal=document.body.classList.contains('component-sheet-open') || expandedComponentRowIndex>=0;
   const shouldShow=workshopActive && !blockedByModal && window.scrollY>320;
   button.hidden=!shouldShow;
   button.classList.toggle('is-visible',shouldShow);
