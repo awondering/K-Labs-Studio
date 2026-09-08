@@ -9612,6 +9612,11 @@ function updateWorkshopBuildOverview(){
   if(titleEl){
     titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
   }
+  // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
+  const introHintEl=$('quoteBuilderIntroHint');
+  if(introHintEl)introHintEl.hidden=hasIdentity;
+  const entryActionsEl=$('quoteBuilderEntryActions');
+  if(entryActionsEl)entryActionsEl.hidden=hasIdentity;
   if(!overviewEl)return;
   overviewEl.hidden=!hasIdentity;
   if(!hasIdentity)return;
