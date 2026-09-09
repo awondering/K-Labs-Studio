@@ -456,9 +456,20 @@
     };
   }
 
+  // Composes a readable message from a raw Supabase/PostgREST error (message/details/hint/code), which is
+  // normally swallowed by a generic "could not sync" string - needed to actually see WHY an upload/fetch
+  // failed (RLS rejection, missing constraint, bad payload, etc.) instead of guessing.
+  function supabaseErrorMessage(error, fallback) {
+    if (!error) return fallback;
+    const parts = [error.message, error.details, error.hint, error.code ? `code ${error.code}` : ""].filter(Boolean);
+    return parts.join(" — ") || fallback;
+  }
   async function fetchCloudComponents() {
     const { data, error } = await client().from("components").select("*").eq("user_id", currentUserId);
-    if (error) throw error;
+    if (error) {
+      console.error("[K-Labs Studio] Supabase components fetch failed:", { message: error.message, details: error.details, hint: error.hint, code: error.code });
+      throw new Error(supabaseErrorMessage(error, "Could not read your components from Supabase."));
+    }
     return Array.isArray(data) ? data : [];
   }
   async function fetchCloudTaxonomy() {
@@ -468,9 +479,18 @@
   }
   async function upsertCloudComponents(records) {
     if (!records.length) return;
-    const rows = records.map(recordToRow);
+    // A single upsert() call is one Postgres statement; if two rows in the SAME request share a (user_id,
+    // client_id) conflict key, Postgres rejects the WHOLE batch ("ON CONFLICT DO UPDATE command cannot
+    // affect row a second time in the same command") - a legacy duplicate-id local record would otherwise
+    // fail every other record's upload too. Collapse to one row per client_id (last one wins) first.
+    const byClientId = new Map();
+    records.forEach((record) => { byClientId.set(String(record.id || ""), record); });
+    const rows = Array.from(byClientId.values()).map(recordToRow);
     const { error } = await client().from("components").upsert(rows, { onConflict: "user_id,client_id" });
-    if (error) throw error;
+    if (error) {
+      console.error("[K-Labs Studio] Supabase components upsert failed:", { message: error.message, details: error.details, hint: error.hint, code: error.code, rowCount: rows.length });
+      throw new Error(supabaseErrorMessage(error, "Could not upload components to Supabase."));
+    }
   }
   async function deleteCloudComponents(ids) {
     if (!ids.length) return;
