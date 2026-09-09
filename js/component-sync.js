@@ -270,7 +270,50 @@
     return { categories, suppliers };
   }
 
-  // Sign-in/migration merge: union local + cloud (seeds filtered out), publish the merged library back to
+  // The taxonomy JSON is only half the picture: the UI also harvests category/subcategory names from the
+  // component records themselves (records reference taxonomy by NAME). After a merge, re-harvest from the
+  // merged records so cloud-only subcategories (e.g. ones that were only ever present on another device's
+  // records) are restored into the taxonomy instead of silently disappearing. Never removes entries.
+  function enrichTaxonomyFromRecords(taxonomy, records) {
+    const base = taxonomy && typeof taxonomy === "object" ? taxonomy : {};
+    const categories = Array.isArray(base.categories) ? base.categories.map((category) => ({
+      id: String(category && category.id || ""),
+      name: String(category && category.name || "").trim(),
+      subcategories: Array.isArray(category && category.subcategories) ? category.subcategories.slice() : [],
+    })) : [];
+    const suppliers = Array.isArray(base.suppliers) ? base.suppliers.map((supplier) => ({
+      id: String(supplier && supplier.id || ""),
+      name: String(supplier && supplier.name || "").trim(),
+    })) : [];
+    const newId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    (Array.isArray(records) ? records : []).forEach((record) => {
+      const categoryName = String(record && record.category || "").trim();
+      const categoryKey = normalizeSyncText(categoryName);
+      if (categoryKey) {
+        let category = categories.find((item) => normalizeSyncText(item.name) === categoryKey);
+        if (!category) {
+          category = { id: String(record.categoryId || "") || newId("cat"), name: categoryName, subcategories: [] };
+          categories.push(category);
+        }
+        const subName = String(record && record.subcategory || "").trim();
+        const subKey = normalizeSyncText(subName);
+        if (subKey && !category.subcategories.some((sub) => normalizeSyncText(sub && sub.name) === subKey)) {
+          category.subcategories.push({ id: newId("sub"), name: subName });
+        }
+      }
+      const supplierName = String(record && record.supplier || "").trim();
+      const supplierKey = normalizeSyncText(supplierName);
+      if (supplierKey && !suppliers.some((supplier) => normalizeSyncText(supplier.name) === supplierKey)) {
+        suppliers.push({ id: newId("sup"), name: supplierName });
+      }
+    });
+    return { categories, suppliers };
+  }
+  // Apply the final taxonomy locally (same cache + persistence step as any cloud pull) and push it back up.
+  async function publishTaxonomy(taxonomy) {
+    window.KLABS_UI?.applyCloudComponentTaxonomy?.(taxonomy);
+    await upsertCloudTaxonomy(taxonomy);
+  }
   // Supabase exactly once, persist it locally, and mark the account linked. Only exact absorbed duplicates
   // are ever deleted from cloud. Returns the merged record count.
   async function publishMergedLibrary(cloudRows, cloudTaxonomyRow) {
@@ -296,8 +339,10 @@
     const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
     const cloudTaxonomy = cloudTaxonomyRow && cloudTaxonomyRow.taxonomy ? cloudTaxonomyRow.taxonomy : null;
     const mergedTaxonomy = cloudTaxonomy ? mergeTaxonomies(localTaxonomy, cloudTaxonomy) : localTaxonomy;
-    window.KLABS_UI?.applyCloudComponentTaxonomy?.(mergedTaxonomy);
-    await upsertCloudTaxonomy(mergedTaxonomy);
+    // Recover any category/subcategory that lives only on the merged component records (e.g. subcategories
+    // whose seed records were filtered out of a stale local cache before the taxonomy could harvest them).
+    const finalTaxonomy = enrichTaxonomyFromRecords(mergedTaxonomy, merged);
+    await publishTaxonomy(finalTaxonomy);
     window.Store.set(migrationFlagKey(), true);
     setKnownCloudIds(new Set(merged.map((record) => record.id)));
     setKnownUpdatedFromRows(verify.rows);
@@ -575,6 +620,11 @@
         // never prompt. Pure seeds are dropped locally so a signed-in account starts from its (empty)
         // cloud library instead of re-polluting it.
         if (ownRecords.length) saveLocalRecordsSilently([]);
+        // Component rows may be empty while a taxonomy row still exists - never let the local seed
+        // taxonomy overwrite it; restore the account's real categories/subcategories instead.
+        if (cloudTaxonomyRow && cloudTaxonomyRow.taxonomy) {
+          await publishTaxonomy(enrichTaxonomyFromRecords(cloudTaxonomyRow.taxonomy, []));
+        }
         window.Store.set(migrationFlagKey(), true);
         setKnownCloudIds(new Set());
         setKnownUpdated({});
