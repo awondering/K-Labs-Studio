@@ -3171,6 +3171,7 @@ function renderComponentSyncStatus(state){
   }
   // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification).
   renderComponentSyncDiagnostics();
+  updateImportLocalComponentsButtonVisibility();
   if(actionBtn){
     if(signedIn&&state&&state.status==='migration-pending'){
       actionBtn.hidden=false;
@@ -3229,6 +3230,21 @@ function renderComponentSyncDiagnostics(){
     el.textContent='DIAG ERROR '+(error&&error.message);
   }
 }
+// Manual recovery button visibility: signed in, local anonymous library has records, this account's own
+// namespaced store is empty, and cloud is confirmed empty too (avoids offering a re-import once the
+// account already has its own data, from any source).
+function updateImportLocalComponentsButtonVisibility(){
+  const btn=$('importLocalComponentsBtn');
+  if(!btn)return;
+  const signedIn=!!window.KLABS_ACCOUNT_ID;
+  if(!signedIn){btn.hidden=true;return;}
+  const records=componentLibraryRecords();
+  const anonRecords=readAnonymousComponentLibraryRecords();
+  if(records.length>0||anonRecords.length===0){btn.hidden=true;return;}
+  const counter=window.KLABS_SYNC&&typeof window.KLABS_SYNC.countCloudComponents==='function'?window.KLABS_SYNC.countCloudComponents:null;
+  if(!counter){btn.hidden=true;return;}
+  counter().then((count)=>{btn.hidden=count!==0;}).catch(()=>{btn.hidden=true;});
+}
 function bindComponentSyncControls(){
   const actionBtn=$('componentSyncActionBtn');
   if(!actionBtn||actionBtn.getAttribute('data-component-sync-bound')==='true')return;
@@ -3238,6 +3254,24 @@ function bindComponentSyncControls(){
     if(action==='review')promptComponentLibraryMigration();
     else if(action==='retry')window.KLABS_SYNC?.retry?.();
   });
+  const importBtn=$('importLocalComponentsBtn');
+  if(importBtn&&importBtn.getAttribute('data-import-local-bound')!=='true'){
+    importBtn.setAttribute('data-import-local-bound','true');
+    importBtn.addEventListener('click',()=>{
+      if(importBtn.disabled)return;
+      importBtn.disabled=true;
+      const finish=(result)=>{
+        importBtn.disabled=false;
+        updateImportLocalComponentsButtonVisibility();
+        if(result&&result.ok){
+          openConfirmDialog({title:'Local components imported',message:`${result.count} component${result.count===1?'':'s'} imported • cloud sync complete`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        }else{
+          openConfirmDialog({title:'Import failed',message:(result&&result.error)?result.error:'Could not import your local component library. Local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        }
+      };
+      window.KLABS_SYNC?.importLocalLibrary?.().then(finish).catch((error)=>finish({ok:false,error:error&&error.message}));
+    });
+  }
 }
 function onComponentLibraryMigrationPending(){
   promptComponentLibraryMigration();

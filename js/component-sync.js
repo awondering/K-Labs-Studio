@@ -809,6 +809,50 @@
     getState() {
       return syncState;
     },
+    // Manual recovery action for "Settings -> Account -> IMPORT LOCAL COMPONENTS". Completely separate
+    // from the automatic runMigrationOrSync path above (not touched here): takes the complete anonymous
+    // library as-is (no seed filtering), collapses only true/exact duplicates, writes it into this
+    // account's own namespaced store, verifies that write, uploads to Supabase, verifies the cloud row
+    // count, then rebuilds taxonomy from the imported records. The anonymous source is only ever read.
+    async importLocalLibrary() {
+      if (!currentUserId) return { ok: false, error: "You need to be signed in to import your local component library." };
+      setState({ status: "syncing", error: "" });
+      try {
+        const anonymousRecords = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
+        if (!anonymousRecords.length) {
+          throw new Error("No local components were found to import.");
+        }
+        const deduped = dedupeLocalRecords(anonymousRecords);
+        saveLocalRecordsSilently(deduped);
+        const written = window.componentLibraryRecords().filter((record) => record.id);
+        if (!written.length) {
+          throw new Error("Import failed: components were not saved to your account library.");
+        }
+        await upsertCloudComponents(written);
+        const verify = await verifyCloudComponents(written.map((record) => record.id));
+        if (!verify.ok) {
+          throw new Error(`Cloud upload verification failed: ${verify.missing.length} of ${written.length} component(s) could not be confirmed in your account.`);
+        }
+        if (verify.rows.length !== written.length) {
+          throw new Error(`Cloud row count (${verify.rows.length}) does not match the ${written.length} uploaded component(s).`);
+        }
+        const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
+        const finalTaxonomy = enrichTaxonomyFromRecords(localTaxonomy, written);
+        await publishTaxonomy(finalTaxonomy);
+        window.Store.set(migrationFlagKey(), true);
+        setKnownCloudIds(new Set(written.map((record) => record.id)));
+        setKnownUpdatedFromRows(verify.rows);
+        lastErrorKind = "";
+        setState({ status: "synced", error: "", count: written.length });
+        window.KLABS_UI?.refreshComponentLibraryViews?.();
+        return { ok: true, count: written.length };
+      } catch (error) {
+        console.error("[K-Labs Studio] Manual local component import failed:", error);
+        const message = (error && error.message) || "Could not import your local component library. Local data is unchanged.";
+        setState({ status: "error", error: message });
+        return { ok: false, error: message };
+      }
+    },
     // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): read-only count of this uid's cloud
     // component rows. head+count:'exact' returns no row data and writes nothing.
     async countCloudComponents() {
