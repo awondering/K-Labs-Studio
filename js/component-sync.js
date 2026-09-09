@@ -532,16 +532,22 @@
       const cloudById = new Map(cloudRows.map((row) => [String(row.client_id), row]));
       const localRecords = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
 
-      if (cloudRows.length === 0 && localRecords.length > 0) {
+      // Gate on the FULL local library (unfiltered), not the seed-filtered view: a library made mostly of
+      // edited starter-catalogue rows can otherwise read as "nothing real" here and fall through into the
+      // merge/delete logic below, which would then tombstone-delete every previously-known cloud id.
+      const allOwnRecords = window.componentLibraryRecords().filter((record) => record.id);
+      if (cloudRows.length === 0 && allOwnRecords.length > 0) {
         // Ambiguous empty cloud read on a linked account: never treat it as "everything was deleted".
         // Self-heal by re-pushing this account's own records, with no deletions.
-        await upsertCloudComponents(localRecords);
-        const verify = await verifyCloudComponents(localRecords.map((record) => record.id));
-        if (!verify.ok) throw new Error(`Verification failed: ${verify.missing.length} component(s) missing after upload.`);
-        setKnownCloudIds(new Set(localRecords.map((record) => record.id)));
+        await upsertCloudComponents(allOwnRecords);
+        const verify = await verifyCloudComponents(allOwnRecords.map((record) => record.id));
+        if (!verify.ok || verify.rows.length !== allOwnRecords.length) {
+          throw new Error(`Cloud verification failed: expected ${allOwnRecords.length}, found ${verify.rows.length}.`);
+        }
+        setKnownCloudIds(new Set(allOwnRecords.map((record) => record.id)));
         setKnownUpdatedFromRows(verify.rows);
         lastErrorKind = "";
-        setState({ status: "synced", error: "", count: localRecords.length });
+        setState({ status: "synced", error: "", count: allOwnRecords.length });
         return;
       }
 
@@ -749,18 +755,29 @@
     }
 
     if (cloudRows.length === 0 && linked) {
-      // Previously linked but cloud now reads empty: never treat this as "erase local". Self-heal by
-      // re-pushing this account's own cached namespace (seeds excluded) instead of ever wiping it.
-      const ownRecords = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
-      if (ownRecords.length > 0) {
-        try {
-          await reconcileNow();
-        } catch (error) {
-          console.error("[K-Labs Studio] Could not restore cloud component library from local cache:", error);
-          setState({ status: "error", error: "Your account library looks empty and re-sync failed. Local data is safe." });
-        }
-      } else {
+      // Previously linked but cloud now reads empty: never treat this as "erase local", and never declare
+      // SYNCED without a verified cloud row count. Use the FULL local library here (not seed-filtered) -
+      // matches the RECORDS diagnostic exactly, so a library made of edited starter-catalogue rows is never
+      // silently skipped just because it also matches the seed-detection signature.
+      const ownRecords = window.componentLibraryRecords().filter((record) => record.id);
+      if (ownRecords.length === 0) {
         setState({ status: "synced", error: "", count: 0 });
+        return;
+      }
+      try {
+        await upsertCloudComponents(ownRecords);
+        const verify = await verifyCloudComponents(ownRecords.map((record) => record.id));
+        if (!verify.ok || verify.rows.length !== ownRecords.length) {
+          throw new Error(`Cloud verification failed: expected ${ownRecords.length}, found ${verify.rows.length}.`);
+        }
+        setKnownCloudIds(new Set(ownRecords.map((record) => record.id)));
+        setKnownUpdatedFromRows(verify.rows);
+        lastErrorKind = "";
+        setState({ status: "synced", error: "", count: ownRecords.length });
+      } catch (error) {
+        console.error("[K-Labs Studio] Could not restore cloud component library from local cache:", error);
+        lastErrorKind = "push";
+        setState({ status: "error", error: supabaseErrorMessage(error, "Your account library looks empty in Supabase and re-sync failed. Local data is safe.") });
       }
       return;
     }
