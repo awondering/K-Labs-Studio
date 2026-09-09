@@ -890,8 +890,40 @@
         return { ok: false, error: message };
       }
     },
-    // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): read-only count of this uid's cloud
-    // component rows. head+count:'exact' returns no row data and writes nothing.
+    // Manual recovery action for "Settings -> Account -> SYNC COMPONENTS TO CLOUD". Distinct from
+    // importLocalLibrary: this never touches the anonymous store or taxonomy, and is meant for the case
+    // where the signed-in namespaced RECORDS store is already correct but Supabase upload never landed.
+    // Uploads the existing namespaced records as-is, re-fetches, and only reports SYNCED when the cloud
+    // row count matches. RECORDS/ANON are never written here.
+    async syncRecordsToCloud() {
+      if (!currentUserId) return { ok: false, error: "You need to be signed in to sync your component library." };
+      setState({ status: "syncing", error: "" });
+      try {
+        const records = window.componentLibraryRecords().filter((record) => record.id);
+        if (!records.length) {
+          throw new Error("No account components found to sync.");
+        }
+        await upsertCloudComponents(records);
+        const verify = await verifyCloudComponents(records.map((record) => record.id));
+        if (!verify.ok) {
+          throw new Error(`Cloud upload verification failed: ${verify.missing.length} of ${records.length} component(s) could not be confirmed in your account.`);
+        }
+        if (verify.rows.length !== records.length) {
+          throw new Error(`Cloud row count (${verify.rows.length}) does not match the ${records.length} account component(s).`);
+        }
+        setKnownCloudIds(new Set(records.map((record) => record.id)));
+        setKnownUpdatedFromRows(verify.rows);
+        lastErrorKind = "";
+        setState({ status: "synced", error: "", count: records.length });
+        return { ok: true, count: records.length };
+      } catch (error) {
+        console.error("[K-Labs Studio] Manual sync-to-cloud failed:", error);
+        const message = supabaseErrorMessage(error, "Could not upload your component library to Supabase. Local data is unchanged.");
+        lastErrorKind = "push";
+        setState({ status: "error", error: message });
+        return { ok: false, error: message };
+      }
+    },
     async countCloudComponents() {
       if (!currentUserId || !client()) return null;
       const { count, error } = await client().from("components").select("client_id", { count: "exact", head: true }).eq("user_id", currentUserId);

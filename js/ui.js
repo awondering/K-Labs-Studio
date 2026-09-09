@@ -3172,6 +3172,7 @@ function renderComponentSyncStatus(state){
   // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification).
   renderComponentSyncDiagnostics();
   updateImportLocalComponentsButtonVisibility();
+  updateSyncComponentsToCloudButtonVisibility();
   if(actionBtn){
     if(signedIn&&state&&state.status==='migration-pending'){
       actionBtn.hidden=false;
@@ -3245,6 +3246,19 @@ function updateImportLocalComponentsButtonVisibility(){
   if(!counter){btn.hidden=true;return;}
   counter().then((count)=>{btn.hidden=count!==0;}).catch(()=>{btn.hidden=true;});
 }
+// Retry-upload button visibility: signed in, the account already has its own RECORDS, but the cloud row
+// count is not (yet) equal to that RECORDS count — covers both CLOUD 0 and any partial-upload mismatch.
+function updateSyncComponentsToCloudButtonVisibility(){
+  const btn=$('syncComponentsToCloudBtn');
+  if(!btn)return;
+  const signedIn=!!window.KLABS_ACCOUNT_ID;
+  if(!signedIn){btn.hidden=true;return;}
+  const records=componentLibraryRecords();
+  if(records.length===0){btn.hidden=true;return;}
+  const counter=window.KLABS_SYNC&&typeof window.KLABS_SYNC.countCloudComponents==='function'?window.KLABS_SYNC.countCloudComponents:null;
+  if(!counter){btn.hidden=true;return;}
+  counter().then((count)=>{btn.hidden=count===records.length;}).catch(()=>{btn.hidden=true;});
+}
 function bindComponentSyncControls(){
   const actionBtn=$('componentSyncActionBtn');
   if(!actionBtn||actionBtn.getAttribute('data-component-sync-bound')==='true')return;
@@ -3270,6 +3284,24 @@ function bindComponentSyncControls(){
         }
       };
       window.KLABS_SYNC?.importLocalLibrary?.().then(finish).catch((error)=>finish({ok:false,error:error&&error.message}));
+    });
+  }
+  const syncBtn=$('syncComponentsToCloudBtn');
+  if(syncBtn&&syncBtn.getAttribute('data-sync-to-cloud-bound')!=='true'){
+    syncBtn.setAttribute('data-sync-to-cloud-bound','true');
+    syncBtn.addEventListener('click',()=>{
+      if(syncBtn.disabled)return;
+      syncBtn.disabled=true;
+      const finish=(result)=>{
+        syncBtn.disabled=false;
+        updateSyncComponentsToCloudButtonVisibility();
+        if(result&&result.ok){
+          openConfirmDialog({title:'Components synced',message:`${result.count} component${result.count===1?'':'s'} synced • cloud sync complete`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        }else{
+          openConfirmDialog({title:'Sync failed',message:(result&&result.error)?result.error:'Could not sync your component library to Supabase. Local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        }
+      };
+      window.KLABS_SYNC?.syncRecordsToCloud?.().then(finish).catch((error)=>finish({ok:false,error:error&&error.message}));
     });
   }
 }
