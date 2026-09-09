@@ -7133,41 +7133,42 @@ function starterSeedNameSet(){
   }
   return starterSeedNameSetCache;
 }
-// True only for a PROVABLY untouched starter seed. Pristine seeds are created with an exact notes string, a
-// seed-catalogue name, and NEVER set brand, variant or sizeOptions - so any record the user has touched
-// (a brand, a variant, an Available Size, or any notes edit) is preserved as real user data, even if it
-// shares a name with a seed or still carries the default starter notes verbatim. This is the narrowest
-// reliable distinction that keeps genuine user records while still blocking true seed re-injection.
+// The exact specifications string the seeder writes for a given product (mirrors the seeding call in
+// seedStarterComponentsLibrary). Combined with name + notes it gives a provably-untouched-seed signature.
+function starterSeedSpecificationsFor(name,categoryIndex,productIndex){
+  const definition=STARTER_COMPONENTS_SEED_CATEGORIES[categoryIndex];
+  if(!definition)return '';
+  return categoryIndex===1
+    ?`Guide family: ${productIndex<3?'Alconite':'Fuji Concept'}; frame: ${productIndex%2?'black':'smoke'}; ring: ${productIndex%2?'Alconite':'ceramic'}; set sizes and quantities to be confirmed.`
+    :`${definition.subcategory}; workshop starter specification for ${name}.`;
+}
+// True only for a PROVABLY untouched starter seed. The seeder writes a deterministic name + notes +
+// specifications triple per product; a record is a pristine seed only when all three match exactly AND the
+// user has added nothing beyond the seed (no brand/variant/sizes). Any edit to name, notes or
+// specifications - or any user-supplied brand/variant/size - breaks the match and preserves the record as
+// real user data, so genuine records that merely share a seed name are never rejected.
 function isStarterComponentRecord(record){
   if(!record||typeof record!=='object')return false;
   const name=String(record.name||'').trim();
   const notes=String(record.notes||'').trim();
-  const brand=String(record.brand||'').trim();
-  const variant=String(record.variant||'').trim();
-  const sizeCount=Array.isArray(record.sizeOptions)?record.sizeOptions.length:0;
-  const exactNotes=notes===STARTER_COMPONENT_NOTES_EXACT;
-  const inCatalogue=starterSeedNameSet().has(normalizeNameKey(name));
-  const result=exactNotes && inCatalogue && !brand && !variant && sizeCount===0;
-  // TEMPORARY DIAGNOSTIC: log the first few records with the exact failing condition(s).
-  if(typeof window!=='undefined'){
-    window.__klabsSeedTraceCount=(window.__klabsSeedTraceCount||0);
-    if(window.__klabsSeedTraceCount<5){
-      window.__klabsSeedTraceCount++;
-      console.log('[MIG-TRACE] seed-filter v2',{
-        impl:'build111-v132',
-        name,
-        notes:notes.slice(0,60)+(notes.length>60?'…':''),
-        brand:brand||'(empty)',
-        variant:variant||'(empty)',
-        sizeCount,
-        exactNotes,
-        inCatalogue,
-        isSeed:result,
-        rejectedBy:!exactNotes?'notes-mismatch':!inCatalogue?'not-in-catalogue':brand?'has-brand':variant?'has-variant':sizeCount>0?'has-sizes':'IS-SEED',
-      });
-    }
-  }
-  return result;
+  if(notes!==STARTER_COMPONENT_NOTES_EXACT)return false;
+  const nameKey=normalizeNameKey(name);
+  if(!starterSeedNameSet().has(nameKey))return false;
+  // Match the exact seeded specifications for this product.
+  let seededSpecs='';
+  let found=false;
+  STARTER_COMPONENTS_SEED_CATEGORIES.forEach((definition,categoryIndex)=>{
+    definition.products.forEach((productName,productIndex)=>{
+      if(!found && normalizeNameKey(productName)===nameKey){found=true;seededSpecs=starterSeedSpecificationsFor(productName,categoryIndex,productIndex);}
+    });
+  });
+  if(!found)return false;
+  if(String(record.specifications||'').trim()!==String(seededSpecs||'').trim())return false;
+  // Any user-supplied field beyond the seed defaults means real user data, not a pristine seed.
+  if(String(record.brand||'').trim())return false;
+  if(String(record.variant||'').trim())return false;
+  if(Array.isArray(record.sizeOptions)&&record.sizeOptions.length)return false;
+  return true;
 }
 // First-run seeding is deliberately deferred until AFTER auth/sync has settled (called from
 // js/supabase-client.js): it must never run against the pre-auth bare key on a device that is about to
