@@ -857,9 +857,13 @@
       setState({ status: "local", error: "", count: window.componentLibraryRecords().length });
     },
     retry() {
-      if (!currentUserId) return;
-      // TEMPORARY DIAGNOSTIC (RETRY-TRACE): which path RETRY SYNC actually takes, and as which uid.
-      console.log("[RETRY-TRACE] retry() invoked", { uid: currentUserId, lastErrorKind, linked: isLinked(), path: (lastErrorKind === "push" && isLinked()) ? "reconcileNow" : "runMigrationOrSync" });
+      // TEMPORARY DIAGNOSTIC (RETRY-TRACE): must fire unconditionally on entry, BEFORE any early return,
+      // so a silent no-op (e.g. currentUserId unset) is still visible instead of producing no trace at all.
+      console.log("[RETRY-TRACE] retry() invoked", { uid: currentUserId, lastErrorKind, linked: currentUserId ? isLinked() : false, path: (currentUserId && lastErrorKind === "push" && isLinked()) ? "reconcileNow" : "runMigrationOrSync" });
+      if (!currentUserId) {
+        console.error("[RETRY-TRACE] retry() aborted: no currentUserId (not signed in from the sync layer's perspective)");
+        return;
+      }
       if (lastErrorKind === "push" && isLinked()) {
         reconcileNow().catch((error) => console.error("[K-Labs Studio] Component library sync retry failed:", error));
         return;

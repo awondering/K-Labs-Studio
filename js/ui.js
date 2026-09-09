@@ -3259,15 +3259,25 @@ function updateSyncComponentsToCloudButtonVisibility(){
   if(!counter){btn.hidden=true;return;}
   counter().then((count)=>{btn.hidden=count===records.length;}).catch(()=>{btn.hidden=true;});
 }
-function bindComponentSyncControls(){
-  const actionBtn=$('componentSyncActionBtn');
-  if(!actionBtn||actionBtn.getAttribute('data-component-sync-bound')==='true')return;
-  actionBtn.setAttribute('data-component-sync-bound','true');
-  actionBtn.addEventListener('click',()=>{
-    const action=actionBtn.getAttribute('data-component-sync-action');
+// Document-level delegated click handler for the visible RETRY SYNC/REVIEW SYNC button: querying the
+// CURRENT DOM node at click-time (instead of relying on the specific node reference captured whenever
+// bindComponentSyncControls() first ran) guarantees the click always reaches window.KLABS_SYNC.retry(),
+// even if that direct binding attempt ran before the button existed or the node was later replaced.
+let componentSyncActionDelegationBound=false;
+function bindComponentSyncActionDelegation(){
+  if(componentSyncActionDelegationBound)return;
+  componentSyncActionDelegationBound=true;
+  document.addEventListener('click',(event)=>{
+    const btn=event.target&&event.target.closest?event.target.closest('#componentSyncActionBtn'):null;
+    if(!btn)return;
+    const action=btn.getAttribute('data-component-sync-action');
+    console.log('[RETRY-TRACE] visible retry button clicked',{action});
     if(action==='review')promptComponentLibraryMigration();
     else if(action==='retry')window.KLABS_SYNC?.retry?.();
   });
+}
+function bindComponentSyncControls(){
+  bindComponentSyncActionDelegation();
   const importBtn=$('importLocalComponentsBtn');
   if(importBtn&&importBtn.getAttribute('data-import-local-bound')!=='true'){
     importBtn.setAttribute('data-import-local-bound','true');
