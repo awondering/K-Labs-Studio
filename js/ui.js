@@ -7140,13 +7140,34 @@ function starterSeedNameSet(){
 // reliable distinction that keeps genuine user records while still blocking true seed re-injection.
 function isStarterComponentRecord(record){
   if(!record||typeof record!=='object')return false;
-  if(String(record.notes||'').trim()!==STARTER_COMPONENT_NOTES_EXACT)return false;
-  if(!starterSeedNameSet().has(normalizeNameKey(record.name)))return false;
-  // Any user-supplied field beyond the seed defaults means this is real user data, not a pristine seed.
-  if(String(record.brand||'').trim())return false;
-  if(String(record.variant||'').trim())return false;
-  if(Array.isArray(record.sizeOptions)&&record.sizeOptions.length)return false;
-  return true;
+  const name=String(record.name||'').trim();
+  const notes=String(record.notes||'').trim();
+  const brand=String(record.brand||'').trim();
+  const variant=String(record.variant||'').trim();
+  const sizeCount=Array.isArray(record.sizeOptions)?record.sizeOptions.length:0;
+  const exactNotes=notes===STARTER_COMPONENT_NOTES_EXACT;
+  const inCatalogue=starterSeedNameSet().has(normalizeNameKey(name));
+  const result=exactNotes && inCatalogue && !brand && !variant && sizeCount===0;
+  // TEMPORARY DIAGNOSTIC: log the first few records with the exact failing condition(s).
+  if(typeof window!=='undefined'){
+    window.__klabsSeedTraceCount=(window.__klabsSeedTraceCount||0);
+    if(window.__klabsSeedTraceCount<5){
+      window.__klabsSeedTraceCount++;
+      console.log('[MIG-TRACE] seed-filter v2',{
+        impl:'build111-v132',
+        name,
+        notes:notes.slice(0,60)+(notes.length>60?'…':''),
+        brand:brand||'(empty)',
+        variant:variant||'(empty)',
+        sizeCount,
+        exactNotes,
+        inCatalogue,
+        isSeed:result,
+        rejectedBy:!exactNotes?'notes-mismatch':!inCatalogue?'not-in-catalogue':brand?'has-brand':variant?'has-variant':sizeCount>0?'has-sizes':'IS-SEED',
+      });
+    }
+  }
+  return result;
 }
 // First-run seeding is deliberately deferred until AFTER auth/sync has settled (called from
 // js/supabase-client.js): it must never run against the pre-auth bare key on a device that is about to

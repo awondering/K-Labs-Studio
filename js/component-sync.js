@@ -88,7 +88,21 @@
   // account libraries. Detection lives in js/ui.js (it owns the seed catalogue).
   function isSeedRecord(record) {
     try {
-      return !!window.KLABS_UI?.isStarterComponentRecord?.(record);
+      const fn = window.KLABS_UI?.isStarterComponentRecord;
+      const result = !!fn?.(record);
+      // TEMPORARY DIAGNOSTIC: confirm which implementation reference the sync layer is actually calling.
+      if (typeof window !== "undefined") {
+        window.__klabsSeedCallerCount = (window.__klabsSeedCallerCount || 0);
+        if (window.__klabsSeedCallerCount < 1) {
+          window.__klabsSeedCallerCount++;
+          console.log("[MIG-TRACE] isSeedRecord caller", {
+            hasKlabsUi: !!window.KLABS_UI,
+            hasFn: typeof fn === "function",
+            fnSourceHead: typeof fn === "function" ? String(fn).slice(0, 90) : "(none)",
+          });
+        }
+      }
+      return result;
     } catch (error) {
       return false;
     }
