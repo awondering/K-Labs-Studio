@@ -43,9 +43,9 @@ function wireServiceWorkerUpdateFlow(registration){
 		if(!installing)return;
 		installing.addEventListener('statechange',()=>{
 			if(installing.state!=='installed')return;
-			if(navigator.serviceWorker.controller){
-				promptServiceWorkerUpdate(registration);
-			}
+			// Activate the newest worker immediately; do not gate on an existing controller,
+			// otherwise a worker installed before first control parks in waiting and stale JS stays served.
+			promptServiceWorkerUpdate(registration);
 		});
 	};
 	handleWorkerState();
