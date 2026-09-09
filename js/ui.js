@@ -7076,6 +7076,35 @@ function assignStarterComponentSuppliers(){
   if(changed)saveComponentLibraryRecords(records);
   Store.set(STARTER_COMPONENTS_SUPPLIER_FIX_KEY,true);
 }
+// Marker text present on every untouched starter-library record (also used by assignStarterComponentSuppliers).
+const STARTER_COMPONENT_NOTES_MARKER='Starter library record.';
+let starterSeedNameSetCache=null;
+function starterSeedNameSet(){
+  if(!starterSeedNameSetCache){
+    starterSeedNameSetCache=new Set();
+    STARTER_COMPONENTS_SEED_CATEGORIES.forEach((definition)=>definition.products.forEach((name)=>starterSeedNameSetCache.add(normalizeNameKey(name))));
+  }
+  return starterSeedNameSetCache;
+}
+// True only for records that are unmodified starter-library seeds (seeded name AND untouched starter notes).
+// A seed the user has edited no longer matches and is treated as real user data. Used by the sync layer to
+// keep reproducible defaults out of signed-in account libraries.
+function isStarterComponentRecord(record){
+  if(!record||typeof record!=='object')return false;
+  if(!String(record.notes||'').includes(STARTER_COMPONENT_NOTES_MARKER))return false;
+  return starterSeedNameSet().has(normalizeNameKey(record.name));
+}
+// First-run seeding is deliberately deferred until AFTER auth/sync has settled (called from
+// js/supabase-client.js): it must never run against the pre-auth bare key on a device that is about to
+// sign in, or seeded defaults would be claimed/merged into the account library.
+// Signed-in accounts are never seeded at all - an account library comes from the cloud merge only, so
+// seeds can never reappear once account data exists (or appear at all for a new account).
+function maybeSeedStarterComponents(){
+  if(String(window.KLABS_ACCOUNT_ID||'').trim())return;
+  if(componentLibraryRecords().length>0)return;
+  seedStarterComponentsLibrary();
+  assignStarterComponentSuppliers();
+}
 const CATEGORY_ALIAS_MERGE_STORAGE_KEY='klabs-studio-category-alias-merge-v1';
 function mergeDuplicateCategoryAliasesOnce(){
   if(Store.get(CATEGORY_ALIAS_MERGE_STORAGE_KEY,false))return;
@@ -11975,8 +12004,9 @@ function render(options){
   if(workshopLandingScreen && workshopLandingScreen.classList.contains('active')){renderWorkshopCalculator();}
   if($('homeScreen') && $('homeScreen').classList.contains('active')){homeRodRefreshFromState();}
 }
-seedStarterComponentsLibrary();
-assignStarterComponentSuppliers();
+// NOTE: starter-component seeding no longer runs here at parse time (auth has not resolved yet, so it
+// would always hit the bare anonymous key and pollute later sign-in merges). maybeSeedStarterComponents()
+// is invoked from js/supabase-client.js once the auth/sync state is known.
 cleanupPlaceholderComponentRecordsOnce();
 ensureComponentLibraryIdsBackfilled();
 loadChoicePickerFavourites();
@@ -11991,4 +12021,4 @@ bindSettingsControls();
 bindComponentSyncControls();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
-window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy};
+window.loadBlank=loadBlank;window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents};

@@ -32,7 +32,14 @@ function klabsApplyAuthState(session) {
     if (accountEmail) accountEmail.textContent = "Signed out";
   }
 
-  window.KLABS_SYNC?.onAuthStateChanged?.(session);
+  const syncOutcome = window.KLABS_SYNC?.onAuthStateChanged?.(session);
+  // First-run starter seeding must wait until any merge/sync has fully settled, so seeded defaults can
+  // never be mistaken for pre-existing local data during a sign-in merge.
+  Promise.resolve(syncOutcome)
+    .catch(() => {})
+    .finally(() => {
+      window.KLABS_UI?.maybeSeedStarterComponents?.();
+    });
 
   document.body.classList.remove("klabs-auth-resolving");
 }
