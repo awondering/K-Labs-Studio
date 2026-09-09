@@ -111,19 +111,27 @@
   function claimAnonymousLibraryIfNeeded(cloudHasData) {
     const anonymousRecords = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
     const realRecords = anonymousRecords.filter((record) => !isSeedRecord(record));
+    // TEMPORARY DIAGNOSTIC
+    console.log("[MIG-TRACE] claim enter", {
+      uid: !!currentUserId,
+      hasKlabsUi: !!window.KLABS_UI,
+      hasReadAnon: typeof window.KLABS_UI?.readAnonymousComponentLibraryRecords === "function",
+      anonRaw: anonymousRecords.length,
+      anonReal: realRecords.length,
+      cloudHasData: !!cloudHasData,
+      owner: anonymousLibraryOwner() ? "set" : "unset",
+      ownNamespaceCount: (() => { try { return window.componentLibraryRecords().length; } catch (e) { return "err:" + e.message; } })(),
+    });
     if (!realRecords.length) return;
     const owner = anonymousLibraryOwner();
     if (!owner) {
-      // First authenticated account ever to see this anonymous library: record it as the permanent owner.
       window.Store.set(ANONYMOUS_OWNER_KEY, currentUserId);
     } else if (owner !== currentUserId) {
-      // A different account owns the legacy library; this account must not touch it.
       return;
     }
     const ownNamespaceEmpty = window.componentLibraryRecords().length === 0;
-    if (!ownNamespaceEmpty) return; // this account already has local data - never overwrite it
-    if (!cloudHasData) return; // empty-cloud import is handled (dedupe+upload+verify) in runMigrationOrSync
-    // Cloud already has data: copy the anonymous library in locally; the merge below uploads it.
+    if (!ownNamespaceEmpty) return;
+    if (!cloudHasData) return;
     saveLocalRecordsSilently(realRecords);
     const anonymousTaxonomy = window.KLABS_UI?.readAnonymousComponentTaxonomy?.() || { categories: [], suppliers: [] };
     if (anonymousTaxonomy.categories.length || anonymousTaxonomy.suppliers.length) {
@@ -621,6 +629,8 @@
     }
     claimAnonymousLibraryIfNeeded(cloudRows.length > 0);
     const linked = isLinked();
+    // TEMPORARY DIAGNOSTIC
+    console.log("[MIG-TRACE] runMigrationOrSync after-fetch", { cloudRows: cloudRows.length, linked: linked });
 
     // One-time anonymous -> account import. Runs whenever cloud is empty AND this account's namespace has
     // no real records AND the anonymous store still holds the user's real records - INDEPENDENT of the
@@ -630,13 +640,19 @@
     if (cloudRows.length === 0) {
       const ownReal = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
       const anonymousReal = (window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || []).filter((record) => !isSeedRecord(record));
+      // TEMPORARY DIAGNOSTIC
+      console.log("[MIG-TRACE] import gate", { ownReal: ownReal.length, anonymousReal: anonymousReal.length, enters: ownReal.length === 0 && anonymousReal.length > 0 });
       if (ownReal.length === 0 && anonymousReal.length > 0) {
         try {
           const deduped = dedupeLocalRecords(anonymousReal);
+          console.log("[MIG-TRACE] deduped", { count: deduped.length });
           saveLocalRecordsSilently(deduped);
           const withIds = window.componentLibraryRecords().filter((record) => record.id);
+          console.log("[MIG-TRACE] namespaced after save", { count: withIds.length });
           await upsertCloudComponents(withIds);
+          console.log("[MIG-TRACE] upload attempted", { count: withIds.length });
           const verify = await verifyCloudComponents(withIds.map((record) => record.id));
+          console.log("[MIG-TRACE] verify", { ok: verify.ok, missing: verify.missing.length, cloudRowsNow: verify.rows.length });
           if (!verify.ok) {
             throw new Error(`Migration verification failed: ${verify.missing.length} of ${withIds.length} components could not be confirmed in your account.`);
           }
@@ -652,6 +668,7 @@
           return;
         } catch (error) {
           console.error("[K-Labs Studio] Anonymous component library migration failed:", error);
+          console.log("[MIG-TRACE] import error", { message: error && error.message, code: error && error.code, details: error && error.details, hint: error && error.hint });
           lastErrorKind = "push";
           setState({ status: "error", error: "Could not move your local component library to your account. Local data is unchanged." });
           return;
