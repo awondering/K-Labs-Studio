@@ -622,41 +622,47 @@
     claimAnonymousLibraryIfNeeded(cloudRows.length > 0);
     const linked = isLinked();
 
+    // One-time anonymous -> account import. Runs whenever cloud is empty AND this account's namespace has
+    // no real records AND the anonymous store still holds the user's real records - INDEPENDENT of the
+    // linked flag, because an earlier buggy build could have set linked=true while both stores were empty
+    // (which is exactly the state this migration exists to repair). Dedupe -> write namespaced -> upload
+    // -> verify -> only then link. Anonymous source is never deleted.
+    if (cloudRows.length === 0) {
+      const ownReal = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
+      const anonymousReal = (window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || []).filter((record) => !isSeedRecord(record));
+      if (ownReal.length === 0 && anonymousReal.length > 0) {
+        try {
+          const deduped = dedupeLocalRecords(anonymousReal);
+          saveLocalRecordsSilently(deduped);
+          const withIds = window.componentLibraryRecords().filter((record) => record.id);
+          await upsertCloudComponents(withIds);
+          const verify = await verifyCloudComponents(withIds.map((record) => record.id));
+          if (!verify.ok) {
+            throw new Error(`Migration verification failed: ${verify.missing.length} of ${withIds.length} components could not be confirmed in your account.`);
+          }
+          const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
+          const finalTaxonomy = enrichTaxonomyFromRecords(localTaxonomy, withIds);
+          await publishTaxonomy(finalTaxonomy);
+          window.Store.set(migrationFlagKey(), true);
+          setKnownCloudIds(new Set(withIds.map((record) => record.id)));
+          setKnownUpdatedFromRows(verify.rows);
+          lastErrorKind = "";
+          setState({ status: "synced", error: "", count: withIds.length });
+          window.KLABS_UI?.refreshComponentLibraryViews?.();
+          return;
+        } catch (error) {
+          console.error("[K-Labs Studio] Anonymous component library migration failed:", error);
+          lastErrorKind = "push";
+          setState({ status: "error", error: "Could not move your local component library to your account. Local data is unchanged." });
+          return;
+        }
+      }
+    }
+
     if (cloudRows.length === 0 && !linked) {
       const ownRecords = window.componentLibraryRecords().filter((record) => record.id);
       const realRecords = ownRecords.filter((record) => !isSeedRecord(record));
       if (realRecords.length === 0) {
-        // Namespace AND cloud are both empty. If the anonymous library still holds the user's real records
-        // (e.g. an earlier sign-in marked this account linked while the namespace was still empty), import
-        // them now: dedupe, write to this account's namespace, upload to Supabase, verify, then link.
-        const anonymousReal = (window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || []).filter((record) => !isSeedRecord(record));
-        if (anonymousReal.length > 0) {
-          try {
-            const deduped = dedupeLocalRecords(anonymousReal);
-            saveLocalRecordsSilently(deduped);
-            const withIds = window.componentLibraryRecords().filter((record) => record.id);
-            await upsertCloudComponents(withIds);
-            const verify = await verifyCloudComponents(withIds.map((record) => record.id));
-            if (!verify.ok) {
-              throw new Error(`Migration verification failed: ${verify.missing.length} of ${withIds.length} components could not be confirmed in your account.`);
-            }
-            const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
-            const finalTaxonomy = enrichTaxonomyFromRecords(localTaxonomy, withIds);
-            await publishTaxonomy(finalTaxonomy);
-            window.Store.set(migrationFlagKey(), true);
-            setKnownCloudIds(new Set(withIds.map((record) => record.id)));
-            setKnownUpdatedFromRows(verify.rows);
-            lastErrorKind = "";
-            setState({ status: "synced", error: "", count: withIds.length });
-            window.KLABS_UI?.refreshComponentLibraryViews?.();
-            return;
-          } catch (error) {
-            console.error("[K-Labs Studio] Anonymous component library migration failed:", error);
-            lastErrorKind = "push";
-            setState({ status: "error", error: "Could not move your local component library to your account. Local data is unchanged." });
-            return;
-          }
-        }
         // Nothing anywhere but reproducible seeded/default records (or nothing at all): never upload
         // defaults and never prompt. Pure seeds are dropped locally so a signed-in account starts from its
         // (empty) cloud library instead of re-polluting it.
