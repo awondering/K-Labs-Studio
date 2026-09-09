@@ -1,3 +1,4 @@
+// TEMPORARY DIAGNOSTIC surface: this cache id is also shown in Settings → Account → Sync diagnostics.
 const APP_SHELL_VERSION='build105-v126';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
@@ -77,12 +78,18 @@ self.addEventListener('activate',(event)=>{
 				.filter((key)=>key!==CACHE && (key.startsWith(CACHE_PREFIX) || key.startsWith(LEGACY_CACHE_PREFIX)))
 				.map((key)=>caches.delete(key))))
 			.then(()=>self.clients.claim())
+			.then(()=>self.clients.matchAll({type:'window'}))
+			.then((clients)=>{clients.forEach((client)=>client.postMessage({type:'KLABS_SW_ACTIVE',cache:CACHE}));})
 	);
 });
 
 self.addEventListener('message',(event)=>{
 	if(event.data && event.data.type==='SKIP_WAITING'){
 		self.skipWaiting();
+		return;
+	}
+	if(event.data && event.data.type==='KLABS_SW_QUERY'){
+		event.source && event.source.postMessage({type:'KLABS_SW_ACTIVE',cache:CACHE});
 	}
 });
 

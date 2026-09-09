@@ -3169,6 +3169,8 @@ function renderComponentSyncStatus(state){
     line.hidden=!signedIn;
     if(signedIn)line.textContent=componentSyncStatusLabel(state);
   }
+  // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification).
+  renderComponentSyncDiagnostics();
   if(actionBtn){
     if(signedIn&&state&&state.status==='migration-pending'){
       actionBtn.hidden=false;
@@ -3182,6 +3184,34 @@ function renderComponentSyncStatus(state){
       actionBtn.hidden=true;
       actionBtn.removeAttribute('data-component-sync-action');
     }
+  }
+}
+// TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): read-only snapshot proving which build
+// is executing, which SW cache is active, and exactly what the Components→category→subcategory render
+// source (ensureStudioComponentTaxonomyLoaded + componentLibraryRecords) contains right now.
+function renderComponentSyncDiagnostics(){
+  const el=$('componentSyncDiagnostics');
+  if(!el)return;
+  el.hidden=false;
+  try{
+    const records=componentLibraryRecords();
+    const taxonomy=ensureStudioComponentTaxonomyLoaded();
+    const categories=Array.isArray(taxonomy.categories)?taxonomy.categories:[];
+    const subCount=categories.reduce((total,category)=>total+(Array.isArray(category.subcategories)?category.subcategories.length:0),0);
+    const withSub=records.filter((record)=>normalizeNameKey(record.subcategory));
+    const firstSubs=Array.from(new Set(withSub.map((record)=>String(record.subcategory||'').trim()).filter(Boolean))).slice(0,5);
+    el.textContent=[
+      'BUILD '+(window.KLABS_BUILD_ID||'?'),
+      'SW '+(window.KLABS_SW_CACHE||'?'),
+      'UID '+(window.KLABS_ACCOUNT_ID?'YES':'NO'),
+      'RECORDS '+records.length,
+      'CATS '+categories.length,
+      'SUBS(tax) '+subCount,
+      'RECS-with-SUB '+withSub.length,
+      'SUBS[5]: '+(firstSubs.join(', ')||'(none)'),
+    ].join('\n');
+  }catch(error){
+    el.textContent='DIAG ERROR '+(error&&error.message);
   }
 }
 function bindComponentSyncControls(){
