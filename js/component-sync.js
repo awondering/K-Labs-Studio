@@ -646,19 +646,20 @@
     // TEMPORARY DIAGNOSTIC
     console.log("[MIG-TRACE] runMigrationOrSync after-fetch", { cloudRows: cloudRows.length, linked: linked });
 
-    // One-time anonymous -> account import. Runs whenever cloud is empty AND this account's namespace has
-    // no real records AND the anonymous store still holds the user's real records - INDEPENDENT of the
-    // linked flag, because an earlier buggy build could have set linked=true while both stores were empty
-    // (which is exactly the state this migration exists to repair). Dedupe -> write namespaced -> upload
-    // -> verify -> only then link. Anonymous source is never deleted.
+    // One-time anonymous -> account import. Runs whenever cloud is empty AND this account's namespace is
+    // empty AND the anonymous store holds records - INDEPENDENT of the linked flag, because an earlier
+    // buggy build could have set linked=true while both stores were empty (the exact state this repairs).
+    // This is the user's existing working library, so it is taken AS-IS with NO seed filtering; only true
+    // duplicates are collapsed. Dedupe -> write namespaced -> upload -> verify -> only then link.
+    // The anonymous source is never deleted.
     if (cloudRows.length === 0) {
-      const ownReal = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
-      const anonymousReal = (window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || []).filter((record) => !isSeedRecord(record));
+      const ownCount = window.componentLibraryRecords().length;
+      const anonymousAll = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
       // TEMPORARY DIAGNOSTIC
-      console.log("[MIG-TRACE] import gate", { ownReal: ownReal.length, anonymousReal: anonymousReal.length, enters: ownReal.length === 0 && anonymousReal.length > 0 });
-      if (ownReal.length === 0 && anonymousReal.length > 0) {
+      console.log("[MIG-TRACE] import gate", { ownCount, anonymousAll: anonymousAll.length, enters: ownCount === 0 && anonymousAll.length > 0 });
+      if (ownCount === 0 && anonymousAll.length > 0) {
         try {
-          const deduped = dedupeLocalRecords(anonymousReal);
+          const deduped = dedupeLocalRecords(anonymousAll);
           console.log("[MIG-TRACE] deduped", { count: deduped.length });
           saveLocalRecordsSilently(deduped);
           const withIds = window.componentLibraryRecords().filter((record) => record.id);
