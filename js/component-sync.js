@@ -486,7 +486,26 @@
     const byClientId = new Map();
     records.forEach((record) => { byClientId.set(String(record.id || ""), record); });
     const rows = Array.from(byClientId.values()).map(recordToRow);
-    const { error } = await client().from("components").upsert(rows, { onConflict: "user_id,client_id" });
+    // TEMPORARY DIAGNOSTIC (RETRY-TRACE): confirms the request actually fires, the target table/uid, and
+    // the exact mapped payload shape for one representative row, before the request is sent.
+    console.log("[RETRY-TRACE] upsertCloudComponents request", {
+      table: "components",
+      uid: currentUserId,
+      hasClient: !!client(),
+      rowCount: rows.length,
+      sampleRow: rows[0],
+    });
+    if (!client()) {
+      console.error("[RETRY-TRACE] upsertCloudComponents aborted: no Supabase client available (request never fired)");
+    }
+    const { error, status, statusText } = await client().from("components").upsert(rows, { onConflict: "user_id,client_id" });
+    // TEMPORARY DIAGNOSTIC (RETRY-TRACE): the complete response, success or failure.
+    console.log("[RETRY-TRACE] upsertCloudComponents response", {
+      ok: !error,
+      status,
+      statusText,
+      error: error ? { message: error.message, details: error.details, hint: error.hint, code: error.code } : null,
+    });
     if (error) {
       console.error("[K-Labs Studio] Supabase components upsert failed:", { message: error.message, details: error.details, hint: error.hint, code: error.code, rowCount: rows.length });
       throw new Error(supabaseErrorMessage(error, "Could not upload components to Supabase."));
@@ -536,6 +555,8 @@
       // edited starter-catalogue rows can otherwise read as "nothing real" here and fall through into the
       // merge/delete logic below, which would then tombstone-delete every previously-known cloud id.
       const allOwnRecords = window.componentLibraryRecords().filter((record) => record.id);
+      // TEMPORARY DIAGNOSTIC (RETRY-TRACE): confirms whether the self-heal upload gate is even entered.
+      console.log("[RETRY-TRACE] reconcileNow self-heal gate", { uid: currentUserId, cloudRowCount: cloudRows.length, allOwnRecordsCount: allOwnRecords.length, willUpload: cloudRows.length === 0 && allOwnRecords.length > 0 });
       if (cloudRows.length === 0 && allOwnRecords.length > 0) {
         // Ambiguous empty cloud read on a linked account: never treat it as "everything was deleted".
         // Self-heal by re-pushing this account's own records, with no deletions.
@@ -837,6 +858,8 @@
     },
     retry() {
       if (!currentUserId) return;
+      // TEMPORARY DIAGNOSTIC (RETRY-TRACE): which path RETRY SYNC actually takes, and as which uid.
+      console.log("[RETRY-TRACE] retry() invoked", { uid: currentUserId, lastErrorKind, linked: isLinked(), path: (lastErrorKind === "push" && isLinked()) ? "reconcileNow" : "runMigrationOrSync" });
       if (lastErrorKind === "push" && isLinked()) {
         reconcileNow().catch((error) => console.error("[K-Labs Studio] Component library sync retry failed:", error));
         return;
