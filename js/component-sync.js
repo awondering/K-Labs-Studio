@@ -274,10 +274,17 @@
   // Supabase exactly once, persist it locally, and mark the account linked. Only exact absorbed duplicates
   // are ever deleted from cloud. Returns the merged record count.
   async function publishMergedLibrary(cloudRows, cloudTaxonomyRow) {
-    const localRecords = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
+    const knownIds = getKnownCloudIds();
+    const cloudIds = new Set((Array.isArray(cloudRows) ? cloudRows : []).map((row) => String(row.client_id)));
+    const localRecords = window.componentLibraryRecords()
+      .filter((record) => record.id && !isSeedRecord(record))
+      // Tombstone baseline (the same rule reconcileNow already applies): a local record this context
+      // previously confirmed in cloud, now absent from cloud, was deleted on another device - honour that
+      // deletion instead of letting the stale local copy win the merge and be re-uploaded. Records never
+      // known to cloud (created offline/unlinked; baseline is empty pre-link) are always preserved.
+      .filter((record) => !knownIds.has(record.id) || cloudIds.has(record.id));
     const cloudRecords = (Array.isArray(cloudRows) ? cloudRows : []).map(rowToRecord);
     const { merged, droppedCloudIds } = mergeRecordSets(localRecords, cloudRecords);
-    const cloudIds = new Set((Array.isArray(cloudRows) ? cloudRows : []).map((row) => String(row.client_id)));
     const absorbedIds = Array.from(droppedCloudIds).filter((id) => cloudIds.has(id));
     if (absorbedIds.length) await deleteCloudComponents(absorbedIds);
     if (merged.length) await upsertCloudComponents(merged);
