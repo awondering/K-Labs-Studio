@@ -3195,21 +3195,36 @@ function renderComponentSyncDiagnostics(){
   el.hidden=false;
   try{
     const records=componentLibraryRecords();
+    const anonRecords=readAnonymousComponentLibraryRecords();
     const taxonomy=ensureStudioComponentTaxonomyLoaded();
     const categories=Array.isArray(taxonomy.categories)?taxonomy.categories:[];
     const subCount=categories.reduce((total,category)=>total+(Array.isArray(category.subcategories)?category.subcategories.length:0),0);
     const withSub=records.filter((record)=>normalizeNameKey(record.subcategory));
     const firstSubs=Array.from(new Set(withSub.map((record)=>String(record.subcategory||'').trim()).filter(Boolean))).slice(0,5);
-    el.textContent=[
+    const lines=[
       'BUILD '+(window.KLABS_BUILD_ID||'?'),
       'SW '+(window.KLABS_SW_CACHE||'?'),
       'UID '+(window.KLABS_ACCOUNT_ID?'YES':'NO'),
       'RECORDS '+records.length,
+      'ANON '+anonRecords.length,
+      'CLOUD …',
       'CATS '+categories.length,
       'SUBS(tax) '+subCount,
       'RECS-with-SUB '+withSub.length,
       'SUBS[5]: '+(firstSubs.join(', ')||'(none)'),
-    ].join('\n');
+    ];
+    el.textContent=lines.join('\n');
+    // Fill CLOUD asynchronously without blocking render; rewrites this block only.
+    const counter=window.KLABS_SYNC&&typeof window.KLABS_SYNC.countCloudComponents==='function'?window.KLABS_SYNC.countCloudComponents:null;
+    if(counter && window.KLABS_ACCOUNT_ID){
+      counter().then((count)=>{
+        el.textContent=lines.map((line)=>line.indexOf('CLOUD')===0?('CLOUD '+(count===null||count===undefined?'?':count)):line).join('\n');
+      }).catch(()=>{
+        el.textContent=lines.map((line)=>line.indexOf('CLOUD')===0?'CLOUD ?':line).join('\n');
+      });
+    }else{
+      el.textContent=lines.map((line)=>line.indexOf('CLOUD')===0?'CLOUD n/a':line).join('\n');
+    }
   }catch(error){
     el.textContent='DIAG ERROR '+(error&&error.message);
   }

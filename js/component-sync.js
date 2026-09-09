@@ -730,5 +730,13 @@
     getState() {
       return syncState;
     },
+    // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): read-only count of this uid's cloud
+    // component rows. head+count:'exact' returns no row data and writes nothing.
+    async countCloudComponents() {
+      if (!currentUserId || !client()) return null;
+      const { count, error } = await client().from("components").select("client_id", { count: "exact", head: true }).eq("user_id", currentUserId);
+      if (error) return null;
+      return typeof count === "number" ? count : null;
+    },
   };
 })();
