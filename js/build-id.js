@@ -1,3 +1,3 @@
 // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): single source for the running build id
 // so the Settings diagnostics panel can prove which bundle is actually executing.
-window.KLABS_BUILD_ID='build110-v131';
+window.KLABS_BUILD_ID='build111-v132';

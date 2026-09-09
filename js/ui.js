@@ -7123,6 +7123,8 @@ function assignStarterComponentSuppliers(){
 }
 // Marker text present on every untouched starter-library record (also used by assignStarterComponentSuppliers).
 const STARTER_COMPONENT_NOTES_MARKER='Starter library record.';
+// The exact, complete notes string a pristine seed is created with (must match the seeding call verbatim).
+const STARTER_COMPONENT_NOTES_EXACT='Starter library record. Edit supplier, pricing, stock and specifications for your shop.';
 let starterSeedNameSetCache=null;
 function starterSeedNameSet(){
   if(!starterSeedNameSetCache){
@@ -7131,13 +7133,20 @@ function starterSeedNameSet(){
   }
   return starterSeedNameSetCache;
 }
-// True only for records that are unmodified starter-library seeds (seeded name AND untouched starter notes).
-// A seed the user has edited no longer matches and is treated as real user data. Used by the sync layer to
-// keep reproducible defaults out of signed-in account libraries.
+// True only for a PROVABLY untouched starter seed. Pristine seeds are created with an exact notes string, a
+// seed-catalogue name, and NEVER set brand, variant or sizeOptions - so any record the user has touched
+// (a brand, a variant, an Available Size, or any notes edit) is preserved as real user data, even if it
+// shares a name with a seed or still carries the default starter notes verbatim. This is the narrowest
+// reliable distinction that keeps genuine user records while still blocking true seed re-injection.
 function isStarterComponentRecord(record){
   if(!record||typeof record!=='object')return false;
-  if(!String(record.notes||'').includes(STARTER_COMPONENT_NOTES_MARKER))return false;
-  return starterSeedNameSet().has(normalizeNameKey(record.name));
+  if(String(record.notes||'').trim()!==STARTER_COMPONENT_NOTES_EXACT)return false;
+  if(!starterSeedNameSet().has(normalizeNameKey(record.name)))return false;
+  // Any user-supplied field beyond the seed defaults means this is real user data, not a pristine seed.
+  if(String(record.brand||'').trim())return false;
+  if(String(record.variant||'').trim())return false;
+  if(Array.isArray(record.sizeOptions)&&record.sizeOptions.length)return false;
+  return true;
 }
 // First-run seeding is deliberately deferred until AFTER auth/sync has settled (called from
 // js/supabase-client.js): it must never run against the pre-auth bare key on a device that is about to
