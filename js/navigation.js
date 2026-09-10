@@ -133,8 +133,8 @@ document.addEventListener('click',(event)=>{
 		if(nav.dataset.nav==='workshopLandingScreen' && window.KLABS_UI && typeof window.KLABS_UI.prepareWorkshopLanding==='function'){
 			window.KLABS_UI.prepareWorkshopLanding();
 		}
-		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.enterStudio==='function'){
-			window.KLABS_UI.enterStudio();
+		if(nav.dataset.nav==='workshopScreen' && window.KLABS_UI && typeof window.KLABS_UI.enterStudioFromBottomNav==='function'){
+			window.KLABS_UI.enterStudioFromBottomNav();
 			return;
 		}
 		if(nav.dataset.nav==='buildsScreen' && window.KLABS_UI && typeof window.KLABS_UI.openActiveBuildsList==='function'){

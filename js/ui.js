@@ -1266,6 +1266,18 @@ function enterStudio(){
   }
   goScreen('workshopScreen');
 }
+// Bottom-nav Studio tab ONLY (distinct from enterStudio(), still used by the hamburger menu's Studio item
+// and other contextual "back to Studio" controls, which intentionally resume an in-progress build/view).
+// Tapping the bottom tab must always land on the Studio root, clearing whatever nested view was open
+// (Components category/subcategory/component, Taxonomy, or an open Customer/Build workflow) - no saved
+// data is touched, only which screen/section is currently displayed.
+function enterStudioFromBottomNav(){
+  preserveWorkshopQuoteOnEntry=false;
+  if(studioScreenView!=='landing'){
+    showStudioLanding();
+  }
+  goScreen('workshopScreen');
+}
 // Always leaves any individually open build and shows the full, freshly-loaded Active Builds list.
 // Deliberately does not clear activeSavedBuildRef/quote so contextual workflows (e.g. Edit Guide Layout) can still identify the build.
 function openActiveBuildsList(){
@@ -12227,4 +12239,4 @@ window.ensureStudioComponentTaxonomyLoaded=ensureStudioComponentTaxonomyLoaded;
 // stays the same plain/anonymous local cache key it always was; the sync layer only adds a cloud mirror.
 window.savedBuildRecords=savedBuildRecords;
 window.saveBuildRecords=(records)=>{Store.set('klabs-workshop-builds',Array.isArray(records)?records:[]);};
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
