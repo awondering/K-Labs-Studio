@@ -33,6 +33,10 @@ function klabsApplyAuthState(session) {
   }
 
   const syncOutcome = window.KLABS_SYNC?.onAuthStateChanged?.(session);
+  // Build sync is independent of Component sync above - failures/timing in one must never block the other.
+  Promise.resolve(window.KLABS_BUILD_SYNC?.onAuthStateChanged?.(session)).catch((error) => {
+    console.error("[K-Labs Studio] Build library sync error:", error);
+  });
   // First-run starter seeding must wait until any merge/sync has fully settled, so seeded defaults can
   // never be mistaken for pre-existing local data during a sign-in merge.
   Promise.resolve(syncOutcome)

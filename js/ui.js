@@ -2379,6 +2379,7 @@ function homeRodRefreshFromState(triggerSequence){
 }
 function newQuoteTemplate(){
   return{
+    id:'',
     buildNumber:'',
     quoteNumber:'',
     customerName:'',company:'',phone:'',email:'',buildName:'',estimatedCompletionDate:'',notes:'',
@@ -5483,8 +5484,10 @@ function requestDeleteCurrentBuild(){
     if(action!=='delete')return;
     const records=savedBuildRecords();
     if(target.index<0 || target.index>=records.length)return;
+    const deletedId=specificationValue(records[target.index]&&records[target.index].id);
     records.splice(target.index,1);
     Store.set('klabs-workshop-builds',records);
+    if(deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
     finalizeDeletedCurrentBuild();
   });
 }
@@ -6354,17 +6357,35 @@ function persistBuildRecord(currentQuote){
       savedAt:nowIso,
       updatedAt:nowIso,
     };
+    if(!specificationValue(updatedRecord.id))updatedRecord.id=specificationValue(target.record&&target.record.id)||studioTaxonomyId('build');
     records.splice(target.index,1);
     records.unshift(updatedRecord);
     Store.set('klabs-workshop-builds',records);
     reconcileCommittedBuildStock(previousRecord,updatedRecord);
+    window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(updatedRecord);
     return {source:'build',index:0,record:updatedRecord};
   }
   const record={...persistedQuote,createdAt:nowIso,savedAt:nowIso,updatedAt:nowIso};
+  if(!specificationValue(record.id))record.id=studioTaxonomyId('build');
   records.unshift(record);
   Store.set('klabs-workshop-builds',records);
   reconcileCommittedBuildStock(null,record);
+  window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record);
   return {source:'build',index:0,record};
+}
+// One-time backfill for build records saved before cloud sync existed, so the sync layer always has a
+// stable id to key off; safe to call every load (no-op once every record already has one).
+function ensureBuildRecordIdsBackfilled(){
+  const records=savedBuildRecords();
+  let changed=false;
+  const backfilled=records.map((record)=>{
+    if(record && typeof record==='object' && !specificationValue(record.id)){
+      changed=true;
+      return {...record,id:studioTaxonomyId('build')};
+    }
+    return record;
+  });
+  if(changed)Store.set('klabs-workshop-builds',backfilled);
 }
 function componentStockReferenceKey(component){
   const primaryName=specificationValue(component&&component.description);
@@ -9774,6 +9795,7 @@ function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   }
   records[numericIndex]=nextRecord;
   Store.set(storageKey,records);
+  if(storageKey==='klabs-workshop-builds')window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(nextRecord);
   return true;
 }
 function buildLifecycleLabel(lifecycle){
@@ -9947,8 +9969,10 @@ function deleteSavedEntryBySource(source,index){
   const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
+  const deletedId=specificationValue(records[numericIndex]&&records[numericIndex].id);
   records.splice(numericIndex,1);
   Store.set(storageKey,records);
+  if(storageKey==='klabs-workshop-builds' && deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
   return true;
 }
 function requestDeleteSavedBuildRecord(source,index){
@@ -12161,6 +12185,7 @@ function render(options){
 // is invoked from js/supabase-client.js once the auth/sync state is known.
 cleanupPlaceholderComponentRecordsOnce();
 ensureComponentLibraryIdsBackfilled();
+ensureBuildRecordIdsBackfilled();
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();
@@ -12180,4 +12205,8 @@ window.loadBlank=loadBlank;
 window.componentLibraryRecords=componentLibraryRecords;
 window.saveComponentLibraryRecords=saveComponentLibraryRecords;
 window.ensureStudioComponentTaxonomyLoaded=ensureStudioComponentTaxonomyLoaded;
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents};
+// js/build-sync.js calls these as bare window.* globals the same way (see lesson above) - klabs-workshop-builds
+// stays the same plain/anonymous local cache key it always was; the sync layer only adds a cloud mirror.
+window.savedBuildRecords=savedBuildRecords;
+window.saveBuildRecords=(records)=>{Store.set('klabs-workshop-builds',Array.isArray(records)?records:[]);};
+window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
