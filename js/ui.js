@@ -2925,6 +2925,7 @@ function renderStudioScreenMode(){
   const components=$('studioComponentsPanel');
   const taxonomy=$('studioTaxonomyPanel');
   const returnBtn=$('activeBuildReturnBtn');
+  const customersReturnBtn=$('customerFinderReturnBtn');
   const showWorkflow=studioScreenView==='workflow';
   const showComponents=studioScreenView==='components';
   const showTaxonomy=studioScreenView==='taxonomy';
@@ -2933,7 +2934,11 @@ function renderStudioScreenMode(){
   if(components)components.hidden=!showComponents;
   if(taxonomy)taxonomy.hidden=!showTaxonomy;
   // Only shown when the open workflow is an actual saved Active Build (see activeSavedBuildRef), not a fresh unsaved draft.
-  if(returnBtn)returnBtn.hidden=!(showWorkflow && !!activeSavedBuildRef);
+  const hasActiveBuildRef=!!activeSavedBuildRef;
+  if(returnBtn)returnBtn.hidden=!(showWorkflow && hasActiveBuildRef);
+  // Covers the gap left above: a customer-linked build with no saved Active Build reference yet (e.g. a
+  // fresh New Build draft just created from Find Customer) had no contextual return control at all.
+  if(customersReturnBtn)customersReturnBtn.hidden=!(showWorkflow && !hasActiveBuildRef && !!specificationValue(quote&&quote.customerName));
 }
 function resetStudioScreenScrollMemory(){
   if(window.KLABS_NAV && typeof window.KLABS_NAV.forgetScreenScroll==='function'){
@@ -9857,6 +9862,10 @@ function updateWorkshopBuildOverview(){
   const customerName=specificationValue(quote&&quote.customerName);
   const buildName=specificationValue(quote&&quote.buildName);
   const hasIdentity=!!(customerName||buildName);
+  // Contextual "‹ Customers" return: only when there is no saved Active Build reference yet (that case
+  // already has its own "‹ ACTIVE BUILDS" control) and the current draft actually has a customer attached.
+  const customersReturnBtn=$('customerFinderReturnBtn');
+  if(customersReturnBtn)customersReturnBtn.hidden=!(studioScreenView==='workflow' && !activeSavedBuildRef && !!customerName);
   if(titleEl){
     titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
   }
@@ -11003,6 +11012,15 @@ function bindWorkshopQuoteBuilder(){
     activeBuildReturnBtn.setAttribute('data-active-build-return-bound','true');
     activeBuildReturnBtn.addEventListener('click',()=>{
       openActiveBuildsList();
+    });
+  }
+  const customerFinderReturnBtn=$('customerFinderReturnBtn');
+  if(customerFinderReturnBtn && customerFinderReturnBtn.getAttribute('data-customer-finder-return-bound')!=='true'){
+    customerFinderReturnBtn.setAttribute('data-customer-finder-return-bound','true');
+    customerFinderReturnBtn.addEventListener('click',()=>{
+      // Opens the existing Customer Finder sheet on top of the current screen - the in-progress build/
+      // customer draft is left completely untouched underneath, nothing is saved or discarded.
+      openCustomerFinderSheet('browse');
     });
   }
   const newQuoteEntryBtn=$('newQuoteEntryBtn');
