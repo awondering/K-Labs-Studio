@@ -8240,6 +8240,9 @@ function toggleComponentRow(index,options){
     hideComponentRowMenu();
     renderQuoteComponents();
     updateQuoteSummary();
+    if(options&&options.revealComponentsHeader){
+      revealComponentsSectionHeader();
+    }
     return;
   }
   if(expandedComponentRowIndex>=0 && expandedComponentRowIndex<quote.components.length && componentRowIsEffectivelyEmpty(quote.components[expandedComponentRowIndex])){
@@ -8537,6 +8540,19 @@ function scrollNewComponentRowIntoView(index){
   if(!row)return false;
   const container=nearestScrollableContainer(row);
   scrollElementFullyIntoView(container,row);
+  return true;
+}
+function revealComponentsSectionHeader(){
+  const section=$('workshopComponentsSection');
+  if(!section)return false;
+  if(section.classList.contains('quote-section--collapsed')){
+    expandWorkshopCollapsibleSection('quoteComponentsList');
+  }
+  const head=section.querySelector('.quote-section__components-head');
+  if(!head)return false;
+  waitForDomRender(()=>{
+    scrollElementFullyIntoView(nearestScrollableContainer(head),head);
+  });
   return true;
 }
 function focusNewComponentDescription(index){
@@ -11220,7 +11236,7 @@ function bindWorkshopQuoteBuilder(){
       }
       if(action==='open-row' || action==='close-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
-        toggleComponentRow(i,{focusDescription:false});
+        toggleComponentRow(i,{focusDescription:false,revealComponentsHeader:action==='close-row'});
         return;
       }
       if(action==='open-component-sheet'){
@@ -11275,14 +11291,22 @@ function bindWorkshopQuoteBuilder(){
         const prune=pruneComponentDraftRows(draftIndex);
         draftIndex=prune.preserveIndex;
         changed=prune.changed;
+        if(draftIndex>0){
+          // Newest component always sits directly below + ADD COMPONENT.
+          const [reusedDraft]=quote.components.splice(draftIndex,1);
+          quote.components.unshift(reusedDraft);
+          draftIndex=0;
+          changed=true;
+        }
         if(draftIndex>=0 && quote.components[draftIndex]){
           pendingComponentDraftRows.add(quote.components[draftIndex]);
         }
       }else{
         const prune=pruneComponentDraftRows(-1);
         changed=prune.changed;
-        quote.components.push(defaultComponentRow());
-        draftIndex=quote.components.length-1;
+        // Newest component always sits directly below + ADD COMPONENT.
+        quote.components.unshift(defaultComponentRow());
+        draftIndex=0;
         pendingComponentDraftRows.add(quote.components[draftIndex]);
         shouldAnimateComponentRows=true;
         changed=true;
