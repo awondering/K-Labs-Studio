@@ -8840,8 +8840,10 @@ function saveCustomerRecordFromDraft(draft){
     savedAt:nowIso,
     updatedAt:nowIso,
   });
-  quoteRecords.unshift(savedRecord);
-  Store.set('klabs-workshop-quotes',quoteRecords);
+  if(!specificationValue(savedRecord.id))savedRecord.id=studioTaxonomyId('build');
+  buildRecords.unshift(savedRecord);
+  Store.set('klabs-workshop-builds',buildRecords);
+  window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(savedRecord);
   return savedRecord;
 }
 function handleCreateCustomerFromNewBuildForm(){
