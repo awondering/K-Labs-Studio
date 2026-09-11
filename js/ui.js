@@ -9248,22 +9248,67 @@ function openCustomerEditSheet(customerKey){
 function requestEditCustomer(customerKey){
   openCustomerEditSheet(customerKey);
 }
+function isCustomerOnlyBuildEntry(entry){
+  if(!entry || entry.source!=='build')return false;
+  const record=entry.record&&typeof entry.record==='object'?entry.record:{};
+  if(!specificationValue(record.id))return false;
+  if(specificationValue(record.buildNumber) || specificationValue(record.quoteNumber))return false;
+  if(specificationValue(record.buildName) || specificationValue(record.estimatedCompletionDate))return false;
+  if(specificationValue(record.blankId) || specificationValue(record.blankName) || specificationValue(record.blankMaker) || specificationValue(record.blankSeries) || specificationValue(record.blankSku))return false;
+  const specs=record.buildSpecifications&&typeof record.buildSpecifications==='object'?record.buildSpecifications:{};
+  if(Object.keys(specs).some((key)=>!!specificationValue(specs[key])))return false;
+  const guide=record.guideSpecification&&typeof record.guideSpecification==='object'?record.guideSpecification:{};
+  if(guide.guideCount!==null && guide.guideCount!==undefined)return false;
+  if(guide.firstGuideMm!==null && guide.firstGuideMm!==undefined)return false;
+  if(guide.targetStripperMm!==null && guide.targetStripperMm!==undefined)return false;
+  if(specificationValue(guide.spiralMethod) || specificationValue(guide.spiralDirection))return false;
+  if(Array.isArray(guide.spiralAngles) && guide.spiralAngles.length)return false;
+  const components=Array.isArray(record.components)?record.components:[];
+  if(components.some((item)=>componentRowHasMeaningfulData(item)))return false;
+  if(numberOrZero(record.blankCost)>0 || numberOrZero(record.labourHours)>0 || numberOrZero(record.targetProfit)>0 || numberOrZero(record.finalCustomerPrice)>0)return false;
+  if(numberOrZero(record.marginPercent||record.markupPercent)>0 || numberOrZero(record.priceAdjustment)>0 || numberOrZero(record.naturalCustomerPrice)>0)return false;
+  return true;
+}
 function requestDeleteCustomerGroup(customerKey,customerName){
   const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
-  const refs=group?(group.quotes.length+group.builds.length):0;
-  if(refs>0){
+  const entries=group&&Array.isArray(group.entries)?group.entries:[];
+  const customerOnlyEntries=entries.filter(isCustomerOnlyBuildEntry);
+  const relatedEntries=entries.filter((entry)=>!isCustomerOnlyBuildEntry(entry));
+  if(relatedEntries.length>0){
     openConfirmDialog({
       title:'Delete Customer',
-      message:`This customer has ${refs} build${refs===1?'':'s'}. Delete those records first.`,
+      message:`This customer has ${relatedEntries.length} saved record${relatedEntries.length===1?'':'s'}. Delete those records first.`,
+      actions:[{id:'ok',label:'OK',kind:'primary'}]
+    },()=>{});
+    return;
+  }
+  if(!customerOnlyEntries.length){
+    openConfirmDialog({
+      title:'Delete Customer',
+      message:'No customer-only record was found.',
       actions:[{id:'ok',label:'OK',kind:'primary'}]
     },()=>{});
     return;
   }
   openConfirmDialog({
     title:'Delete Customer',
-    message:`Delete customer ${customerName||'record'}?`,
+    message:`Delete ${customerName||'this customer'}? This removes the customer record only.`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete Customer',kind:'danger'}]
-  },()=>{});
+  },(action)=>{
+    if(action!=='delete')return;
+    const deletedIndexes=new Set(customerOnlyEntries.map((entry)=>Number(entry.index)));
+    customerOnlyEntries
+      .slice()
+      .sort((left,right)=>Number(right.index)-Number(left.index))
+      .forEach((entry)=>{deleteSavedEntryBySource('build',entry.index);});
+    if(activeSavedBuildRef && activeSavedBuildRef.source==='build' && deletedIndexes.has(Number(activeSavedBuildRef.index))){
+      clearActiveSavedBuildRef();
+    }
+    customerFinderSelectedKey='';
+    renderBuilds();
+    renderCustomerFinder();
+    flashWorkshopStatus('Customer deleted');
+  });
 }
 function renderCustomerFinder(){
   const resultHost=$('customerFinderResults');
