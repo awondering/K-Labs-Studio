@@ -870,6 +870,24 @@ body.component-sheet-open .workshop-back-to-top{
   color:#ece6d8;
 }
 
+#settingsScreen .settings-context-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+  margin-top:12px;
+}
+
+#settingsScreen .settings-context-action{
+  min-height:30px;
+  padding:0 10px;
+  font-size:10px;
+  letter-spacing:.08em;
+  color:rgba(214,208,196,.76);
+  border-color:rgba(214,208,196,.16);
+  background:rgba(12,15,17,.72);
+}
+
 #settingsScreen .settings-card .settings-preference-card__head,
 #settingsScreen .settings-card > h2{
   margin-bottom:2px;

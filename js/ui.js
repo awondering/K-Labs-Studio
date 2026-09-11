@@ -12308,10 +12308,44 @@ function bindBusinessProfileControls(){
     nextNumberInput.addEventListener('change',commitNextNumber);
     nextNumberInput.addEventListener('blur',commitNextNumber);
   }
+  const clearBusinessBtn=$('settingsClearBusinessProfileBtn');
+  if(clearBusinessBtn && clearBusinessBtn.getAttribute('data-business-profile-bound')!=='true'){
+    clearBusinessBtn.setAttribute('data-business-profile-bound','true');
+    clearBusinessBtn.addEventListener('click',()=>{
+      openConfirmDialog({
+        title:'Clear Business Profile',
+        message:'Clear your business profile fields?',
+        actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'clear',label:'Clear',kind:'danger'}]
+      },(action)=>{
+        if(action!=='clear')return;
+        ['businessName','contactName','email','phone','website'].forEach((key)=>{businessProfile[key]='';});
+        saveBusinessProfile();
+        syncBusinessProfileControls(true);
+      });
+    });
+  }
+  const clearPaymentBtn=$('settingsClearPaymentDetailsBtn');
+  if(clearPaymentBtn && clearPaymentBtn.getAttribute('data-business-profile-bound')!=='true'){
+    clearPaymentBtn.setAttribute('data-business-profile-bound','true');
+    clearPaymentBtn.addEventListener('click',()=>{
+      openConfirmDialog({
+        title:'Clear Payment Details',
+        message:'Clear saved payment details?',
+        actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'clear',label:'Clear',kind:'danger'}]
+      },(action)=>{
+        if(action!=='clear')return;
+        businessProfile.paymentAccountName='';
+        businessProfile.paymentAccountNumber='';
+        saveBusinessProfile();
+        syncBusinessProfileControls(true);
+      });
+    });
+  }
   syncBusinessProfileControls();
 }
 function bindSettingsControls(){
   bindBusinessProfileControls();
+  const defaultSettings=normalizeStudioSettings({});
   const taxEnabledInput=$('settingsTaxEnabled');
   if(taxEnabledInput){
     taxEnabledInput.checked=activeTaxEnabled();
@@ -12393,6 +12427,39 @@ function bindSettingsControls(){
       defaultLabourRateInput.blur();
     });
   }
+  const restoreTaxDefaultsBtn=$('settingsRestoreTaxDefaultsBtn');
+  if(restoreTaxDefaultsBtn && restoreTaxDefaultsBtn.getAttribute('data-settings-bound')!=='true'){
+    restoreTaxDefaultsBtn.setAttribute('data-settings-bound','true');
+    restoreTaxDefaultsBtn.addEventListener('click',()=>{
+      studioSettings.taxEnabled=defaultSettings.taxEnabled;
+      studioSettings.taxRate=defaultSettings.taxRate;
+      saveStudioSettings();
+      if(taxEnabledInput)taxEnabledInput.checked=activeTaxEnabled();
+      if(taxRateInput)taxRateInput.value=String(activeTaxRate());
+      updateQuoteSummary();
+    });
+  }
+  const restoreLabourDefaultBtn=$('settingsRestoreLabourDefaultBtn');
+  if(restoreLabourDefaultBtn && restoreLabourDefaultBtn.getAttribute('data-settings-bound')!=='true'){
+    restoreLabourDefaultBtn.setAttribute('data-settings-bound','true');
+    restoreLabourDefaultBtn.addEventListener('click',()=>{
+      studioSettings.defaultLabourRate=defaultSettings.defaultLabourRate;
+      saveStudioSettings();
+      if(defaultLabourRateInput)defaultLabourRateInput.value=String(activeDefaultLabourRate());
+    });
+  }
+  const resetStockPreferenceBtn=$('settingsResetStockPreferenceBtn');
+  if(resetStockPreferenceBtn && resetStockPreferenceBtn.getAttribute('data-settings-bound')!=='true'){
+    resetStockPreferenceBtn.setAttribute('data-settings-bound','true');
+    resetStockPreferenceBtn.addEventListener('click',()=>{
+      studioSettings.trackComponentStock=defaultSettings.trackComponentStock;
+      saveStudioSettings();
+      if(trackStockInput)trackStockInput.checked=activeTrackComponentStock();
+      if(studioScreenView==='components'){
+        renderStudioComponentsLibrary();
+      }
+    });
+  }
   document.querySelectorAll('[data-settings-units]').forEach((button)=>{
     if(button.getAttribute('data-settings-bound')==='true')return;
     button.setAttribute('data-settings-bound','true');
@@ -12408,6 +12475,20 @@ function bindSettingsControls(){
       renderBuilds();
     });
   });
+  const resetUnitsBtn=$('settingsResetUnitsBtn');
+  if(resetUnitsBtn && resetUnitsBtn.getAttribute('data-settings-bound')!=='true'){
+    resetUnitsBtn.setAttribute('data-settings-bound','true');
+    resetUnitsBtn.addEventListener('click',()=>{
+      if(studioSettings.measurementUnits===defaultSettings.measurementUnits)return;
+      studioSettings.measurementUnits=defaultSettings.measurementUnits;
+      saveStudioSettings();
+      syncSettingsPreferenceControls();
+      renderMeasurementPresentation();
+      renderWorkshopQuote();
+      renderBlanks();
+      renderBuilds();
+    });
+  }
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
     if(button.getAttribute('data-settings-bound')==='true')return;
     button.setAttribute('data-settings-bound','true');
@@ -12421,6 +12502,18 @@ function bindSettingsControls(){
       renderCustomerFinder();
     });
   });
+  const resetDateFormatBtn=$('settingsResetDateFormatBtn');
+  if(resetDateFormatBtn && resetDateFormatBtn.getAttribute('data-settings-bound')!=='true'){
+    resetDateFormatBtn.setAttribute('data-settings-bound','true');
+    resetDateFormatBtn.addEventListener('click',()=>{
+      if(studioSettings.dateFormat===defaultSettings.dateFormat)return;
+      studioSettings.dateFormat=defaultSettings.dateFormat;
+      saveStudioSettings();
+      syncSettingsPreferenceControls();
+      renderBuilds();
+      renderCustomerFinder();
+    });
+  }
   syncSettingsPreferenceControls();
 }
 function render(options){
