@@ -265,6 +265,7 @@ function normalizeStudioSettings(settings){
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+  window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
 }
 // Business profile is per signed-in account: never share a builder's identity or bank details between Studio users.
 function activeAccountKey(){
@@ -290,6 +291,33 @@ function normalizeBusinessProfile(profile){
 }
 function saveBusinessProfile(){
   Store.set(businessProfileStorageKey(),businessProfile);
+  window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+}
+function readStudioSettingsSyncPayload(){
+  return {
+    studioSettings:normalizeStudioSettings(studioSettings),
+    businessProfile:normalizeBusinessProfile(businessProfile),
+  };
+}
+function applyStudioSettingsSyncPayload(payload){
+  const source=payload&&typeof payload==='object'?payload:{};
+  studioSettings=normalizeStudioSettings(source.studioSettings);
+  businessProfile=normalizeBusinessProfile(source.businessProfile);
+  Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+  Store.set(businessProfileStorageKey(),businessProfile);
+  syncBusinessProfileControls(true);
+  syncSettingsPreferenceControls();
+  if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
+  if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
+  if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
+  renderMeasurementPresentation();
+  updateQuoteSummary();
+  renderBuilds();
+  renderCustomerFinder();
+  if(studioScreenView==='components'){
+    renderStudioComponentsLibrary();
+  }
 }
 function reloadBusinessProfileForAccount(){
   businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
@@ -12618,4 +12646,6 @@ window.ensureStudioComponentTaxonomyLoaded=ensureStudioComponentTaxonomyLoaded;
 // stays the same plain/anonymous local cache key it always was; the sync layer only adds a cloud mirror.
 window.savedBuildRecords=savedBuildRecords;
 window.saveBuildRecords=(records)=>{Store.set('klabs-workshop-builds',Array.isArray(records)?records:[]);};
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
+window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
+window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
