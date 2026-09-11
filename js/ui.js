@@ -95,6 +95,7 @@ let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
 let customerFinderCreateInFlight=false;
 let activeCustomerRenameContext={key:'',existingName:''};
+let activeCustomerEditContext={key:''};
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
@@ -9068,6 +9069,173 @@ function ensureCustomerRenameSheet(){
 function requestRenameCustomer(customerKey,currentName){
   openCustomerRenameSheet(customerKey,currentName);
 }
+const CUSTOMER_EDIT_FIELDS=[
+  {id:'customerEditName',key:'customerName',label:'Customer Name',type:'text',autocomplete:'name'},
+  {id:'customerEditCompany',key:'company',label:'Company',type:'text',autocomplete:'organization'},
+  {id:'customerEditPhone',key:'phone',label:'Phone',type:'text',autocomplete:'tel'},
+  {id:'customerEditEmail',key:'email',label:'Email',type:'email',autocomplete:'email'},
+  {id:'customerEditAddress1',key:'addressLine1',label:'Address Line 1',type:'text',autocomplete:'address-line1',full:true},
+  {id:'customerEditAddress2',key:'addressLine2',label:'Address Line 2',type:'text',autocomplete:'address-line2',full:true},
+  {id:'customerEditSuburb',key:'suburbLocality',label:'Suburb / Locality',type:'text',autocomplete:'address-level3'},
+  {id:'customerEditCity',key:'cityTown',label:'City / Town',type:'text',autocomplete:'address-level2'},
+  {id:'customerEditRegion',key:'regionState',label:'Region / State',type:'text',autocomplete:'address-level1'},
+  {id:'customerEditPostcode',key:'postcode',label:'Postcode / ZIP',type:'text',autocomplete:'postal-code'},
+  {id:'customerEditCountry',key:'country',label:'Country',type:'text',autocomplete:'country-name',full:true},
+  {id:'customerEditNotes',key:'notes',label:'Customer Notes',textarea:true,full:true},
+];
+function customerEditSourceRecord(customerKey){
+  const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
+  return customerFinderPrimaryRecord(group)||{};
+}
+function customerEditValue(record,key){
+  if(key==='company')return specificationValue(record&&record.company||record&&record.companyName||record&&record.businessName);
+  return String(record&&record[key]||'').trim();
+}
+function setCustomerEditValidation(message){
+  const error=$('customerEditNameError');
+  const input=$('customerEditName');
+  const text=String(message||'').trim();
+  if(error){
+    error.textContent=text;
+    error.hidden=!text;
+  }
+  if(input){
+    input.setAttribute('aria-invalid',text?'true':'false');
+  }
+}
+function customerEditDraftFromSheet(){
+  const draft={};
+  CUSTOMER_EDIT_FIELDS.forEach((field)=>{
+    const input=$(field.id);
+    draft[field.key]=String(input&&input.value||'').trim();
+  });
+  return draft;
+}
+function closeCustomerEditSheet(){
+  const sheet=$('customerEditSheet');
+  if(!sheet)return;
+  sheet.hidden=true;
+  activeCustomerEditContext={key:''};
+  setCustomerEditValidation('');
+  unlockModalLayer({restoreFocus:true});
+}
+function applyCustomerEdit(customerKey,draft){
+  const next=draft&&typeof draft==='object'?draft:{};
+  const nextName=String(next.customerName||'').trim();
+  const nowIso=new Date().toISOString();
+  const fields=CUSTOMER_EDIT_FIELDS.map((field)=>field.key);
+  const applyToRecord=(record)=>{
+    fields.forEach((field)=>{record[field]=String(next[field]||'').trim();});
+    record.updatedAt=nowIso;
+  };
+  const quoteRecords=savedQuoteRecords();
+  const buildRecords=savedBuildRecords();
+  let quoteChanged=false;
+  let buildChanged=false;
+  quoteRecords.forEach((record)=>{
+    if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
+      applyToRecord(record);
+      quoteChanged=true;
+    }
+  });
+  buildRecords.forEach((record)=>{
+    if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
+      applyToRecord(record);
+      buildChanged=true;
+    }
+  });
+  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
+  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
+  if(customerFinderMatchesKey(customerKey,quote.customerName)){
+    fields.forEach((field)=>{quote[field]=String(next[field]||'').trim();});
+    quote.updatedAt=nowIso;
+    saveQuoteCurrent();
+    renderWorkshopQuote();
+  }
+  customerFinderSelectedKey=normalizeNameKey(nextName)||'__no_customer__';
+  renderBuilds();
+  renderCustomerFinder();
+  flashWorkshopStatus('Customer saved');
+}
+function submitCustomerEdit(){
+  const draft=customerEditDraftFromSheet();
+  if(!specificationValue(draft.customerName)){
+    setCustomerEditValidation('Enter a customer name to continue.');
+    const input=$('customerEditName');
+    if(input){try{input.focus({preventScroll:true});}catch{input.focus();}}
+    return;
+  }
+  const key=String(activeCustomerEditContext.key||'');
+  closeCustomerEditSheet();
+  applyCustomerEdit(key,draft);
+}
+function ensureCustomerEditSheet(){
+  if($('customerEditSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='customerEditSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  const fieldsMarkup=CUSTOMER_EDIT_FIELDS.map((field)=>{
+    const className=field.full?' class="customer-finder__new-form-full"':'';
+    if(field.textarea){
+      return `<label${className}><span>${escapeHtml(field.label)}</span><textarea id="${escapeAttributeValue(field.id)}" rows="2" placeholder="Notes"></textarea></label>`;
+    }
+    return `<label${className}><span>${escapeHtml(field.label)}</span><input id="${escapeAttributeValue(field.id)}" type="${escapeAttributeValue(field.type||'text')}" placeholder="${escapeAttributeValue(field.label)}" autocomplete="${escapeAttributeValue(field.autocomplete||'off')}" /></label>`;
+  }).join('');
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-customer-edit-action="close"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Edit Customer">
+      <header class="component-sheet__header">
+        <h2>Edit Customer</h2>
+        <button class="component-sheet__close" type="button" data-customer-edit-action="close" aria-label="Close edit customer">×</button>
+      </header>
+      <div class="component-sheet__body">
+        <div class="customer-finder__new-form">${fieldsMarkup}</div>
+        <p id="customerEditNameError" class="customer-finder__field-error" aria-live="polite" hidden></p>
+        <div class="quote-preview-actions">
+          <button class="ghost-action" type="button" data-customer-edit-action="close">Cancel</button>
+          <button class="primary-action" type="button" data-customer-edit-action="save">Save Customer</button>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    const actionEl=event.target.closest('[data-customer-edit-action]');
+    if(!actionEl)return;
+    const action=actionEl.getAttribute('data-customer-edit-action')||'';
+    if(action==='save'){
+      submitCustomerEdit();
+      return;
+    }
+    closeCustomerEditSheet();
+  });
+  const nameInput=sheet.querySelector('#customerEditName');
+  if(nameInput){
+    nameInput.addEventListener('input',()=>{
+      if(specificationValue(nameInput.value))setCustomerEditValidation('');
+    });
+  }
+}
+function openCustomerEditSheet(customerKey){
+  ensureCustomerEditSheet();
+  const sheet=$('customerEditSheet');
+  if(!sheet)return;
+  const source=customerEditSourceRecord(customerKey);
+  activeCustomerEditContext={key:String(customerKey||'')};
+  CUSTOMER_EDIT_FIELDS.forEach((field)=>{
+    const input=$(field.id);
+    if(input)input.value=customerEditValue(source,field.key);
+  });
+  setCustomerEditValidation('');
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
+  const nameInput=$('customerEditName');
+  if(nameInput){try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}}
+}
+function requestEditCustomer(customerKey){
+  openCustomerEditSheet(customerKey);
+}
 function requestDeleteCustomerGroup(customerKey,customerName){
   const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
   const refs=group?(group.quotes.length+group.builds.length):0;
@@ -9141,7 +9309,7 @@ function renderCustomerFinder(){
     notes?`<small>Notes: ${escapeHtml(notes)}</small>`:''
   ].filter(Boolean).join('');
   const jobRows=selected.entries.length?selected.entries.map(customerFinderWorkRowMarkup).join(''):'<div class="component-sheet__empty">No builds found for this customer.</div>';
-  const customerMenu=customerFinderCustomerMenuOpen?`<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Customer actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-detail-action="rename" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Rename Customer</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-detail-action="delete" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Delete Customer</button></div>`:'';
+  const customerMenu=customerFinderCustomerMenuOpen?`<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Customer actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-detail-action="edit" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Edit Customer</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-detail-action="delete" data-customer-key="${escapeHtml(selected.key)}" data-customer-name="${escapeHtml(selected.name)}">Delete Customer</button></div>`:'';
   detailHost.hidden=false;
   detailHost.innerHTML=`
     <header class="customer-finder__detail-head">
@@ -9431,6 +9599,7 @@ function ensureCustomerFinderSheet(){
         return;
       }
       closeCustomerFinderCustomerMenu();
+      if(action==='edit'){requestEditCustomer(customerKey);}
       if(action==='rename'){requestRenameCustomer(customerKey,customerName);}
       if(action==='delete'){requestDeleteCustomerGroup(customerKey,customerName);}
       return;

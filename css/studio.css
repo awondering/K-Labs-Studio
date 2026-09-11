@@ -1960,7 +1960,8 @@ body.component-sheet-open .workshop-back-to-top{
   text-transform:uppercase;
 }
 
-.customer-finder__new-form input{
+.customer-finder__new-form input,
+.customer-finder__new-form textarea{
   width:100%;
   border:1px solid rgba(144,139,130,.34);
   border-radius:10px;
@@ -1970,7 +1971,8 @@ body.component-sheet-open .workshop-back-to-top{
   font:500 13px/1.2 "Manrope",system-ui,sans-serif;
 }
 
-.customer-finder__new-form input:focus{
+.customer-finder__new-form input:focus,
+.customer-finder__new-form textarea:focus{
   outline:none;
   border-color:rgba(206,44,58,.62);
   box-shadow:0 0 0 2px rgba(206,44,58,.18);
@@ -6276,6 +6278,7 @@ textarea::-moz-selection,
 .blank-editor-grid input,
 .blank-editor-grid textarea,
 .customer-finder__new-form input,
+.customer-finder__new-form textarea,
 .component-sheet__search,
 .component-sheet__custom-input,
 #settingsTaxRate,
@@ -6299,6 +6302,7 @@ textarea::-moz-selection,
 .blank-editor-grid input:focus,
 .blank-editor-grid textarea:focus,
 .customer-finder__new-form input:focus,
+.customer-finder__new-form textarea:focus,
 .component-sheet__search:focus,
 .component-sheet__custom-input:focus,
 #settingsTaxRate:focus,
