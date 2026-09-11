@@ -255,11 +255,12 @@ function saveChoicePickerFavourites(){
 function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
+  const defaultLabourRate=Math.max(0,numberOrZero(settings&&settings.defaultLabourRate));
   const trackComponentStock=!!(settings&&settings.trackComponentStock);
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
-  return {taxRate,taxEnabled,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
+  return {taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
 }
 function saveStudioSettings(){
   Store.set(SETTINGS_STORAGE_KEY,studioSettings);
@@ -312,6 +313,14 @@ function activeTaxRate(){
 }
 function activeTaxEnabled(){
   return (studioSettings&&typeof studioSettings.taxEnabled==='boolean')?studioSettings.taxEnabled:true;
+}
+function activeDefaultLabourRate(){
+  return Math.max(0,numberOrZero(studioSettings&&studioSettings.defaultLabourRate));
+}
+// Seeded labour rates must not make an untouched new build look like it already has pricing data.
+function quoteHasCustomLabourRate(candidate){
+  const rate=numberOrZero(candidate&&candidate.labourRate);
+  return rate>0 && rate!==activeDefaultLabourRate();
 }
 function activeTrackComponentStock(){
   return !!(studioSettings&&studioSettings.trackComponentStock);
@@ -2400,7 +2409,7 @@ function newQuoteTemplate(){
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:0,labourHours:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
+    labourRate:activeDefaultLabourRate(),labourHours:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
     depositEnabled:false,depositType:'percent',depositValue:0
   };
 }
@@ -2808,6 +2817,8 @@ function normalizeQuote(inputQuote){
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
+  // A saved build keeps the labour rate it was stored with; only a fresh template carries the global default.
+  merged.labourRate=Math.max(0,numberOrZero(inputQuote&&inputQuote.labourRate));
   // pricingDriver tracks which of Final Price/Required Profit/Required Margin the builder most recently
   // edited, so a later Internal Build Cost change recalculates using their chosen target, not a guess.
   merged.pricingDriver=normalizePricingDriver(inputQuote&&inputQuote.pricingDriver);
@@ -5516,7 +5527,7 @@ function quoteHasMeaningfulDraft(currentQuote){
   const hasCountryOverride=specificationValue(candidate.country)!==specificationValue(baseline.country);
   const hasBuildSpecs=Object.keys(candidate.buildSpecifications||{}).some((key)=>!!specificationValue(candidate.buildSpecifications&&candidate.buildSpecifications[key]));
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
-  const hasCosts=numberOrZero(candidate.blankCost)>0 || numberOrZero(candidate.labourRate)>0 || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0;
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || quoteHasCustomLabourRate(candidate) || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
@@ -5575,7 +5586,7 @@ function workshopHasPricingData(){
   return numberOrZero(quote&&quote.finalCustomerPrice)>0
     || numberOrZero(quote&&quote.targetProfit)>0
     || numberOrZero(quote&&quote.markupPercent)>0
-    || numberOrZero(quote&&quote.labourRate)>0
+    || quoteHasCustomLabourRate(quote)
     || numberOrZero(quote&&quote.labourHours)>0;
 }
 function nextWorkshopSectionId(){
@@ -11435,7 +11446,7 @@ function updateWorkshopSectionVisibility(){
   const actionsSection=$('workshopActionsSection');
   if(!pricingSection || !actionsSection)return;
   const hasComponents=componentRowsForTotals().length>0;
-  const hasPricingValues=numberOrZero(quote&&quote.finalCustomerPrice)>0 || numberOrZero(quote&&quote.targetProfit)>0 || numberOrZero(quote&&quote.markupPercent)>0 || numberOrZero(quote&&quote.labourRate)>0 || numberOrZero(quote&&quote.labourHours)>0;
+  const hasPricingValues=numberOrZero(quote&&quote.finalCustomerPrice)>0 || numberOrZero(quote&&quote.targetProfit)>0 || numberOrZero(quote&&quote.markupPercent)>0 || quoteHasCustomLabourRate(quote) || numberOrZero(quote&&quote.labourHours)>0;
   const hasIdentity=!!(specificationValue(quote&&quote.customerName) || specificationValue(quote&&quote.buildName));
   const showPricing=hasComponents || hasPricingValues;
   const showActions=showPricing || hasIdentity;
@@ -12009,6 +12020,7 @@ function onScreenChange(screenId){
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+    if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
     syncSettingsPreferenceControls();
     syncBusinessProfileControls();
@@ -12130,6 +12142,32 @@ function bindSettingsControls(){
       event.preventDefault();
       saveTaxRate();
       taxRateInput.blur();
+    });
+  }
+  const defaultLabourRateInput=$('settingsDefaultLabourRate');
+  const defaultLabourRateSavedLabel=$('settingsDefaultLabourRateSaved');
+  let defaultLabourRateSavedTimer=null;
+  if(defaultLabourRateInput){
+    defaultLabourRateInput.value=String(activeDefaultLabourRate());
+    const saveDefaultLabourRate=()=>{
+      studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
+      defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
+      saveStudioSettings();
+      if(!defaultLabourRateSavedLabel)return;
+      defaultLabourRateSavedLabel.hidden=false;
+      if(defaultLabourRateSavedTimer){clearTimeout(defaultLabourRateSavedTimer);}
+      defaultLabourRateSavedTimer=window.setTimeout(()=>{
+        defaultLabourRateSavedLabel.hidden=true;
+        defaultLabourRateSavedTimer=null;
+      },1200);
+    };
+    defaultLabourRateInput.addEventListener('change',saveDefaultLabourRate);
+    defaultLabourRateInput.addEventListener('blur',saveDefaultLabourRate);
+    defaultLabourRateInput.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      saveDefaultLabourRate();
+      defaultLabourRateInput.blur();
     });
   }
   document.querySelectorAll('[data-settings-units]').forEach((button)=>{
