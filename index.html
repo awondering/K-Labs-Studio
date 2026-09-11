@@ -659,23 +659,29 @@
 
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><h1>Studio Settings</h1><p class="subtle">Configure pricing, units, and date format.</p></div>
-      <article class="settings-card" aria-label="Pricing and Tax">
-        <header class="settings-preference-card__head">
-          <h3>Pricing &amp; Tax</h3>
-          <p>Set default tax handling and labour rate for Studio pricing calculations.</p>
-        </header>
+      <details class="settings-card settings-preference-card settings-disclosure" id="settingsPricingTaxCard" aria-label="Pricing and Tax">
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Pricing &amp; Tax</span>
+            <span class="settings-disclosure__hint">Set default tax handling and labour rate for Studio pricing calculations.</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
         <div class="settings-row"><span>Tax Enabled (Default)</span><strong><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" checked /><span class="settings-toggle__state-off" aria-hidden="true">OFF</span><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span><span class="settings-toggle__state-on" aria-hidden="true">ON</span></label></strong></div>
         <div class="settings-row"><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
         <div class="settings-row"><span>Default Labour Rate ($/hr)</span><strong><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
-      </article>
+      </details>
       <section class="settings-preferences-shell" aria-label="Preferences">
         <h2 class="settings-preferences-shell__title">Preferences</h2>
 
-        <article class="settings-card settings-preference-card" aria-label="Track Component Stock Preference">
-          <header class="settings-preference-card__head">
-            <h3>Track Component Stock</h3>
-            <p>Keep component quantities updated as parts are used in builds.</p>
-          </header>
+        <details class="settings-card settings-preference-card settings-disclosure" id="settingsTrackStockCard" aria-label="Track Component Stock Preference">
+          <summary class="settings-disclosure__summary">
+            <span class="settings-disclosure__copy">
+              <span class="settings-disclosure__title">Track Component Stock</span>
+              <span class="settings-disclosure__hint">Keep component quantities updated as parts are used in builds.</span>
+            </span>
+            <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+          </summary>
           <div class="settings-toggle-row">
             <label class="settings-toggle" for="settingsTrackComponentStock">
               <input id="settingsTrackComponentStock" type="checkbox" />
@@ -684,29 +690,35 @@
               <span class="settings-toggle__state-on" aria-hidden="true">ON</span>
             </label>
           </div>
-        </article>
+        </details>
 
-        <article class="settings-card settings-preference-card" aria-label="Measurement Units Preference">
-          <header class="settings-preference-card__head">
-            <h3>Measurement Units</h3>
-            <p>Choose how measurements are displayed.</p>
-          </header>
+        <details class="settings-card settings-preference-card settings-disclosure" id="settingsMeasurementUnitsCard" aria-label="Measurement Units Preference">
+          <summary class="settings-disclosure__summary">
+            <span class="settings-disclosure__copy">
+              <span class="settings-disclosure__title">Measurement Units</span>
+              <span class="settings-disclosure__hint">Choose how measurements are displayed.</span>
+            </span>
+            <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+          </summary>
           <div class="settings-choice-row settings-segmented" role="group" aria-label="Measurement Units">
             <button id="settingsUnitsMetric" class="ghost-action settings-choice-button" type="button" data-settings-units="metric" aria-pressed="true">Metric (mm)</button>
             <button id="settingsUnitsImperial" class="ghost-action settings-choice-button" type="button" data-settings-units="imperial" aria-pressed="false">Imperial (in)</button>
           </div>
-        </article>
+        </details>
 
-        <article class="settings-card settings-preference-card" aria-label="Date Format Preference">
-          <header class="settings-preference-card__head">
-            <h3>Date Format</h3>
-            <p>Choose how dates are displayed.</p>
-          </header>
+        <details class="settings-card settings-preference-card settings-disclosure" id="settingsDateFormatCard" aria-label="Date Format Preference">
+          <summary class="settings-disclosure__summary">
+            <span class="settings-disclosure__copy">
+              <span class="settings-disclosure__title">Date Format</span>
+              <span class="settings-disclosure__hint">Choose how dates are displayed.</span>
+            </span>
+            <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+          </summary>
           <div class="settings-choice-row settings-segmented" role="group" aria-label="Date Format">
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="dd/mm/yyyy" aria-pressed="true">DD/MM/YYYY</button>
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="mm/dd/yyyy" aria-pressed="false">MM/DD/YYYY</button>
           </div>
-        </article>
+        </details>
       </section>
       <section class="settings-preferences-shell" aria-label="Business">
         <h2 class="settings-preferences-shell__title">Business</h2>
@@ -757,17 +769,20 @@
           <p class="settings-field-note">Next quote will be <strong id="settingsQuoteNumberPreview">—</strong>. Existing quotes and builds keep the number they were given.</p>
         </details>
       </section>
-      <article class="settings-card settings-preference-card settings-account-card" aria-label="Account">
-        <header class="settings-preference-card__head">
-          <h3>Account</h3>
-          <p id="settingsAccountEmail">Signed in</p>
-        </header>
+      <details class="settings-card settings-preference-card settings-disclosure settings-account-card" id="settingsAccountCard" aria-label="Account">
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Account</span>
+            <span class="settings-disclosure__hint" id="settingsAccountEmail">Signed in</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
         <p id="componentSyncStatusLine" class="settings-field-note" hidden></p>
         <div class="settings-account-card__actions">
           <button id="componentSyncRetryBtn" class="ghost-action settings-signout-button" type="button" hidden>RETRY SYNC</button>
           <button id="settingsSignOut" class="ghost-action settings-signout-button" type="button">Log Out</button>
         </div>
-      </article>
+      </details>
     </section>
 
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>

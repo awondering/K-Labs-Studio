@@ -832,6 +832,14 @@ body.component-sheet-open .workshop-back-to-top{
   transform:rotate(180deg);
 }
 
+/* .settings-disclosure sets gap:0, so non-grid panel content needs its own spacing. */
+#settingsScreen .settings-disclosure > .settings-row,
+#settingsScreen .settings-disclosure > .settings-toggle-row,
+#settingsScreen .settings-disclosure > .settings-choice-row,
+#settingsScreen .settings-disclosure > .settings-account-card__actions{
+  margin-top:12px;
+}
+
 #settingsScreen .settings-field-grid{
   display:grid;
   gap:10px;

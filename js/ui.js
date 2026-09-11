@@ -11887,10 +11887,33 @@ function onScreenChange(screenId){
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
     if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
+    collapseSettingsSections();
     syncSettingsPreferenceControls();
     syncBusinessProfileControls();
   }
   updateWorkshopBackToTopVisibility();
+}
+function settingsSectionElements(){
+  return Array.from(document.querySelectorAll('#settingsScreen .settings-disclosure'));
+}
+function collapseSettingsSections(){
+  settingsSectionElements().forEach((section)=>{section.open=false;});
+}
+// Accordion: opening one section closes the rest. Bound on the container so it also covers the
+// programmatic `open` changes made by collapseSettingsSections().
+function bindSettingsSectionAccordion(){
+  const screen=$('settingsScreen');
+  if(!screen || screen.getAttribute('data-settings-accordion-bound')==='true')return;
+  screen.setAttribute('data-settings-accordion-bound','true');
+  settingsSectionElements().forEach((section)=>{
+    section.addEventListener('toggle',()=>{
+      if(!section.open)return;
+      settingsSectionElements().forEach((other)=>{
+        if(other!==section)other.open=false;
+      });
+    });
+  });
+  collapseSettingsSections();
 }
 function syncSettingsPreferenceControls(){
   document.querySelectorAll('[data-settings-units]').forEach((button)=>{
@@ -12152,6 +12175,7 @@ bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
+bindSettingsSectionAccordion();
 bindComponentSyncRetryControl();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
