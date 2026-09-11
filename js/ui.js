@@ -8961,6 +8961,7 @@ function closeCustomerRenameSheet(){
 function applyCustomerRename(customerKey,nextName){
   const quoteRecords=savedQuoteRecords();
   const buildRecords=savedBuildRecords();
+  const changedBuildRecords=[];
   let quoteChanged=false;
   let buildChanged=false;
   quoteRecords.forEach((record)=>{
@@ -8972,11 +8973,15 @@ function applyCustomerRename(customerKey,nextName){
   buildRecords.forEach((record)=>{
     if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
       record.customerName=nextName;
+      changedBuildRecords.push(record);
       buildChanged=true;
     }
   });
   if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
-  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
+  if(buildChanged){
+    Store.set('klabs-workshop-builds',buildRecords);
+    changedBuildRecords.forEach((record)=>window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record));
+  }
   if(customerFinderMatchesKey(customerKey,quote.customerName)){
     quote.customerName=nextName;
     saveQuoteCurrent();
@@ -9130,6 +9135,7 @@ function applyCustomerEdit(customerKey,draft){
   };
   const quoteRecords=savedQuoteRecords();
   const buildRecords=savedBuildRecords();
+  const changedBuildRecords=[];
   let quoteChanged=false;
   let buildChanged=false;
   quoteRecords.forEach((record)=>{
@@ -9141,11 +9147,15 @@ function applyCustomerEdit(customerKey,draft){
   buildRecords.forEach((record)=>{
     if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
       applyToRecord(record);
+      changedBuildRecords.push(record);
       buildChanged=true;
     }
   });
   if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
-  if(buildChanged)Store.set('klabs-workshop-builds',buildRecords);
+  if(buildChanged){
+    Store.set('klabs-workshop-builds',buildRecords);
+    changedBuildRecords.forEach((record)=>window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record));
+  }
   if(customerFinderMatchesKey(customerKey,quote.customerName)){
     fields.forEach((field)=>{quote[field]=String(next[field]||'').trim();});
     quote.updatedAt=nowIso;
