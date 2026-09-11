@@ -3188,161 +3188,26 @@ function componentSyncStatusLabel(state){
     default:return 'COMPONENT LIBRARY • LOCAL';
   }
 }
-// Account section status line: only visible while signed in; a Review/Retry action only appears when
-// there is something actionable (a pending first-sync decision, or a recoverable sync error).
+// Account section status line: only visible while signed in. Retry is offered only for a recoverable error.
 function renderComponentSyncStatus(state){
   const line=$('componentSyncStatusLine');
-  const actionBtn=$('componentSyncActionBtn');
+  const retryBtn=$('componentSyncRetryBtn');
   const signedIn=!!window.KLABS_ACCOUNT_ID;
   if(line){
     line.hidden=!signedIn;
     if(signedIn)line.textContent=componentSyncStatusLabel(state);
   }
-  // TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification).
-  renderComponentSyncDiagnostics();
-  updateImportLocalComponentsButtonVisibility();
-  updateSyncComponentsToCloudButtonVisibility();
-  if(actionBtn){
-    if(signedIn&&state&&state.status==='migration-pending'){
-      actionBtn.hidden=false;
-      actionBtn.textContent='REVIEW SYNC';
-      actionBtn.setAttribute('data-component-sync-action','review');
-    }else if(signedIn&&state&&state.status==='error'){
-      actionBtn.hidden=false;
-      actionBtn.textContent='RETRY SYNC';
-      actionBtn.setAttribute('data-component-sync-action','retry');
-    }else{
-      actionBtn.hidden=true;
-      actionBtn.removeAttribute('data-component-sync-action');
-    }
+  if(retryBtn){
+    retryBtn.hidden=!(signedIn && state && state.status==='error');
   }
 }
-// TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): read-only snapshot proving which build
-// is executing, which SW cache is active, and exactly what the Components→category→subcategory render
-// source (ensureStudioComponentTaxonomyLoaded + componentLibraryRecords) contains right now.
-function renderComponentSyncDiagnostics(){
-  const el=$('componentSyncDiagnostics');
-  if(!el)return;
-  el.hidden=false;
-  try{
-    const records=componentLibraryRecords();
-    const anonRecords=readAnonymousComponentLibraryRecords();
-    const taxonomy=ensureStudioComponentTaxonomyLoaded();
-    const categories=Array.isArray(taxonomy.categories)?taxonomy.categories:[];
-    const subCount=categories.reduce((total,category)=>total+(Array.isArray(category.subcategories)?category.subcategories.length:0),0);
-    const withSub=records.filter((record)=>normalizeNameKey(record.subcategory));
-    const firstSubs=Array.from(new Set(withSub.map((record)=>String(record.subcategory||'').trim()).filter(Boolean))).slice(0,5);
-    const lines=[
-      'BUILD '+(window.KLABS_BUILD_ID||'?'),
-      'SW '+(window.KLABS_SW_CACHE||'?'),
-      'UID '+(window.KLABS_ACCOUNT_ID?'YES':'NO'),
-      'RECORDS '+records.length,
-      'ANON '+anonRecords.length,
-      'CLOUD …',
-      'CATS '+categories.length,
-      'SUBS(tax) '+subCount,
-      'RECS-with-SUB '+withSub.length,
-      'SUBS[5]: '+(firstSubs.join(', ')||'(none)'),
-    ];
-    el.textContent=lines.join('\n');
-    // Fill CLOUD asynchronously without blocking render; rewrites this block only.
-    const counter=window.KLABS_SYNC&&typeof window.KLABS_SYNC.countCloudComponents==='function'?window.KLABS_SYNC.countCloudComponents:null;
-    if(counter && window.KLABS_ACCOUNT_ID){
-      counter().then((count)=>{
-        el.textContent=lines.map((line)=>line.indexOf('CLOUD')===0?('CLOUD '+(count===null||count===undefined?'?':count)):line).join('\n');
-      }).catch(()=>{
-        el.textContent=lines.map((line)=>line.indexOf('CLOUD')===0?'CLOUD ?':line).join('\n');
-      });
-    }else{
-      el.textContent=lines.map((line)=>line.indexOf('CLOUD')===0?'CLOUD n/a':line).join('\n');
-    }
-  }catch(error){
-    el.textContent='DIAG ERROR '+(error&&error.message);
-  }
-}
-// Manual recovery button visibility: signed in, local anonymous library has records, this account's own
-// namespaced store is empty, and cloud is confirmed empty too (avoids offering a re-import once the
-// account already has its own data, from any source).
-function updateImportLocalComponentsButtonVisibility(){
-  const btn=$('importLocalComponentsBtn');
-  if(!btn)return;
-  const signedIn=!!window.KLABS_ACCOUNT_ID;
-  if(!signedIn){btn.hidden=true;return;}
-  const records=componentLibraryRecords();
-  const anonRecords=readAnonymousComponentLibraryRecords();
-  if(records.length>0||anonRecords.length===0){btn.hidden=true;return;}
-  const counter=window.KLABS_SYNC&&typeof window.KLABS_SYNC.countCloudComponents==='function'?window.KLABS_SYNC.countCloudComponents:null;
-  if(!counter){btn.hidden=true;return;}
-  counter().then((count)=>{btn.hidden=count!==0;}).catch(()=>{btn.hidden=true;});
-}
-// Retry-upload button visibility: signed in, the account already has its own RECORDS, but the cloud row
-// count is not (yet) equal to that RECORDS count — covers both CLOUD 0 and any partial-upload mismatch.
-function updateSyncComponentsToCloudButtonVisibility(){
-  const btn=$('syncComponentsToCloudBtn');
-  if(!btn)return;
-  const signedIn=!!window.KLABS_ACCOUNT_ID;
-  if(!signedIn){btn.hidden=true;return;}
-  const records=componentLibraryRecords();
-  if(records.length===0){btn.hidden=true;return;}
-  const counter=window.KLABS_SYNC&&typeof window.KLABS_SYNC.countCloudComponents==='function'?window.KLABS_SYNC.countCloudComponents:null;
-  if(!counter){btn.hidden=true;return;}
-  counter().then((count)=>{btn.hidden=count===records.length;}).catch(()=>{btn.hidden=true;});
-}
-// Document-level delegated click handler for the visible RETRY SYNC/REVIEW SYNC button: querying the
-// CURRENT DOM node at click-time (instead of relying on the specific node reference captured whenever
-// bindComponentSyncControls() first ran) guarantees the click always reaches window.KLABS_SYNC.retry(),
-// even if that direct binding attempt ran before the button existed or the node was later replaced.
-let componentSyncActionDelegationBound=false;
-function bindComponentSyncActionDelegation(){
-  if(componentSyncActionDelegationBound)return;
-  componentSyncActionDelegationBound=true;
-  document.addEventListener('click',(event)=>{
-    const btn=event.target&&event.target.closest?event.target.closest('#componentSyncActionBtn'):null;
-    if(!btn)return;
-    const action=btn.getAttribute('data-component-sync-action');
-    console.log('[RETRY-TRACE] visible retry button clicked',{action});
-    if(action==='review')promptComponentLibraryMigration();
-    else if(action==='retry')window.KLABS_SYNC?.retry?.();
+function bindComponentSyncRetryControl(){
+  const retryBtn=$('componentSyncRetryBtn');
+  if(!retryBtn || retryBtn.getAttribute('data-component-sync-retry-bound')==='true')return;
+  retryBtn.setAttribute('data-component-sync-retry-bound','true');
+  retryBtn.addEventListener('click',()=>{
+    window.KLABS_SYNC?.retry?.();
   });
-}
-function bindComponentSyncControls(){
-  bindComponentSyncActionDelegation();
-  const importBtn=$('importLocalComponentsBtn');
-  if(importBtn&&importBtn.getAttribute('data-import-local-bound')!=='true'){
-    importBtn.setAttribute('data-import-local-bound','true');
-    importBtn.addEventListener('click',()=>{
-      if(importBtn.disabled)return;
-      importBtn.disabled=true;
-      const finish=(result)=>{
-        importBtn.disabled=false;
-        updateImportLocalComponentsButtonVisibility();
-        if(result&&result.ok){
-          openConfirmDialog({title:'Local components imported',message:`${result.count} component${result.count===1?'':'s'} imported • cloud sync complete`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
-        }else{
-          openConfirmDialog({title:'Import failed',message:(result&&result.error)?result.error:'Could not import your local component library. Local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
-        }
-      };
-      window.KLABS_SYNC?.importLocalLibrary?.().then(finish).catch((error)=>finish({ok:false,error:error&&error.message}));
-    });
-  }
-  const syncBtn=$('syncComponentsToCloudBtn');
-  if(syncBtn&&syncBtn.getAttribute('data-sync-to-cloud-bound')!=='true'){
-    syncBtn.setAttribute('data-sync-to-cloud-bound','true');
-    syncBtn.addEventListener('click',()=>{
-      if(syncBtn.disabled)return;
-      syncBtn.disabled=true;
-      const finish=(result)=>{
-        syncBtn.disabled=false;
-        updateSyncComponentsToCloudButtonVisibility();
-        if(result&&result.ok){
-          openConfirmDialog({title:'Components synced',message:`${result.count} component${result.count===1?'':'s'} synced • cloud sync complete`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
-        }else{
-          openConfirmDialog({title:'Sync failed',message:(result&&result.error)?result.error:'Could not sync your component library to Supabase. Local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
-        }
-      };
-      window.KLABS_SYNC?.syncRecordsToCloud?.().then(finish).catch((error)=>finish({ok:false,error:error&&error.message}));
-    });
-  }
 }
 function onComponentLibraryMigrationPending(){
   promptComponentLibraryMigration();
@@ -12287,7 +12152,7 @@ bindHomeActions();
 bindBuildsControls();
 bindBlankLibraryControls();
 bindSettingsControls();
-bindComponentSyncControls();
+bindComponentSyncRetryControl();
 syncSpiralWithGuideLayout();
 window.KLABS_MEASUREMENTS={formatValue:(valueMm)=>formatMeasurementValue(valueMm,CORE_MEASUREMENT_FORMAT)};
 window.loadBlank=loadBlank;

@@ -88,21 +88,7 @@
   // account libraries. Detection lives in js/ui.js (it owns the seed catalogue).
   function isSeedRecord(record) {
     try {
-      const fn = window.KLABS_UI?.isStarterComponentRecord;
-      const result = !!fn?.(record);
-      // TEMPORARY DIAGNOSTIC: confirm which implementation reference the sync layer is actually calling.
-      if (typeof window !== "undefined") {
-        window.__klabsSeedCallerCount = (window.__klabsSeedCallerCount || 0);
-        if (window.__klabsSeedCallerCount < 1) {
-          window.__klabsSeedCallerCount++;
-          console.log("[MIG-TRACE] isSeedRecord caller", {
-            hasKlabsUi: !!window.KLABS_UI,
-            hasFn: typeof fn === "function",
-            fnSourceHead: typeof fn === "function" ? String(fn).slice(0, 90) : "(none)",
-          });
-        }
-      }
-      return result;
+      return !!window.KLABS_UI?.isStarterComponentRecord?.(record);
     } catch (error) {
       return false;
     }
@@ -125,17 +111,6 @@
   function claimAnonymousLibraryIfNeeded(cloudHasData) {
     const anonymousRecords = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
     const realRecords = anonymousRecords.filter((record) => !isSeedRecord(record));
-    // TEMPORARY DIAGNOSTIC
-    console.log("[MIG-TRACE] claim enter", {
-      uid: !!currentUserId,
-      hasKlabsUi: !!window.KLABS_UI,
-      hasReadAnon: typeof window.KLABS_UI?.readAnonymousComponentLibraryRecords === "function",
-      anonRaw: anonymousRecords.length,
-      anonReal: realRecords.length,
-      cloudHasData: !!cloudHasData,
-      owner: anonymousLibraryOwner() ? "set" : "unset",
-      ownNamespaceCount: (() => { try { return window.componentLibraryRecords().length; } catch (e) { return "err:" + e.message; } })(),
-    });
     if (!realRecords.length) return;
     const owner = anonymousLibraryOwner();
     if (!owner) {
@@ -486,26 +461,7 @@
     const byClientId = new Map();
     records.forEach((record) => { byClientId.set(String(record.id || ""), record); });
     const rows = Array.from(byClientId.values()).map(recordToRow);
-    // TEMPORARY DIAGNOSTIC (RETRY-TRACE): confirms the request actually fires, the target table/uid, and
-    // the exact mapped payload shape for one representative row, before the request is sent.
-    console.log("[RETRY-TRACE] upsertCloudComponents request", {
-      table: "components",
-      uid: currentUserId,
-      hasClient: !!client(),
-      rowCount: rows.length,
-      sampleRow: rows[0],
-    });
-    if (!client()) {
-      console.error("[RETRY-TRACE] upsertCloudComponents aborted: no Supabase client available (request never fired)");
-    }
-    const { error, status, statusText } = await client().from("components").upsert(rows, { onConflict: "user_id,client_id" });
-    // TEMPORARY DIAGNOSTIC (RETRY-TRACE): the complete response, success or failure.
-    console.log("[RETRY-TRACE] upsertCloudComponents response", {
-      ok: !error,
-      status,
-      statusText,
-      error: error ? { message: error.message, details: error.details, hint: error.hint, code: error.code } : null,
-    });
+    const { error } = await client().from("components").upsert(rows, { onConflict: "user_id,client_id" });
     if (error) {
       console.error("[K-Labs Studio] Supabase components upsert failed:", { message: error.message, details: error.details, hint: error.hint, code: error.code, rowCount: rows.length });
       throw new Error(supabaseErrorMessage(error, "Could not upload components to Supabase."));
@@ -555,8 +511,6 @@
       // edited starter-catalogue rows can otherwise read as "nothing real" here and fall through into the
       // merge/delete logic below, which would then tombstone-delete every previously-known cloud id.
       const allOwnRecords = window.componentLibraryRecords().filter((record) => record.id);
-      // TEMPORARY DIAGNOSTIC (RETRY-TRACE): confirms whether the self-heal upload gate is even entered.
-      console.log("[RETRY-TRACE] reconcileNow self-heal gate", { uid: currentUserId, cloudRowCount: cloudRows.length, allOwnRecordsCount: allOwnRecords.length, willUpload: cloudRows.length === 0 && allOwnRecords.length > 0 });
       if (cloudRows.length === 0 && allOwnRecords.length > 0) {
         // Ambiguous empty cloud read on a linked account: never treat it as "everything was deleted".
         // Self-heal by re-pushing this account's own records, with no deletions.
@@ -690,8 +644,6 @@
     }
     claimAnonymousLibraryIfNeeded(cloudRows.length > 0);
     const linked = isLinked();
-    // TEMPORARY DIAGNOSTIC
-    console.log("[MIG-TRACE] runMigrationOrSync after-fetch", { cloudRows: cloudRows.length, linked: linked });
 
     // One-time anonymous -> account import. Runs whenever cloud is empty AND this account's namespace is
     // empty AND the anonymous store holds records - INDEPENDENT of the linked flag, because an earlier
@@ -702,19 +654,13 @@
     if (cloudRows.length === 0) {
       const ownCount = window.componentLibraryRecords().length;
       const anonymousAll = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
-      // TEMPORARY DIAGNOSTIC
-      console.log("[MIG-TRACE] import gate", { ownCount, anonymousAll: anonymousAll.length, enters: ownCount === 0 && anonymousAll.length > 0 });
       if (ownCount === 0 && anonymousAll.length > 0) {
         try {
           const deduped = dedupeLocalRecords(anonymousAll);
-          console.log("[MIG-TRACE] deduped", { count: deduped.length });
           saveLocalRecordsSilently(deduped);
           const withIds = window.componentLibraryRecords().filter((record) => record.id);
-          console.log("[MIG-TRACE] namespaced after save", { count: withIds.length });
           await upsertCloudComponents(withIds);
-          console.log("[MIG-TRACE] upload attempted", { count: withIds.length });
           const verify = await verifyCloudComponents(withIds.map((record) => record.id));
-          console.log("[MIG-TRACE] verify", { ok: verify.ok, missing: verify.missing.length, cloudRowsNow: verify.rows.length });
           if (!verify.ok) {
             throw new Error(`Migration verification failed: ${verify.missing.length} of ${withIds.length} components could not be confirmed in your account.`);
           }
@@ -730,7 +676,6 @@
           return;
         } catch (error) {
           console.error("[K-Labs Studio] Anonymous component library migration failed:", error);
-          console.log("[MIG-TRACE] import error", { message: error && error.message, code: error && error.code, details: error && error.details, hint: error && error.hint });
           lastErrorKind = "push";
           setState({ status: "error", error: "Could not move your local component library to your account. Local data is unchanged." });
           return;
@@ -857,13 +802,7 @@
       setState({ status: "local", error: "", count: window.componentLibraryRecords().length });
     },
     retry() {
-      // TEMPORARY DIAGNOSTIC (RETRY-TRACE): must fire unconditionally on entry, BEFORE any early return,
-      // so a silent no-op (e.g. currentUserId unset) is still visible instead of producing no trace at all.
-      console.log("[RETRY-TRACE] retry() invoked", { uid: currentUserId, lastErrorKind, linked: currentUserId ? isLinked() : false, path: (currentUserId && lastErrorKind === "push" && isLinked()) ? "reconcileNow" : "runMigrationOrSync" });
-      if (!currentUserId) {
-        console.error("[RETRY-TRACE] retry() aborted: no currentUserId (not signed in from the sync layer's perspective)");
-        return;
-      }
+      if (!currentUserId) return;
       if (lastErrorKind === "push" && isLinked()) {
         reconcileNow().catch((error) => console.error("[K-Labs Studio] Component library sync retry failed:", error));
         return;

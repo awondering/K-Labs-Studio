@@ -107,20 +107,3 @@ if('serviceWorker' in navigator){
 KLABS_UI.buildWheels();
 KLABS_UI.renderBlanks();
 KLABS_UI.render();
-
-// TEMPORARY DIAGNOSTIC (remove after PC↔iPhone sync verification): record which SW cache actually controls
-// this page so Settings can prove the PC is no longer on a stale bundle.
-window.KLABS_SW_CACHE='none';
-if('serviceWorker' in navigator){
-	navigator.serviceWorker.addEventListener('message',(event)=>{
-		if(event.data && event.data.type==='KLABS_SW_ACTIVE'){
-			window.KLABS_SW_CACHE=event.data.cache;
-			if(window.KLABS_UI && typeof window.KLABS_UI.renderComponentSyncStatus==='function'){
-				window.KLABS_UI.renderComponentSyncStatus(window.KLABS_SYNC&&typeof window.KLABS_SYNC.getState==='function'?window.KLABS_SYNC.getState():null);
-			}
-		}
-	});
-	navigator.serviceWorker.ready.then((registration)=>{
-		if(registration && registration.active)registration.active.postMessage({type:'KLABS_SW_QUERY'});
-	}).catch(()=>{});
-}
