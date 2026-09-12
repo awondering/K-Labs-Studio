@@ -12291,6 +12291,18 @@ function bindSettingsSectionAccordion(){
   collapseSettingsSections();
 }
 const SETTINGS_SECTION_SAVE_TIMERS={};
+const SETTINGS_PENDING_SYNC_SECTIONS=new Set();
+
+function onSettingsSyncStatus(status,detail){
+  if(status==='synced'){
+    SETTINGS_PENDING_SYNC_SECTIONS.clear();
+  }else if(status==='error'){
+    SETTINGS_PENDING_SYNC_SECTIONS.forEach((sectionKey)=>{
+      setSettingsSectionSaveState(sectionKey,'error');
+    });
+    SETTINGS_PENDING_SYNC_SECTIONS.clear();
+  }
+}
 
 function setSettingsSectionSaveState(sectionKey,state,message){
   const btnId=`settings${sectionKey}SaveBtn`;
@@ -12301,6 +12313,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
     SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=null;
   }
   if(state==='dirty'){
+    SETTINGS_PENDING_SYNC_SECTIONS.delete(sectionKey);
     btn.hidden=false;
     btn.disabled=false;
     btn.textContent=message||'SAVE';
@@ -12312,6 +12325,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
     btn.textContent=message||'SAVING...';
     btn.className='ghost-action settings-context-action settings-save-btn is-saving';
   }else if(state==='saved'){
+    SETTINGS_PENDING_SYNC_SECTIONS.add(sectionKey);
     btn.hidden=false;
     btn.disabled=true;
     btn.textContent=message||'✓ SAVED';
@@ -12322,12 +12336,14 @@ function setSettingsSectionSaveState(sectionKey,state,message){
       SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=null;
     },2200);
   }else if(state==='error'){
+    SETTINGS_PENDING_SYNC_SECTIONS.delete(sectionKey);
     btn.hidden=false;
     btn.disabled=false;
     btn.textContent=message||'SAVE FAILED';
     btn.className='ghost-action settings-context-action settings-save-btn is-error';
     btn.setAttribute('aria-label',`Save failed for ${sectionKey}, click to retry`);
   }else{
+    SETTINGS_PENDING_SYNC_SECTIONS.delete(sectionKey);
     btn.hidden=true;
     btn.disabled=true;
     btn.className='ghost-action settings-context-action settings-save-btn';
@@ -12881,4 +12897,4 @@ window.savedBuildRecords=savedBuildRecords;
 window.saveBuildRecords=(records)=>{Store.set('klabs-workshop-builds',Array.isArray(records)?records:[]);};
 window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
 window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};

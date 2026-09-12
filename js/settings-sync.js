@@ -130,6 +130,7 @@
         console.error("[K-Labs Studio] Settings sync listener error:", err);
       }
     }
+    window.KLABS_UI?.onSettingsSyncStatus?.(status, detail);
   }
 
   async function flushUpload() {
