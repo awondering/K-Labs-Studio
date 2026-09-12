@@ -670,7 +670,7 @@
         <div class="settings-row"><span>Tax Enabled (Default)</span><strong><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" checked /><span class="settings-toggle__state-off" aria-hidden="true">OFF</span><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span><span class="settings-toggle__state-on" aria-hidden="true">ON</span></label></strong></div>
         <div class="settings-row"><span>Tax Rate (%)</span><strong><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
         <div class="settings-row"><span>Default Labour Rate ($/hr)</span><strong><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></strong></div>
-        <div class="settings-context-actions"><button id="settingsRestoreTaxDefaultsBtn" class="ghost-action settings-context-action" type="button">Restore Tax Defaults</button><button id="settingsRestoreLabourDefaultBtn" class="ghost-action settings-context-action" type="button">Restore Labour Default</button></div>
+        <div class="settings-context-actions"><button id="settingsRestoreTaxDefaultsBtn" class="ghost-action settings-context-action" type="button">Restore Tax Defaults</button><button id="settingsRestoreLabourDefaultBtn" class="ghost-action settings-context-action" type="button">Restore Labour Default</button><button id="settingsPricingTaxSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
       </details>
       <section class="settings-preferences-shell" aria-label="Preferences">
         <h2 class="settings-preferences-shell__title">Preferences</h2>
@@ -691,7 +691,7 @@
               <span class="settings-toggle__state-on" aria-hidden="true">ON</span>
             </label>
           </div>
-          <div class="settings-context-actions"><button id="settingsResetStockPreferenceBtn" class="ghost-action settings-context-action" type="button">Restore Default</button></div>
+          <div class="settings-context-actions"><button id="settingsResetStockPreferenceBtn" class="ghost-action settings-context-action" type="button">Restore Default</button><button id="settingsTrackStockSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
         </details>
 
         <details class="settings-card settings-preference-card settings-disclosure" id="settingsMeasurementUnitsCard" aria-label="Measurement Units Preference">
@@ -706,7 +706,7 @@
             <button id="settingsUnitsMetric" class="ghost-action settings-choice-button" type="button" data-settings-units="metric" aria-pressed="true">Metric (mm)</button>
             <button id="settingsUnitsImperial" class="ghost-action settings-choice-button" type="button" data-settings-units="imperial" aria-pressed="false">Imperial (in)</button>
           </div>
-          <div class="settings-context-actions"><button id="settingsResetUnitsBtn" class="ghost-action settings-context-action" type="button">Restore Default</button></div>
+          <div class="settings-context-actions"><button id="settingsResetUnitsBtn" class="ghost-action settings-context-action" type="button">Restore Default</button><button id="settingsMeasurementUnitsSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
         </details>
 
         <details class="settings-card settings-preference-card settings-disclosure" id="settingsDateFormatCard" aria-label="Date Format Preference">
@@ -721,7 +721,7 @@
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="dd/mm/yyyy" aria-pressed="true">DD/MM/YYYY</button>
             <button class="ghost-action settings-choice-button" type="button" data-settings-date-format="mm/dd/yyyy" aria-pressed="false">MM/DD/YYYY</button>
           </div>
-          <div class="settings-context-actions"><button id="settingsResetDateFormatBtn" class="ghost-action settings-context-action" type="button">Restore Default</button></div>
+          <div class="settings-context-actions"><button id="settingsResetDateFormatBtn" class="ghost-action settings-context-action" type="button">Restore Default</button><button id="settingsDateFormatSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
         </details>
       </section>
       <section class="settings-preferences-shell" aria-label="Business">
@@ -742,7 +742,7 @@
             <label><span>Phone</span><input id="settingsBusinessPhone" type="tel" autocomplete="tel" placeholder="Phone" /></label>
             <label><span>Website</span><input id="settingsBusinessWebsite" type="text" inputmode="url" placeholder="www.example.com" /></label>
           </div>
-          <div class="settings-context-actions"><button id="settingsClearBusinessProfileBtn" class="ghost-action settings-context-action" type="button">Clear Business Profile</button></div>
+          <div class="settings-context-actions"><button id="settingsClearBusinessProfileBtn" class="ghost-action settings-context-action" type="button">Clear Business Profile</button><button id="settingsBusinessProfileSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
         </details>
 
         <details class="settings-card settings-preference-card settings-disclosure" id="settingsPaymentDetailsCard">
@@ -757,7 +757,7 @@
             <label><span>Account Name</span><input id="settingsPaymentAccountName" type="text" placeholder="Account name" /></label>
             <label><span>Bank Account Number</span><input id="settingsPaymentAccountNumber" type="text" inputmode="numeric" placeholder="00-0000-0000000-00" /></label>
           </div>
-          <div class="settings-context-actions"><button id="settingsClearPaymentDetailsBtn" class="ghost-action settings-context-action" type="button">Clear Payment Details</button></div>
+          <div class="settings-context-actions"><button id="settingsClearPaymentDetailsBtn" class="ghost-action settings-context-action" type="button">Clear Payment Details</button><button id="settingsPaymentDetailsSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
         </details>
 
         <details class="settings-card settings-preference-card settings-disclosure" id="settingsQuoteNumberingCard">
@@ -773,6 +773,7 @@
             <label><span>Next Quote Number</span><input id="settingsQuoteNextNumber" type="number" inputmode="numeric" min="1" step="1" placeholder="1000" /></label>
           </div>
           <p class="settings-field-note">Next quote will be <strong id="settingsQuoteNumberPreview">—</strong>. Existing quotes and builds keep the number they were given.</p>
+          <div class="settings-context-actions"><button id="settingsQuoteNumberingSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
         </details>
       </section>
       <details class="settings-card settings-preference-card settings-disclosure settings-account-card" id="settingsAccountCard" aria-label="Account">

@@ -264,8 +264,14 @@ function normalizeStudioSettings(settings){
   return {taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
 }
 function saveStudioSettings(){
-  Store.set(SETTINGS_STORAGE_KEY,studioSettings);
-  window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+  try {
+    Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+    window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+    return true;
+  } catch(error) {
+    console.error('[K-Labs Studio] Failed to save Studio settings:', error);
+    return false;
+  }
 }
 // Business profile is per signed-in account: never share a builder's identity or bank details between Studio users.
 function activeAccountKey(){
@@ -290,8 +296,14 @@ function normalizeBusinessProfile(profile){
   };
 }
 function saveBusinessProfile(){
-  Store.set(businessProfileStorageKey(),businessProfile);
-  window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+  try {
+    Store.set(businessProfileStorageKey(),businessProfile);
+    window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+    return true;
+  } catch(error) {
+    console.error('[K-Labs Studio] Failed to save business profile:', error);
+    return false;
+  }
 }
 function readStudioSettingsSyncPayload(){
   return {
@@ -12278,6 +12290,50 @@ function bindSettingsSectionAccordion(){
   });
   collapseSettingsSections();
 }
+const SETTINGS_SECTION_SAVE_TIMERS={};
+
+function setSettingsSectionSaveState(sectionKey,state,message){
+  const btnId=`settings${sectionKey}SaveBtn`;
+  const btn=$(btnId);
+  if(!btn)return;
+  if(SETTINGS_SECTION_SAVE_TIMERS[sectionKey]){
+    clearTimeout(SETTINGS_SECTION_SAVE_TIMERS[sectionKey]);
+    SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=null;
+  }
+  if(state==='dirty'){
+    btn.hidden=false;
+    btn.disabled=false;
+    btn.textContent=message||'SAVE';
+    btn.className='primary-action settings-context-action settings-save-btn is-dirty';
+    btn.setAttribute('aria-label',`Save ${sectionKey} changes`);
+  }else if(state==='saving'){
+    btn.hidden=false;
+    btn.disabled=true;
+    btn.textContent=message||'SAVING...';
+    btn.className='ghost-action settings-context-action settings-save-btn is-saving';
+  }else if(state==='saved'){
+    btn.hidden=false;
+    btn.disabled=true;
+    btn.textContent=message||'✓ SAVED';
+    btn.className='ghost-action settings-context-action settings-save-btn is-saved';
+    SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=window.setTimeout(()=>{
+      btn.hidden=true;
+      btn.className='ghost-action settings-context-action settings-save-btn';
+      SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=null;
+    },2200);
+  }else if(state==='error'){
+    btn.hidden=false;
+    btn.disabled=false;
+    btn.textContent=message||'SAVE FAILED';
+    btn.className='ghost-action settings-context-action settings-save-btn is-error';
+    btn.setAttribute('aria-label',`Save failed for ${sectionKey}, click to retry`);
+  }else{
+    btn.hidden=true;
+    btn.disabled=true;
+    btn.className='ghost-action settings-context-action settings-save-btn';
+  }
+}
+
 function syncSettingsPreferenceControls(){
   document.querySelectorAll('[data-settings-units]').forEach((button)=>{
     const selected=button.getAttribute('data-settings-units')===activeMeasurementUnits();
@@ -12290,14 +12346,20 @@ function syncSettingsPreferenceControls(){
     button.setAttribute('aria-pressed',String(selected));
   });
 }
-const BUSINESS_PROFILE_TEXT_FIELDS=[
+const BUSINESS_PROFILE_BASE_FIELDS=[
   {id:'settingsBusinessName',key:'businessName'},
   {id:'settingsBusinessContactName',key:'contactName'},
   {id:'settingsBusinessEmail',key:'email'},
   {id:'settingsBusinessPhone',key:'phone'},
   {id:'settingsBusinessWebsite',key:'website'},
+];
+const PAYMENT_DETAILS_FIELDS=[
   {id:'settingsPaymentAccountName',key:'paymentAccountName'},
   {id:'settingsPaymentAccountNumber',key:'paymentAccountNumber'},
+];
+const BUSINESS_PROFILE_TEXT_FIELDS=[
+  ...BUSINESS_PROFILE_BASE_FIELDS,
+  ...PAYMENT_DETAILS_FIELDS,
   {id:'settingsQuotePrefix',key:'quotePrefix'},
 ];
 function syncBusinessProfileControls(force){
@@ -12311,31 +12373,132 @@ function syncBusinessProfileControls(force){
   if(preview)preview.textContent=formatQuoteNumber(businessProfile.quoteNextNumber);
 }
 function bindBusinessProfileControls(){
-  BUSINESS_PROFILE_TEXT_FIELDS.forEach((field)=>{
+  BUSINESS_PROFILE_BASE_FIELDS.forEach((field)=>{
     const input=$(field.id);
     if(!input || input.getAttribute('data-business-profile-bound')==='true')return;
     input.setAttribute('data-business-profile-bound','true');
+    input.addEventListener('input',()=>{
+      const isDirty=BUSINESS_PROFILE_BASE_FIELDS.some((f)=>{
+        const el=$(f.id);
+        return el && String(el.value||'').trim()!==(businessProfile[f.key]||'');
+      });
+      setSettingsSectionSaveState('BusinessProfile',isDirty?'dirty':'idle');
+    });
     const commit=()=>{
       businessProfile[field.key]=String(input.value||'').trim();
       input.value=businessProfile[field.key];
-      saveBusinessProfile();
+      const ok=saveBusinessProfile();
       syncBusinessProfileControls();
+      setSettingsSectionSaveState('BusinessProfile',ok?'saved':'error');
     };
     input.addEventListener('change',commit);
     input.addEventListener('blur',commit);
   });
+  const saveBusinessProfileBtn=$('settingsBusinessProfileSaveBtn');
+  if(saveBusinessProfileBtn && saveBusinessProfileBtn.getAttribute('data-business-profile-bound')!=='true'){
+    saveBusinessProfileBtn.setAttribute('data-business-profile-bound','true');
+    saveBusinessProfileBtn.addEventListener('click',()=>{
+      BUSINESS_PROFILE_BASE_FIELDS.forEach((f)=>{
+        const el=$(f.id);
+        if(el)businessProfile[f.key]=String(el.value||'').trim();
+      });
+      const ok=saveBusinessProfile();
+      syncBusinessProfileControls(true);
+      setSettingsSectionSaveState('BusinessProfile',ok?'saved':'error');
+    });
+  }
+
+  PAYMENT_DETAILS_FIELDS.forEach((field)=>{
+    const input=$(field.id);
+    if(!input || input.getAttribute('data-payment-details-bound')==='true')return;
+    input.setAttribute('data-payment-details-bound','true');
+    input.addEventListener('input',()=>{
+      const isDirty=PAYMENT_DETAILS_FIELDS.some((f)=>{
+        const el=$(f.id);
+        return el && String(el.value||'').trim()!==(businessProfile[f.key]||'');
+      });
+      setSettingsSectionSaveState('PaymentDetails',isDirty?'dirty':'idle');
+    });
+    const commit=()=>{
+      businessProfile[field.key]=String(input.value||'').trim();
+      input.value=businessProfile[field.key];
+      const ok=saveBusinessProfile();
+      syncBusinessProfileControls();
+      setSettingsSectionSaveState('PaymentDetails',ok?'saved':'error');
+    };
+    input.addEventListener('change',commit);
+    input.addEventListener('blur',commit);
+  });
+  const savePaymentDetailsBtn=$('settingsPaymentDetailsSaveBtn');
+  if(savePaymentDetailsBtn && savePaymentDetailsBtn.getAttribute('data-payment-details-bound')!=='true'){
+    savePaymentDetailsBtn.setAttribute('data-payment-details-bound','true');
+    savePaymentDetailsBtn.addEventListener('click',()=>{
+      PAYMENT_DETAILS_FIELDS.forEach((f)=>{
+        const el=$(f.id);
+        if(el)businessProfile[f.key]=String(el.value||'').trim();
+      });
+      const ok=saveBusinessProfile();
+      syncBusinessProfileControls(true);
+      setSettingsSectionSaveState('PaymentDetails',ok?'saved':'error');
+    });
+  }
+
+  const quotePrefixInput=$('settingsQuotePrefix');
+  if(quotePrefixInput && quotePrefixInput.getAttribute('data-quote-numbering-bound')!=='true'){
+    quotePrefixInput.setAttribute('data-quote-numbering-bound','true');
+    quotePrefixInput.addEventListener('input',()=>{
+      const currentPrefix=String(quotePrefixInput.value||'').trim();
+      const nextInput=$('settingsQuoteNextNumber');
+      const currentNext=nextInput?String(nextInput.value||'').trim():String(businessProfile.quoteNextNumber);
+      const isDirty=currentPrefix!==(businessProfile.quotePrefix||'') || currentNext!==String(businessProfile.quoteNextNumber);
+      const preview=$('settingsQuoteNumberPreview');
+      if(preview)preview.textContent=`${currentPrefix}${Math.max(1,Math.round(numberOrZero(currentNext))||1)}`;
+      setSettingsSectionSaveState('QuoteNumbering',isDirty?'dirty':'idle');
+    });
+    const commitPrefix=()=>{
+      businessProfile.quotePrefix=String(quotePrefixInput.value||'').trim();
+      quotePrefixInput.value=businessProfile.quotePrefix;
+      const ok=saveBusinessProfile();
+      syncBusinessProfileControls();
+      setSettingsSectionSaveState('QuoteNumbering',ok?'saved':'error');
+    };
+    quotePrefixInput.addEventListener('change',commitPrefix);
+    quotePrefixInput.addEventListener('blur',commitPrefix);
+  }
+
   const nextNumberInput=$('settingsQuoteNextNumber');
   if(nextNumberInput && nextNumberInput.getAttribute('data-business-profile-bound')!=='true'){
     nextNumberInput.setAttribute('data-business-profile-bound','true');
+    nextNumberInput.addEventListener('input',()=>{
+      const currentPrefix=quotePrefixInput?String(quotePrefixInput.value||'').trim():businessProfile.quotePrefix;
+      const currentNext=String(nextNumberInput.value||'').trim();
+      const isDirty=currentPrefix!==(businessProfile.quotePrefix||'') || currentNext!==String(businessProfile.quoteNextNumber);
+      const preview=$('settingsQuoteNumberPreview');
+      if(preview)preview.textContent=`${currentPrefix}${Math.max(1,Math.round(numberOrZero(currentNext))||1)}`;
+      setSettingsSectionSaveState('QuoteNumbering',isDirty?'dirty':'idle');
+    });
     const commitNextNumber=()=>{
       businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
       nextNumberInput.value=String(businessProfile.quoteNextNumber);
-      saveBusinessProfile();
+      const ok=saveBusinessProfile();
       syncBusinessProfileControls();
+      setSettingsSectionSaveState('QuoteNumbering',ok?'saved':'error');
     };
     nextNumberInput.addEventListener('change',commitNextNumber);
     nextNumberInput.addEventListener('blur',commitNextNumber);
   }
+  const saveQuoteNumberingBtn=$('settingsQuoteNumberingSaveBtn');
+  if(saveQuoteNumberingBtn && saveQuoteNumberingBtn.getAttribute('data-quote-numbering-bound')!=='true'){
+    saveQuoteNumberingBtn.setAttribute('data-quote-numbering-bound','true');
+    saveQuoteNumberingBtn.addEventListener('click',()=>{
+      if(quotePrefixInput)businessProfile.quotePrefix=String(quotePrefixInput.value||'').trim();
+      if(nextNumberInput)businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
+      const ok=saveBusinessProfile();
+      syncBusinessProfileControls(true);
+      setSettingsSectionSaveState('QuoteNumbering',ok?'saved':'error');
+    });
+  }
+
   const clearBusinessBtn=$('settingsClearBusinessProfileBtn');
   if(clearBusinessBtn && clearBusinessBtn.getAttribute('data-business-profile-bound')!=='true'){
     clearBusinessBtn.setAttribute('data-business-profile-bound','true');
@@ -12347,8 +12510,9 @@ function bindBusinessProfileControls(){
       },(action)=>{
         if(action!=='clear')return;
         ['businessName','contactName','email','phone','website'].forEach((key)=>{businessProfile[key]='';});
-        saveBusinessProfile();
+        const ok=saveBusinessProfile();
         syncBusinessProfileControls(true);
+        setSettingsSectionSaveState('BusinessProfile',ok?'saved':'error');
       });
     });
   }
@@ -12364,8 +12528,9 @@ function bindBusinessProfileControls(){
         if(action!=='clear')return;
         businessProfile.paymentAccountName='';
         businessProfile.paymentAccountNumber='';
-        saveBusinessProfile();
+        const ok=saveBusinessProfile();
         syncBusinessProfileControls(true);
+        setSettingsSectionSaveState('PaymentDetails',ok?'saved':'error');
       });
     });
   }
@@ -12379,10 +12544,11 @@ function bindSettingsControls(){
     taxEnabledInput.checked=activeTaxEnabled();
     const onTaxEnabledChange=()=>{
       studioSettings.taxEnabled=taxEnabledInput.checked;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       // Global tax setting is the single source of truth for Tax/GST visibility: refresh the
       // live quote summary immediately so no stale Tax/GST row/gap lingers after toggling.
       updateQuoteSummary();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     };
     taxEnabledInput.addEventListener('input',onTaxEnabledChange);
     taxEnabledInput.addEventListener('change',onTaxEnabledChange);
@@ -12392,10 +12558,11 @@ function bindSettingsControls(){
     trackStockInput.checked=activeTrackComponentStock();
     const onTrackStockChange=()=>{
       studioSettings.trackComponentStock=trackStockInput.checked;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       if(studioScreenView==='components'){
         renderStudioComponentsLibrary();
       }
+      setSettingsSectionSaveState('TrackStock',ok?'saved':'error');
     };
     trackStockInput.addEventListener('input',onTrackStockChange);
     trackStockInput.addEventListener('change',onTrackStockChange);
@@ -12414,11 +12581,16 @@ function bindSettingsControls(){
   };
   if(taxRateInput){
     taxRateInput.value=String(activeTaxRate());
+    taxRateInput.addEventListener('input',()=>{
+      const isDirty=String(taxRateInput.value||'').trim()!==String(activeTaxRate());
+      setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
+    });
     const saveTaxRate=()=>{
       studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
       taxRateInput.value=String(studioSettings.taxRate);
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       showTaxSaved();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     };
     taxRateInput.addEventListener('change',saveTaxRate);
     taxRateInput.addEventListener('blur',saveTaxRate);
@@ -12434,17 +12606,23 @@ function bindSettingsControls(){
   let defaultLabourRateSavedTimer=null;
   if(defaultLabourRateInput){
     defaultLabourRateInput.value=String(activeDefaultLabourRate());
+    defaultLabourRateInput.addEventListener('input',()=>{
+      const isDirty=String(defaultLabourRateInput.value||'').trim()!==String(activeDefaultLabourRate());
+      setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
+    });
     const saveDefaultLabourRate=()=>{
       studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
       defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
-      saveStudioSettings();
-      if(!defaultLabourRateSavedLabel)return;
-      defaultLabourRateSavedLabel.hidden=false;
-      if(defaultLabourRateSavedTimer){clearTimeout(defaultLabourRateSavedTimer);}
-      defaultLabourRateSavedTimer=window.setTimeout(()=>{
-        defaultLabourRateSavedLabel.hidden=true;
-        defaultLabourRateSavedTimer=null;
-      },1200);
+      const ok=saveStudioSettings();
+      if(defaultLabourRateSavedLabel){
+        defaultLabourRateSavedLabel.hidden=false;
+        if(defaultLabourRateSavedTimer){clearTimeout(defaultLabourRateSavedTimer);}
+        defaultLabourRateSavedTimer=window.setTimeout(()=>{
+          defaultLabourRateSavedLabel.hidden=true;
+          defaultLabourRateSavedTimer=null;
+        },1200);
+      }
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     };
     defaultLabourRateInput.addEventListener('change',saveDefaultLabourRate);
     defaultLabourRateInput.addEventListener('blur',saveDefaultLabourRate);
@@ -12455,16 +12633,29 @@ function bindSettingsControls(){
       defaultLabourRateInput.blur();
     });
   }
+  const pricingTaxSaveBtn=$('settingsPricingTaxSaveBtn');
+  if(pricingTaxSaveBtn && pricingTaxSaveBtn.getAttribute('data-settings-bound')!=='true'){
+    pricingTaxSaveBtn.setAttribute('data-settings-bound','true');
+    pricingTaxSaveBtn.addEventListener('click',()=>{
+      if(taxRateInput)studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
+      if(defaultLabourRateInput)studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
+      const ok=saveStudioSettings();
+      if(taxRateInput)taxRateInput.value=String(studioSettings.taxRate);
+      if(defaultLabourRateInput)defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
+    });
+  }
   const restoreTaxDefaultsBtn=$('settingsRestoreTaxDefaultsBtn');
   if(restoreTaxDefaultsBtn && restoreTaxDefaultsBtn.getAttribute('data-settings-bound')!=='true'){
     restoreTaxDefaultsBtn.setAttribute('data-settings-bound','true');
     restoreTaxDefaultsBtn.addEventListener('click',()=>{
       studioSettings.taxEnabled=defaultSettings.taxEnabled;
       studioSettings.taxRate=defaultSettings.taxRate;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       if(taxEnabledInput)taxEnabledInput.checked=activeTaxEnabled();
       if(taxRateInput)taxRateInput.value=String(activeTaxRate());
       updateQuoteSummary();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     });
   }
   const restoreLabourDefaultBtn=$('settingsRestoreLabourDefaultBtn');
@@ -12472,8 +12663,9 @@ function bindSettingsControls(){
     restoreLabourDefaultBtn.setAttribute('data-settings-bound','true');
     restoreLabourDefaultBtn.addEventListener('click',()=>{
       studioSettings.defaultLabourRate=defaultSettings.defaultLabourRate;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       if(defaultLabourRateInput)defaultLabourRateInput.value=String(activeDefaultLabourRate());
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     });
   }
   const resetStockPreferenceBtn=$('settingsResetStockPreferenceBtn');
@@ -12481,11 +12673,20 @@ function bindSettingsControls(){
     resetStockPreferenceBtn.setAttribute('data-settings-bound','true');
     resetStockPreferenceBtn.addEventListener('click',()=>{
       studioSettings.trackComponentStock=defaultSettings.trackComponentStock;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       if(trackStockInput)trackStockInput.checked=activeTrackComponentStock();
       if(studioScreenView==='components'){
         renderStudioComponentsLibrary();
       }
+      setSettingsSectionSaveState('TrackStock',ok?'saved':'error');
+    });
+  }
+  const trackStockSaveBtn=$('settingsTrackStockSaveBtn');
+  if(trackStockSaveBtn && trackStockSaveBtn.getAttribute('data-settings-bound')!=='true'){
+    trackStockSaveBtn.setAttribute('data-settings-bound','true');
+    trackStockSaveBtn.addEventListener('click',()=>{
+      const ok=saveStudioSettings();
+      setSettingsSectionSaveState('TrackStock',ok?'saved':'error');
     });
   }
   document.querySelectorAll('[data-settings-units]').forEach((button)=>{
@@ -12493,28 +12694,44 @@ function bindSettingsControls(){
     button.setAttribute('data-settings-bound','true');
     button.addEventListener('click',()=>{
       const next=normalizeMeasurementUnits(button.getAttribute('data-settings-units'));
-      if(studioSettings.measurementUnits===next)return;
+      if(studioSettings.measurementUnits===next){
+        setSettingsSectionSaveState('MeasurementUnits','saved');
+        return;
+      }
       studioSettings.measurementUnits=next;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       syncSettingsPreferenceControls();
       renderMeasurementPresentation();
       renderWorkshopQuote();
       renderBlanks();
       renderBuilds();
+      setSettingsSectionSaveState('MeasurementUnits',ok?'saved':'error');
     });
   });
   const resetUnitsBtn=$('settingsResetUnitsBtn');
   if(resetUnitsBtn && resetUnitsBtn.getAttribute('data-settings-bound')!=='true'){
     resetUnitsBtn.setAttribute('data-settings-bound','true');
     resetUnitsBtn.addEventListener('click',()=>{
-      if(studioSettings.measurementUnits===defaultSettings.measurementUnits)return;
+      if(studioSettings.measurementUnits===defaultSettings.measurementUnits){
+        setSettingsSectionSaveState('MeasurementUnits','saved');
+        return;
+      }
       studioSettings.measurementUnits=defaultSettings.measurementUnits;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       syncSettingsPreferenceControls();
       renderMeasurementPresentation();
       renderWorkshopQuote();
       renderBlanks();
       renderBuilds();
+      setSettingsSectionSaveState('MeasurementUnits',ok?'saved':'error');
+    });
+  }
+  const measurementUnitsSaveBtn=$('settingsMeasurementUnitsSaveBtn');
+  if(measurementUnitsSaveBtn && measurementUnitsSaveBtn.getAttribute('data-settings-bound')!=='true'){
+    measurementUnitsSaveBtn.setAttribute('data-settings-bound','true');
+    measurementUnitsSaveBtn.addEventListener('click',()=>{
+      const ok=saveStudioSettings();
+      setSettingsSectionSaveState('MeasurementUnits',ok?'saved':'error');
     });
   }
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
@@ -12522,24 +12739,40 @@ function bindSettingsControls(){
     button.setAttribute('data-settings-bound','true');
     button.addEventListener('click',()=>{
       const next=normalizeDateFormat(button.getAttribute('data-settings-date-format'));
-      if(studioSettings.dateFormat===next)return;
+      if(studioSettings.dateFormat===next){
+        setSettingsSectionSaveState('DateFormat','saved');
+        return;
+      }
       studioSettings.dateFormat=next;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       syncSettingsPreferenceControls();
       renderBuilds();
       renderCustomerFinder();
+      setSettingsSectionSaveState('DateFormat',ok?'saved':'error');
     });
   });
   const resetDateFormatBtn=$('settingsResetDateFormatBtn');
   if(resetDateFormatBtn && resetDateFormatBtn.getAttribute('data-settings-bound')!=='true'){
     resetDateFormatBtn.setAttribute('data-settings-bound','true');
     resetDateFormatBtn.addEventListener('click',()=>{
-      if(studioSettings.dateFormat===defaultSettings.dateFormat)return;
+      if(studioSettings.dateFormat===defaultSettings.dateFormat){
+        setSettingsSectionSaveState('DateFormat','saved');
+        return;
+      }
       studioSettings.dateFormat=defaultSettings.dateFormat;
-      saveStudioSettings();
+      const ok=saveStudioSettings();
       syncSettingsPreferenceControls();
       renderBuilds();
       renderCustomerFinder();
+      setSettingsSectionSaveState('DateFormat',ok?'saved':'error');
+    });
+  }
+  const dateFormatSaveBtn=$('settingsDateFormatSaveBtn');
+  if(dateFormatSaveBtn && dateFormatSaveBtn.getAttribute('data-settings-bound')!=='true'){
+    dateFormatSaveBtn.setAttribute('data-settings-bound','true');
+    dateFormatSaveBtn.addEventListener('click',()=>{
+      const ok=saveStudioSettings();
+      setSettingsSectionSaveState('DateFormat',ok?'saved':'error');
     });
   }
   syncSettingsPreferenceControls();

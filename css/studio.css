@@ -890,6 +890,49 @@ body.component-sheet-open .workshop-back-to-top{
   background:rgba(12,15,17,.72);
 }
 
+#settingsScreen .settings-save-btn{
+  min-width:68px;
+  font-weight:700;
+  text-align:center;
+  justify-content:center;
+  transition:background-color 100ms ease,border-color 100ms ease,color 100ms ease,box-shadow 100ms ease,opacity 100ms ease;
+}
+
+#settingsScreen .settings-save-btn.is-dirty{
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.28),rgba(var(--kl-red-rgb),.12));
+  border-color:var(--kl-red-base);
+  color:#f7ebe8;
+  cursor:pointer;
+}
+
+#settingsScreen .settings-save-btn.is-dirty:hover,
+#settingsScreen .settings-save-btn.is-dirty:focus-visible{
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.38),rgba(var(--kl-red-rgb),.18));
+  border-color:var(--kl-red-active);
+  color:#fff;
+}
+
+#settingsScreen .settings-save-btn.is-saved{
+  background:rgba(216,210,197,.12);
+  border-color:rgba(216,210,197,.28);
+  color:#e5ded2;
+  cursor:default;
+}
+
+#settingsScreen .settings-save-btn.is-saving{
+  background:rgba(12,15,17,.85);
+  border-color:rgba(214,208,196,.2);
+  color:rgba(214,208,196,.6);
+  cursor:wait;
+}
+
+#settingsScreen .settings-save-btn.is-error{
+  background:rgba(88,23,31,.35);
+  border-color:rgba(191,63,75,.6);
+  color:#ffb5bb;
+  cursor:pointer;
+}
+
 #settingsScreen .settings-card .settings-preference-card__head,
 #settingsScreen .settings-card > h2{
   margin-bottom:2px;
@@ -2831,11 +2874,12 @@ body.component-sheet-open .workshop-back-to-top{
 .settings-inline-saved{
   display:inline-block;
   margin-left:8px;
-  color:#9fc8a2;
+  color:#e5ded2;
   font-size:10px;
   font-weight:700;
   letter-spacing:.06em;
   text-transform:uppercase;
+  opacity:.85;
 }
 
 .quote-mode-switch{

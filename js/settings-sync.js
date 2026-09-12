@@ -119,6 +119,19 @@
     }
     window.Store.set(localUpdatedKey(), Date.now());
   }
+
+  let syncListener = null;
+
+  function notifySyncStatus(status, detail) {
+    if (typeof syncListener === "function") {
+      try {
+        syncListener(status, detail);
+      } catch (err) {
+        console.error("[K-Labs Studio] Settings sync listener error:", err);
+      }
+    }
+  }
+
   async function flushUpload() {
     if (!currentUserId || !client()) return;
     if (uploadInFlight) {
@@ -126,6 +139,7 @@
       return;
     }
     uploadInFlight = true;
+    notifySyncStatus("syncing");
     try {
       const localPayload = readLocalPayload();
       const cloudRow = await fetchCloudSettings();
@@ -133,8 +147,10 @@
       applyLocalPayload(merged);
       await upsertCloudSettings(merged);
       window.Store.set(localUpdatedKey(), Date.now());
+      notifySyncStatus("synced");
     } catch (error) {
       console.error("[K-Labs Studio] Settings cloud sync failed:", error);
+      notifySyncStatus("error", error);
     } finally {
       uploadInFlight = false;
       if (uploadQueuedAgain) {
@@ -154,6 +170,9 @@
   }
 
   window.KLABS_SETTINGS_SYNC = {
+    setSyncListener(fn) {
+      syncListener = fn;
+    },
     onAuthStateChanged(session) {
       const nextUserId = session?.user?.id || "";
       if (uploadTimer) {
