@@ -212,9 +212,16 @@ let workshopLandingReturnFocusTool='';
 let layoutEntryOrigin='';
 // Snapshot of activeSavedBuildRef taken at entry, so the return control targets that exact build even if the active ref moves on.
 let layoutEntryBuildRef=null;
+// Origin of the current build workflow view: 'customer' (opened from Customer Finder detail/history), 'builds' (opened from Active Builds list), or ''
+let workflowReturnOrigin='';
+let workflowCustomerReturnKey='';
 function clearLayoutEntryOrigin(){
   layoutEntryOrigin='';
   layoutEntryBuildRef=null;
+}
+function clearWorkflowCustomerOrigin(){
+  workflowReturnOrigin='';
+  workflowCustomerReturnKey='';
 }
 
 function save(){
@@ -2997,12 +3004,10 @@ function renderStudioScreenMode(){
   if(workflow)workflow.hidden=!showWorkflow;
   if(components)components.hidden=!showComponents;
   if(taxonomy)taxonomy.hidden=!showTaxonomy;
-  // Only shown when the open workflow is an actual saved Active Build (see activeSavedBuildRef), not a fresh unsaved draft.
   const hasActiveBuildRef=!!activeSavedBuildRef;
-  if(returnBtn)returnBtn.hidden=!(showWorkflow && hasActiveBuildRef);
-  // Covers the gap left above: a customer-linked build with no saved Active Build reference yet (e.g. a
-  // fresh New Build draft just created from Find Customer) had no contextual return control at all.
-  if(customersReturnBtn)customersReturnBtn.hidden=!(showWorkflow && !hasActiveBuildRef && !!specificationValue(quote&&quote.customerName));
+  const isCustomerOrigin=workflowReturnOrigin==='customer';
+  if(returnBtn)returnBtn.hidden=!(showWorkflow && hasActiveBuildRef && !isCustomerOrigin);
+  if(customersReturnBtn)customersReturnBtn.hidden=!(showWorkflow && (isCustomerOrigin || (!hasActiveBuildRef && !!specificationValue(quote&&quote.customerName))));
 }
 function resetStudioScreenScrollMemory(){
   if(window.KLABS_NAV && typeof window.KLABS_NAV.forgetScreenScroll==='function'){
@@ -5629,6 +5634,7 @@ function beginFreshQuote(options){
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
   clearLayoutEntryOrigin();
+  clearWorkflowCustomerOrigin();
   quote=normalizeQuote(newQuoteTemplate());
   saveQuoteCurrent();
   markQuoteSaved();
@@ -5659,13 +5665,19 @@ function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
   return target;
 }
 function startFreshQuoteForCustomer(record,options){
-  const settings={...(options||{})};
+  const settings={origin:'customer',customerKey:'',...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
   clearLayoutEntryOrigin();
+  if(settings.origin==='customer'){
+    workflowReturnOrigin='customer';
+    workflowCustomerReturnKey=String(settings.customerKey||normalizeNameKey(record&&record.customerName)||'');
+  }else{
+    clearWorkflowCustomerOrigin();
+  }
   quote=normalizeQuote(next);
   // A customer-linked build is a real quote, so it takes its customer-facing number straight away.
   ensureCurrentQuoteNumber();
@@ -9883,8 +9895,9 @@ function ensureCustomerFinderSheet(){
         return;
       }
       if(action==='rename'){
+        const customerKey=customerFinderSelectedKey;
         closeCustomerFinderSheet();
-        openSavedBuildRecord(source,index,{openAtTop:true});
+        openSavedBuildRecord(source,index,{openAtTop:true,origin:'customer',customerKey});
         window.setTimeout(()=>{
           focusBuildNameField();
           flashWorkshopStatus('Rename build in Build Details section',{pending:true,duration:1900});
@@ -9901,8 +9914,9 @@ function ensureCustomerFinderSheet(){
     if(openRow && !event.target.closest('[data-customer-row-action]') && !event.target.closest('[data-customer-build-action]')){
       const source=openRow.getAttribute('data-customer-open-source')||'quote';
       const index=Number(openRow.getAttribute('data-customer-open-index'));
+      const customerKey=customerFinderSelectedKey;
       closeCustomerFinderSheet();
-      openSavedBuildRecord(source,index,{openAtTop:true});
+      openSavedBuildRecord(source,index,{openAtTop:true,origin:'customer',customerKey});
       return;
     }
     if(customerFinderBuildRowMenu || customerFinderCustomerMenuOpen){
@@ -9918,8 +9932,9 @@ function ensureCustomerFinderSheet(){
     event.preventDefault();
     const source=openRow.getAttribute('data-customer-open-source')||'quote';
     const index=Number(openRow.getAttribute('data-customer-open-index'));
+    const customerKey=customerFinderSelectedKey;
     closeCustomerFinderSheet();
-    openSavedBuildRecord(source,index,{openAtTop:true});
+    openSavedBuildRecord(source,index,{openAtTop:true,origin:'customer',customerKey});
   });
   const searchInput=sheet.querySelector('#customerFinderSearch');
   if(searchInput){
@@ -10147,10 +10162,12 @@ function updateWorkshopBuildOverview(){
   const customerName=specificationValue(quote&&quote.customerName);
   const buildName=specificationValue(quote&&quote.buildName);
   const hasIdentity=!!(customerName||buildName);
-  // Contextual "‹ Customers" return: only when there is no saved Active Build reference yet (that case
-  // already has its own "‹ ACTIVE BUILDS" control) and the current draft actually has a customer attached.
+  const returnBtn=$('activeBuildReturnBtn');
   const customersReturnBtn=$('customerFinderReturnBtn');
-  if(customersReturnBtn)customersReturnBtn.hidden=!(studioScreenView==='workflow' && !activeSavedBuildRef && !!customerName);
+  const hasActiveBuildRef=!!activeSavedBuildRef;
+  const isCustomerOrigin=workflowReturnOrigin==='customer';
+  if(returnBtn)returnBtn.hidden=!(studioScreenView==='workflow' && hasActiveBuildRef && !isCustomerOrigin);
+  if(customersReturnBtn)customersReturnBtn.hidden=!(studioScreenView==='workflow' && (isCustomerOrigin || (!hasActiveBuildRef && !!customerName)));
   if(titleEl){
     titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
   }
@@ -10324,12 +10341,19 @@ function resetWorkshopEntryTransientState(){
   }
 }
 function openSavedBuildRecord(source,index,options){
-  const settings={openAtTop:false,focusSection:'',...(options||{})};
+  const settings={openAtTop:false,focusSection:'',origin:'',customerKey:'',...(options||{})};
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
   clearQuoteAutosaveTimer();
   resetWorkshopEntryTransientState();
   clearLayoutEntryOrigin();
+  if(settings.origin==='customer'){
+    workflowReturnOrigin='customer';
+    workflowCustomerReturnKey=String(settings.customerKey||normalizeNameKey(selected&&selected.customerName)||'');
+  }else if(settings.origin==='builds'){
+    workflowReturnOrigin='builds';
+    workflowCustomerReturnKey='';
+  }
   setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
   applyGuideSpecificationSnapshot(quote.guideSpecification);
@@ -11296,6 +11320,7 @@ function bindWorkshopQuoteBuilder(){
   if(activeBuildReturnBtn && activeBuildReturnBtn.getAttribute('data-active-build-return-bound')!=='true'){
     activeBuildReturnBtn.setAttribute('data-active-build-return-bound','true');
     activeBuildReturnBtn.addEventListener('click',()=>{
+      clearWorkflowCustomerOrigin();
       openActiveBuildsList();
     });
   }
@@ -11303,6 +11328,16 @@ function bindWorkshopQuoteBuilder(){
   if(customerFinderReturnBtn && customerFinderReturnBtn.getAttribute('data-customer-finder-return-bound')!=='true'){
     customerFinderReturnBtn.setAttribute('data-customer-finder-return-bound','true');
     customerFinderReturnBtn.addEventListener('click',()=>{
+      if(workflowReturnOrigin==='customer'){
+        const customerKey=workflowCustomerReturnKey||normalizeNameKey(quote&&quote.customerName)||'';
+        openCustomerFinderSheet('browse');
+        if(customerKey){
+          customerFinderSelectedKey=customerKey;
+          customerFinderBrowseView='detail';
+          renderCustomerFinder();
+        }
+        return;
+      }
       // Opens the existing Customer Finder sheet on top of the current screen - the in-progress build/
       // customer draft is left completely untouched underneath, nothing is saved or discarded.
       openCustomerFinderSheet('browse');
@@ -12144,7 +12179,7 @@ function bindBuildsControls(){
       const action=button.getAttribute('data-build-action')||'';
       const source=button.getAttribute('data-build-source')||'quote';
       const index=Number(button.getAttribute('data-build-index'));
-      if(action==='open'){openSavedBuildRecord(source,index,{openAtTop:true});}
+      if(action==='open'){openSavedBuildRecord(source,index,{openAtTop:true,origin:'builds'});}
       if(action==='toggle-menu'){
         event.preventDefault();
         event.stopPropagation();
