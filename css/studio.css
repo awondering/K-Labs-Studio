@@ -223,37 +223,39 @@ body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
   min-height:45px;
   position:relative;
   z-index:2;
-  border-radius:9px;
-  letter-spacing:.13em;
+  border-radius:6px;
+  letter-spacing:.14em;
   text-transform:uppercase;
   font-size:13px;
   font-weight:700;
-  background:linear-gradient(180deg,#353a3c 0%,#2f3436 100%);
-  border:1px solid #5f6668;
-  color:#e7ded2;
-  text-shadow:0 -.4px 0 rgba(0,0,0,.55),0 .35px 0 rgba(255,255,255,.08);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 0 rgba(0,0,0,.5),inset 0 0 0 1px rgba(18,21,22,.72),0 2px 6px rgba(0,0,0,.24);
-  transition:transform 120ms cubic-bezier(.2,.75,.28,1),background-color 120ms ease,border-color 120ms ease,box-shadow 120ms ease;
+  background:linear-gradient(180deg,rgba(20,24,27,.82),rgba(12,15,17,.9));
+  border:1px solid rgba(214,210,200,.2);
+  color:var(--text);
+  box-shadow:none;
+  text-shadow:none;
+  transition:transform 100ms cubic-bezier(.2,.75,.28,1),background-color 100ms ease,border-color 100ms ease,box-shadow 100ms ease,color 100ms ease;
   will-change:transform;
   -webkit-tap-highlight-color:transparent;
 }
 
 #homeScreen .home-enter-rod-button:hover{
-  background:linear-gradient(180deg,#393f41 0%,#33383a 100%);
-  border-color:#687072;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.52),inset 0 0 0 1px rgba(20,23,24,.75),0 2px 7px rgba(0,0,0,.26);
+  background:linear-gradient(180deg,rgba(26,31,34,.88),rgba(16,19,21,.94));
+  border-color:rgba(214,210,200,.32);
+  color:#ece4d7;
+  box-shadow:none;
 }
 
 #homeScreen .home-enter-rod-button:focus-visible{
-  outline:2px solid rgba(170,178,180,.42);
+  outline:2px solid rgba(173,169,157,.45);
   outline-offset:2px;
 }
 
 #homeScreen .home-enter-rod-button:active{
   transform:translateY(1px);
-  background:linear-gradient(180deg,#2d3234 0%,#2a2f31 100%);
-  border-color:#4f5658;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 -1px 0 rgba(0,0,0,.56),inset 0 0 0 1px rgba(21,24,25,.78),0 1px 3px rgba(0,0,0,.24);
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.22),rgba(var(--kl-red-rgb),.08));
+  border-color:var(--kl-red-base);
+  box-shadow:inset 0 0 0 1px rgba(var(--kl-red-rgb),.32);
+  color:#f7ebe8;
 }
 
 /* Keep Home visually self-contained by suppressing cross-screen bleed-through labels/panels. */
@@ -3883,12 +3885,6 @@ body.component-sheet-open .workshop-back-to-top{
   width:min(84%,780px);
   min-height:51px;
   justify-self:center;
-  border-radius:10px;
-  font-size:13px;
-  font-weight:740;
-  letter-spacing:.145em;
-  border-color:#667073;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(0,0,0,.5),inset 0 0 0 1px rgba(18,21,22,.74),0 3px 10px rgba(0,0,0,.3);
 }
 
 #homeScreen .home-hero{
