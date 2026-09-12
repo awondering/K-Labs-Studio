@@ -865,7 +865,76 @@ function applySpiralGuideSpacingImport(rows,targetCount){
     const row=rows[index];
     if(row)guide.positionMm=Math.max(0,numberOrZero(row.cum));
   });
+  flashWorkshopStatus('Applied Guide Spacing positions',{pending:true,duration:2000});
   renderWorkshopCalculator();
+}
+
+function copySpiralGuideOffsets(){
+  const spiral=workshopToolsState.spiral;
+  const guides=Array.isArray(spiral.guides)?spiral.guides:[];
+  if(!guides.length){
+    flashWorkshopStatus('No guides to copy',{pending:true,duration:1800});
+    return;
+  }
+  const stripperIndex=Math.max(0,guides.length-1);
+  const methodLabel=String(spiral.method||'progressive').toUpperCase();
+  const dirLabel=spiral.method==='standard'?'STANDARD':String(spiral.direction||'left').toUpperCase();
+  const unitSuffix=workshopUnitSuffix(spiral.unit);
+  const lines=[
+    `SPIRAL GUIDE MAPPER — ${methodLabel} (${dirLabel})`,
+    `Unit: ${spiral.unit.toUpperCase()} | Guides: ${guides.length}`,
+    '----------------------------------------',
+  ];
+  for(let i=stripperIndex;i>=0;i-=1){
+    const guide=guides[i];
+    if(!guide)continue;
+    const isStripper=i===stripperIndex;
+    const displayNum=guides.length-i;
+    const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
+    const posText=formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT);
+    const typeLabel=isStripper?'STRIPPER':(clampSpiralAngle(guide.angleDeg)<=0.05||clampSpiralAngle(guide.angleDeg)>=179.95)?'RUNNING':'TRANSITION';
+    let line=`Guide ${displayNum} [${typeLabel}]: Pos ${posText} | ${labels.rotationText}`;
+    if(guide.odMm && Number(guide.odMm)>0){
+      const odText=formatWorkshopMeasurementValue(guide.odMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT);
+      line+=` | OD ${odText} | Offset: ${labels.offsetText}`;
+    }
+    lines.push(line);
+  }
+  const text=lines.join('\n');
+  const copyBtn=$('workshopSpiralCopyBtn');
+  const onCopied=()=>{
+    if(copyBtn){
+      const orig=copyBtn.textContent;
+      copyBtn.textContent='COPIED';
+      copyBtn.classList.add('is-copied');
+      window.setTimeout(()=>{
+        copyBtn.textContent=orig;
+        copyBtn.classList.remove('is-copied');
+      },1600);
+    }
+    flashWorkshopStatus('Guide offsets copied',{pending:true,duration:1800});
+  };
+  if(navigator.clipboard && typeof navigator.clipboard.writeText==='function'){
+    navigator.clipboard.writeText(text).then(onCopied).catch(()=>{
+      fallbackCopyText(text);
+      onCopied();
+    });
+  }else{
+    fallbackCopyText(text);
+    onCopied();
+  }
+}
+function fallbackCopyText(text){
+  const textarea=document.createElement('textarea');
+  textarea.value=text;
+  textarea.style.position='fixed';
+  textarea.style.left='-9999px';
+  textarea.style.top='0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(textarea);
 }
 function resetSpiralGuideMapper(){
   const spiral=workshopToolsState.spiral;
@@ -1988,6 +2057,14 @@ function bindWorkshopCalculatorControls(){
     spiralImportBtn.addEventListener('click',()=>{
       importSpiralFromGuideSpacing();
       renderWorkshopCalculator();
+    });
+  }
+
+  const spiralCopyBtn=$('workshopSpiralCopyBtn');
+  if(spiralCopyBtn && spiralCopyBtn.getAttribute('data-spiral-copy-bound')!=='true'){
+    spiralCopyBtn.setAttribute('data-spiral-copy-bound','true');
+    spiralCopyBtn.addEventListener('click',()=>{
+      copySpiralGuideOffsets();
     });
   }
 

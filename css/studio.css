@@ -7264,6 +7264,7 @@ textarea::-moz-selection,
 .spiral-reset-row{
   display:flex;
   justify-content:flex-end;
+  gap:8px;
   margin:-6px 0 2px;
 }
 
@@ -7277,12 +7278,19 @@ textarea::-moz-selection,
   border-color:rgba(214,210,200,.14);
   color:rgba(225,218,205,.62);
   background:transparent;
+  transition:border-color var(--micro-motion) ease,color var(--micro-motion) ease,background-color var(--micro-motion) ease;
 }
 
 #workshopToolSpiral .spiral-reset-action:hover,
 #workshopToolSpiral .spiral-reset-action:focus-visible{
   color:rgba(225,218,205,.9);
   border-color:rgba(214,210,200,.3);
+}
+
+#workshopToolSpiral .spiral-reset-action.is-copied{
+  border-color:rgba(var(--kl-red-rgb),.5);
+  color:#f2ece0;
+  background:rgba(var(--kl-red-rgb),.15);
 }
 
 #workshopToolSpiral .spiral-count-grid{
@@ -7533,11 +7541,18 @@ textarea::-moz-selection,
   border-radius:11px;
   border:1px solid rgba(214,210,200,.14);
   background:rgba(255,255,255,.02);
+  transition:border-color var(--micro-motion) ease,box-shadow var(--micro-motion) ease,background-color var(--micro-motion) ease;
 }
 
 .spiral-guide-row--expanded{
   border-color:rgba(var(--kl-red-rgb),.72);
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.1),rgba(255,255,255,.02));
   box-shadow:inset 3px 0 0 rgba(var(--kl-red-rgb),.7),inset 0 0 0 1px rgba(var(--kl-red-rgb),.18);
+}
+
+.spiral-guide-row--expanded .spiral-guide-row__summary strong{
+  color:var(--text);
+  text-shadow:0 0 10px rgba(var(--kl-red-rgb),.4);
 }
 
 .spiral-guide-row__summary{
