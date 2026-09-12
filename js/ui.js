@@ -9056,12 +9056,18 @@ function isCustomerFinderBuildRowMenuOpen(source,index){
 function toggleCustomerFinderBuildRowMenu(source,index){
   const key=customerFinderBuildRowMenuKey(source,index);
   customerFinderBuildRowMenu=customerFinderBuildRowMenu===key?'':key;
+  if(customerFinderBuildRowMenu){
+    customerFinderCustomerMenuOpen=false;
+  }
 }
 function closeCustomerFinderCustomerMenu(){
   customerFinderCustomerMenuOpen=false;
 }
 function toggleCustomerFinderCustomerMenu(){
   customerFinderCustomerMenuOpen=!customerFinderCustomerMenuOpen;
+  if(customerFinderCustomerMenuOpen){
+    customerFinderBuildRowMenu='';
+  }
 }
 function customerFinderBuildRowMenuMarkup(entry){
   const lifecycle=buildLifecycleStatusKey(entry&&entry.record);
