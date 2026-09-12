@@ -5769,11 +5769,11 @@ textarea::-moz-selection,
   font-size:12.5px;
 }
 
-.studio-size-chip__edit,
 .studio-size-chip__remove{
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  width:20px;
   height:20px;
   padding:0;
   border:0;
@@ -5783,19 +5783,6 @@ textarea::-moz-selection,
   font-size:13px;
   line-height:1;
   cursor:pointer;
-}
-
-.studio-size-chip__edit{
-  width:auto;
-  padding:0 8px;
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
-
-.studio-size-chip__remove{
-  width:20px;
 }
 
 .studio-size-entry,

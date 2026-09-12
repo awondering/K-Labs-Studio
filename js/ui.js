@@ -3463,7 +3463,7 @@ function studioComponentCurrencyFieldValue(id){
 }
 function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
-  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__edit" type="button" data-size-action="edit" data-size-value="${escaped}" aria-label="Edit size ${escaped}">Edit</button><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">×</button></span>`;
+  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">×</button></span>`;
 }
 function studioMergedSpecificationValue(record){
   const specs=String(record&&record.specifications||'').trim();
@@ -3492,7 +3492,6 @@ function studioComponentSizesSectionMarkup(){
         <label class="quote-component-field"><span>From</span><input id="studioComponentSizeFrom" type="number" inputmode="decimal" step="any" placeholder="9" /></label>
         <label class="quote-component-field"><span>To</span><input id="studioComponentSizeTo" type="number" inputmode="decimal" step="any" placeholder="15" /></label>
         <label class="quote-component-field"><span>Step</span><input id="studioComponentSizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
-        <label class="quote-component-field"><span>Unit</span><input id="studioComponentSizeUnit" type="text" placeholder="mm" /></label>
         <button class="ghost-action studio-size-range__btn" type="button" data-size-action="generate">Generate Range</button>
       </div>
     </details>
@@ -3519,14 +3518,14 @@ function addStudioComponentSizeFromInput(){
   input.value='';
   refreshStudioComponentSizeList();
 }
-// Builds "9 mm, 10 mm, ... 15 mm" from From/To/Step/Unit. Rejects non-finite or non-terminating ranges
-// rather than emitting NaN or looping forever.
+// Builds "9 mm, 10 mm, ... 15 mm" (or "in" in imperial mode) from From/To/Step and active measurement unit.
+// Rejects non-finite or non-terminating ranges rather than emitting NaN or looping forever.
 function generateStudioComponentSizeRange(){
   const from=Number(String(($('studioComponentSizeFrom')&&$('studioComponentSizeFrom').value)||'').trim());
   const to=Number(String(($('studioComponentSizeTo')&&$('studioComponentSizeTo').value)||'').trim());
   const rawStep=String(($('studioComponentSizeStep')&&$('studioComponentSizeStep').value)||'').trim();
   const step=rawStep===''?1:Number(rawStep);
-  const unit=String(($('studioComponentSizeUnit')&&$('studioComponentSizeUnit').value)||'').trim();
+  const unit=measurementUnitSuffix();
   if(!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(step) || step<=0){
     openInfoDialog('Check Range','Enter a numeric From, To and a Step greater than zero.');
     return;
@@ -3555,110 +3554,6 @@ function removeStudioComponentSize(value){
   if(!key)return;
   studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft).filter((size)=>size.toLowerCase()!==key);
   refreshStudioComponentSizeList();
-}
-let activeSizeEditValue='';
-function setStudioSizeEditValidation(message){
-  const error=$('studioSizeEditError');
-  const input=$('studioSizeEditInput');
-  const text=String(message||'').trim();
-  if(error){
-    error.textContent=text;
-    error.hidden=!text;
-  }
-  if(input){
-    input.setAttribute('aria-invalid',text?'true':'false');
-  }
-}
-function closeStudioSizeEditSheet(){
-  const sheet=$('studioSizeEditSheet');
-  if(sheet)sheet.hidden=true;
-  activeSizeEditValue='';
-  setStudioSizeEditValidation('');
-  unlockModalLayer({restoreFocus:true});
-}
-function submitStudioSizeEdit(){
-  const oldValue=String(activeSizeEditValue||'').trim();
-  const input=$('studioSizeEditInput');
-  const nextValue=String(input&&input.value||'').replace(/\s+/g,' ').trim();
-  if(!oldValue || !input)return;
-  if(!nextValue){
-    setStudioSizeEditValidation('Enter a size value.');
-    try{input.focus({preventScroll:true});}catch{input.focus();}
-    return;
-  }
-  const oldKey=oldValue.toLowerCase();
-  const nextKey=nextValue.toLowerCase();
-  const sizes=normalizeComponentSizeOptions(studioComponentSizeDraft);
-  if(nextKey!==oldKey && sizes.some((size)=>size.toLowerCase()===nextKey)){
-    setStudioSizeEditValidation('That size already exists.');
-    try{input.focus({preventScroll:true});}catch{input.focus();}
-    if(typeof input.select==='function')input.select();
-    return;
-  }
-  studioComponentSizeDraft=normalizeComponentSizeOptions(sizes.map((size)=>size.toLowerCase()===oldKey?nextValue:size));
-  closeStudioSizeEditSheet();
-  refreshStudioComponentSizeList();
-}
-function ensureStudioSizeEditSheet(){
-  if($('studioSizeEditSheet'))return;
-  const sheet=document.createElement('div');
-  sheet.id='studioSizeEditSheet';
-  sheet.className='component-sheet';
-  sheet.hidden=true;
-  sheet.innerHTML=`
-    <div class="component-sheet__scrim" data-size-edit-action="close"></div>
-    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Edit Size">
-      <header class="component-sheet__header">
-        <h2>Edit Size</h2>
-        <button class="component-sheet__close" type="button" data-size-edit-action="close" aria-label="Close edit size">×</button>
-      </header>
-      <div class="component-sheet__body">
-        <label class="quote-component-field"><span>Size</span><input id="studioSizeEditInput" type="text" placeholder="e.g. 12 mm or Large" /></label>
-        <p id="studioSizeEditError" class="customer-finder__field-error" aria-live="polite" hidden></p>
-        <div class="quote-preview-actions">
-          <button class="ghost-action" type="button" data-size-edit-action="close">Cancel</button>
-          <button class="primary-action" type="button" data-size-edit-action="save">Save Size</button>
-        </div>
-      </div>
-    </section>
-  `;
-  document.body.appendChild(sheet);
-  sheet.addEventListener('click',(event)=>{
-    const actionEl=event.target.closest('[data-size-edit-action]');
-    if(!actionEl)return;
-    const action=actionEl.getAttribute('data-size-edit-action')||'';
-    if(action==='save'){
-      submitStudioSizeEdit();
-      return;
-    }
-    closeStudioSizeEditSheet();
-  });
-  const input=sheet.querySelector('#studioSizeEditInput');
-  if(input){
-    input.addEventListener('input',()=>{
-      if(specificationValue(input.value))setStudioSizeEditValidation('');
-    });
-    input.addEventListener('keydown',(event)=>{
-      if(event.key!=='Enter')return;
-      event.preventDefault();
-      submitStudioSizeEdit();
-    });
-  }
-}
-function openStudioSizeEditSheet(value){
-  const size=String(value||'').trim();
-  if(!size)return;
-  ensureStudioSizeEditSheet();
-  const sheet=$('studioSizeEditSheet');
-  const input=$('studioSizeEditInput');
-  if(!sheet || !input)return;
-  activeSizeEditValue=size;
-  input.value=size;
-  setStudioSizeEditValidation('');
-  sheet.hidden=false;
-  lockModalLayer(document.activeElement);
-  try{input.focus({preventScroll:true});}catch{input.focus();}
-  if(typeof input.select==='function')input.select();
 }
 function renderStudioComponentDetails(record,options){
   const details=$('studioComponentDetails');
@@ -5296,7 +5191,6 @@ function bindStudioComponentsPanel(){
         const sizeAction=sizeButton.getAttribute('data-size-action');
         if(sizeAction==='add')addStudioComponentSizeFromInput();
         else if(sizeAction==='generate')generateStudioComponentSizeRange();
-        else if(sizeAction==='edit')openStudioSizeEditSheet(sizeButton.getAttribute('data-size-value'));
         else if(sizeAction==='remove')removeStudioComponentSize(sizeButton.getAttribute('data-size-value'));
         return;
       }
