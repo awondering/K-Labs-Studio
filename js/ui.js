@@ -1468,20 +1468,6 @@ function renderDiameterCircumferenceTool(){
       ? formatWorkshopMeasurementValue(state.diameterMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT)
       : formatWorkshopMeasurementValue(circumferenceMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
   }
-
-  const metricLine=$('workshopDcMetricLine');
-  const imperialDecimalLine=$('workshopDcImperialDecimalLine');
-  const imperialFractionalLine=$('workshopDcImperialFractionalLine');
-  if(metricLine){
-    metricLine.textContent=`D ${formatDecimal(state.diameterMm,2)} mm • C ${formatDecimal(circumferenceMm,2)} mm`;
-  }
-  if(imperialDecimalLine){
-    imperialDecimalLine.textContent=`D ${formatDecimal(mmToInches(state.diameterMm),3)} in • C ${formatDecimal(mmToInches(circumferenceMm),3)} in`;
-  }
-  if(imperialFractionalLine){
-    imperialFractionalLine.textContent=`D ${formatImperialFractionInches(mmToInches(state.diameterMm),32)} in • C ${formatImperialFractionInches(mmToInches(circumferenceMm),32)} in`;
-  }
-
 }
 function buildGripCutEndGuideSvg(options){
   const settings=options&&typeof options==='object'?options:{};
