@@ -662,9 +662,10 @@ body.component-sheet-open .workshop-back-to-top{
 #settingsScreen{
   display:grid;
   align-content:start;
-  gap:14px;
+  gap:12px;
   justify-items:stretch;
   padding-top:14px;
+  padding-bottom:calc(28px + var(--safe-bottom));
 }
 
 #settingsScreen .screen-head{
@@ -6217,8 +6218,7 @@ textarea::-moz-selection,
 .screen-head,
 #layoutScreen .layout-screen-shell,
 #workshopScreen .quote-builder,
-#buildsScreen.active,
-#settingsScreen{
+#buildsScreen.active{
   gap:var(--ds-space-4);
 }
 
