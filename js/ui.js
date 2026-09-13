@@ -1405,8 +1405,8 @@ function enterStudio(){
   }
   goScreen('workshopScreen');
 }
-// Bottom-nav Studio tab ONLY (distinct from enterStudio(), still used by the hamburger menu's Studio item
-// and other contextual "back to Studio" controls, which intentionally resume an in-progress build/view).
+// Bottom-nav Studio tab ONLY (distinct from enterStudio(), used by contextual "back to Studio" controls,
+// which intentionally resume an in-progress build/view).
 // Tapping the bottom tab must always land on the Studio root, clearing whatever nested view was open
 // (Components category/subcategory/component, Taxonomy, or an open Customer/Build workflow) - no saved
 // data is touched, only which screen/section is currently displayed.
@@ -8620,10 +8620,7 @@ function bindWorkshopKeyboardDismissGuard(){
     if(Date.now()>workshopKeyboardDismissState.suppressNavUntil)return;
     if(!isWorkshopScreenActive())return;
     const navTarget=event.target.closest('[data-nav]');
-    const menuOpenTarget=event.target.closest('[data-menu-action="open-menu"]');
-    const shouldSuppressNav=!!(navTarget && !navTarget.closest('#navMenuSheet'));
-    const shouldSuppressMenuOpen=!!menuOpenTarget;
-    if(!shouldSuppressNav && !shouldSuppressMenuOpen)return;
+    if(!navTarget)return;
     event.preventDefault();
     event.stopPropagation();
     if(typeof event.stopImmediatePropagation==='function')event.stopImmediatePropagation();

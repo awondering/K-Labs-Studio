@@ -50,7 +50,6 @@ body.component-sheet-open{
   overflow:hidden;
   overscroll-behavior:none;
 }
-body.nav-menu-open{overflow:hidden}
 body.workshop-input-focus-active .bottom-nav{backdrop-filter:none}
 
 #homeScreen{
@@ -1884,11 +1883,6 @@ body.component-sheet-open .workshop-back-to-top{
 .quote-add-component-btn:focus-visible{
   border-color:rgba(214,210,200,.32);
   background:#1a1e21;
-}
-
-#navMenuSheet .nav-menu-list{
-  display:grid;
-  gap:8px;
 }
 
 .component-sheet{
@@ -4979,12 +4973,6 @@ textarea::-moz-selection,
 /* BUILD 062: refinement and simplification pass */
 .topbar{
   margin-bottom:8px;
-}
-
-.icon-button{
-  width:46px;
-  height:46px;
-  border-radius:14px;
 }
 
 .brand-lockup small{
