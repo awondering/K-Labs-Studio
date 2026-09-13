@@ -11763,11 +11763,9 @@ function updateDepositFields(){
   const enabled=!!quote.depositEnabled;
   const typeField=$('quoteDepositTypeField');
   const valueField=$('quoteDepositValueField');
-  const amountField=$('quoteDepositAmountField');
   const balanceField=$('quoteBalanceRemainingField');
   if(typeField)typeField.hidden=!enabled;
   if(valueField)valueField.hidden=!enabled;
-  if(amountField)amountField.hidden=!enabled;
   if(balanceField)balanceField.hidden=!enabled;
   if(!enabled)return;
   const math=depositMaths();
@@ -11776,10 +11774,6 @@ function updateDepositFields(){
   const valueInput=$('quoteDepositValue');
   if(valueLabel)valueLabel.textContent=math.depositType==='fixed'?'Deposit Amount ($)':'Deposit %';
   if(valueInput && document.activeElement!==valueInput)valueInput.value=numberOrZero(math.depositValue).toFixed(math.depositType==='fixed'?2:1);
-  if(amountField){
-    const amountInput=$('quoteDepositAmount');
-    if(amountInput)amountInput.value=currency(math.depositAmount);
-  }
   if(balanceField){
     const balanceInput=$('quoteBalanceRemaining');
     if(balanceInput)balanceInput.value=currency(math.remainingBalance);
