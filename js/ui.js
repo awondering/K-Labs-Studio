@@ -330,6 +330,10 @@ function applyStudioSettingsSyncPayload(payload){
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
+  if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
+    quote.labourRate=activeDefaultLabourRate();
+    saveQuoteCurrent();
+  }
   renderMeasurementPresentation();
   updateQuoteSummary();
   renderBuilds();
@@ -2957,7 +2961,10 @@ function normalizeQuote(inputQuote){
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
   // A saved build keeps the labour rate it was stored with; only a fresh template carries the global default.
-  merged.labourRate=Math.max(0,numberOrZero(inputQuote&&inputQuote.labourRate));
+  const incomingLabourRate=(inputQuote&&inputQuote.labourRate);
+  merged.labourRate=(incomingLabourRate===0 || Number.isFinite(Number(incomingLabourRate)))
+    ?Math.max(0,numberOrZero(incomingLabourRate))
+    :base.labourRate;
   // pricingDriver tracks which of Final Price/Required Profit/Required Margin the builder most recently
   // edited, so a later Internal Build Cost change recalculates using their chosen target, not a guess.
   merged.pricingDriver=normalizePricingDriver(inputQuote&&inputQuote.pricingDriver);
@@ -8930,7 +8937,6 @@ function saveCustomerRecordFromDraft(draft){
     const existing=normalizeQuote(quoteRecords[existingQuoteIndex]);
     const merged=normalizeQuote({
       ...existing,
-      ...persistedQuote,
       customerName,
       company:persistedQuote.company,
       phone:persistedQuote.phone,
@@ -8959,7 +8965,6 @@ function saveCustomerRecordFromDraft(draft){
     const existing=normalizeQuote(buildRecords[existingBuildIndex]);
     const merged=normalizeQuote({
       ...existing,
-      ...persistedQuote,
       customerName,
       company:persistedQuote.company,
       phone:persistedQuote.phone,
@@ -12655,6 +12660,10 @@ function bindSettingsControls(){
     const saveDefaultLabourRate=()=>{
       studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
       defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
+      if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
+        quote.labourRate=activeDefaultLabourRate();
+        saveQuoteCurrent();
+      }
       const ok=saveStudioSettings();
       if(defaultLabourRateSavedLabel){
         defaultLabourRateSavedLabel.hidden=false;
@@ -12681,6 +12690,10 @@ function bindSettingsControls(){
     pricingTaxSaveBtn.addEventListener('click',()=>{
       if(taxRateInput)studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
       if(defaultLabourRateInput)studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
+      if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
+        quote.labourRate=activeDefaultLabourRate();
+        saveQuoteCurrent();
+      }
       const ok=saveStudioSettings();
       if(taxRateInput)taxRateInput.value=String(studioSettings.taxRate);
       if(defaultLabourRateInput)defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
@@ -12705,6 +12718,10 @@ function bindSettingsControls(){
     restoreLabourDefaultBtn.setAttribute('data-settings-bound','true');
     restoreLabourDefaultBtn.addEventListener('click',()=>{
       studioSettings.defaultLabourRate=defaultSettings.defaultLabourRate;
+      if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
+        quote.labourRate=activeDefaultLabourRate();
+        saveQuoteCurrent();
+      }
       const ok=saveStudioSettings();
       if(defaultLabourRateInput)defaultLabourRateInput.value=String(activeDefaultLabourRate());
       setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
