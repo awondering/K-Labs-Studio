@@ -659,13 +659,14 @@ body.component-sheet-open .workshop-back-to-top{
   display:none;
 }
 
-#settingsScreen{
-  display:grid;
+#settingsScreen,
+#settingsScreen.active{
+  display:grid!important;
   align-content:start;
   gap:12px;
   justify-items:stretch;
   padding-top:14px;
-  padding-bottom:calc(28px + var(--safe-bottom));
+  padding-bottom:calc(32px + var(--safe-bottom));
 }
 
 #settingsScreen .screen-head{
