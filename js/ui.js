@@ -12546,41 +12546,6 @@ function bindBusinessProfileControls(){
     });
   }
 
-  const clearBusinessBtn=$('settingsClearBusinessProfileBtn');
-  if(clearBusinessBtn && clearBusinessBtn.getAttribute('data-business-profile-bound')!=='true'){
-    clearBusinessBtn.setAttribute('data-business-profile-bound','true');
-    clearBusinessBtn.addEventListener('click',()=>{
-      openConfirmDialog({
-        title:'Clear Business Profile',
-        message:'Clear your business profile fields?',
-        actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'clear',label:'Clear',kind:'danger'}]
-      },(action)=>{
-        if(action!=='clear')return;
-        ['businessName','contactName','email','phone','website'].forEach((key)=>{businessProfile[key]='';});
-        const ok=saveBusinessProfile();
-        syncBusinessProfileControls(true);
-        setSettingsSectionSaveState('BusinessProfile',ok?'saved':'error');
-      });
-    });
-  }
-  const clearPaymentBtn=$('settingsClearPaymentDetailsBtn');
-  if(clearPaymentBtn && clearPaymentBtn.getAttribute('data-business-profile-bound')!=='true'){
-    clearPaymentBtn.setAttribute('data-business-profile-bound','true');
-    clearPaymentBtn.addEventListener('click',()=>{
-      openConfirmDialog({
-        title:'Clear Payment Details',
-        message:'Clear saved payment details?',
-        actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'clear',label:'Clear',kind:'danger'}]
-      },(action)=>{
-        if(action!=='clear')return;
-        businessProfile.paymentAccountName='';
-        businessProfile.paymentAccountNumber='';
-        const ok=saveBusinessProfile();
-        syncBusinessProfileControls(true);
-        setSettingsSectionSaveState('PaymentDetails',ok?'saved':'error');
-      });
-    });
-  }
   syncBusinessProfileControls();
 }
 function bindSettingsControls(){
@@ -12700,46 +12665,6 @@ function bindSettingsControls(){
       setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     });
   }
-  const restoreTaxDefaultsBtn=$('settingsRestoreTaxDefaultsBtn');
-  if(restoreTaxDefaultsBtn && restoreTaxDefaultsBtn.getAttribute('data-settings-bound')!=='true'){
-    restoreTaxDefaultsBtn.setAttribute('data-settings-bound','true');
-    restoreTaxDefaultsBtn.addEventListener('click',()=>{
-      studioSettings.taxEnabled=defaultSettings.taxEnabled;
-      studioSettings.taxRate=defaultSettings.taxRate;
-      const ok=saveStudioSettings();
-      if(taxEnabledInput)taxEnabledInput.checked=activeTaxEnabled();
-      if(taxRateInput)taxRateInput.value=String(activeTaxRate());
-      updateQuoteSummary();
-      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
-    });
-  }
-  const restoreLabourDefaultBtn=$('settingsRestoreLabourDefaultBtn');
-  if(restoreLabourDefaultBtn && restoreLabourDefaultBtn.getAttribute('data-settings-bound')!=='true'){
-    restoreLabourDefaultBtn.setAttribute('data-settings-bound','true');
-    restoreLabourDefaultBtn.addEventListener('click',()=>{
-      studioSettings.defaultLabourRate=defaultSettings.defaultLabourRate;
-      if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
-        quote.labourRate=activeDefaultLabourRate();
-        saveQuoteCurrent();
-      }
-      const ok=saveStudioSettings();
-      if(defaultLabourRateInput)defaultLabourRateInput.value=String(activeDefaultLabourRate());
-      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
-    });
-  }
-  const resetStockPreferenceBtn=$('settingsResetStockPreferenceBtn');
-  if(resetStockPreferenceBtn && resetStockPreferenceBtn.getAttribute('data-settings-bound')!=='true'){
-    resetStockPreferenceBtn.setAttribute('data-settings-bound','true');
-    resetStockPreferenceBtn.addEventListener('click',()=>{
-      studioSettings.trackComponentStock=defaultSettings.trackComponentStock;
-      const ok=saveStudioSettings();
-      if(trackStockInput)trackStockInput.checked=activeTrackComponentStock();
-      if(studioScreenView==='components'){
-        renderStudioComponentsLibrary();
-      }
-      setSettingsSectionSaveState('TrackStock',ok?'saved':'error');
-    });
-  }
   const trackStockSaveBtn=$('settingsTrackStockSaveBtn');
   if(trackStockSaveBtn && trackStockSaveBtn.getAttribute('data-settings-bound')!=='true'){
     trackStockSaveBtn.setAttribute('data-settings-bound','true');
@@ -12767,24 +12692,6 @@ function bindSettingsControls(){
       setSettingsSectionSaveState('MeasurementUnits',ok?'saved':'error');
     });
   });
-  const resetUnitsBtn=$('settingsResetUnitsBtn');
-  if(resetUnitsBtn && resetUnitsBtn.getAttribute('data-settings-bound')!=='true'){
-    resetUnitsBtn.setAttribute('data-settings-bound','true');
-    resetUnitsBtn.addEventListener('click',()=>{
-      if(studioSettings.measurementUnits===defaultSettings.measurementUnits){
-        setSettingsSectionSaveState('MeasurementUnits','saved');
-        return;
-      }
-      studioSettings.measurementUnits=defaultSettings.measurementUnits;
-      const ok=saveStudioSettings();
-      syncSettingsPreferenceControls();
-      renderMeasurementPresentation();
-      renderWorkshopQuote();
-      renderBlanks();
-      renderBuilds();
-      setSettingsSectionSaveState('MeasurementUnits',ok?'saved':'error');
-    });
-  }
   const measurementUnitsSaveBtn=$('settingsMeasurementUnitsSaveBtn');
   if(measurementUnitsSaveBtn && measurementUnitsSaveBtn.getAttribute('data-settings-bound')!=='true'){
     measurementUnitsSaveBtn.setAttribute('data-settings-bound','true');
@@ -12810,22 +12717,6 @@ function bindSettingsControls(){
       setSettingsSectionSaveState('DateFormat',ok?'saved':'error');
     });
   });
-  const resetDateFormatBtn=$('settingsResetDateFormatBtn');
-  if(resetDateFormatBtn && resetDateFormatBtn.getAttribute('data-settings-bound')!=='true'){
-    resetDateFormatBtn.setAttribute('data-settings-bound','true');
-    resetDateFormatBtn.addEventListener('click',()=>{
-      if(studioSettings.dateFormat===defaultSettings.dateFormat){
-        setSettingsSectionSaveState('DateFormat','saved');
-        return;
-      }
-      studioSettings.dateFormat=defaultSettings.dateFormat;
-      const ok=saveStudioSettings();
-      syncSettingsPreferenceControls();
-      renderBuilds();
-      renderCustomerFinder();
-      setSettingsSectionSaveState('DateFormat',ok?'saved':'error');
-    });
-  }
   const dateFormatSaveBtn=$('settingsDateFormatSaveBtn');
   if(dateFormatSaveBtn && dateFormatSaveBtn.getAttribute('data-settings-bound')!=='true'){
     dateFormatSaveBtn.setAttribute('data-settings-bound','true');

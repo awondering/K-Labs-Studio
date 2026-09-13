@@ -730,21 +730,6 @@ body.component-sheet-open .workshop-back-to-top{
   gap:8px;
 }
 
-#settingsScreen .settings-preferences-shell{
-  width:min(100%,760px);
-  margin-inline:auto;
-  display:grid;
-  gap:12px;
-}
-
-#settingsScreen .settings-preferences-shell__title{
-  margin:2px 3px 0;
-  font-size:15px;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-  color:#e7e0d3;
-}
-
 #settingsScreen .settings-preference-card{
   display:grid;
   gap:12px;
@@ -1124,10 +1109,6 @@ body.component-sheet-open .workshop-back-to-top{
   #settingsScreen .settings-row > strong{
     margin-left:0;
     justify-content:flex-start;
-  }
-
-  #settingsScreen .settings-preferences-shell{
-    width:100%;
   }
 
   #settingsScreen .settings-preference-card{
