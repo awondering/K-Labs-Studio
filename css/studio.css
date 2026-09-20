@@ -1992,6 +1992,13 @@ body.component-sheet-open .workshop-back-to-top{
   box-shadow:0 0 0 2px rgba(206,44,58,.18);
 }
 
+.customer-finder__new-form input::placeholder,
+.customer-finder__new-form textarea::placeholder{
+  color:rgba(214,210,200,.38);
+  font-size:11px;
+  font-weight:450;
+}
+
 .customer-finder__new-form-full{
   grid-column:1 / -1;
 }
@@ -8175,6 +8182,46 @@ body.klabs-auth-resolving::after {
   border-color:rgba(122,186,126,.55);
   background:linear-gradient(180deg,rgba(46,110,58,.96),rgba(28,72,38,.96));
   color:#eaf6e9;
+}
+
+@media (max-width:760px){
+  .customer-finder__new-form{
+    gap:6px;
+  }
+
+  .customer-finder__new-form label{
+    gap:3px;
+  }
+
+  .customer-finder__new-form input,
+  .customer-finder__new-form textarea{
+    min-height:38px;
+    padding:6px 9px;
+  }
+
+  .customer-finder__new-form label span{
+    font-size:9px;
+    letter-spacing:.08em;
+  }
+
+  .customer-finder__body .customer-finder__new-form{
+    padding-bottom:calc(20px + env(safe-area-inset-bottom,0px) + var(--customer-finder-keyboard-inset,0px));
+  }
+
+  .customer-finder__body .customer-finder__new-form-actions{
+    grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+    margin-top:6px;
+  }
+
+  .customer-finder__body .customer-finder__new-form-actions .primary-action{
+    order:0;
+  }
+
+  #customerEditSheet .component-sheet__body{
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
 }
 
 /* Component Add/Edit form balance after Brand / Variant were retired. Must live at the end of the

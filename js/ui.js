@@ -9177,6 +9177,13 @@ function setCustomerFinderNewBuildStep(step){
   scheduleCustomerFinderViewportSync(40);
 }
 function updateCustomerFinderIntentUi(){
+  const title=$('customerFinderTitle');
+  const panel=$('customerFinderSheet')&&$('customerFinderSheet').querySelector('.customer-finder__panel');
+  const isAddMode=customerFinderIntent==='customer-only' || (customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add');
+  const isFindMode=customerFinderIntent==='browse' || customerFinderNewBuildStep==='search';
+  const modeTitle=isAddMode?'Add Customer':isFindMode?'Find Customer':'Choose Customer';
+  if(title)title.textContent=modeTitle;
+  if(panel)panel.setAttribute('aria-label',modeTitle);
   const intro=$('customerFinderIntro');
   if(intro)intro.textContent=customerFinderActionIntroText();
   const startActions=$('customerFinderStartActions');
@@ -9185,8 +9192,10 @@ function updateCustomerFinderIntentUi(){
   const browseHead=$('customerFinderBrowseHead');
   const browseAddBtn=$('customerFinderBrowseAddBtn');
   const form=$('customerFinderNewForm');
+  const formBack=$('customerFinderNewBackBtn');
   const backs=searchBlock?Array.from(searchBlock.querySelectorAll('[data-customer-finder-action="back-to-actions"]')):[];
   const back=backs.length?backs[0]:null;
+  if(formBack)formBack.textContent=customerFinderIntent==='customer-only'?'Cancel':'Back';
   if(customerFinderIntent==='customer-only'){
     if(startActions)startActions.hidden=true;
     if(searchBlock)searchBlock.hidden=true;
@@ -9545,14 +9554,14 @@ function requestRenameCustomer(customerKey,currentName){
 const CUSTOMER_EDIT_FIELDS=[
   {id:'customerEditName',key:'customerName',label:'Customer Name',type:'text',autocomplete:'name'},
   {id:'customerEditCompany',key:'company',label:'Company',type:'text',autocomplete:'organization'},
-  {id:'customerEditPhone',key:'phone',label:'Phone',type:'text',autocomplete:'tel'},
-  {id:'customerEditEmail',key:'email',label:'Email',type:'email',autocomplete:'email'},
-  {id:'customerEditAddress1',key:'addressLine1',label:'Address Line 1',type:'text',autocomplete:'address-line1',full:true},
-  {id:'customerEditAddress2',key:'addressLine2',label:'Address Line 2',type:'text',autocomplete:'address-line2',full:true},
+  {id:'customerEditPhone',key:'phone',label:'Phone',placeholder:'021 123 4567',type:'text',autocomplete:'tel'},
+  {id:'customerEditEmail',key:'email',label:'Email',placeholder:'name@example.com',type:'email',autocomplete:'email'},
+  {id:'customerEditAddress1',key:'addressLine1',label:'Address Line 1',placeholder:'Street address',type:'text',autocomplete:'address-line1',full:true},
+  {id:'customerEditAddress2',key:'addressLine2',label:'Address Line 2',placeholder:'Apartment, unit, etc.',type:'text',autocomplete:'address-line2',full:true},
   {id:'customerEditSuburb',key:'suburbLocality',label:'Suburb / Locality',type:'text',autocomplete:'address-level3'},
   {id:'customerEditCity',key:'cityTown',label:'City / Town',type:'text',autocomplete:'address-level2'},
   {id:'customerEditRegion',key:'regionState',label:'Region / State',type:'text',autocomplete:'address-level1'},
-  {id:'customerEditPostcode',key:'postcode',label:'Postcode / ZIP',type:'text',autocomplete:'postal-code'},
+  {id:'customerEditPostcode',key:'postcode',label:'Postcode / ZIP',placeholder:'1010',type:'text',autocomplete:'postal-code'},
   {id:'customerEditCountry',key:'country',label:'Country',type:'text',autocomplete:'country-name',full:true},
   {id:'customerEditNotes',key:'notes',label:'Customer Notes',textarea:true,full:true},
 ];
@@ -9662,9 +9671,10 @@ function ensureCustomerEditSheet(){
   const fieldsMarkup=CUSTOMER_EDIT_FIELDS.map((field)=>{
     const className=field.full?' class="customer-finder__new-form-full"':'';
     if(field.textarea){
-      return `<label${className}><span>${escapeHtml(field.label)}</span><textarea id="${escapeAttributeValue(field.id)}" rows="2" placeholder="Notes"></textarea></label>`;
+      return `<label${className}><span>${escapeHtml(field.label)}</span><textarea id="${escapeAttributeValue(field.id)}" rows="2"></textarea></label>`;
     }
-    return `<label${className}><span>${escapeHtml(field.label)}</span><input id="${escapeAttributeValue(field.id)}" type="${escapeAttributeValue(field.type||'text')}" placeholder="${escapeAttributeValue(field.label)}" autocomplete="${escapeAttributeValue(field.autocomplete||'off')}" /></label>`;
+    const placeholder=field.placeholder?` placeholder="${escapeAttributeValue(field.placeholder)}"`:'';
+    return `<label${className}><span>${escapeHtml(field.label)}</span><input id="${escapeAttributeValue(field.id)}" type="${escapeAttributeValue(field.type||'text')}"${placeholder} autocomplete="${escapeAttributeValue(field.autocomplete||'off')}" /></label>`;
   }).join('');
   sheet.innerHTML=`
     <div class="component-sheet__scrim" data-customer-edit-action="close"></div>
@@ -10018,7 +10028,7 @@ function ensureCustomerFinderSheet(){
     <div class="component-sheet__scrim" data-customer-finder-action="close"></div>
     <section class="component-sheet__panel customer-finder__panel" role="dialog" aria-modal="true" aria-label="Find Customer">
       <header class="component-sheet__header">
-        <h2>Find Customer</h2>
+        <h2 id="customerFinderTitle">Find Customer</h2>
         <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">&#215;</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
@@ -10042,19 +10052,19 @@ function ensureCustomerFinderSheet(){
           <section id="customerFinderDetail" class="customer-finder__detail customer-finder__detail-pane" aria-live="polite" hidden></section>
         </div>
         <form id="customerFinderNewForm" class="customer-finder__new-form" hidden>
-          <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" placeholder="Customer name" autocomplete="name" /></label>
+          <label><span>Customer Name</span><input id="customerFinderNewCustomerName" type="text" autocomplete="name" /></label>
           <p id="customerFinderNewCustomerNameError" class="customer-finder__field-error" aria-live="polite" hidden></p>
-          <label><span>Phone</span><input id="customerFinderNewPhone" type="text" placeholder="Phone" autocomplete="tel" /></label>
-          <label><span>Email</span><input id="customerFinderNewEmail" type="email" placeholder="Email" autocomplete="email" /></label>
-          <label class="customer-finder__new-form-full"><span>Address Line 1</span><input id="customerFinderNewAddress1" type="text" placeholder="Address line 1" autocomplete="address-line1" /></label>
-          <label class="customer-finder__new-form-full"><span>Address Line 2</span><input id="customerFinderNewAddress2" type="text" placeholder="Address line 2" autocomplete="address-line2" /></label>
-          <label><span>Suburb / Locality</span><input id="customerFinderNewSuburb" type="text" placeholder="Suburb / locality" autocomplete="address-level3" /></label>
-          <label><span>City / Town</span><input id="customerFinderNewCity" type="text" placeholder="City / town" autocomplete="address-level2" /></label>
-          <label><span>Region / State</span><input id="customerFinderNewRegion" type="text" placeholder="Region / state" autocomplete="address-level1" /></label>
-          <label><span>Postcode / ZIP</span><input id="customerFinderNewPostcode" type="text" placeholder="Postcode / ZIP" autocomplete="postal-code" /></label>
-          <label class="customer-finder__new-form-full"><span>Country</span><input id="customerFinderNewCountry" type="text" placeholder="Country" autocomplete="country-name" /></label>
+          <label><span>Phone</span><input id="customerFinderNewPhone" type="text" placeholder="021 123 4567" autocomplete="tel" /></label>
+          <label><span>Email</span><input id="customerFinderNewEmail" type="email" placeholder="name@example.com" autocomplete="email" /></label>
+          <label class="customer-finder__new-form-full"><span>Address Line 1</span><input id="customerFinderNewAddress1" type="text" placeholder="Street address" autocomplete="address-line1" /></label>
+          <label class="customer-finder__new-form-full"><span>Address Line 2</span><input id="customerFinderNewAddress2" type="text" placeholder="Apartment, unit, etc." autocomplete="address-line2" /></label>
+          <label><span>Suburb / Locality</span><input id="customerFinderNewSuburb" type="text" autocomplete="address-level3" /></label>
+          <label><span>City / Town</span><input id="customerFinderNewCity" type="text" autocomplete="address-level2" /></label>
+          <label><span>Region / State</span><input id="customerFinderNewRegion" type="text" autocomplete="address-level1" /></label>
+          <label><span>Postcode / ZIP</span><input id="customerFinderNewPostcode" type="text" placeholder="1010" autocomplete="postal-code" /></label>
+          <label class="customer-finder__new-form-full"><span>Country</span><input id="customerFinderNewCountry" type="text" autocomplete="country-name" /></label>
           <div class="customer-finder__new-form-actions">
-            <button class="ghost-action" type="button" data-customer-finder-action="back-to-actions">Back</button>
+            <button id="customerFinderNewBackBtn" class="ghost-action" type="button" data-customer-finder-action="back-to-actions">Back</button>
             <button id="customerFinderSubmitNewCustomerBtn" class="primary-action" type="button" data-customer-finder-action="submit-new">CREATE CUSTOMER</button>
           </div>
         </form>
@@ -10081,6 +10091,10 @@ function ensureCustomerFinderSheet(){
       if(action==='back-to-actions'){
         if(customerFinderIntent==='new-build'){
           setCustomerFinderNewBuildStep('actions');
+        }else if(customerFinderIntent==='customer-only'){
+          customerFinderIntent='browse';
+          customerFinderBrowseView='list';
+          setCustomerFinderNewBuildStep('search');
         }
         return;
       }
