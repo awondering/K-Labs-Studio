@@ -10,9 +10,7 @@ function normalizeLayoutState(input){
   };
 }
 let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0}));
-const DEFAULT_CATEGORY_NAMES=['Blank','Reel Seat','Grip','Winding Checks','Butt Cap','Hook Keeper','Guides','Tip Top','Thread & Finish','Epoxy','Clear coat','Freight','Decals','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
-const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
 // Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "—" option).
 const SUBCATEGORY_CLEAR_LABEL='—';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
@@ -51,16 +49,6 @@ function categoryAliasGroupKeyFor(name){
   if(!key)return '';
   const group=CATEGORY_NAME_ALIAS_GROUPS.find((variants)=>variants.some((variant)=>normalizeNameKey(variant)===key));
   return group?normalizeNameKey(group[0]):'';
-}
-function findExistingCategoryByAlias(categoryMap,name){
-  const directKey=normalizeNameKey(name);
-  if(categoryMap.has(directKey))return categoryMap.get(directKey);
-  const aliasGroupKey=categoryAliasGroupKeyFor(name);
-  if(!aliasGroupKey)return null;
-  for(const [key,category] of categoryMap){
-    if(categoryAliasGroupKeyFor(key)===aliasGroupKey)return category;
-  }
-  return null;
 }
 const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
@@ -3349,11 +3337,6 @@ function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
       supplierMap.set(supplierKey,{id:studioTaxonomyId('sup'),name:supplierName});
     }
   });
-  getCustomCategoryNames().forEach((name)=>{
-    const key=normalizeNameKey(name);
-    if(!key || isInvalidLibraryCategoryName(name) || categoryMap.has(key))return;
-    categoryMap.set(key,{id:studioTaxonomyId('cat'),name:String(name).trim(),subcategories:[]});
-  });
   getCustomSupplierNames().forEach((name)=>{
     const key=normalizeNameKey(name);
     if(!key || isBogusTaxonomyName(name) || supplierMap.has(key))return;
@@ -3385,19 +3368,15 @@ function resyncStudioComponentTaxonomyWithRecords(){
 function saveStudioComponentTaxonomy(){
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(studioComponentTaxonomyState);
   Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
-  saveCustomCategoryNames(allStudioCategoryNames(studioComponentTaxonomyState));
   saveCustomSupplierNames(allStudioSupplierNames(studioComponentTaxonomyState));
   window.KLABS_SYNC?.notifyTaxonomyChanged?.();
 }
 // Applies a taxonomy object fetched from Supabase as the new in-memory/local-cache taxonomy (cloud is the
 // signed-in source of truth once linked); mirrors ensureStudioComponentTaxonomyLoaded's persistence step only.
 function applyCloudComponentTaxonomy(taxonomy){
-  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
   studioComponentTaxonomyState=normalizeStudioComponentTaxonomy(taxonomy);
   Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
-  saveCustomCategoryNames(allStudioCategoryNames(studioComponentTaxonomyState));
   saveCustomSupplierNames(allStudioSupplierNames(studioComponentTaxonomyState));
-  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
 }
 // Reads the preserved anonymous/pre-migration taxonomy directly (never the active account namespace); used
 // only to offer a first-time migration decision, never to silently seed/overwrite an account's own cache.
@@ -4246,8 +4225,6 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
 
   const recordsSnapshot=Store.get(componentLibraryStorageKey(),[]);
   const taxonomySnapshot=Store.get(componentTaxonomyStorageKey(),null);
-  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
-
   const sourceSubcategoriesSnapshot=(sourceCategory.subcategories||[]).map((item)=>({...item}));
   const destSubcategories=(destCategory.subcategories||[]).map((item)=>({...item}));
   const targetSubNameById=new Map();
@@ -4311,7 +4288,6 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
     studioComponentTaxonomyState=null;
     return {ok:false,movedCount:0,subcategoryCount:0};
   }
-  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   return {ok:true,movedCount,subcategoryCount:sourceSubcategoriesSnapshot.length};
 }
 let categoryMergeDialogState={sourceCategoryId:'',destCategoryId:''};
@@ -4614,10 +4590,8 @@ function studioTaxonomyRenameCategoryByName(fromName,toName){
   const target=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===fromKey);
   if(!target)return false;
   if(taxonomy.categories.some((item)=>item.id!==target.id && normalizeNameKey(item.name)===normalizeNameKey(next)))return false;
-  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
   target.name=next;
   saveStudioComponentTaxonomy();
-  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   return true;
 }
 function studioTaxonomyRemoveCategoryByName(name){
@@ -4626,10 +4600,8 @@ function studioTaxonomyRemoveCategoryByName(name){
   if(!key)return false;
   const next=taxonomy.categories.filter((item)=>normalizeNameKey(item.name)!==key);
   if(next.length===taxonomy.categories.length)return false;
-  const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
   taxonomy.categories=next;
   saveStudioComponentTaxonomy();
-  archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   return true;
 }
 function studioTaxonomyRenameSupplierByName(fromName,toName){
@@ -4693,12 +4665,10 @@ function handleStudioTaxonomyAction(action){
     const existing=studioCategoryByName(nextCategoryName);
     if(existing && existing.id!==category.id){openInfoDialog('Category Exists','Another category already uses this name.');return;}
     const oldName=category.name;
-    const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
     category.name=nextCategoryName;
     studioRenameCategoryById(category.id,oldName,nextCategoryName);
     setStudioTaxonomySectionMode('categories','edit');
     saveStudioComponentTaxonomy();
-    archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
   }
   if(action==='category-delete'){
     if(!category){openInfoDialog('Select Category','Choose a category to delete.');return;}
@@ -4710,7 +4680,6 @@ function handleStudioTaxonomyAction(action){
       return;
     }
     const deleteNow=()=>{
-      const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
       studioComponentTaxonomyState.categories=studioComponentTaxonomyState.categories.filter((item)=>item.id!==category.id);
       if(studioLibraryPath.categoryId===category.id || studioLibraryEditor.targetId===category.id){
         studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
@@ -4721,7 +4690,6 @@ function handleStudioTaxonomyAction(action){
         studioComponentTaxonomySelection.subcategory='';
       }
       saveStudioComponentTaxonomy();
-      archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
       refreshStudioComponentAndTaxonomyViews();
     };
     openConfirmDialog({
@@ -4899,8 +4867,35 @@ function studioSubcategoryNamesForLibrary(taxonomy,records,categoryName){
     .filter((item)=>normalizeNameKey(item&&item.category)===categoryKey)
     .map((item)=>String(item&&item.subcategory||'').trim())
     .filter(Boolean);
-  return Array.from(new Set(taxonomySubcategories.concat(recordSubcategories)))
-    .sort(compareTaxonomyDisplayNames);
+  const names=Array.from(new Set(taxonomySubcategories.concat(recordSubcategories)));
+  const hasUnassignedRecords=(records||[]).some((item)=>normalizeNameKey(item&&item.category)===categoryKey && !normalizeNameKey(item&&item.subcategory));
+  if(hasUnassignedRecords && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
+    names.push(UNASSIGNED_COMPONENT_CATEGORY);
+  }
+  return names.sort(compareTaxonomyDisplayNames);
+}
+function studioComponentRecordsForCategory(records,categoryName){
+  const categoryKey=normalizeNameKey(categoryName);
+  if(categoryKey===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
+    return (records||[]).filter((record)=>!normalizeNameKey(record&&record.category) || isInvalidLibraryCategoryName(record&&record.category));
+  }
+  return (records||[]).filter((record)=>normalizeNameKey(record&&record.category)===categoryKey);
+}
+function studioComponentRecordsForSubcategory(records,categoryName,subcategoryName){
+  const subcategoryKey=normalizeNameKey(subcategoryName);
+  const scoped=studioComponentRecordsForCategory(records,categoryName);
+  if(!subcategoryKey)return scoped;
+  const unassignedKey=normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY);
+  return scoped.filter((record)=>subcategoryKey===unassignedKey?!normalizeNameKey(record&&record.subcategory):normalizeNameKey(record&&record.subcategory)===subcategoryKey);
+}
+function studioComponentLibrarySelectionData(){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const records=componentLibraryRecords();
+  return {
+    taxonomy,
+    records,
+    categories:studioCategoryNamesForLibrary(taxonomy,records),
+  };
 }
 function currentStudioComponentRecord(){
   if(studioComponentDraft)return studioComponentDraft;
@@ -4970,13 +4965,13 @@ function renderStudioComponentsLibrary(){
   const listCard=list?list.closest('.studio-components-shell__list-card'):null;
   if(!list || !details)return;
 
-  const taxonomy=ensureStudioComponentTaxonomyLoaded();
-  const records=componentLibraryRecords();
+  const libraryData=studioComponentLibrarySelectionData();
+  const {taxonomy,records}=libraryData;
   const queryRaw=String(studioComponentsSearch||'').trim();
   const queryKey=queryRaw.toLowerCase();
   if(searchInput && searchInput.value!==queryRaw){searchInput.value=queryRaw;}
 
-  const categoryNames=studioCategoryNamesForLibrary(taxonomy,records);
+  const categoryNames=libraryData.categories;
   const validCategory=categoryNames.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.categoryId))||'';
   const supplierBrowseLevels=['supplier','supplier-category','supplier-subcategory','supplier-component'];
   if(!supplierBrowseLevels.includes(studioLibraryPath.level) && studioLibraryPath.level!=='categories' && !validCategory){
@@ -5157,7 +5152,7 @@ function renderStudioComponentsLibrary(){
 
   if(studioLibraryPath.level==='subcategory'){
     const trackStock=activeTrackComponentStock();
-    const scopedRecords=records.filter((item)=>normalizeNameKey(item.category)===normalizeNameKey(studioLibraryPath.categoryId) && normalizeNameKey(item.subcategory)===normalizeNameKey(studioLibraryPath.subcategoryId));
+    const scopedRecords=studioComponentRecordsForSubcategory(records,studioLibraryPath.categoryId,studioLibraryPath.subcategoryId);
     const visible=sortComponentRecordsByName(scopedRecords.filter((record)=>studioComponentMatchesSearch(record,queryKey)));
     if(!visible.length){
       list.innerHTML='<p class="studio-components-list__empty">No components found in this subcategory.</p>';
@@ -5447,12 +5442,10 @@ function bindStudioComponentsPanel(){
             renderStudioComponentsLibrary();
             return;
           }
-          const coveredBefore=builtInCategoryDefaultsCoveredByRegistry();
           target.name=nextName;
           studioRenameCategoryById(target.id,sourceName,nextName);
           if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceName))studioLibraryPath.categoryId=nextName;
           saveStudioComponentTaxonomy();
-          archiveNewlyUncoveredBuiltInCategoryDefaults(coveredBefore);
           studioLibraryEditor={type:'',mode:'',targetName:''};
           refreshStudioComponentAndTaxonomyViews();
           return;
@@ -6753,14 +6746,6 @@ function saveBlankLibrarySearch(value){
   blankLibrarySearch=String(value||'');
   Store.set(BLANK_LIBRARY_SEARCH_KEY,blankLibrarySearch);
 }
-function getCustomCategoryNames(){
-  const stored=Store.get(CUSTOM_CATEGORY_STORAGE_KEY,Store.get('klabs-workshop-custom-components',[]));
-  if(!Array.isArray(stored))return[];
-  return Array.from(new Set(stored.map((name)=>String(name||'').trim()).filter(Boolean)));
-}
-function saveCustomCategoryNames(names){
-  Store.set(CUSTOM_CATEGORY_STORAGE_KEY,Array.from(new Set(names.map((name)=>String(name||'').trim()).filter(Boolean))));
-}
 function getCustomSupplierNames(){
   const stored=Store.get(CUSTOM_SUPPLIER_STORAGE_KEY,[]);
   if(!Array.isArray(stored))return[];
@@ -6783,125 +6768,28 @@ function saveArchivedChoiceNames(type,names){
 function normalizeNameKey(name){
   return String(name||'').trim().toLowerCase();
 }
-// Active Build "Add Component" is a 3-stage cascade sourced strictly from the current Components
-// library (Category -> Subcategory -> Component), matching the Components screen structure exactly.
-// Non-library pseudo categories (Blank, Freight, Decals, Other, ...) stay one-tap leaves, unchanged.
-function componentPickerRecordsForCategory(categoryName){
-  const key=normalizeNameKey(categoryName);
-  const records=componentLibraryRecords();
-  if(key===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
-    return records.filter((record)=>!normalizeNameKey(record.category) || isInvalidLibraryCategoryName(record.category));
-  }
-  return records.filter((record)=>normalizeNameKey(record.category)===key);
-}
-function componentPickerCategoryHasLibraryRecords(name){
-  const key=normalizeNameKey(name);
-  if(!key)return false;
-  return componentPickerRecordsForCategory(name).length>0;
-}
-// True when the authoritative category registry already covers this name - either exactly or via a
-// known singular/plural naming variant (i.e. a renamed or merged twin from CATEGORY_NAME_ALIAS_GROUPS) -
-// so a built-in fallback name can never reintroduce a category that was renamed, merged or deleted in
-// Components. General data-path rule: no per-category special cases.
-function componentPickerRegistryCoversCategory(registryNames,name){
-  const key=normalizeNameKey(name);
-  if(!key)return false;
-  const aliasGroupKey=categoryAliasGroupKeyFor(name);
-  return (Array.isArray(registryNames)?registryNames:[]).some((registryName)=>{
-    if(normalizeNameKey(registryName)===key)return true;
-    return !!aliasGroupKey && categoryAliasGroupKeyFor(registryName)===aliasGroupKey;
-  });
-}
-// Built-in picker defaults that exactly match a registry category (or one of its known naming
-// variants) are suppressed as duplicates. When a Components rename/merge/delete (or a cloud taxonomy
-// pull) leaves such a built-in name uncovered, it is archived so the picker's gap-fill leaves can
-// never resurrect the obsolete category. 'Blank' is exempt: it is a functional build-row entry point
-// that opens the blank-library picker, not just a category label.
-function archiveBuiltInCategoryDefault(name){
-  const key=normalizeNameKey(name);
-  if(!key || isBlankCategory(name))return;
-  const isBuiltIn=DEFAULT_CATEGORY_NAMES.some((defaultName)=>normalizeNameKey(defaultName)===key);
-  if(!isBuiltIn)return;
-  const archived=getArchivedChoiceNames('category');
-  if(archived.some((value)=>normalizeNameKey(value)===key))return;
-  archived.push(String(name||'').trim());
-  saveArchivedChoiceNames('category',archived);
-}
-function builtInCategoryDefaultsCoveredByRegistry(){
-  const registryNames=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
-  return DEFAULT_CATEGORY_NAMES.filter((name)=>componentPickerRegistryCoversCategory(registryNames,name));
-}
-function archiveNewlyUncoveredBuiltInCategoryDefaults(previouslyCoveredNames){
-  const registryNames=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
-  (Array.isArray(previouslyCoveredNames)?previouslyCoveredNames:[]).forEach((name)=>{
-    if(!componentPickerRegistryCoversCategory(registryNames,name))archiveBuiltInCategoryDefault(name);
-  });
-}
 function componentPickerCategoryStageOptions(query){
-  const archived=new Set(getArchivedChoiceNames('category').map(normalizeNameKey));
-  const seen=new Set();
-  const names=[];
-  // Single authoritative source: the current Components category registry - the exact same list the
-  // Components screen renders - so rename/merge/delete in Components propagates here immediately.
-  // The legacy picker archive list never hides a live registry category.
-  const registryNames=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
-  registryNames.forEach((name)=>{
-    const key=normalizeNameKey(name);
-    if(!key || seen.has(key))return;
-    seen.add(key);
-    names.push(name);
-  });
-  // Built-in names survive only as gap-fill quick-add leaves for categories the registry does not
-  // cover at all and that were never explicitly removed - never as a parallel taxonomy that could
-  // resurrect a renamed, merged or deleted category name.
-  DEFAULT_CATEGORY_NAMES.forEach((name)=>{
-    const key=normalizeNameKey(name);
-    if(!key || seen.has(key) || archived.has(key))return;
-    // The Blank entry opens the blank-library picker (a functional build row that drives guide
-    // layout), not a taxonomy drill-down, so it stays available even when a "Blanks" product
-    // category covers the alias group in the registry.
-    if(!isBlankCategory(name) && componentPickerRegistryCoversCategory(registryNames,name))return;
-    seen.add(key);
-    names.push(name);
-  });
-  // Render-only ordering (never rewrites the stored/insertion order): alphabetical, case-insensitive, whitespace-trimmed.
-  names.sort((left,right)=>compareTaxonomyDisplayNames(String(left||'').trim(),String(right||'').trim()));
+  const names=studioComponentLibrarySelectionData().categories;
   const normalized=normalizeNameKey(query);
   return names
     .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
-    .map((name)=>({name,id:'',isDrill:!isBlankCategory(name) && componentPickerCategoryHasLibraryRecords(name)}));
+    .map((name)=>({name,id:'',isDrill:true}));
 }
 function componentPickerSubcategoryStageOptions(categoryName,query){
-  // Single authoritative source: the exact aggregation the Components library screen renders (taxonomy
-  // subcategories plus any values present on saved component records), resolved through the persisted
-  // taxonomy so a stale in-memory cache self-heals. Previously this stage scraped record.subcategory only,
-  // so a subcategory rename/reparent in Components was not reflected here until a record carried it.
-  const persistedCategory=studioCategoryByName(categoryName);
+  const libraryData=studioComponentLibrarySelectionData();
+  const persistedCategory=libraryData.taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(categoryName));
   const resolvedCategoryName=persistedCategory?persistedCategory.name:categoryName;
-  const names=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),resolvedCategoryName).slice();
-  // Keeps library components saved without a subcategory selectable instead of stranding them behind a drill-down.
-  const hasUnassignedRecords=componentPickerRecordsForCategory(categoryName).some((record)=>!normalizeNameKey(record.subcategory));
-  if(hasUnassignedRecords && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
-    names.push(UNASSIGNED_COMPONENT_CATEGORY);
-  }
+  const names=studioSubcategoryNamesForLibrary(libraryData.taxonomy,libraryData.records,resolvedCategoryName);
   const normalized=normalizeNameKey(query);
   return names
-    .sort((left,right)=>compareTaxonomyDisplayNames(String(left||'').trim(),String(right||'').trim()))
     .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
     .map((name)=>({name,id:'',isDrill:true}));
 }
 function componentPickerComponentStageOptions(categoryName,subcategoryName,query){
-  const subcategoryKey=normalizeNameKey(subcategoryName);
-  const unassignedKey=normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY);
+  const libraryData=studioComponentLibrarySelectionData();
   const normalized=normalizeNameKey(query);
-  return componentPickerRecordsForCategory(categoryName)
-    .filter((record)=>{
-      if(!subcategoryKey)return true;
-      const recordKey=normalizeNameKey(record.subcategory);
-      return subcategoryKey===unassignedKey?!recordKey:recordKey===subcategoryKey;
-    })
+  return sortComponentRecordsByName(studioComponentRecordsForSubcategory(libraryData.records,categoryName,subcategoryName))
     .filter((record)=>!normalized || normalizeNameKey(record.name).includes(normalized))
-    .sort((left,right)=>compareTaxonomyDisplayNames(String(left.name||'').trim(),String(right.name||'').trim()))
     .map((record)=>({name:record.name,id:String(record.id||''),isDrill:false,record}));
 }
 function componentPickerStageOptions(query){
@@ -7120,7 +7008,6 @@ function ensureChoicePicker(){
     const customInput=$('choicePickerCustomInput');
     const name=(customInput?customInput.value:'').trim();
     if(!name)return;
-    if(activeChoicePicker.type==='category' && studioRejectInvalidCategoryName(name))return;
     if(activeChoiceEditor.mode==='rename'){
       const renamed=renameCustomChoice(activeChoiceEditor.originalName,name,activeChoiceEditor.blankId||'');
       if(renamed){
@@ -7195,11 +7082,10 @@ function ensureChoicePicker(){
   });
 }
 function customChoiceNames(type){
-  return type==='supplier'?getCustomSupplierNames():getCustomCategoryNames();
+  return type==='supplier'?getCustomSupplierNames():[];
 }
 function saveCustomChoiceNames(type,names){
-  if(type==='supplier'){saveCustomSupplierNames(names);return;}
-  saveCustomCategoryNames(names);
+  if(type==='supplier')saveCustomSupplierNames(names);
 }
 // Buy Price only. Never falls back to the Sell Price fields (unitPrice/price): that leak made a component
 // with no Buy Price report Buy = Sell everywhere it was read (Components list, Add Component picker, build
@@ -7583,42 +7469,6 @@ function maybeSeedStarterComponents(){
   seedStarterComponentsLibrary();
   assignStarterComponentSuppliers();
 }
-const CATEGORY_ALIAS_MERGE_STORAGE_KEY='klabs-studio-category-alias-merge-v1';
-function mergeDuplicateCategoryAliasesOnce(){
-  if(Store.get(CATEGORY_ALIAS_MERGE_STORAGE_KEY,false))return;
-  const taxonomy=ensureStudioComponentTaxonomyLoaded();
-  const report=[];
-  CATEGORY_NAME_ALIAS_GROUPS.forEach((variants)=>{
-    const variantKeys=new Set(variants.map(normalizeNameKey));
-    const matches=taxonomy.categories.filter((item)=>variantKeys.has(normalizeNameKey(item.name)));
-    if(matches.length<2)return;
-    // Prefer the variant with real components already assigned; ties break on subcategory count then longer (more descriptive) name.
-    const scored=matches.map((item)=>({
-      item,
-      usage:studioCountCategoryUsage(item.name),
-      subCount:Array.isArray(item.subcategories)?item.subcategories.length:0,
-    })).sort((a,b)=>(b.usage-a.usage)||(b.subCount-a.subCount)||(b.item.name.length-a.item.name.length));
-    const survivor=scored[0].item;
-    scored.slice(1).forEach((entry)=>{
-      const loser=entry.item;
-      const movedCount=studioCountCategoryUsage(loser.name);
-      if(movedCount>0)studioRenameCategory(loser.name,survivor.name);
-      (loser.subcategories||[]).forEach((sub)=>{
-        if(!survivor.subcategories.some((existing)=>normalizeNameKey(existing.name)===normalizeNameKey(sub.name))){
-          survivor.subcategories.push(sub);
-        }
-      });
-      taxonomy.categories=taxonomy.categories.filter((row)=>row.id!==loser.id);
-      report.push(`Merged category "${loser.name}" into "${survivor.name}" (${movedCount} component(s) preserved).`);
-    });
-  });
-  if(report.length){
-    studioComponentTaxonomyState=taxonomy;
-    saveStudioComponentTaxonomy();
-    console.info('[K-Labs Studio] Category duplicate cleanup:',report.join(' '));
-  }
-  Store.set(CATEGORY_ALIAS_MERGE_STORAGE_KEY,true);
-}
 const PLACEHOLDER_COMPONENT_CLEANUP_STORAGE_KEY='klabs-studio-placeholder-cleanup-v1';
 // Category-name-shaped component records created by an earlier bug where picking a brand new Build Cost
 // category/line-item name also created a matching "component" record using that same name.
@@ -7698,33 +7548,6 @@ function mergeAutoSyncedLibraryRecord(existingRecord,incomingRecord,componentNam
     cost:existingCost!==undefined?existingCost:(incomingUnitCost!==undefined?incomingUnitCost:incomingCost),
   };
 }
-function renameComponentLibraryRecord(fromName,toName){
-  const fromKey=normalizeNameKey(fromName);
-  const toKey=normalizeNameKey(toName);
-  if(!fromKey || !toKey)return;
-  const records=componentLibraryRecords();
-  const targetIndex=records.findIndex((record)=>normalizeNameKey(record.name)===fromKey);
-  if(targetIndex<0)return;
-  records[targetIndex]={
-    ...records[targetIndex],
-    name:String(toName||'').trim(),
-    category:String(toName||'').trim(),
-  };
-  saveComponentLibraryRecords(records);
-}
-function duplicateComponentLibraryRecord(fromName,toName){
-  const existing=findComponentLibraryRecordByName(fromName);
-  if(!existing)return;
-  const toKey=normalizeNameKey(toName);
-  const records=componentLibraryRecords().filter((record)=>normalizeNameKey(record.name)!==toKey);
-  records.unshift({
-    ...existing,
-    id:'', // a duplicate is a distinct component, never reuse the source's cloud sync id
-    name:String(toName||'').trim(),
-    category:String(toName||'').trim(),
-  });
-  saveComponentLibraryRecords(records);
-}
 function removeComponentLibraryRecord(name){
   const targetKey=normalizeNameKey(name);
   if(!targetKey)return;
@@ -7749,6 +7572,7 @@ function applyComponentLibraryRecordToRow(index,name){
   row.libraryComponentId=String(record.id||'').trim();
   if(record.stockOnHand!==undefined)row.stockOnHand=numberOrZero(record.stockOnHand);
   if(specificationValue(record.subcategory))row.subcategory=record.subcategory;
+  if(specificationValue(record.brand))row.brand=record.brand;
   if(specificationValue(record.customerLabel))row.customerLabel=record.customerLabel;
   if(Number.isFinite(Number(record.quantity)))row.quantity=Number(record.quantity);
   if(record.unitCost!==undefined)row.unitCost=numberOrZero(record.unitCost);
@@ -7778,8 +7602,7 @@ function syncComponentRowEditorInputs(index){
   }
 }
 function defaultChoiceNameSet(type){
-  const defaults=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES).map(normalizeNameKey);
-  return new Set(defaults);
+  return new Set((type==='supplier'?DEFAULT_SUPPLIER_NAMES:[]).map(normalizeNameKey));
 }
 function startChoiceEditor(mode,originalName){
   const customBox=$('choicePickerCustomBox');
@@ -7872,8 +7695,7 @@ function blankRowMenuMarkup(blank){
     :`<button class="component-picker-menu__item" data-blank-action="select" data-blank-id="${blankId}" type="button">Select</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
   return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">&#8943;</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
-function addCustomChoice(name,options){
-  const context=options&&typeof options==='object'?options:{};
+function addCustomChoice(name){
   if(activeChoicePicker.type==='blank'){
     const newBlank=normalizeBlank({id:generateId('blank'),model:name});
     blanks.unshift(newBlank);
@@ -7881,6 +7703,7 @@ function addCustomChoice(name,options){
     renderBlanks();
     return;
   }
+  if(activeChoicePicker.type!=='supplier')return;
   const normalized=normalizeNameKey(name);
   const type=activeChoicePicker.type;
   const defaultKeys=defaultChoiceNameSet(type);
@@ -7891,18 +7714,11 @@ function addCustomChoice(name,options){
     const archived=getArchivedChoiceNames(type).filter((value)=>normalizeNameKey(value)!==normalized);
     saveArchivedChoiceNames(type,archived);
   }
-  if(type==='category'){
-    if(context.cloneFromName){
-      duplicateComponentLibraryRecord(context.cloneFromName,name);
-    }else{
-      upsertComponentLibraryRecord(name,context.sourceComponent&&typeof context.sourceComponent==='object'?context.sourceComponent:{category:name});
-    }
-  }
   resyncStudioComponentTaxonomyWithRecords();
   refreshStudioComponentAndTaxonomyViews();
 }
 function isDefaultChoiceName(type,name){
-  const defaults=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES);
+  const defaults=type==='supplier'?DEFAULT_SUPPLIER_NAMES:[];
   const normalized=normalizeNameKey(name);
   return defaults.some((value)=>normalizeNameKey(value)===normalized);
 }
@@ -7918,13 +7734,14 @@ function renameCustomChoice(fromName,toName,blankId){
     renderWorkshopQuote();
     return true;
   }
+  if(type!=='supplier')return false;
   const fromKey=normalizeNameKey(fromName);
   const toKey=normalizeNameKey(toName);
   if(!fromKey || !toKey)return false;
   const names=customChoiceNames(type);
   const index=names.findIndex((value)=>normalizeNameKey(value)===fromKey);
   const archivedNames=getArchivedChoiceNames(type);
-  const defaultNames=(type==='supplier'?DEFAULT_SUPPLIER_NAMES:DEFAULT_CATEGORY_NAMES).map(normalizeNameKey);
+  const defaultNames=DEFAULT_SUPPLIER_NAMES.map(normalizeNameKey);
   const visibleNames=new Set(defaultNames.concat(names.map(normalizeNameKey)));
   if(fromKey!==toKey && visibleNames.has(toKey))return false;
   if(index>=0){
@@ -7944,20 +7761,14 @@ function renameCustomChoice(fromName,toName,blankId){
     archived.push(fromName);
   }
   saveArchivedChoiceNames(type,archived);
-  if(type==='category'){
-    const category=studioCategoryByName(fromName);
-    renameComponentLibraryRecord(fromName,toName);
-    if(category)studioRenameCategoryById(category.id,fromName,toName);
-    studioTaxonomyRenameCategoryByName(fromName,toName);
-  }else if(type==='supplier'){
-    studioRenameSupplier(fromName,toName);
-    studioTaxonomyRenameSupplierByName(fromName,toName);
-  }
+  studioRenameSupplier(fromName,toName);
+  studioTaxonomyRenameSupplierByName(fromName,toName);
   refreshStudioComponentAndTaxonomyViews();
   return true;
 }
 function removeCustomChoice(optionName){
   const type=activeChoicePicker.type;
+  if(type!=='supplier')return;
   const optionKey=normalizeNameKey(optionName);
   const nextNames=customChoiceNames(type).filter((value)=>normalizeNameKey(value)!==optionKey);
   saveCustomChoiceNames(type,nextNames);
@@ -7966,14 +7777,8 @@ function removeCustomChoice(optionName){
     archived.push(optionName);
   }
   saveArchivedChoiceNames(type,archived);
-  if(type==='category'){
-    removeComponentLibraryRecord(optionName);
-    studioReassignUsedCategoryToUnassigned(optionName);
-    studioTaxonomyRemoveCategoryByName(optionName);
-  }else if(type==='supplier'){
-    studioReassignUsedSupplierToUnassigned(optionName);
-    studioTaxonomyRemoveSupplierByName(optionName);
-  }
+  studioReassignUsedSupplierToUnassigned(optionName);
+  studioTaxonomyRemoveSupplierByName(optionName);
   refreshStudioComponentAndTaxonomyViews();
 }
 function getChoiceValue(type,item){
@@ -8059,10 +7864,6 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     return;
   }
   if(context.index>=0){
-    if(context.type==='category' && isBlankCategory(selectedName)){
-      openChoicePicker('blank',context.index,document.activeElement);
-      return;
-    }
     // A master component with configured sizes must not be added until a size is chosen.
     if(context.type==='category' && componentRecordSizeOptions(findComponentLibraryRecordByName(selectedName)).length){
       openComponentSizePicker(context.index,selectedName);
