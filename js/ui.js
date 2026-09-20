@@ -9226,6 +9226,34 @@ function toggleCustomerFinderCustomerMenu(){
     customerFinderBuildRowMenu='';
   }
 }
+function positionCustomerFinderInlineMenu(){
+  const sheet=$('customerFinderSheet');
+  if(!sheet || sheet.hidden)return;
+  const menu=sheet.querySelector('.customer-finder__inline-menu');
+  const trigger=sheet.querySelector('.customer-finder__detail-more[aria-expanded="true"], .customer-finder__work-more[aria-expanded="true"]');
+  if(!menu || !trigger)return;
+  menu.style.setProperty('position','fixed','important');
+  menu.style.setProperty('right','auto','important');
+  menu.style.setProperty('bottom','auto','important');
+  const viewport=window.visualViewport;
+  const viewportLeft=Math.round(viewport?viewport.offsetLeft:0);
+  const viewportTop=Math.round(viewport?viewport.offsetTop:0);
+  const viewportWidth=Math.round(viewport?viewport.width:document.documentElement.clientWidth||window.innerWidth);
+  const viewportHeight=Math.round(viewport?viewport.height:document.documentElement.clientHeight||window.innerHeight);
+  const inset=8;
+  const triggerRect=trigger.getBoundingClientRect();
+  const menuRect=menu.getBoundingClientRect();
+  const left=Math.max(viewportLeft+inset,Math.min(viewportLeft+viewportWidth-inset-menuRect.width,triggerRect.right-menuRect.width));
+  const spaceBelow=viewportTop+viewportHeight-triggerRect.bottom-inset;
+  const spaceAbove=triggerRect.top-viewportTop-inset;
+  const opensUpward=spaceBelow<menuRect.height && spaceAbove>=menuRect.height;
+  const top=opensUpward
+    ?triggerRect.top-menuRect.height-6
+    :Math.min(viewportTop+viewportHeight-inset-menuRect.height,triggerRect.bottom+6);
+  menu.style.left=`${left}px`;
+  menu.style.top=`${Math.max(viewportTop+inset,top)}px`;
+  menu.style.maxHeight=`${Math.max(80,viewportHeight-(inset*2))}px`;
+}
 function customerFinderBuildRowMenuMarkup(entry){
   const lifecycle=buildLifecycleStatusKey(entry&&entry.record);
   const source=escapeHtml(entry.source);
@@ -9240,7 +9268,7 @@ function customerFinderBuildRowMenuMarkup(entry){
       const toggleAction=lifecycle==='complete'?'mark-active':'mark-complete';
       return `<button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="${toggleAction}" data-customer-open-source="${source}" data-customer-open-index="${index}">${toggleLabel}</button>`;
     })();
-  return `<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Build actions">${confirmItem}${toggleItem}<button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="rename" data-customer-open-source="${source}" data-customer-open-index="${index}">Rename Build</button><button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-build-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">Delete Build</button></div>`;
+  return `<div class="saved-build-card__menu customer-finder__inline-menu" role="menu" aria-label="Quote actions"><button class="saved-build-card__menu-item" type="button" role="menuitem" data-customer-build-action="open-edit" data-customer-open-source="${source}" data-customer-open-index="${index}">Open / Edit Quote</button>${confirmItem}${toggleItem}<button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-customer-build-action="delete" data-customer-open-source="${source}" data-customer-open-index="${index}">Delete Quote</button></div>`;
 }
 function customerFinderWorkRowMarkup(entry){
   const record=entry&&entry.record?entry.record:{};
@@ -9255,7 +9283,7 @@ function customerFinderWorkRowMarkup(entry){
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
   const menuOpen=isCustomerFinderBuildRowMenuOpen(entry.source,index);
-  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open build ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${statusLabel}</small><small>${escapeHtml(timelineText)}</small></div><div class="customer-finder__work-actions"><button class="ghost-action customer-finder__work-more" type="button" data-customer-row-action="toggle-menu" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?customerFinderBuildRowMenuMarkup(entry):''}</div></div>`;
+  return `<div class="customer-finder__work-row" data-customer-open-source="${source}" data-customer-open-index="${index}" role="button" tabindex="0" aria-label="Open quote ${escapeHtml(title)}"><div class="customer-finder__work-copy"><strong>${escapeHtml(title)}</strong><small>${statusLabel}</small><small>${escapeHtml(timelineText)}</small></div><div class="customer-finder__work-actions"><button class="ghost-action customer-finder__work-more" type="button" data-customer-row-action="toggle-menu" data-customer-open-source="${source}" data-customer-open-index="${index}" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Quote actions">&hellip;</button>${menuOpen?customerFinderBuildRowMenuMarkup(entry):''}</div></div>`;
 }
 function setCustomerRenameValidation(message){
   const error=$('customerRenameNameError');
@@ -9582,25 +9610,21 @@ function requestDeleteCustomerGroup(customerKey,customerName){
   const entries=group&&Array.isArray(group.records)?group.records:[];
   const customerOnlyEntries=entries.filter(isCustomerOnlyBuildEntry);
   const relatedEntries=entries.filter((entry)=>!isCustomerOnlyEntry(entry));
-  if(relatedEntries.length>0){
-    openConfirmDialog({
-      title:'Delete Customer',
-      message:`This customer has ${relatedEntries.length} saved record${relatedEntries.length===1?'':'s'}. Delete those records first.`,
-      actions:[{id:'ok',label:'OK',kind:'primary'}]
-    },()=>{});
-    return;
-  }
   if(!customerOnlyEntries.length){
     openConfirmDialog({
       title:'Delete Customer',
-      message:'No customer-only record was found.',
+      message:relatedEntries.length
+        ?`This customer is derived from ${relatedEntries.length} historical quote/build record${relatedEntries.length===1?'':'s'}. No standalone customer profile exists to delete, and history will not be removed.`
+        :'No standalone customer profile was found.',
       actions:[{id:'ok',label:'OK',kind:'primary'}]
     },()=>{});
     return;
   }
   openConfirmDialog({
     title:'Delete Customer',
-    message:`Delete ${customerName||'this customer'}? This removes the customer record only.`,
+    message:relatedEntries.length
+      ?`Delete the saved profile for ${customerName||'this customer'}? ${relatedEntries.length} historical quote/build record${relatedEntries.length===1?'':'s'} will remain, so the customer will still appear in Customer Finder through that history.`
+      :`Delete ${customerName||'this customer'}? This removes the customer profile only.`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete Customer',kind:'danger'}]
   },(action)=>{
     if(action!=='delete')return;
@@ -9612,7 +9636,8 @@ function requestDeleteCustomerGroup(customerKey,customerName){
     if(activeSavedBuildRef && activeSavedBuildRef.source==='build' && deletedIndexes.has(Number(activeSavedBuildRef.index))){
       clearActiveSavedBuildRef();
     }
-    customerFinderSelectedKey='';
+    customerFinderSelectedKey=relatedEntries.length?customerKey:'';
+    customerFinderBrowseView=relatedEntries.length?'detail':'list';
     renderBuilds();
     renderCustomerFinder();
     flashWorkshopStatus('Customer deleted');
@@ -9697,6 +9722,9 @@ function renderCustomerFinder(){
     </section>
   `;
   if(rootView)rootView.hidden=true;
+  if(customerFinderCustomerMenuOpen || customerFinderBuildRowMenu){
+    window.requestAnimationFrame(positionCustomerFinderInlineMenu);
+  }
 }
 function clearCustomerFinderViewportStyles(){
   const sheet=$('customerFinderSheet');
@@ -9756,6 +9784,9 @@ function syncCustomerFinderViewport(){
   sheet.style.setProperty('--customer-finder-keyboard-inset',`${keyboardInset}px`);
   if(keyboardActive && activeEl && typeof activeEl.scrollIntoView==='function'){
     activeEl.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+  if(customerFinderCustomerMenuOpen || customerFinderBuildRowMenu){
+    window.requestAnimationFrame(positionCustomerFinderInlineMenu);
   }
 }
 function handleCustomerFinderFocusIn(){
@@ -10035,19 +10066,19 @@ function ensureCustomerFinderSheet(){
         });
         return;
       }
-      if(action==='rename'){
+      if(action==='open-edit'){
         const customerKey=customerFinderSelectedKey;
         closeCustomerFinderSheet();
         openSavedBuildRecord(source,index,{openAtTop:true,origin:'customer',customerKey});
-        window.setTimeout(()=>{
-          focusBuildNameField();
-          flashWorkshopStatus('Rename build in Build Details section',{pending:true,duration:1900});
-        },56);
         return;
       }
       if(action==='delete'){
         closeCustomerFinderBuildRowMenu();
-        requestDeleteSavedBuildRecord(source,index);
+        requestDeleteSavedBuildRecord(source,index,{
+          title:'Delete Quote?',
+          message:'Delete only this quote/build history record? The customer profile and all other history will remain.',
+          confirmLabel:'Delete Quote',
+        });
       }
       return;
     }
@@ -10440,14 +10471,15 @@ function deleteSavedEntryBySource(source,index){
   if(storageKey==='klabs-workshop-builds' && deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
   return true;
 }
-function requestDeleteSavedBuildRecord(source,index){
+function requestDeleteSavedBuildRecord(source,index,options){
   const selected=getSavedEntryBySource(source,index);
   if(!selected)return;
+  const settings={title:'Delete this build?',message:'This action cannot be undone.',confirmLabel:'Delete',...(options||{})};
   closeSavedBuildRowMenu();
   openConfirmDialog({
-    title:'Delete this build?',
-    message:'This action cannot be undone.',
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]
+    title:settings.title,
+    message:settings.message,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:settings.confirmLabel,kind:'danger'}]
   },(action)=>{
     if(action!=='delete')return;
     if(!deleteSavedEntryBySource(source,index))return;
