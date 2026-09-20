@@ -21,6 +21,7 @@ const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
 const CUSTOMER_ONLY_RECORD_TYPE='customer';
+const COMPONENT_HIERARCHY_CLEANUP_KEY='klabs-component-hierarchy-cleanup-v1';
 // Signed-out/never-migrated usage keeps the original bare key (the "anonymous" namespace - preserved
 // forever, never deleted). Each signed-in account gets its own suffixed key so accounts sharing a device
 // can never read, overwrite or upload each other's component library/taxonomy.
@@ -3496,6 +3497,14 @@ function categorySubcategoryOptionsMarkup(selectedCategoryName,selectedSubcatego
     .concat(sourceSubcategories.map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.name)}"${normalizeNameKey(subcategory.name)===normalizeNameKey(selectedSubcategoryName)?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
   return {categoryOptions:categoryOptions.join(''),subcategoryOptions:subcategoryOptions.join('')};
 }
+function explicitBrandForSubcategory(categoryName,subcategoryName){
+  const key=`${normalizeNameKey(categoryName)}|${normalizeNameKey(subcategoryName)}`;
+  const explicitBrands={
+    'reel seats|fuji':'Fuji',
+    'reel seats|k-labs':'K-Labs',
+  };
+  return explicitBrands[key]||'';
+}
 function studioComponentDetailPayloadFromDom(){
   const stockInput=$('studioComponentStockOnHand');
   const rawStock=String(stockInput&&stockInput.value||'').trim();
@@ -4338,6 +4347,52 @@ function studioRenameSubcategory(categoryName,oldSubcategory,newSubcategory){
   });
   return true;
 }
+function componentHierarchyCleanupStorageKey(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim()||'local';
+  return `${COMPONENT_HIERARCHY_CLEANUP_KEY}:${accountId}`;
+}
+function migrateComponentHierarchyLabels(){
+  const markerKey=componentHierarchyCleanupStorageKey();
+  if(Store.get(markerKey,false))return {changed:false,renamed:[],skipped:[]};
+  const migrations=[
+    {category:'Reel Seats',from:'Fuji Reel seats',to:'Fuji',brand:'Fuji'},
+    {category:'Reel Seats',from:'K-Labs Reel seats',to:'K-Labs',brand:'K-Labs'},
+  ];
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const records=componentLibraryRecords();
+  const renamed=[];
+  const skipped=[];
+  let recordsChanged=false;
+  let taxonomyChanged=false;
+  migrations.forEach((migration)=>{
+    const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(migration.category));
+    if(!category)return;
+    const source=category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(migration.from));
+    if(!source)return;
+    const destination=category.subcategories.find((item)=>item.id!==source.id && normalizeNameKey(item.name)===normalizeNameKey(migration.to));
+    if(destination){
+      skipped.push({category:category.name,from:source.name,to:destination.name,reason:'destination-exists'});
+      return;
+    }
+    const oldName=source.name;
+    source.name=migration.to;
+    taxonomyChanged=true;
+    let componentCount=0;
+    records.forEach((record)=>{
+      if(normalizeNameKey(record.category)!==normalizeNameKey(category.name))return;
+      if(normalizeNameKey(record.subcategory)!==normalizeNameKey(oldName))return;
+      record.subcategory=migration.to;
+      if(!String(record.brand||'').trim())record.brand=migration.brand;
+      componentCount+=1;
+      recordsChanged=true;
+    });
+    renamed.push({category:category.name,from:oldName,to:migration.to,subcategoryId:source.id,componentCount});
+  });
+  if(recordsChanged)saveComponentLibraryRecords(records);
+  if(taxonomyChanged)saveStudioComponentTaxonomy();
+  Store.set(markerKey,true);
+  return {changed:recordsChanged||taxonomyChanged,renamed,skipped};
+}
 function studioRelinkSubcategory(oldCategoryName,oldSubcategory,newCategoryName,newSubcategory){
   const oldCategoryKey=normalizeNameKey(oldCategoryName);
   const oldSubcategoryKey=normalizeNameKey(oldSubcategory);
@@ -4952,7 +5007,7 @@ function renderStudioComponentsLibrary(){
         if(buyValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--buy">BUY $${buyValue.toFixed(2)}</span>`);
         if(sellValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--sell">SELL $${sellValue.toFixed(2)}</span>`);
         const secondaryParts=[];
-        if(brand)secondaryParts.push(brand);
+        if(brand && normalizeNameKey(brand)!==normalizeNameKey(studioLibraryPath.subcategoryId))secondaryParts.push(brand);
         if(trackStock){
           const stockValue=componentLibraryStockValue(record);
           secondaryParts.push(`In Stock ${stockValue===undefined?0:stockValue}`);
@@ -5179,6 +5234,15 @@ function bindStudioComponentsPanel(){
         const options=categorySubcategoryOptionsMarkup(selectedCategory,'');
         if(subcategorySelect){
           subcategorySelect.innerHTML=options.subcategoryOptions;
+        }
+      }
+      if(target && (target.id==='studioComponentCategory' || target.id==='studioComponentSubcategory')){
+        const brandInput=$('studioComponentBrand');
+        const categoryName=String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim();
+        const subcategoryName=String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim();
+        const explicitBrand=explicitBrandForSubcategory(categoryName,subcategoryName);
+        if(brandInput && !String(brandInput.value||'').trim() && explicitBrand){
+          brandInput.value=explicitBrand;
         }
       }
       syncStudioComponentSaveButtonState();
@@ -12884,4 +12948,4 @@ window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
 window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
 window.readAnonymousStudioSettingsSyncPayload=readAnonymousStudioSettingsSyncPayload;
 window.studioSettingsSyncCacheState=studioSettingsSyncCacheState;
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};

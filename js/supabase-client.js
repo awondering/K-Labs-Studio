@@ -43,6 +43,9 @@ function klabsApplyAuthState(session) {
   // First-run starter seeding must wait until any merge/sync has fully settled, so seeded defaults can
   // never be mistaken for pre-existing local data during a sign-in merge.
   Promise.resolve(syncOutcome)
+    .then(() => {
+      if (session?.user?.id) window.KLABS_UI?.migrateComponentHierarchyLabels?.();
+    })
     .catch(() => {})
     .finally(() => {
       window.KLABS_UI?.maybeSeedStarterComponents?.();
