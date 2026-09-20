@@ -20,6 +20,7 @@ const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
 const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
+const CUSTOMER_ONLY_RECORD_TYPE='customer';
 // Signed-out/never-migrated usage keeps the original bare key (the "anonymous" namespace - preserved
 // forever, never deleted). Each signed-in account gets its own suffixed key so accounts sharing a device
 // can never read, overwrite or upload each other's component library/taxonomy.
@@ -8595,13 +8596,107 @@ function savedBuildRecords(){
   const records=Store.get('klabs-workshop-builds',[]);
   return Array.isArray(records)?records:[];
 }
+function isCustomerOnlyRecord(record){
+  const source=record&&typeof record==='object'?record:{};
+  if(source.recordType===CUSTOMER_ONLY_RECORD_TYPE)return true;
+  if(!isValidCustomerName(source.customerName))return false;
+  if(specificationValue(source.buildNumber) || specificationValue(source.quoteNumber))return false;
+  if(specificationValue(source.buildName) || specificationValue(source.estimatedCompletionDate))return false;
+  if(specificationValue(source.blankId) || specificationValue(source.blankName) || specificationValue(source.blankMaker) || specificationValue(source.blankSeries) || specificationValue(source.blankSku))return false;
+  const specs=source.buildSpecifications&&typeof source.buildSpecifications==='object'?source.buildSpecifications:{};
+  if(Object.keys(specs).some((key)=>!!specificationValue(specs[key])))return false;
+  const guide=source.guideSpecification&&typeof source.guideSpecification==='object'?source.guideSpecification:{};
+  if(guide.guideCount!==null && guide.guideCount!==undefined)return false;
+  if(guide.firstGuideMm!==null && guide.firstGuideMm!==undefined)return false;
+  if(guide.targetStripperMm!==null && guide.targetStripperMm!==undefined)return false;
+  if(specificationValue(guide.spiralMethod) || specificationValue(guide.spiralDirection))return false;
+  if(Array.isArray(guide.spiralAngles) && guide.spiralAngles.length)return false;
+  const components=Array.isArray(source.components)?source.components:[];
+  if(components.some((item)=>componentRowHasMeaningfulData(item)))return false;
+  if(numberOrZero(source.blankCost)>0 || numberOrZero(source.labourHours)>0 || numberOrZero(source.targetProfit)>0 || numberOrZero(source.finalCustomerPrice)>0)return false;
+  if(numberOrZero(source.marginPercent||source.markupPercent)>0 || numberOrZero(source.priceAdjustment)>0 || numberOrZero(source.naturalCustomerPrice)>0)return false;
+  return true;
+}
+function isCustomerOnlyEntry(entry){
+  return !!(entry&&entry.source==='build'&&isCustomerOnlyRecord(entry.record));
+}
+function customerOnlyRecordId(customerName){
+  const value=normalizeNameKey(customerName).replace(/\s+/g,' ');
+  let first=2166136261;
+  let second=2246822519;
+  for(let index=0;index<value.length;index+=1){
+    const code=value.charCodeAt(index);
+    first=Math.imul(first^code,16777619);
+    second=Math.imul(second^code,3266489917);
+  }
+  return `customer-${(first>>>0).toString(36)}-${(second>>>0).toString(36)}`;
+}
+function customerOnlyRecordFromSource(source,existingRecord,nowIso){
+  const input=source&&typeof source==='object'?source:{};
+  const existing=existingRecord&&typeof existingRecord==='object'?existingRecord:{};
+  const timestamp=nowIso||new Date().toISOString();
+  const profileText=(key,aliases)=>{
+    const sourceKeys=[key,...(Array.isArray(aliases)?aliases:[])];
+    const sourceKey=sourceKeys.find((candidate)=>Object.prototype.hasOwnProperty.call(input,candidate));
+    if(sourceKey)return String(input[sourceKey]||'').trim();
+    return String(existing[key]||'').trim();
+  };
+  return {
+    id:specificationValue(existing.id)||customerOnlyRecordId(input.customerName),
+    recordType:CUSTOMER_ONLY_RECORD_TYPE,
+    customerName:profileText('customerName'),
+    company:profileText('company',['companyName','businessName']),
+    phone:profileText('phone'),
+    email:profileText('email'),
+    addressLine1:profileText('addressLine1'),
+    addressLine2:profileText('addressLine2'),
+    suburbLocality:profileText('suburbLocality'),
+    cityTown:profileText('cityTown'),
+    regionState:profileText('regionState'),
+    postcode:profileText('postcode'),
+    country:profileText('country')||'New Zealand',
+    notes:profileText('notes'),
+    createdAt:specificationValue(existing.createdAt)||specificationValue(input.createdAt)||specificationValue(input.savedAt)||timestamp,
+    savedAt:timestamp,
+    updatedAt:timestamp,
+  };
+}
+function saveCustomerOnlyRecord(source,matchCustomerKey){
+  const customerName=String(source&&source.customerName||'').trim();
+  if(!isValidCustomerName(customerName))return null;
+  const records=savedBuildRecords();
+  const matchKey=String(matchCustomerKey||normalizeNameKey(customerName));
+  const stableId=customerOnlyRecordId(customerName);
+  const existingIndex=records.findIndex((record)=>isCustomerOnlyRecord(record) && (specificationValue(record.id)===stableId || customerFinderMatchesKey(matchKey,record.customerName)));
+  const savedRecord=customerOnlyRecordFromSource(source,existingIndex>=0?records[existingIndex]:null);
+  if(existingIndex>=0)records.splice(existingIndex,1);
+  records.unshift(savedRecord);
+  Store.set('klabs-workshop-builds',records);
+  window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(savedRecord);
+  return savedRecord;
+}
+function migrateLegacyCustomerOnlyRecordsToBuilds(){
+  const buildRecords=savedBuildRecords();
+  const changedRecords=[];
+  buildRecords.forEach((record,index)=>{
+    if(!isCustomerOnlyRecord(record) || record.recordType===CUSTOMER_ONLY_RECORD_TYPE)return;
+    const upgraded=customerOnlyRecordFromSource(record,record,specificationValue(record.updatedAt)||specificationValue(record.savedAt)||new Date().toISOString());
+    buildRecords[index]=upgraded;
+    changedRecords.push(upgraded);
+  });
+  if(!changedRecords.length)return;
+  Store.set('klabs-workshop-builds',buildRecords);
+  changedRecords.forEach((record)=>window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record));
+}
 function allSavedEntries(){
-  const quoteEntries=savedQuoteRecords().map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}));
+  const quoteEntries=savedQuoteRecords()
+    .map((record,index)=>({source:'quote',index,record:normalizeQuote(record)}))
+    .filter((entry)=>!isCustomerOnlyEntry(entry));
   const buildEntries=savedBuildRecords().map((record,index)=>({source:'build',index,record:normalizeQuote(record)}));
   return quoteEntries.concat(buildEntries);
 }
 function savedBuildEntries(){
-  return allSavedEntries().sort((left,right)=>{
+  return allSavedEntries().filter((entry)=>!isCustomerOnlyEntry(entry)).sort((left,right)=>{
     const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
     const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
     return rightDate-leftDate;
@@ -8638,10 +8733,11 @@ function customerSavedGroups(searchValue,options){
     if(!includeInvalidCustomers && !isValidCustomerName(customerName))return;
     const key=normalizeNameKey(customerName)||'__no_customer__';
     if(!grouped.has(key)){
-      grouped.set(key,{key,name:customerName||'No customer name',entries:[],sortSurname:''});
+      grouped.set(key,{key,name:customerName||'No customer name',records:[],entries:[],sortSurname:''});
     }
     const target=grouped.get(key);
-    target.entries.push(entry);
+    target.records.push(entry);
+    if(!isCustomerOnlyEntry(entry))target.entries.push(entry);
     if(customerName && target.name==='No customer name')target.name=customerName;
     if(!target.sortSurname){
       target.sortSurname=customerSurnameFromRecord(record);
@@ -8649,6 +8745,11 @@ function customerSavedGroups(searchValue,options){
   });
   const normalizedSearch=normalizeNameKey(searchValue);
   const groups=Array.from(grouped.values()).map((group)=>{
+    const records=[...group.records].sort((left,right)=>{
+      const leftDate=Date.parse(left.record&&left.record.updatedAt||left.record&&left.record.savedAt||'')||0;
+      const rightDate=Date.parse(right.record&&right.record.updatedAt||right.record&&right.record.savedAt||'')||0;
+      return rightDate-leftDate;
+    });
     const entries=[...group.entries].sort((left,right)=>{
       const leftDate=Date.parse(left.record&&left.record.savedAt||'')||0;
       const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
@@ -8657,10 +8758,11 @@ function customerSavedGroups(searchValue,options){
     const sortSurname=group.sortSurname||customerSurnameFromRecord(entries[0]&&entries[0].record);
     return {
       ...group,
+      records,
       entries,
       quotes:entries.filter((entry)=>entry.source==='quote'),
       builds:entries.filter((entry)=>entry.source==='build'),
-      latestSavedAt:entries[0]&&entries[0].record?entries[0].record.savedAt:'',
+      latestSavedAt:records[0]&&records[0].record?records[0].record.savedAt:'',
       // Reliable structured surname sorts first; otherwise sort by the full display name rather than a guess.
       sortKey:normalizeNameKey(sortSurname||group.name),
     };
@@ -8683,6 +8785,9 @@ function customerGroupByKey(customerKey){
   return customerSavedGroups('').find((group)=>group.key===customerKey)||null;
 }
 function customerFinderActionIntroText(){
+  if(customerFinderIntent==='customer-only'){
+    return 'Enter customer details.';
+  }
   if(customerFinderIntent!=='new-build'){
     return 'Search customer name and open their build history.';
   }
@@ -8773,6 +8878,16 @@ function updateCustomerFinderIntentUi(){
   const form=$('customerFinderNewForm');
   const backs=searchBlock?Array.from(searchBlock.querySelectorAll('[data-customer-finder-action="back-to-actions"]')):[];
   const back=backs.length?backs[0]:null;
+  if(customerFinderIntent==='customer-only'){
+    if(startActions)startActions.hidden=true;
+    if(searchBlock)searchBlock.hidden=true;
+    if(rootView)rootView.hidden=true;
+    if(browseHead)browseHead.hidden=true;
+    if(browseAddBtn)browseAddBtn.hidden=true;
+    if(form)form.hidden=false;
+    if(back)back.hidden=true;
+    return;
+  }
   if(customerFinderIntent==='new-build'){
     if(startActions)startActions.hidden=customerFinderNewBuildStep!=='actions';
     if(searchBlock)searchBlock.hidden=customerFinderNewBuildStep!=='search';
@@ -8828,11 +8943,9 @@ function saveCustomerRecordFromDraft(draft){
   const source=draft&&typeof draft==='object'?draft:{};
   const customerName=String(source.customerName||'').trim();
   if(!customerName)return null;
-  const normalizedCustomerName=normalizeNameKey(customerName);
-  const persistedQuote=normalizeQuote({
-    ...newQuoteTemplate(),
+  return saveCustomerOnlyRecord({
     customerName,
-    company:String(source.company||'').trim(),
+    ...(Object.prototype.hasOwnProperty.call(source,'company')?{company:String(source.company||'').trim()}:{}),
     phone:String(source.phone||'').trim(),
     email:String(source.email||'').trim(),
     addressLine1:String(source.addressLine1||'').trim(),
@@ -8842,77 +8955,7 @@ function saveCustomerRecordFromDraft(draft){
     regionState:String(source.regionState||'').trim(),
     postcode:String(source.postcode||'').trim(),
     country:String(source.country||'').trim()||'New Zealand',
-    quoteMode:'internal',
-    quoteStatus:'quote',
   });
-  const quoteRecords=savedQuoteRecords();
-  const existingQuoteIndex=quoteRecords.findIndex((record)=>{
-    if(!record)return false;
-    return !!normalizeNameKey(record&&record.customerName) && normalizeNameKey(record.customerName)===normalizedCustomerName;
-  });
-  if(existingQuoteIndex>=0){
-    const existing=normalizeQuote(quoteRecords[existingQuoteIndex]);
-    const merged=normalizeQuote({
-      ...existing,
-      customerName,
-      company:persistedQuote.company,
-      phone:persistedQuote.phone,
-      email:persistedQuote.email,
-      addressLine1:persistedQuote.addressLine1,
-      addressLine2:persistedQuote.addressLine2,
-      suburbLocality:persistedQuote.suburbLocality,
-      cityTown:persistedQuote.cityTown,
-      regionState:persistedQuote.regionState,
-      postcode:persistedQuote.postcode,
-      country:persistedQuote.country,
-      updatedAt:new Date().toISOString(),
-      savedAt:specificationValue(existing.savedAt)||new Date().toISOString(),
-    });
-    quoteRecords.splice(existingQuoteIndex,1);
-    quoteRecords.unshift(merged);
-    Store.set('klabs-workshop-quotes',quoteRecords);
-    return merged;
-  }
-  const buildRecords=savedBuildRecords();
-  const existingBuildIndex=buildRecords.findIndex((record)=>{
-    if(!record)return false;
-    return !!normalizeNameKey(record&&record.customerName) && normalizeNameKey(record.customerName)===normalizedCustomerName;
-  });
-  if(existingBuildIndex>=0){
-    const existing=normalizeQuote(buildRecords[existingBuildIndex]);
-    const merged=normalizeQuote({
-      ...existing,
-      customerName,
-      company:persistedQuote.company,
-      phone:persistedQuote.phone,
-      email:persistedQuote.email,
-      addressLine1:persistedQuote.addressLine1,
-      addressLine2:persistedQuote.addressLine2,
-      suburbLocality:persistedQuote.suburbLocality,
-      cityTown:persistedQuote.cityTown,
-      regionState:persistedQuote.regionState,
-      postcode:persistedQuote.postcode,
-      country:persistedQuote.country,
-      updatedAt:new Date().toISOString(),
-      savedAt:specificationValue(existing.savedAt)||new Date().toISOString(),
-    });
-    buildRecords.splice(existingBuildIndex,1);
-    buildRecords.unshift(merged);
-    Store.set('klabs-workshop-builds',buildRecords);
-    return merged;
-  }
-  const nowIso=new Date().toISOString();
-  const savedRecord=normalizeQuote({
-    ...persistedQuote,
-    createdAt:nowIso,
-    savedAt:nowIso,
-    updatedAt:nowIso,
-  });
-  if(!specificationValue(savedRecord.id))savedRecord.id=studioTaxonomyId('build');
-  buildRecords.unshift(savedRecord);
-  Store.set('klabs-workshop-builds',buildRecords);
-  window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(savedRecord);
-  return savedRecord;
 }
 function handleCreateCustomerFromNewBuildForm(){
   // A second tap must never write a second record while the first save is still settling.
@@ -8947,6 +8990,10 @@ function handleCreateCustomerFromNewBuildForm(){
   window.setTimeout(()=>{
     customerFinderCreateInFlight=false;
     closeCustomerFinderSheet();
+    if(customerFinderIntent==='customer-only'){
+      flashWorkshopStatus('Customer saved');
+      return;
+    }
     runNewBuildStartAction(()=>{
       startFreshQuoteForCustomer(savedCustomer);
       flashWorkshopStatus('Customer saved');
@@ -8954,8 +9001,10 @@ function handleCreateCustomerFromNewBuildForm(){
   },220);
 }
 function customerFinderPrimaryRecord(group){
-  const selected=(group && Array.isArray(group.entries))?group.entries:[];
+  const selected=(group && Array.isArray(group.records))?group.records:[];
   if(!selected.length)return {};
+  const profile=selected.find((entry)=>entry&&entry.record&&entry.record.recordType===CUSTOMER_ONLY_RECORD_TYPE);
+  if(profile)return profile.record;
   const sorted=[...selected].sort((left,right)=>{
     const leftDate=Date.parse(left&&left.record&&left.record.savedAt||'')||0;
     const rightDate=Date.parse(right&&right.record&&right.record.savedAt||'')||0;
@@ -9035,6 +9084,7 @@ function closeCustomerRenameSheet(){
   unlockModalLayer({restoreFocus:true});
 }
 function applyCustomerRename(customerKey,nextName){
+  const sourceRecord=customerEditSourceRecord(customerKey);
   const quoteRecords=savedQuoteRecords();
   const buildRecords=savedBuildRecords();
   const changedBuildRecords=[];
@@ -9049,10 +9099,17 @@ function applyCustomerRename(customerKey,nextName){
   buildRecords.forEach((record)=>{
     if(customerFinderMatchesKey(customerKey,record&&record.customerName)){
       record.customerName=nextName;
+      record.updatedAt=new Date().toISOString();
       changedBuildRecords.push(record);
       buildChanged=true;
     }
   });
+  if(!changedBuildRecords.some((record)=>isCustomerOnlyRecord(record))){
+    const customerRecord=customerOnlyRecordFromSource({...sourceRecord,customerName:nextName},null);
+    buildRecords.unshift(customerRecord);
+    changedBuildRecords.push(customerRecord);
+    buildChanged=true;
+  }
   if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
   if(buildChanged){
     Store.set('klabs-workshop-builds',buildRecords);
@@ -9227,6 +9284,12 @@ function applyCustomerEdit(customerKey,draft){
       buildChanged=true;
     }
   });
+  if(!changedBuildRecords.some((record)=>isCustomerOnlyRecord(record))){
+    const customerRecord=customerOnlyRecordFromSource(next,null,nowIso);
+    buildRecords.unshift(customerRecord);
+    changedBuildRecords.push(customerRecord);
+    buildChanged=true;
+  }
   if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
   if(buildChanged){
     Store.set('klabs-workshop-builds',buildRecords);
@@ -9323,31 +9386,13 @@ function requestEditCustomer(customerKey){
   openCustomerEditSheet(customerKey);
 }
 function isCustomerOnlyBuildEntry(entry){
-  if(!entry || entry.source!=='build')return false;
-  const record=entry.record&&typeof entry.record==='object'?entry.record:{};
-  if(!specificationValue(record.id))return false;
-  if(specificationValue(record.buildNumber) || specificationValue(record.quoteNumber))return false;
-  if(specificationValue(record.buildName) || specificationValue(record.estimatedCompletionDate))return false;
-  if(specificationValue(record.blankId) || specificationValue(record.blankName) || specificationValue(record.blankMaker) || specificationValue(record.blankSeries) || specificationValue(record.blankSku))return false;
-  const specs=record.buildSpecifications&&typeof record.buildSpecifications==='object'?record.buildSpecifications:{};
-  if(Object.keys(specs).some((key)=>!!specificationValue(specs[key])))return false;
-  const guide=record.guideSpecification&&typeof record.guideSpecification==='object'?record.guideSpecification:{};
-  if(guide.guideCount!==null && guide.guideCount!==undefined)return false;
-  if(guide.firstGuideMm!==null && guide.firstGuideMm!==undefined)return false;
-  if(guide.targetStripperMm!==null && guide.targetStripperMm!==undefined)return false;
-  if(specificationValue(guide.spiralMethod) || specificationValue(guide.spiralDirection))return false;
-  if(Array.isArray(guide.spiralAngles) && guide.spiralAngles.length)return false;
-  const components=Array.isArray(record.components)?record.components:[];
-  if(components.some((item)=>componentRowHasMeaningfulData(item)))return false;
-  if(numberOrZero(record.blankCost)>0 || numberOrZero(record.labourHours)>0 || numberOrZero(record.targetProfit)>0 || numberOrZero(record.finalCustomerPrice)>0)return false;
-  if(numberOrZero(record.marginPercent||record.markupPercent)>0 || numberOrZero(record.priceAdjustment)>0 || numberOrZero(record.naturalCustomerPrice)>0)return false;
-  return true;
+  return !!(entry&&entry.source==='build'&&isCustomerOnlyRecord(entry.record));
 }
 function requestDeleteCustomerGroup(customerKey,customerName){
   const group=customerSavedGroups('').find((entry)=>entry.key===customerKey);
-  const entries=group&&Array.isArray(group.entries)?group.entries:[];
+  const entries=group&&Array.isArray(group.records)?group.records:[];
   const customerOnlyEntries=entries.filter(isCustomerOnlyBuildEntry);
-  const relatedEntries=entries.filter((entry)=>!isCustomerOnlyBuildEntry(entry));
+  const relatedEntries=entries.filter((entry)=>!isCustomerOnlyEntry(entry));
   if(relatedEntries.length>0){
     openConfirmDialog({
       title:'Delete Customer',
@@ -9709,8 +9754,8 @@ function ensureCustomerFinderSheet(){
         return;
       }
       if(action==='browse-add-customer'){
-        closeCustomerFinderSheet();
-        openCustomerFinderSheet('new-build');
+        customerFinderIntent='customer-only';
+        resetCustomerFinderNewForm();
         setCustomerFinderNewBuildStep('add');
         return;
       }
@@ -10302,6 +10347,7 @@ function renderBuilds(){
   const terms=savedBuildSearchTerms(query);
   const records=savedBuildRecords()
     .map((record,index)=>({source:'build',index,record:normalizeQuote(record)}))
+    .filter((entry)=>!isCustomerOnlyEntry(entry))
     .sort((left,right)=>{
       const leftDate=Date.parse(left.record&&left.record.updatedAt||left.record&&left.record.savedAt||'')||0;
       const rightDate=Date.parse(right.record&&right.record.updatedAt||right.record&&right.record.savedAt||'')||0;
@@ -12716,6 +12762,7 @@ function render(options){
 cleanupPlaceholderComponentRecordsOnce();
 ensureComponentLibraryIdsBackfilled();
 ensureBuildRecordIdsBackfilled();
+migrateLegacyCustomerOnlyRecordsToBuilds();
 loadChoicePickerFavourites();
 bindLayoutControls();
 bindWorkshopCalculatorControls();

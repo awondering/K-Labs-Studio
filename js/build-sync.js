@@ -1,14 +1,15 @@
 // Supabase sync for klabs-workshop-builds ONLY. Independent from js/component-sync.js (Components/taxonomy)
 // and does not touch the legacy klabs-workshop-quotes store. One Build record = one authoritative record,
 // identified by its own stable `id` field (NOT buildNumber, which is a per-device sequential display label
-// only - see js/ui.js nextBuildNumber()). Customers are never stored/synced here: they remain a pure
-// derived view over Build/Quote records (js/ui.js customerSavedGroups()/allSavedEntries()), so once Builds
-// match on both devices the Customer list matches automatically with no changes to that code.
+// only - see js/ui.js nextBuildNumber()). Customer-only profiles use the same payload path with
+// recordType="customer"; the UI includes them in Customer Finder identity/profile data but excludes them
+// from build and quote histories.
 (function () {
   let currentUserId = "";
   let pushTimer = null;
   let pushInFlight = false;
   let pushQueuedAgain = false;
+  let localMutationVersion = 0;
   // Per-record queues flushed together on the next debounced push - keeps "on save, upsert that ONE
   // record" literal: we never re-scan/re-upload the whole local array on an ordinary edit.
   let pendingUpsertById = new Map();
@@ -73,6 +74,7 @@
   async function mergeAndSync() {
     const cloudRows = await fetchCloudBuilds();
     const cloudById = new Map(cloudRows.map((row) => [String(row.client_id), row]));
+    const snapshotVersion = localMutationVersion;
     const local = localBuilds();
     const seen = new Set();
     const merged = [];
@@ -95,6 +97,9 @@
     });
 
     if (toUpsert.length) await upsertCloudBuilds(toUpsert);
+    // A save/delete may land while the sign-in merge is awaiting cloud I/O. Never replace that newer local
+    // state with this merge's stale snapshot; restart against the latest local records instead.
+    if (localMutationVersion !== snapshotVersion) return mergeAndSync();
     saveLocalBuilds(merged);
     window.KLABS_UI?.refreshBuildViews?.();
   }
@@ -143,12 +148,14 @@
     // Queues exactly the one changed record - id is that record's own stable id (see js/ui.js persistBuildRecord).
     notifyBuildSaved(record) {
       if (!currentUserId || !record || !record.id) return;
+      localMutationVersion += 1;
       pendingDeleteIds.delete(String(record.id));
       pendingUpsertById.set(String(record.id), record);
       scheduleFlush();
     },
     notifyBuildDeleted(id) {
       if (!currentUserId || !id) return;
+      localMutationVersion += 1;
       pendingUpsertById.delete(String(id));
       pendingDeleteIds.add(String(id));
       scheduleFlush();
