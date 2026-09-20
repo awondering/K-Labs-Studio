@@ -1,5 +1,5 @@
 // TEMPORARY DIAGNOSTIC surface: this cache id is also shown in Settings → Account → Sync diagnostics.
-const APP_SHELL_VERSION='build119-v140';
+const APP_SHELL_VERSION='build119-v141';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
 const LEGACY_CACHE_PREFIX='klabs-studio-build';
@@ -21,6 +21,7 @@ const APP_SHELL_ASSETS=[
 	'js/studio-visuals.js',
 	'js/navigation.js',
 	'js/ui.js',
+	'js/quote-number-allocator.js',
 	'js/app.js',
 	'assets/logo.svg',
 	'assets/rod-carbon.svg',

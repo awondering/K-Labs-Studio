@@ -146,6 +146,8 @@ let workshopStatusFlashUntil=0;
 let workshopStatusFlashTimer=null;
 let quoteAutosaveTimer=null;
 let quoteAutosaveInFlight=false;
+let quoteNumberAllocationPromise=null;
+let quoteStartInFlight=false;
 let currentBuildActionsMenuOpen=false;
 let preserveWorkshopQuoteOnEntry=false;
 let studioScreenView='landing';
@@ -421,7 +423,30 @@ function formatQuoteNumber(sequence){
   return `${businessProfile.quotePrefix}${Math.max(1,Math.round(numberOrZero(sequence))||1)}`;
 }
 // Consumes the next sequence number: only ever called for a quote that does not already carry one.
-function assignNextQuoteNumber(){
+function historicalQuoteSequenceFloor(){
+  const records=[...savedBuildRecords(),...savedQuoteRecords(),quote];
+  const highest=records.reduce((maximum,record)=>{
+    const match=String(record&&record.quoteNumber||'').trim().match(/(\d+)\s*$/);
+    if(!match)return maximum;
+    const value=Number(match[1]);
+    return Number.isSafeInteger(value)?Math.max(maximum,value):maximum;
+  },0);
+  const localNext=Math.max(1,Math.round(numberOrZero(businessProfile.quoteNextNumber))||1000);
+  return Math.max(localNext,highest+1);
+}
+// Anonymous operation keeps the existing local allocator. Signed-in accounts allocate only through the
+// atomic server RPC; an unreachable server leaves the draft unnumbered rather than inventing a conflicting number.
+async function assignNextQuoteNumber(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  if(accountId){
+    const allocator=window.KLABS_QUOTE_NUMBERS;
+    if(!allocator || typeof allocator.allocate!=='function')throw new Error('Quote number service is unavailable.');
+    const sequence=await allocator.allocate(historicalQuoteSequenceFloor());
+    businessProfile.quoteNextNumber=Math.max(historicalQuoteSequenceFloor(),sequence+1);
+    saveBusinessProfile();
+    syncBusinessProfileControls();
+    return formatQuoteNumber(sequence);
+  }
   const assigned=formatQuoteNumber(businessProfile.quoteNextNumber);
   businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(businessProfile.quoteNextNumber))||1000)+1;
   saveBusinessProfile();
@@ -1432,12 +1457,18 @@ function findSavedBuildTargetByRef(ref){
   return found>=0?{index:found,record:records[found]}:null;
 }
 // Saves live Guide Spacing/Guide Orientation edits to the originating build (existing save mechanism), then reopens it with Rod Specification expanded and the Guide Specification card in view.
-function returnToOriginatingBuildFromGuideLayout(){
+async function returnToOriginatingBuildFromGuideLayout(){
   const originRef=layoutEntryBuildRef;
   clearQuoteAutosaveTimer();
   if(quoteHasMeaningfulDraft(quote)){
-    persistCurrentQuoteRecord();
-    markQuoteSaved();
+    try{
+      await persistCurrentQuoteRecord();
+      markQuoteSaved();
+    }catch(error){
+      console.error('[K-Labs Studio] Could not save guide layout:',error);
+      flashWorkshopStatus('Connect to allocate a quote number and save',{pending:true,duration:3200});
+      return;
+    }
   }
   clearLayoutEntryOrigin();
   const originBuildNumber=normalizeNameKey(originRef&&originRef.buildNumber);
@@ -3075,14 +3106,25 @@ function clearQuoteAutosaveTimer(){
   quoteAutosaveTimer=null;
 }
 // Assigned once, then carried unchanged through QUOTE -> ACTIVE -> COMPLETE.
-function ensureCurrentQuoteNumber(){
+async function ensureCurrentQuoteNumber(){
   if(specificationValue(quote.quoteNumber))return quote.quoteNumber;
-  quote.quoteNumber=assignNextQuoteNumber();
-  return quote.quoteNumber;
+  if(quoteNumberAllocationPromise)return quoteNumberAllocationPromise;
+  const targetQuote=quote;
+  quoteNumberAllocationPromise=(async()=>{
+    const allocated=await assignNextQuoteNumber();
+    if(quote!==targetQuote)throw new Error('Quote changed while allocating its number.');
+    if(!specificationValue(targetQuote.quoteNumber))targetQuote.quoteNumber=allocated;
+    return targetQuote.quoteNumber;
+  })();
+  try{
+    return await quoteNumberAllocationPromise;
+  }finally{
+    quoteNumberAllocationPromise=null;
+  }
 }
-function persistCurrentQuoteRecord(){
+async function persistCurrentQuoteRecord(){
+  await ensureCurrentQuoteNumber();
   if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
-  ensureCurrentQuoteNumber();
   saveQuoteCurrent();
   const savedRef=persistBuildRecord(quote);
   if(savedRef){
@@ -3090,13 +3132,18 @@ function persistCurrentQuoteRecord(){
   }
   return savedRef||null;
 }
-function runQuoteAutosave(){
+async function runQuoteAutosave(){
   if(quoteAutosaveInFlight || !hasUnsavedQuoteChanges)return;
   quoteAutosaveInFlight=true;
   updateQuoteActionPriority();
   try{
-    persistCurrentQuoteRecord();
+    const savedRef=await persistCurrentQuoteRecord();
+    if(!savedRef)return;
     markQuoteSaved();
+  }catch(error){
+    hasUnsavedQuoteChanges=true;
+    console.error('[K-Labs Studio] Quote autosave could not allocate or persist:',error);
+    flashWorkshopStatus('Connect to save and allocate a quote number',{pending:true,duration:2800});
   }finally{
     quoteAutosaveInFlight=false;
     updateQuoteActionPriority();
@@ -5727,7 +5774,9 @@ function applyCustomerFieldsToQuoteFromRecord(targetQuote,record){
   }
   return target;
 }
-function startFreshQuoteForCustomer(record,options){
+async function startFreshQuoteForCustomer(record,options){
+  if(quoteStartInFlight)return false;
+  quoteStartInFlight=true;
   const settings={origin:'customer',customerKey:'',...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
@@ -5742,17 +5791,29 @@ function startFreshQuoteForCustomer(record,options){
     clearWorkflowCustomerOrigin();
   }
   quote=normalizeQuote(next);
-  // A customer-linked build is a real quote, so it takes its customer-facing number straight away.
-  ensureCurrentQuoteNumber();
-  saveQuoteCurrent();
-  markQuoteSaved();
-  showStudioWorkflow();
-  renderWorkshopQuote();
-  collapseWorkshopSections();
-  preserveWorkshopQuoteOnEntry=true;
-  goScreen('workshopScreen');
-  const targetSection=settings.expandCustomerSection?'workshopCustomerBody':nextWorkshopSectionId();
-  window.setTimeout(()=>focusWorkshopSection(targetSection),36);
+  try{
+    // A customer-linked build is a genuine quote. Signed-in allocation must complete atomically before
+    // the draft can be persisted; anonymous mode uses the local allocator above.
+    await ensureCurrentQuoteNumber();
+    saveQuoteCurrent();
+    markQuoteSaved();
+    return true;
+  }catch(error){
+    saveQuoteCurrent();
+    hasUnsavedQuoteChanges=true;
+    console.error('[K-Labs Studio] Could not allocate quote number:',error);
+    flashWorkshopStatus('Connect to allocate a quote number and save this draft',{pending:true,duration:3200});
+    return false;
+  }finally{
+    showStudioWorkflow();
+    renderWorkshopQuote();
+    collapseWorkshopSections();
+    preserveWorkshopQuoteOnEntry=true;
+    goScreen('workshopScreen');
+    const targetSection=settings.expandCustomerSection?'workshopCustomerBody':nextWorkshopSectionId();
+    window.setTimeout(()=>focusWorkshopSection(targetSection),36);
+    quoteStartInFlight=false;
+  }
 }
 function runNewBuildStartAction(startAction){
   if(typeof startAction!=='function')return;
@@ -9046,9 +9107,8 @@ function handleCustomerSelectionForNewBuild(customerKey,customerName){
   });
   const sourceRecord=matches[0]&&matches[0].record?matches[0].record:{customerName:String(customerName||'').trim()};
   closeCustomerFinderSheet();
-  runNewBuildStartAction(()=>{
-    startFreshQuoteForCustomer(sourceRecord);
-    flashWorkshopStatus('Customer linked');
+  runNewBuildStartAction(async()=>{
+    if(await startFreshQuoteForCustomer(sourceRecord))flashWorkshopStatus('Customer linked');
   });
 }
 function handleAddCustomerForNewBuild(){
@@ -9057,8 +9117,8 @@ function handleAddCustomerForNewBuild(){
     return;
   }
   closeCustomerFinderSheet();
-  runNewBuildStartAction(()=>{
-    startFreshQuoteForCustomer({});
+  runNewBuildStartAction(async()=>{
+    await startFreshQuoteForCustomer({});
   });
 }
 function setCustomerFinderCreateButtonState(saved){
@@ -9124,9 +9184,8 @@ function handleCreateCustomerFromNewBuildForm(){
       flashWorkshopStatus('Customer saved');
       return;
     }
-    runNewBuildStartAction(()=>{
-      startFreshQuoteForCustomer(savedCustomer);
-      flashWorkshopStatus('Customer saved');
+    runNewBuildStartAction(async()=>{
+      if(await startFreshQuoteForCustomer(savedCustomer))flashWorkshopStatus('Customer saved');
     });
   },220);
 }
@@ -10275,7 +10334,7 @@ function updateWorkshopBuildOverview(){
     dueEl.textContent=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'No due date set';
   }
 }
-function ensureCurrentBuildReference(){
+async function ensureCurrentBuildReference(){
   const target=findCurrentSavedBuildTarget();
   if(target){
     setActiveSavedBuildRef('build',target.index,target.record);
@@ -10285,13 +10344,20 @@ function ensureCurrentBuildReference(){
     flashWorkshopStatus('Add build details first',{pending:true,duration:1800});
     return null;
   }
-  const savedRef=persistCurrentQuoteRecord();
+  const savedRef=await persistCurrentQuoteRecord();
   if(!savedRef)return null;
   markQuoteSaved();
   return savedRef;
 }
-function setCurrentBuildLifecycle(nextLifecycle,options){
-  const target=ensureCurrentBuildReference();
+async function setCurrentBuildLifecycle(nextLifecycle,options){
+  let target;
+  try{
+    target=await ensureCurrentBuildReference();
+  }catch(error){
+    console.error('[K-Labs Studio] Could not allocate or save quote before status change:',error);
+    flashWorkshopStatus('Connect to allocate a quote number and save',{pending:true,duration:3200});
+    return false;
+  }
   if(!target)return false;
   if(!saveBuildLifecycleStatusBySource(target.source,target.index,nextLifecycle))return false;
   const refreshed=getSavedEntryBySource(target.source,target.index);
@@ -10308,24 +10374,30 @@ function setCurrentBuildLifecycle(nextLifecycle,options){
   flashWorkshopStatus((options&&options.message)||defaultMessage);
   return true;
 }
-function toggleCurrentBuildLifecycle(){
+async function toggleCurrentBuildLifecycle(){
   const current=currentBuildLifecycleStatus();
   if(current==='quote')return false;
   return setCurrentBuildLifecycle(current==='complete'?'active':'complete');
 }
 // Confirm Build: QUOTE -> ACTIVE on the same record. Flushes any unsaved edits first so nothing is silently discarded.
-function confirmCurrentBuildAsActive(){
+async function confirmCurrentBuildAsActive(){
   if(currentBuildLifecycleStatus()!=='quote')return;
   openConfirmDialog({
     title:'Confirm Build',
     message:'Confirm this quote as an active build?',
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Build',kind:'primary'}]
-  },(action)=>{
+  },async(action)=>{
     if(action!=='confirm')return;
     if(hasUnsavedQuoteChanges){
-      persistCurrentQuoteRecord();
+      try{
+        await persistCurrentQuoteRecord();
+      }catch(error){
+        console.error('[K-Labs Studio] Could not allocate or save quote before confirmation:',error);
+        flashWorkshopStatus('Connect to allocate a quote number and save',{pending:true,duration:3200});
+        return;
+      }
     }
-    setCurrentBuildLifecycle('active',{message:'Build confirmed \u2014 now Active'});
+    await setCurrentBuildLifecycle('active',{message:'Build confirmed \u2014 now Active'});
   });
 }
 function focusBuildNameField(){
