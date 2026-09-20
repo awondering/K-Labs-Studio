@@ -13,8 +13,8 @@ let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,gu
 const DEFAULT_CATEGORY_NAMES=['Blank','Reel Seat','Grip','Winding Checks','Butt Cap','Hook Keeper','Guides','Tip Top','Thread & Finish','Epoxy','Clear coat','Freight','Decals','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
-// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "â€”" option).
-const SUBCATEGORY_CLEAR_LABEL='â€”';
+// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "—" option).
+const SUBCATEGORY_CLEAR_LABEL='—';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
 const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
@@ -985,7 +985,7 @@ function copySpiralGuideOffsets(){
   const dirLabel=spiral.method==='standard'?'STANDARD':String(spiral.direction||'left').toUpperCase();
   const unitSuffix=workshopUnitSuffix(spiral.unit);
   const lines=[
-    `SPIRAL GUIDE MAPPER â€” ${methodLabel} (${dirLabel})`,
+    `SPIRAL GUIDE MAPPER — ${methodLabel} (${dirLabel})`,
     `Unit: ${spiral.unit.toUpperCase()} | Guides: ${guides.length}`,
     '----------------------------------------',
   ];
@@ -1200,8 +1200,8 @@ function renderSpiralGuideMapper(){
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
     visualDirection.textContent=spiral.method==='standard'
-      ?'STANDARD Â· NO TRANSITION'
-      :`STRIPPER G1 Â· ${spiral.direction.toUpperCase()} TRANSITION`;
+      ?'STANDARD · NO TRANSITION'
+      :`STRIPPER G1 · ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
   renderSpiralMapperVisual(spiral);
@@ -1336,7 +1336,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <span>${guideType}</span>
             <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT)}</span>
             <span>${labels.rotationText}</span>
-            <span class="spiral-guide-row__disclosure" aria-hidden="true">âŒ„</span>
+            <span class="spiral-guide-row__disclosure" aria-hidden="true">&#8964;</span>
           </button>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
           ${showPhysicalOffsets && labels.offsetText?`<p class="spiral-guide-row__offset">${labels.offsetText}</p>`:''}
@@ -1353,10 +1353,10 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <label>
               <span>Rotation</span>
               <div class="spiral-rotation-control" role="group" aria-label="Guide ${displayGuideNumber} rotation control">
-                <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">âˆ’</button>
+                <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">&minus;</button>
                 <div class="spiral-rotation-control__value-wrap">
                   <input class="spiral-rotation-control__value" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="angle" data-guide-index="${index}" value="${escapeHtml(formatDecimal(guide.angleDeg,1))}" aria-label="Guide ${displayGuideNumber} rotation value" />
-                  <span class="spiral-rotation-control__unit" aria-hidden="true">Â°</span>
+                  <span class="spiral-rotation-control__unit" aria-hidden="true">&deg;</span>
                 </div>
                 <button class="layout-control-card__button" type="button" data-spiral-angle-action="increment" data-guide-index="${index}" aria-label="Increase guide ${displayGuideNumber} rotation by 5 degrees">+</button>
               </div>
@@ -1786,7 +1786,7 @@ function openGripCutTemplatePrint(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Grip wrap cut template preview">
       <header class="component-sheet__header">
         <h2>Cut Template Preview</h2>
-        <button class="component-sheet__close" type="button" data-grip-template-action="close" aria-label="Close template preview">Ã—</button>
+        <button class="component-sheet__close" type="button" data-grip-template-action="close" aria-label="Close template preview">&#215;</button>
       </header>
       <div class="component-sheet__body grip-template-preview__body">
         <div class="grip-template-preview__actions">
@@ -2470,11 +2470,11 @@ function migrateBlankWorkflow(merged){
 function quoteTaxAvailable(){
   return activeTaxEnabled() && quote.taxEnabled!==false;
 }
-// Customer-facing sell value for a component row: qty Ã— Sell Price. A blank/zero Sell Price contributes $0 (never falls back to Buy Price).
+// Customer-facing sell value for a component row: qty x Sell Price. A blank/zero Sell Price contributes $0 (never falls back to Buy Price).
 function componentRowSellValue(item){
   return numberOrZero(item&&item.unitPrice)*componentRowQuantity(item);
 }
-// The natural (unadjusted) customer price: sum of every component's qtyÃ—SellPrice (this also covers charge line-items
+// The natural (unadjusted) customer price: sum of every component's qty x SellPrice (this also covers charge line-items
 // such as Freight/Postage/Repair, which are stored as components) plus the existing labour cost model.
 function naturalCustomerPrice(){
   const componentsSellTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowSellValue(item),0);
@@ -2737,9 +2737,9 @@ function blankSpecificationSummary(){
   const specifications=specificationValue(blankComponent&&blankComponent.specifications)
     || specificationValue(blankComponent&&blankComponent.blankNotes)
     || specificationValue(quote.blankNotes)
-    || (legacySpecs.length?legacySpecs.join(' â€¢ '):'');
+    || (legacySpecs.length?legacySpecs.join(' • '):'');
   const details=[brand,variant,specifications].filter(Boolean);
-  return details.join(' â€¢ ');
+  return details.join(' • ');
 }
 // Single source of truth for the saved customer address lines: reused by the internal customer preview
 // and the customer-facing quote's Delivery section so both read the exact same stored fields.
@@ -2765,7 +2765,7 @@ function customerAddressLines(){
 }
 function customerPreviewLines(){
   const lines=[];
-  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' â€¢ ');
+  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' • ');
   if(identity)lines.push(identity);
   return lines.concat(customerAddressLines());
 }
@@ -2774,7 +2774,7 @@ function customerCardSecondarySummary(){
   const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
   const phone=specificationValue(quote.phone);
   const email=specificationValue(quote.email);
-  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' â€¢ ');
+  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' • ');
 }
 function customerGripConfigurationValue(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
@@ -2795,7 +2795,7 @@ function customerGripConfigurationValue(){
   if(rear)parts.push(`Rear ${rear}`);
   if(lower)parts.push(`Lower ${lower}`);
   if(fore)parts.push(`Fore ${fore}`);
-  return parts.join(' â€¢ ');
+  return parts.join(' • ');
 }
 function customerGripFeatureSummary(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
@@ -2898,7 +2898,7 @@ function customerFinishDetailsSummary(){
     if(details.some((value)=>normalizeNameKey(value)===normalized))return;
     details.push(detail);
   });
-  return details.join(' â€¢ ');
+  return details.join(' • ');
 }
 function customerRodIdentity(){
   const buildName=customerSafeText(quote.buildName);
@@ -3070,7 +3070,7 @@ function normalizeQuote(inputQuote){
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
   merged.guideSpecification=normalizeGuideSpecification(inputQuote&&inputQuote.guideSpecification);
   migrateBlankWorkflow(merged);
-  // Natural price = qtyÃ—SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
+  // Natural price = qty x SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
   const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours)));
   merged.naturalCustomerPrice=naturalPrice;
   const hasStoredAdjustment=(inputQuote&&inputQuote.priceAdjustment)!==undefined;
@@ -3427,10 +3427,10 @@ function refreshComponentLibraryViews(){
 }
 function componentSyncStatusLabel(state){
   switch(state&&state.status){
-    case 'synced':return 'COMPONENT LIBRARY â€¢ SYNCED';
-    case 'syncing':return 'COMPONENT LIBRARY â€¢ SYNCINGâ€¦';
-    case 'error':return 'COMPONENT LIBRARY â€¢ SYNC ERROR';
-    default:return 'COMPONENT LIBRARY â€¢ LOCAL';
+    case 'synced':return 'COMPONENT LIBRARY • SYNCED';
+    case 'syncing':return 'COMPONENT LIBRARY • SYNCING…';
+    case 'error':return 'COMPONENT LIBRARY • SYNC ERROR';
+    default:return 'COMPONENT LIBRARY • LOCAL';
   }
 }
 // Account section status line: only visible while signed in. Retry is offered only for a recoverable error.
@@ -3472,7 +3472,7 @@ function promptComponentLibraryMigration(){
     }
     window.KLABS_SYNC?.copyToAccount?.().then((result)=>{
       if(result&&result.ok){
-        openConfirmDialog({title:'Component library synced',message:`Component library synced â€¢ ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        openConfirmDialog({title:'Component library synced',message:`Component library synced • ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
       }else{
         openConfirmDialog({title:'Sync failed',message:(result&&result.error)?result.error:'Could not copy your component library. Your local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
       }
@@ -3593,7 +3593,7 @@ function syncStudioComponentSaveButtonState(){
   }
   if(studioComponentDetailContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='âœ“ SAVED';
+    button.textContent='✓ SAVED';
     button.classList.add('is-saved');
     return;
   }
@@ -3619,7 +3619,7 @@ function syncStudioTaxonomySupplierSaveButtonState(){
   }
   if(studioSupplierEditContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='âœ“ SAVED';
+    button.textContent='✓ SAVED';
     button.className='ghost-action studio-taxonomy-editor__save is-saved';
     return;
   }
@@ -3654,7 +3654,7 @@ function studioComponentCurrencyFieldValue(id){
 }
 function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
-  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">Ã—</button></span>`;
+  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">&#215;</button></span>`;
 }
 // AVAILABLE SIZES editor for the component form. Generic to any category; stays collapsed until sizes exist.
 function studioComponentSizesSectionMarkup(){
@@ -4022,7 +4022,7 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
   `:'';
   const showSaved=mode==='edit' && selectedSupplier && studioSupplierEditContext.savedFlash;
   const saveButtonClass=showSaved?'ghost-action studio-taxonomy-editor__save is-saved':'ghost-action studio-taxonomy-editor__save';
-  const saveButtonLabel=showSaved?'âœ“ SAVED':'SAVE';
+  const saveButtonLabel=showSaved?'✓ SAVED':'SAVE';
   const editMarkup=mode==='edit' && selectedSupplier?`
     <div class="studio-taxonomy-modal">
       <div class="studio-taxonomy-modal__scrim" data-taxonomy-ui-action="supplier-cancel"></div>
@@ -4209,7 +4209,7 @@ function ensureCategoryMergeSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Move category contents">
       <header class="component-sheet__header">
         <h2 id="categoryMergeTitle">Delete Category</h2>
-        <button class="component-sheet__close" type="button" data-category-merge-action="cancel" aria-label="Close dialog">Ã—</button>
+        <button class="component-sheet__close" type="button" data-category-merge-action="cancel" aria-label="Close dialog">&#215;</button>
       </header>
       <div class="component-sheet__body">
         <div class="studio-component-details__head"><p id="categoryMergeMessage"></p></div>
@@ -5059,7 +5059,7 @@ function renderStudioComponentsLibrary(){
           const stockValue=componentLibraryStockValue(record);
           secondaryParts.push(`In Stock ${stockValue===undefined?0:stockValue}`);
         }
-        const secondary=secondaryParts.join(' â€¢ ');
+        const secondary=secondaryParts.join(' • ');
         const pricingMarkup=priceBits.length?`<span class="studio-components-price-row">${priceBits.join('')}</span>`:'';
         return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}${pricingMarkup}</button>`;
       }).join('');
@@ -6253,7 +6253,7 @@ function selectedBlankViewModel(){
 function selectedBlankSummaryLines(blank){
   const lines=[];
   const maker=String(blank&&blank.maker||'').trim();
-  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' â€¢ ');
+  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
   const pieces=String(blank&&blank.pieces||'').trim();
   const pieceLabel=pieces?`${pieces} Piece${pieces==='1'?'':'s'}`:'';
   const cost=numberOrZero(blank&&blank.cost);
@@ -6266,7 +6266,7 @@ function selectedBlankSummaryLines(blank){
 function selectedBlankSummaryMarkup(blank){
   const lines=selectedBlankSummaryLines(blank);
   const title=escapeHtml(blankModelName(blank)||'Choose Blank');
-  const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">â‹¯</button>`:'';
+  const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">&#8943;</button>`:'';
   const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Edit Blank</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
   return blank
     ?`<div class="selected-blank-card" data-selected-blank-state="summary"><div class="selected-blank-card__head"><strong class="selected-blank-card__name">${title}</strong></div><div class="selected-blank-card__summary">${lines.map((line)=>`<div>${escapeHtml(line)}</div>`).join('')}</div><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button>${menuButton}</div>${menu}</div>`
@@ -6803,10 +6803,10 @@ function componentPickerLeafSecondaryText(record){
   const bits=[];
   const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
   const sell=numberOrZero(record.unitPrice);
-  if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} Â· Sell $${sell.toFixed(2)}`);
+  if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} · Sell $${sell.toFixed(2)}`);
   const sizeCount=componentRecordSizeOptions(record).length;
   if(sizeCount)bits.push(`${sizeCount} size${sizeCount===1?'':'s'}`);
-  return bits.join(' â€¢ ');
+  return bits.join(' • ');
 }
 function syncComponentPickerBackButton(){
   const backButton=$('choicePickerBack');
@@ -6881,9 +6881,9 @@ function ensureChoicePicker(){
       <header class="component-sheet__header">
         <h2 id="choicePickerTitle">Select Item</h2>
         <div class="component-sheet__header-actions">
-          <button id="choicePickerBack" class="component-sheet__close" type="button" hidden aria-label="Back">â€¹</button>
+          <button id="choicePickerBack" class="component-sheet__close" type="button" hidden aria-label="Back">&#8249;</button>
           <button id="choicePickerAdd" class="component-sheet__add component-sheet__add--header" type="button">Add Component</button>
-          <button class="component-sheet__close" type="button" data-sheet-action="close" aria-label="Close picker">Ã—</button>
+          <button class="component-sheet__close" type="button" data-sheet-action="close" aria-label="Close picker">&#215;</button>
         </div>
       </header>
       <div class="component-sheet__body">
@@ -7662,7 +7662,7 @@ function syncComponentRowEditorInputs(index){
   }
   const subcategoryTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-subcategory-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
   if(subcategoryTrigger){
-    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'â€”';
+    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'—';
   }
 }
 function defaultChoiceNameSet(type){
@@ -7758,7 +7758,7 @@ function blankRowMenuMarkup(blank){
   const actions=blank.archived
     ?`<button class="component-picker-menu__item" data-blank-action="restore" data-blank-id="${blankId}" type="button">Restore</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`
     :`<button class="component-picker-menu__item" data-blank-action="select" data-blank-id="${blankId}" type="button">Select</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
-  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">â‹¯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
+  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">&#8943;</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
 function addCustomChoice(name,options){
   const context=options&&typeof options==='object'?options:{};
@@ -7975,7 +7975,7 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
     if(trigger){
-      trigger.textContent=selectedName||'â€”';
+      trigger.textContent=selectedName||'—';
     }
     updateQuoteSummary();
   }
@@ -8025,11 +8025,11 @@ function choiceOptionSecondaryText(type,item){
   if(type==='blank'){
     const blank=item&&item.blank;
     if(!blank)return '';
-    return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' â€¢ ');
+    return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
   }
   if(type==='category'){
     const bits=[String(item&&item.category||'').trim(),String(item&&item.supplier||'').trim()].filter(Boolean);
-    return bits.join(' â€¢ ');
+    return bits.join(' • ');
   }
   return item&&item.isCustom?'Custom':'';
 }
@@ -8091,7 +8091,7 @@ function renderChoicePickerOptions(query){
       list.innerHTML='<div class="component-sheet__empty">No matching components</div>';
       return;
     }
-    list.innerHTML='<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">â—Œ</div><p class="component-sheet__empty">No components yet</p><button class="component-sheet__add component-sheet__add--inline" data-choice-add-inline="true" type="button">Add Component</button></div>';
+    list.innerHTML='<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">&#9676;</div><p class="component-sheet__empty">No components yet</p><button class="component-sheet__add component-sheet__add--inline" data-choice-add-inline="true" type="button">Add Component</button></div>';
     return;
   }
   const rowsMarkup=options.map((item)=>{
@@ -8101,7 +8101,7 @@ function renderChoicePickerOptions(query){
     const favourite=choiceRecordIsFavourite(activeChoicePicker.type,item);
     const tools=(activeChoicePicker.type==='component-size' || activeChoicePicker.type==='subcategory')
       ? ''
-      : `<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">â˜…</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">â‹¯</button>`:''}</div>`;
+      : `<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">&#9733;</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">&#8943;</button>`:''}</div>`;
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${tools}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup;
@@ -8117,14 +8117,14 @@ function renderComponentPickerCascadeOptions(query){
   if(!options.length){
     list.innerHTML=hasQuery
       ?'<div class="component-sheet__empty">No matching results</div>'
-      :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">â—Œ</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
+      :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">&#9676;</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
     return;
   }
   const stage=activeChoicePicker.stage||'category';
   list.innerHTML=options.map((item)=>{
     const selected=choiceOptionIsSelected(item);
     const secondary=stage==='component'?componentPickerLeafSecondaryText(item.record):'';
-    const chevron=item.isDrill?'<span class="component-sheet__row-tools" aria-hidden="true">â€º</span>':'';
+    const chevron=item.isDrill?'<span class="component-sheet__row-tools" aria-hidden="true">&#8250;</span>':'';
     const drillAttr=item.isDrill?' data-choice-drill="true"':'';
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr}><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr} type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${chevron}</div>`;
   }).join('');
@@ -8292,7 +8292,7 @@ function buildSpecSummaryData(){
   if(blankName)parts.push(blankName);
   if(method)parts.push(method);
   if(guideCount)parts.push(`${guideCount} guide${guideCount===1?'':'s'}`);
-  return parts.length?parts.join(' Â· '):'Add rod specification';
+  return parts.length?parts.join(' · '):'Add rod specification';
 }
 function updateBuildSpecSummary(){
   const textEl=$('workshopBuildSpecsSummaryText');
@@ -8315,7 +8315,7 @@ function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
   const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Component':'Delete Component';
   const updateAction=componentRowIsEffectivelyEmpty(item)?'':`<button class="component-picker-menu__item" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button>`;
-  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">â‹¯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
+  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">&#8943;</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowSubcategoryNames(categoryName,currentSubcategory){
   // Resolve the persisted taxonomy category record first (self-heals a stale in-memory taxonomy cache),
@@ -8334,7 +8334,7 @@ function componentRowSubcategoryNames(categoryName,currentSubcategory){
 }
 function componentRowSubcategoryFieldMarkup(item,index){
   const value=specificationValue(item&&item.subcategory);
-  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'â€”')}</span><b>â–¾</b></button></label>`;
+  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'—')}</span><b>&#9662;</b></button></label>`;
 }
 // Shown only when this line has a snapshot size, or its master component still offers sizes to pick from.
 function componentRowSizeFieldMarkup(item,index){
@@ -8342,10 +8342,10 @@ function componentRowSizeFieldMarkup(item,index){
   const hasMasterSizes=componentRecordSizeOptions(componentLibraryRecordForRow(item)).length>0;
   if(!size && !hasMasterSizes)return '';
   const action=hasMasterSizes?` data-component-action="open-size-sheet" data-component-index="${index}"`:' disabled';
-  return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>â–¾</b></button></label>`;
+  return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>&#9662;</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'â€”')}</span><b>â–¾</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="â€”" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>&#9662;</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -8566,7 +8566,7 @@ function renderQuoteComponents(){
             </span>
             <span class="quote-component-row__summary-trailing">
               ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
-              <span class="quote-component-row__disclosure" aria-hidden="true">â€º</span>
+              <span class="quote-component-row__disclosure" aria-hidden="true">&#8250;</span>
             </span>
           </button>
         </div>
@@ -9131,7 +9131,7 @@ function setCustomerFinderCreateButtonState(saved){
   const button=$('customerFinderSubmitNewCustomerBtn');
   if(!button)return;
   const isSaved=!!saved;
-  button.textContent=isSaved?'âœ“ SAVED':'CREATE CUSTOMER';
+  button.textContent=isSaved?'✓ SAVED':'CREATE CUSTOMER';
   button.disabled=isSaved;
   button.classList.toggle('is-saved',isSaved);
 }
@@ -9391,7 +9391,7 @@ function ensureCustomerRenameSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Rename Customer">
       <header class="component-sheet__header">
         <h2>Rename Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-rename-action="close" aria-label="Close rename customer">Ã—</button>
+        <button class="component-sheet__close" type="button" data-customer-rename-action="close" aria-label="Close rename customer">&#215;</button>
       </header>
       <div class="component-sheet__body">
         <label><span>Customer Name</span><input id="customerRenameName" type="text" placeholder="Customer name" autocomplete="name" /></label>
@@ -9559,7 +9559,7 @@ function ensureCustomerEditSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Edit Customer">
       <header class="component-sheet__header">
         <h2>Edit Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-edit-action="close" aria-label="Close edit customer">Ã—</button>
+        <button class="component-sheet__close" type="button" data-customer-edit-action="close" aria-label="Close edit customer">&#215;</button>
       </header>
       <div class="component-sheet__body">
         <div class="customer-finder__new-form">${fieldsMarkup}</div>
@@ -9907,7 +9907,7 @@ function ensureCustomerFinderSheet(){
     <section class="component-sheet__panel customer-finder__panel" role="dialog" aria-modal="true" aria-label="Find Customer">
       <header class="component-sheet__header">
         <h2>Find Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">Ã—</button>
+        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">&#215;</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
         <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their build history.</p>
@@ -10376,7 +10376,7 @@ function updateWorkshopBuildOverview(){
   if(returnBtn)returnBtn.hidden=!(studioScreenView==='workflow' && hasActiveBuildRef && !isCustomerOrigin);
   if(customersReturnBtn)customersReturnBtn.hidden=!(studioScreenView==='workflow' && (isCustomerOrigin || (!hasActiveBuildRef && !!customerName)));
   if(titleEl){
-    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} â€” ${buildName}`:(customerName||buildName)):'Studio';
+    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
   }
   // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
   const entryActionsEl=$('quoteBuilderEntryActions');
@@ -10665,7 +10665,7 @@ function ensureConfirmSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Confirmation dialog">
       <header class="component-sheet__header">
         <h2 id="confirmSheetTitle">Confirm</h2>
-        <button class="component-sheet__close" type="button" data-confirm-action="cancel" aria-label="Close dialog">Ã—</button>
+        <button class="component-sheet__close" type="button" data-confirm-action="cancel" aria-label="Close dialog">&#215;</button>
       </header>
       <div class="component-sheet__body">
         <p id="confirmSheetMessage" class="component-sheet__empty" style="padding:2px 0 10px;text-transform:none;letter-spacing:0;font-size:12px;color:#c9c3b8"></p>
@@ -10789,7 +10789,7 @@ function ensureViewQuoteSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer quote">
       <header class="component-sheet__header">
         <h2>Customer Quote</h2>
-        <button class="component-sheet__close" type="button" data-view-quote-action="close" aria-label="Close customer quote">Ã—</button>
+        <button class="component-sheet__close" type="button" data-view-quote-action="close" aria-label="Close customer quote">&#215;</button>
       </header>
       <div class="component-sheet__body">
         <div id="viewQuoteBody"></div>
@@ -10928,7 +10928,7 @@ function emailCurrentQuote(){
     '',
     `Thank you for choosing ${businessName} for your custom rod build.`,
     '',
-    `Custom Rod Build â€” ${quoteNumber||'Quote'}`,
+    `Custom Rod Build — ${quoteNumber||'Quote'}`,
     '',
     `Total: ${currency(math.total)}`,
     `Deposit required: ${currency(math.depositAmount)}`,
@@ -10955,7 +10955,7 @@ function emailCurrentQuote(){
   if(businessProfileLines.length){
     lines.push('', ...businessProfileLines);
   }
-  const subject=`${businessName} Custom Rod Build Quote â€” ${quoteNumber||'Quote'}`;
+  const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -11360,7 +11360,7 @@ const GUIDE_ORIENTATION_METHOD_LABELS={standard:'Standard / Conventional',acute:
 function guideOrientationMethodLabel(method){
   return GUIDE_ORIENTATION_METHOD_LABELS[normalizeSpiralMethod(method)]||GUIDE_ORIENTATION_METHOD_LABELS.progressive;
 }
-// Build Specification's Guide section is a live read-out of Guide Spacing + Guide Orientation â€” no separate guide data is stored/edited here.
+// Build Specification's Guide section is a live read-out of Guide Spacing + Guide Orientation - no separate guide data is stored/edited here.
 function renderGuideSpecificationSummary(){
   const countEl=$('guideSpecCount');
   const methodEl=$('guideSpecMethod');
@@ -11922,7 +11922,7 @@ function renderWorkshopQuote(){
   if(customerSummaryTextEl){
     const customerName=specificationValue(quote.customerName);
     const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
-    const summary=customerName?(locality?`${customerName} â€¢ ${locality}`:customerName):'Add customer details';
+    const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'Add customer details';
     customerSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   const buildDetailsSummaryTextEl=$('quoteBuildDetailsSummaryText');
@@ -11930,7 +11930,7 @@ function renderWorkshopQuote(){
     const buildName=specificationValue(quote.buildName);
     const dueRaw=specificationValue(quote.estimatedCompletionDate);
     const dueText=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'';
-    const summary=buildName?(dueText?`${buildName} â€¢ ${dueText}`:buildName):(dueText||'Add build name and due date');
+    const summary=buildName?(dueText?`${buildName} • ${dueText}`:buildName):(dueText||'Add build name and due date');
     buildDetailsSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   updateBuildPricingSummary();
@@ -12044,7 +12044,7 @@ function ensureBlankEditorSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Blank editor">
       <header class="component-sheet__header">
         <h2 id="blankEditorTitle">Blank</h2>
-        <button class="component-sheet__close" type="button" data-blank-editor-action="close" aria-label="Close blank editor">Ã—</button>
+        <button class="component-sheet__close" type="button" data-blank-editor-action="close" aria-label="Close blank editor">&#215;</button>
       </header>
       <div class="component-sheet__body">
         <div class="blank-editor-grid">
@@ -12259,7 +12259,7 @@ function renderBlanks(){
   host.innerHTML=filtered.map((blank)=>{
     const idx=blanks.findIndex((item)=>item.id===blank.id);
     const isFavourite=blankIsFavourite(blank);
-    return `<article class="blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.length||'Length n/a')} â€¢ ${escapeHtml(blank.pieces||'Piece n/a')} â€¢ ${escapeHtml(blank.power||'Power n/a')} â€¢ ${escapeHtml(blank.action||'Action n/a')}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Unfavourite blank':'Favourite blank'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">â˜…</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
+    return `<article class="blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.pieces||'Piece n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Unfavourite blank':'Favourite blank'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">&#9733;</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
   }).join('');
 }
 function bindBlankLibraryControls(){
@@ -12593,7 +12593,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
     SETTINGS_PENDING_SYNC_SECTIONS.add(sectionKey);
     btn.hidden=false;
     btn.disabled=true;
-    btn.textContent=message||'âœ“ SAVED';
+    btn.textContent=message||'✓ SAVED';
     btn.className='ghost-action settings-context-action settings-save-btn is-saved';
     SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=window.setTimeout(()=>{
       btn.hidden=true;
