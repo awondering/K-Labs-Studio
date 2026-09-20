@@ -4863,15 +4863,19 @@ function renderStudioComponentsLibrary(){
   }
 
   if(studioLibraryPath.level==='categories'){
-      const visibleCategories=sortTaxonomyEntriesForDisplay(taxonomy.categories).filter((category)=>categoryNames.includes(category.name) && (!queryKey || category.name.toLowerCase().includes(queryKey)));
+    // Render from the authoritative category list, not from taxonomy.categories: the derived Unassigned
+    // bucket has no taxonomy entry, so it was listed in the Add Component picker but unreachable here.
+    const visibleCategories=categoryNames.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
     if(!visibleCategories.length){
       list.innerHTML='<p class="studio-components-list__empty">No categories found.</p>';
     }else{
-      list.innerHTML=visibleCategories.map((category)=>{
-        const name=category.name;
-        const menuKey=category.id;
-        const menuOpen=isStudioLibraryContextMenuOpen('category',menuKey);
-        return `<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button><button class="studio-components-list__menu-trigger" type="button" aria-label="Category actions" data-studio-library-menu-toggle="category" data-studio-library-menu-key="${escapeAttributeValue(menuKey)}">&hellip;</button>${menuOpen?studioCategoryContextMenuMarkup(name):''}</article>`;
+      list.innerHTML=visibleCategories.map((name)=>{
+        const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(name));
+        const openButton=`<button class="studio-components-list__item" type="button" data-studio-library-open-category="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button>`;
+        // Unassigned is derived from records with no category, so it cannot be renamed, reordered or deleted.
+        if(!category)return `<article class="studio-components-list__row">${openButton}</article>`;
+        const menuOpen=isStudioLibraryContextMenuOpen('category',category.id);
+        return `<article class="studio-components-list__row">${openButton}<button class="studio-components-list__menu-trigger" type="button" aria-label="Category actions" data-studio-library-menu-toggle="category" data-studio-library-menu-key="${escapeAttributeValue(category.id)}">&hellip;</button>${menuOpen?studioCategoryContextMenuMarkup(name):''}</article>`;
       }).join('');
     }
     return;
