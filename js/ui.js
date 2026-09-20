@@ -6614,21 +6614,34 @@ function componentPickerCategoryStageOptions(query){
     .map((name)=>({name,id:'',isDrill:!isBlankCategory(name) && componentPickerCategoryHasLibraryRecords(name)}));
 }
 function componentPickerSubcategoryStageOptions(categoryName,query){
-  const names=Array.from(new Set(
-    componentPickerRecordsForCategory(categoryName)
-      .map((record)=>String(record.subcategory||'').trim())
-      .filter(Boolean)
-  )).sort((left,right)=>compareTaxonomyDisplayNames(left.trim(),right.trim()));
+  // Single authoritative source: the exact aggregation the Components library screen renders (taxonomy
+  // subcategories plus any values present on saved component records), resolved through the persisted
+  // taxonomy so a stale in-memory cache self-heals. Previously this stage scraped record.subcategory only,
+  // so a subcategory rename/reparent in Components was not reflected here until a record carried it.
+  const persistedCategory=studioCategoryByName(categoryName);
+  const resolvedCategoryName=persistedCategory?persistedCategory.name:categoryName;
+  const names=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),resolvedCategoryName).slice();
+  // Keeps library components saved without a subcategory selectable instead of stranding them behind a drill-down.
+  const hasUnassignedRecords=componentPickerRecordsForCategory(categoryName).some((record)=>!normalizeNameKey(record.subcategory));
+  if(hasUnassignedRecords && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))){
+    names.push(UNASSIGNED_COMPONENT_CATEGORY);
+  }
   const normalized=normalizeNameKey(query);
   return names
+    .sort((left,right)=>compareTaxonomyDisplayNames(String(left||'').trim(),String(right||'').trim()))
     .filter((name)=>!normalized || normalizeNameKey(name).includes(normalized))
     .map((name)=>({name,id:'',isDrill:true}));
 }
 function componentPickerComponentStageOptions(categoryName,subcategoryName,query){
   const subcategoryKey=normalizeNameKey(subcategoryName);
+  const unassignedKey=normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY);
   const normalized=normalizeNameKey(query);
   return componentPickerRecordsForCategory(categoryName)
-    .filter((record)=>!subcategoryKey || normalizeNameKey(record.subcategory)===subcategoryKey)
+    .filter((record)=>{
+      if(!subcategoryKey)return true;
+      const recordKey=normalizeNameKey(record.subcategory);
+      return subcategoryKey===unassignedKey?!recordKey:recordKey===subcategoryKey;
+    })
     .filter((record)=>!normalized || normalizeNameKey(record.name).includes(normalized))
     .sort((left,right)=>compareTaxonomyDisplayNames(String(left.name||'').trim(),String(right.name||'').trim()))
     .map((record)=>({name:record.name,id:String(record.id||''),isDrill:false,record}));
@@ -6930,12 +6943,13 @@ function saveCustomChoiceNames(type,names){
   if(type==='supplier'){saveCustomSupplierNames(names);return;}
   saveCustomCategoryNames(names);
 }
+// Buy Price only. Never falls back to the Sell Price fields (unitPrice/price): that leak made a component
+// with no Buy Price report Buy = Sell everywhere it was read (Components list, Add Component picker, build
+// line item, Internal Build Cost).
 function componentLibraryCostValue(record){
   const source=record&&typeof record==='object'?record:{};
   if(source.cost!==undefined && source.cost!==null && source.cost!=='')return numberOrZero(source.cost);
   if(source.unitCost!==undefined && source.unitCost!==null && source.unitCost!=='')return numberOrZero(source.unitCost);
-  if(source.unitPrice!==undefined && source.unitPrice!==null && source.unitPrice!=='')return numberOrZero(source.unitPrice);
-  if(source.price!==undefined && source.price!==null && source.price!=='')return numberOrZero(source.price);
   return undefined;
 }
 function componentLibraryUnitCostValue(record){
@@ -7459,32 +7473,15 @@ function removeComponentLibraryRecord(name){
   const records=componentLibraryRecords().filter((record)=>normalizeNameKey(record.name)!==targetKey);
   saveComponentLibraryRecords(records);
 }
-function componentPickerCategoryOptions(){
-  const categorySet=new Set();
-  componentLibraryRecords().forEach((record)=>{
-    const category=String(record&&record.category||'').trim();
-    if(category)categorySet.add(category);
-  });
-  DEFAULT_CATEGORY_NAMES.forEach((name)=>{
-    if(name)categorySet.add(name);
-  });
-  return Array.from(categorySet).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
-}
 function syncChoicePickerFilterControls(){
   const filter=$('choicePickerCategoryFilter');
   if(!filter)return;
-  // Cascade navigation (Category -> Subcategory -> Component) replaces the old flat "All Categories"
-  // filter, so this control stays hidden for the build picker now.
-  const showFilter=false;
-  filter.hidden=!showFilter;
-  if(!showFilter)return;
-  const options=['<option value="all">All Categories</option>']
-    .concat(componentPickerCategoryOptions().map((name)=>`<option value="${escapeHtml(normalizeNameKey(name))}">${escapeHtml(name)}</option>`));
-  filter.innerHTML=options.join('');
-  if(!Array.from(filter.options).some((option)=>option.value===choicePickerCategoryFilter)){
-    choicePickerCategoryFilter='all';
-  }
-  filter.value=choicePickerCategoryFilter;
+  // Cascade navigation (Category -> Subcategory -> Component) replaced the old flat "All Categories"
+  // filter, which built its own parallel category list. The control stays permanently hidden and no
+  // longer has a second component-name source behind it.
+  filter.hidden=true;
+  filter.innerHTML='';
+  choicePickerCategoryFilter='all';
 }
 function applyComponentLibraryRecordToRow(index,name){
   if(index<0 || !quote.components[index])return;
