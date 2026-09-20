@@ -167,6 +167,7 @@ let studioTaxonomyUiState={
 let studioComponentTaxonomyState=null;
 let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
 let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
+let studioComponentMoveState={category:'',subcategory:'',brand:''};
 // Working copy of the open component form's AVAILABLE SIZES list; committed only on save.
 let studioComponentSizeDraft=[];
 let studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
@@ -3534,16 +3535,6 @@ function compareTaxonomyDisplayNames(left,right){
 function sortTaxonomyEntriesForDisplay(entries){
   return (Array.isArray(entries)?entries.slice():[]).sort((left,right)=>compareTaxonomyDisplayNames(left&&left.name,right&&right.name));
 }
-function categorySubcategoryOptionsMarkup(selectedCategoryName,selectedSubcategoryName){
-  const taxonomy=ensureStudioComponentTaxonomyLoaded();
-  const selectedCategory=studioCategoryByName(selectedCategoryName);
-  const categoryOptions=['<option value="">Unassigned</option>']
-    .concat(sortTaxonomyEntriesForDisplay(taxonomy.categories).map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(selectedCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`));
-  const sourceSubcategories=sortTaxonomyEntriesForDisplay(selectedCategory&&selectedCategory.subcategories);
-  const subcategoryOptions=['<option value="">Unassigned</option>']
-    .concat(sourceSubcategories.map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.name)}"${normalizeNameKey(subcategory.name)===normalizeNameKey(selectedSubcategoryName)?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
-  return {categoryOptions:categoryOptions.join(''),subcategoryOptions:subcategoryOptions.join('')};
-}
 function explicitBrandForSubcategory(categoryName,subcategoryName){
   const key=`${normalizeNameKey(categoryName)}|${normalizeNameKey(subcategoryName)}`;
   const explicitBrands={
@@ -3754,18 +3745,14 @@ function renderStudioComponentDetails(record,options){
   const subcategory=String(record.subcategory||'').trim();
   const stockOnHand=componentLibraryStockValue(record);
   const trackStock=activeTrackComponentStock();
-  const optionMarkup=categorySubcategoryOptionsMarkup(category,subcategory);
   studioComponentSizeDraft=componentRecordSizeOptions(record);
   details.innerHTML=`
-    <div class="studio-component-details__head">
-      <p>${isAddMode?'Add this component to your reusable parts library.':'Update this reusable component and save your changes.'}</p>
-    </div>
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
+    <input id="studioComponentBrand" type="hidden" value="${escapeHtml(brand)}" />
+    <input id="studioComponentCategory" type="hidden" value="${escapeHtml(category)}" />
+    <input id="studioComponentSubcategory" type="hidden" value="${escapeHtml(subcategory)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
       <label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
-      <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" value="${escapeHtml(brand)}" placeholder="Brand or manufacturer" /></label>
-      <label class="quote-component-field"><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
-      <label class="quote-component-field"><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
@@ -3773,6 +3760,7 @@ function renderStudioComponentDetails(record,options){
     ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
+      ${isAddMode?'':`<button id="studioComponentMoveBtn" class="ghost-action studio-component-details__move" type="button">Move Component</button>`}
       ${isAddMode?'':`<button id="studioComponentDeleteBtn" class="ghost-action studio-component-details__delete" type="button">Delete</button>`}
     </div>
   `;
@@ -3792,6 +3780,134 @@ function renderStudioComponentDetails(record,options){
     savedFlash:false,
   };
   syncStudioComponentSaveButtonState();
+}
+function componentMoveCategoryNames(){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const names=studioCategoryNamesForLibrary(taxonomy,componentLibraryRecords());
+  if(!names.some((name)=>normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)))names.push(UNASSIGNED_COMPONENT_CATEGORY);
+  const current=String(studioComponentMoveState.category||'').trim();
+  if(current && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(current)))names.push(current);
+  return names.slice().sort(compareTaxonomyDisplayNames);
+}
+function componentMoveSubcategoryNames(){
+  const category=String(studioComponentMoveState.category||'').trim();
+  if(!category)return [];
+  const names=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),category);
+  const current=String(studioComponentMoveState.subcategory||'').trim();
+  if(current && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(current)))names.push(current);
+  return names.slice().sort(compareTaxonomyDisplayNames);
+}
+function componentHierarchyOptionMarkup(value,label,selected,dataAttribute){
+  return `<button class="component-hierarchy-picker__option${selected?' is-selected':''}" type="button" role="option" aria-selected="${selected?'true':'false'}" ${dataAttribute}="${escapeAttributeValue(value)}"><span>${escapeHtml(label)}</span>${selected?'<b aria-hidden="true">&#10003;</b>':''}</button>`;
+}
+function ensureComponentMoveSheet(){
+  if($('componentMoveSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='componentMoveSheet';
+  sheet.className='component-sheet component-hierarchy-picker';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-component-move-action="cancel"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="componentMoveTitle">
+      <header class="component-sheet__header">
+        <h2 id="componentMoveTitle">Move Component</h2>
+        <button class="component-sheet__close" type="button" data-component-move-action="cancel" aria-label="Close move component">&#215;</button>
+      </header>
+      <div class="component-sheet__body">
+        <section class="component-hierarchy-picker__group" aria-labelledby="componentMoveCategoryLabel">
+          <h3 id="componentMoveCategoryLabel">Category</h3>
+          <div id="componentMoveCategoryOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination category"></div>
+        </section>
+        <section class="component-hierarchy-picker__group" aria-labelledby="componentMoveSubcategoryLabel">
+          <h3 id="componentMoveSubcategoryLabel">Subcategory</h3>
+          <div id="componentMoveSubcategoryOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination subcategory"></div>
+        </section>
+        <label class="component-hierarchy-picker__brand"><span>Brand / Manufacturer</span><input id="componentMoveBrand" type="text" autocomplete="off" /></label>
+        <div class="quote-preview-actions">
+          <button class="ghost-action" type="button" data-component-move-action="cancel">Cancel</button>
+          <button class="primary-action" type="button" data-component-move-action="confirm">Move Component</button>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    const categoryButton=event.target.closest('[data-component-move-category]');
+    if(categoryButton){
+      studioComponentMoveState.category=String(categoryButton.getAttribute('data-component-move-category')||'');
+      studioComponentMoveState.subcategory='';
+      const inferred=explicitBrandForSubcategory(studioComponentMoveState.category,'');
+      if(inferred)studioComponentMoveState.brand=inferred;
+      renderComponentMoveSheet();
+      return;
+    }
+    const subcategoryButton=event.target.closest('[data-component-move-subcategory]');
+    if(subcategoryButton){
+      studioComponentMoveState.subcategory=String(subcategoryButton.getAttribute('data-component-move-subcategory')||'');
+      const inferred=explicitBrandForSubcategory(studioComponentMoveState.category,studioComponentMoveState.subcategory);
+      if(inferred)studioComponentMoveState.brand=inferred;
+      renderComponentMoveSheet();
+      return;
+    }
+    const actionButton=event.target.closest('[data-component-move-action]');
+    if(!actionButton)return;
+    if(actionButton.getAttribute('data-component-move-action')==='confirm')commitComponentMove();
+    else closeComponentMoveSheet();
+  });
+  sheet.addEventListener('input',(event)=>{
+    if(event.target.id==='componentMoveBrand')studioComponentMoveState.brand=String(event.target.value||'');
+  });
+}
+function renderComponentMoveSheet(){
+  const sheet=$('componentMoveSheet');
+  if(!sheet)return;
+  const categoryHost=$('componentMoveCategoryOptions');
+  const subcategoryHost=$('componentMoveSubcategoryOptions');
+  const brandInput=$('componentMoveBrand');
+  const selectedCategoryKey=normalizeNameKey(studioComponentMoveState.category);
+  const selectedSubcategoryKey=normalizeNameKey(studioComponentMoveState.subcategory);
+  if(categoryHost){
+    categoryHost.innerHTML=componentMoveCategoryNames().map((name)=>{
+      const value=normalizeNameKey(name)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)?'':name;
+      return componentHierarchyOptionMarkup(value,name,normalizeNameKey(value)===selectedCategoryKey,'data-component-move-category');
+    }).join('');
+  }
+  if(subcategoryHost){
+    const options=[componentHierarchyOptionMarkup('','No Subcategory',!selectedSubcategoryKey,'data-component-move-subcategory')]
+      .concat(componentMoveSubcategoryNames().map((name)=>componentHierarchyOptionMarkup(name,name,normalizeNameKey(name)===selectedSubcategoryKey,'data-component-move-subcategory')));
+    subcategoryHost.innerHTML=options.join('');
+  }
+  if(brandInput && document.activeElement!==brandInput)brandInput.value=studioComponentMoveState.brand;
+}
+function openComponentMoveSheet(){
+  const record=currentStudioComponentRecord();
+  if(!record)return;
+  studioComponentMoveState={
+    category:String(record.category||''),
+    subcategory:String(record.subcategory||''),
+    brand:String(record.brand||''),
+  };
+  ensureComponentMoveSheet();
+  renderComponentMoveSheet();
+  $('componentMoveSheet').hidden=false;
+  lockModalLayer(document.activeElement);
+}
+function closeComponentMoveSheet(){
+  const sheet=$('componentMoveSheet');
+  if(sheet)sheet.hidden=true;
+  studioComponentMoveState={category:'',subcategory:'',brand:''};
+  unlockModalLayer({restoreFocus:true});
+}
+function commitComponentMove(){
+  const categoryInput=$('studioComponentCategory');
+  const subcategoryInput=$('studioComponentSubcategory');
+  const brandInput=$('studioComponentBrand');
+  if(!categoryInput || !subcategoryInput || !brandInput)return;
+  categoryInput.value=studioComponentMoveState.category;
+  subcategoryInput.value=studioComponentMoveState.subcategory;
+  brandInput.value=studioComponentMoveState.brand.trim();
+  closeComponentMoveSheet();
+  saveStudioComponentDetails();
 }
 function saveStudioComponentDetails(){
   const nameInput=$('studioComponentName');
@@ -3818,6 +3934,7 @@ function saveStudioComponentDetails(){
   const existingRecord=findComponentLibraryRecordByName(originalName)||findComponentLibraryRecordByName(nextName);
   const legacy=existingRecord||{};
   const sourceRecord={
+    id:String(legacy.id||''),
     categoryId:'',
     category:payload.category,
     subcategory:payload.subcategory,
@@ -4213,9 +4330,10 @@ function ensureCategoryMergeSheet(){
       </header>
       <div class="component-sheet__body">
         <div class="studio-component-details__head"><p id="categoryMergeMessage"></p></div>
-        <div class="studio-component-details__fields">
-          <label><span>Move To</span><select id="categoryMergeDestinationSelect"></select></label>
-        </div>
+        <section class="component-hierarchy-picker__group" aria-labelledby="categoryMergeDestinationLabel">
+          <h3 id="categoryMergeDestinationLabel">Move To</h3>
+          <div id="categoryMergeDestinationOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination category"></div>
+        </section>
         <p id="categoryMergeHint" class="workshop-tool-note"></p>
         <div id="categoryMergeActions" class="quote-preview-actions"></div>
       </div>
@@ -4223,16 +4341,15 @@ function ensureCategoryMergeSheet(){
   `;
   document.body.appendChild(sheet);
   sheet.addEventListener('click',(event)=>{
+    const destinationButton=event.target.closest('[data-category-merge-destination]');
+    if(destinationButton){
+      categoryMergeDialogState.destCategoryId=String(destinationButton.getAttribute('data-category-merge-destination')||'');
+      renderCategoryMergeSheet();
+      return;
+    }
     if(event.target.closest('[data-category-merge-action="cancel"]')){closeCategoryMergeDialog();return;}
     if(event.target.closest('[data-category-merge-action="confirm"]')){commitCategoryMergeDialog();return;}
   });
-  const select=$('categoryMergeDestinationSelect');
-  if(select){
-    select.addEventListener('change',()=>{
-      categoryMergeDialogState.destCategoryId=select.value;
-      renderCategoryMergeSheet();
-    });
-  }
 }
 function renderCategoryMergeSheet(){
   const sourceCategory=studioCategoryById(categoryMergeDialogState.sourceCategoryId);
@@ -4255,10 +4372,9 @@ function renderCategoryMergeSheet(){
     const verb=parts.length===1 && componentCount===1 && subcategoryCount===0?'uses':'use';
     messageEl.textContent=`${subject} ${verb} this category. Choose where they should be moved before deleting it.`;
   }
-  const select=$('categoryMergeDestinationSelect');
-  if(select){
-    select.innerHTML='<option value="">Select destination category</option>'+candidates.map((item)=>`<option value="${escapeAttributeValue(item.id)}"${item.id===categoryMergeDialogState.destCategoryId?' selected':''}>${escapeHtml(item.name)}</option>`).join('');
-    select.value=categoryMergeDialogState.destCategoryId||'';
+  const optionsHost=$('categoryMergeDestinationOptions');
+  if(optionsHost){
+    optionsHost.innerHTML=candidates.map((item)=>componentHierarchyOptionMarkup(item.id,item.name,item.id===categoryMergeDialogState.destCategoryId,'data-category-merge-destination')).join('');
   }
   const destCategory=candidates.find((item)=>item.id===categoryMergeDialogState.destCategoryId)||null;
   const isDuplicate=!!destCategory && categoriesLookLikeDuplicates(sourceCategory.name,destCategory.name);
@@ -4985,10 +5101,11 @@ function renderStudioComponentsLibrary(){
   if(isSubcategoryEdit){
     const taxonomyCategories=sortTaxonomyEntriesForDisplay(ensureStudioComponentTaxonomyLoaded().categories);
     const sourceCategoryName=String(studioLibraryEditor.sourceCategory||studioLibraryPath.categoryId||'').trim();
+    const selectedParentCategory=String(studioLibraryEditor.parentCategory||sourceCategoryName).trim();
     const categoryOptions=taxonomyCategories
-      .map((category)=>`<option value="${escapeAttributeValue(category.name)}"${normalizeNameKey(category.name)===normalizeNameKey(sourceCategoryName)?' selected':''}>${escapeHtml(category.name)}</option>`)
+      .map((category)=>componentHierarchyOptionMarkup(category.name,category.name,normalizeNameKey(category.name)===normalizeNameKey(selectedParentCategory),'data-studio-library-parent-category'))
       .join('');
-    details.innerHTML=`<div class="studio-component-details__head"><h2>EDIT SUBCATEGORY</h2><p>Rename or move this subcategory to another category.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label><label><span>Parent Category</span><select id="studioLibrarySubcategoryParent">${categoryOptions}</select></label></div><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-rename">Save</button><button class="ghost-action" type="button" data-studio-library-action="editor-cancel">Cancel</button></div>`;
+    details.innerHTML=`<div class="studio-component-details__head"><h2>EDIT SUBCATEGORY</h2><p>Rename or move this subcategory to another category.</p></div><div class="studio-component-details__fields"><label><span>Subcategory Name</span><input id="studioLibrarySubcategoryName" type="text" value="${escapeHtml(studioLibraryEditor.targetName||'')}" /></label></div><section class="component-hierarchy-picker__group" aria-labelledby="studioLibraryParentCategoryLabel"><h3 id="studioLibraryParentCategoryLabel">Parent Category</h3><div class="component-hierarchy-picker__options" role="listbox" aria-label="Parent category">${categoryOptions}</div></section><div class="studio-component-details__actions"><button class="primary-action studio-component-details__save" type="button" data-studio-library-action="subcategory-rename">Save</button><button class="ghost-action" type="button" data-studio-library-action="editor-cancel">Cancel</button></div>`;
     return;
   }
 
@@ -5150,7 +5267,7 @@ function bindStudioComponentsPanel(){
       }else if(studioLibraryPath.level==='subcategory'){
         studioComponentDraft={
           name:'',
-          brand:'',
+          brand:explicitBrandForSubcategory(studioLibraryPath.categoryId,studioLibraryPath.subcategoryId),
           category:studioLibraryPath.categoryId,
           subcategory:studioLibraryPath.subcategoryId,
           cost:undefined,
@@ -5273,25 +5390,7 @@ function bindStudioComponentsPanel(){
     details.addEventListener('input',()=>{
       syncStudioComponentSaveButtonState();
     });
-    details.addEventListener('change',(event)=>{
-      const target=event.target;
-      if(target && target.id==='studioComponentCategory'){
-        const subcategorySelect=$('studioComponentSubcategory');
-        const selectedCategory=String(target.value||'').trim();
-        const options=categorySubcategoryOptionsMarkup(selectedCategory,'');
-        if(subcategorySelect){
-          subcategorySelect.innerHTML=options.subcategoryOptions;
-        }
-      }
-      if(target && (target.id==='studioComponentCategory' || target.id==='studioComponentSubcategory')){
-        const brandInput=$('studioComponentBrand');
-        const categoryName=String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim();
-        const subcategoryName=String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim();
-        const explicitBrand=explicitBrandForSubcategory(categoryName,subcategoryName);
-        if(brandInput && !String(brandInput.value||'').trim() && explicitBrand){
-          brandInput.value=explicitBrand;
-        }
-      }
+    details.addEventListener('change',()=>{
       syncStudioComponentSaveButtonState();
     });
     details.addEventListener('keydown',(event)=>{
@@ -5301,6 +5400,14 @@ function bindStudioComponentsPanel(){
       addStudioComponentSizeFromInput();
     });
     details.addEventListener('click',(event)=>{
+      const parentCategoryButton=event.target.closest('[data-studio-library-parent-category]');
+      if(parentCategoryButton){
+        const nameInput=$('studioLibrarySubcategoryName');
+        studioLibraryEditor.targetName=String(nameInput&&nameInput.value||studioLibraryEditor.targetName||'').trim();
+        studioLibraryEditor.parentCategory=String(parentCategoryButton.getAttribute('data-studio-library-parent-category')||'').trim();
+        renderStudioComponentsLibrary();
+        return;
+      }
       const libraryActionButton=event.target.closest('[data-studio-library-action]');
       if(libraryActionButton){
         const action=String(libraryActionButton.getAttribute('data-studio-library-action')||'');
@@ -5374,7 +5481,7 @@ function bindStudioComponentsPanel(){
           const sourceCategoryName=String(studioLibraryEditor.sourceCategory||studioLibraryPath.categoryId||'').trim();
           const sourceName=String(studioLibraryEditor.targetName||'').trim();
           const nextName=String(($('studioLibrarySubcategoryName')&&$('studioLibrarySubcategoryName').value)||'').trim();
-          const nextCategoryName=String(($('studioLibrarySubcategoryParent')&&$('studioLibrarySubcategoryParent').value)||sourceCategoryName).trim();
+          const nextCategoryName=String(studioLibraryEditor.parentCategory||sourceCategoryName).trim();
           if(!sourceCategoryName || !sourceName)return;
           if(!nextName){openInfoDialog('Subcategory Name Required','Enter a subcategory name.');return;}
           const sourceCategory=taxonomy.categories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(sourceCategoryName));
@@ -5414,6 +5521,11 @@ function bindStudioComponentsPanel(){
       const saveButton=event.target.closest('#studioComponentSaveBtn');
       if(saveButton){
         saveStudioComponentDetails();
+        return;
+      }
+
+      if(event.target.closest('#studioComponentMoveBtn')){
+        openComponentMoveSheet();
         return;
       }
 

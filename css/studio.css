@@ -5764,6 +5764,22 @@ textarea::-moz-selection,
   gap:8px;
 }
 
+.studio-size-entry input,
+.studio-size-range input{
+  min-height:40px;
+  border:1px solid rgba(214,210,200,.22);
+  border-radius:9px;
+  background:#080a0b;
+  color:#f5efe5;
+  padding:8px 10px;
+  font-size:14px;
+}
+
+.studio-size-entry input::placeholder,
+.studio-size-range input::placeholder{
+  color:rgba(214,210,200,.42);
+}
+
 .studio-size-range{
   margin-top:10px;
 }
@@ -5813,6 +5829,99 @@ textarea::-moz-selection,
   justify-content:flex-start;
   gap:8px;
   flex-wrap:wrap;
+}
+
+.studio-component-details__move{
+  min-height:42px;
+  border-radius:10px;
+  padding:0 14px;
+  border-color:rgba(214,210,200,.18);
+  background:rgba(255,255,255,.015);
+  color:rgba(214,210,200,.68);
+}
+
+.component-hierarchy-picker__group{
+  display:grid;
+  gap:7px;
+}
+
+.component-hierarchy-picker__group + .component-hierarchy-picker__group,
+.component-hierarchy-picker__brand{
+  margin-top:14px;
+}
+
+.component-hierarchy-picker__group h3,
+.component-hierarchy-picker__brand span{
+  margin:0;
+  color:rgba(214,210,200,.78);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.component-hierarchy-picker__options{
+  display:grid;
+  gap:5px;
+  max-height:220px;
+  overflow-y:auto;
+  padding:5px;
+  border:1px solid rgba(214,210,200,.16);
+  border-radius:10px;
+  background:#080a0b;
+  scrollbar-gutter:stable;
+}
+
+.component-hierarchy-picker__option{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  width:100%;
+  min-height:38px;
+  padding:7px 10px;
+  border:1px solid transparent;
+  border-radius:8px;
+  background:#101315;
+  color:#e7e1d6;
+  font-size:12px;
+  font-weight:650;
+  letter-spacing:0;
+  text-align:left;
+}
+
+.component-hierarchy-picker__option:hover,
+.component-hierarchy-picker__option:focus-visible{
+  border-color:rgba(214,210,200,.28);
+  background:#15191b;
+  outline:none;
+}
+
+.component-hierarchy-picker__option.is-selected{
+  border-color:rgba(var(--kl-red-rgb),.62);
+  background:rgba(var(--kl-red-rgb),.14);
+  color:#fff1ec;
+}
+
+.component-hierarchy-picker__option b{
+  color:var(--kl-red-base);
+  font-size:13px;
+}
+
+.component-hierarchy-picker__brand{
+  display:grid;
+  gap:6px;
+}
+
+.component-hierarchy-picker__brand input{
+  width:100%;
+  min-height:40px;
+  border:1px solid rgba(214,210,200,.22);
+  border-radius:10px;
+  background:#080a0b;
+  color:#f5efe5;
+  padding:8px 10px;
+  font-size:14px;
 }
 
 .studio-component-details__save{
