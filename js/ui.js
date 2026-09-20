@@ -65,6 +65,11 @@ const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const BUSINESS_PROFILE_STORAGE_PREFIX='klabs-business-profile';
+const SETTINGS_ANONYMOUS_OWNER_KEY='klabs-studio-settings-anonymous-owner';
+function studioSettingsStorageKey(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  return accountId?`${SETTINGS_STORAGE_KEY}:${accountId}`:SETTINGS_STORAGE_KEY;
+}
 const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
 const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
@@ -79,7 +84,7 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'customer'},
   {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Builder Notes',visibility:'workshop'}
 ];
-let studioSettings=normalizeStudioSettings(Store.get(SETTINGS_STORAGE_KEY,{}));
+let studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
 let businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
 let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
@@ -262,6 +267,7 @@ function saveChoicePickerFavourites(){
   });
 }
 function normalizeStudioSettings(settings){
+  const source=settings&&typeof settings==='object'?settings:{};
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
   const defaultLabourRate=Math.max(0,numberOrZero(settings&&settings.defaultLabourRate));
@@ -269,12 +275,23 @@ function normalizeStudioSettings(settings){
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
-  return {taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
+  return {...source,taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
+}
+function settingsObjectPatch(previous,next){
+  const before=previous&&typeof previous==='object'?previous:{};
+  const after=next&&typeof next==='object'?next:{};
+  const patch={};
+  Object.keys(after).forEach((key)=>{
+    if(JSON.stringify(before[key])!==JSON.stringify(after[key]))patch[key]=after[key];
+  });
+  return patch;
 }
 function saveStudioSettings(){
   try {
-    Store.set(SETTINGS_STORAGE_KEY,studioSettings);
-    window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+    const storageKey=studioSettingsStorageKey();
+    const previous=normalizeStudioSettings(Store.get(storageKey,{}));
+    Store.set(storageKey,studioSettings);
+    window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.({studioSettings:settingsObjectPatch(previous,studioSettings)});
     return true;
   } catch(error) {
     console.error('[K-Labs Studio] Failed to save Studio settings:', error);
@@ -291,7 +308,7 @@ function businessProfileStorageKey(){
 function normalizeBusinessProfile(profile){
   const source=profile&&typeof profile==='object'?profile:{};
   const nextNumber=Math.max(1,Math.round(numberOrZero(source.quoteNextNumber))||1000);
-  return {
+  return {...source,
     businessName:String(source.businessName||'').trim(),
     contactName:String(source.contactName||'').trim(),
     email:String(source.email||'').trim(),
@@ -305,8 +322,10 @@ function normalizeBusinessProfile(profile){
 }
 function saveBusinessProfile(){
   try {
-    Store.set(businessProfileStorageKey(),businessProfile);
-    window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.();
+    const storageKey=businessProfileStorageKey();
+    const previous=normalizeBusinessProfile(Store.get(storageKey,{}));
+    Store.set(storageKey,businessProfile);
+    window.KLABS_SETTINGS_SYNC?.notifySettingsChanged?.({businessProfile:settingsObjectPatch(previous,businessProfile)});
     return true;
   } catch(error) {
     console.error('[K-Labs Studio] Failed to save business profile:', error);
@@ -322,8 +341,12 @@ function readStudioSettingsSyncPayload(){
 function applyStudioSettingsSyncPayload(payload){
   const source=payload&&typeof payload==='object'?payload:{};
   studioSettings=normalizeStudioSettings(source.studioSettings);
-  businessProfile=normalizeBusinessProfile(source.businessProfile);
-  Store.set(SETTINGS_STORAGE_KEY,studioSettings);
+  const storedProfile=Store.get(businessProfileStorageKey(),null);
+  const localNextNumber=storedProfile&&typeof storedProfile==='object'&&storedProfile.quoteNextNumber!==undefined
+    ?storedProfile.quoteNextNumber
+    :(source.businessProfile&&source.businessProfile.quoteNextNumber!==undefined?source.businessProfile.quoteNextNumber:businessProfile.quoteNextNumber);
+  businessProfile=normalizeBusinessProfile({...businessProfile,...(source.businessProfile||{}),quoteNextNumber:localNextNumber});
+  Store.set(studioSettingsStorageKey(),studioSettings);
   Store.set(businessProfileStorageKey(),businessProfile);
   syncBusinessProfileControls(true);
   syncSettingsPreferenceControls();
@@ -344,8 +367,51 @@ function applyStudioSettingsSyncPayload(payload){
   }
 }
 function reloadBusinessProfileForAccount(){
-  businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  const profileKey=businessProfileStorageKey();
+  let storedProfile=Store.get(profileKey,null);
+  let owner=String(Store.get(SETTINGS_ANONYMOUS_OWNER_KEY,'')||'');
+  if(accountId && !owner){
+    const hasAnonymousSettings=Store.get(SETTINGS_STORAGE_KEY,null)!==null;
+    const hasAnonymousProfile=Store.get(`${BUSINESS_PROFILE_STORAGE_PREFIX}:local`,null)!==null;
+    if(hasAnonymousSettings || hasAnonymousProfile){
+      owner=accountId;
+      Store.set(SETTINGS_ANONYMOUS_OWNER_KEY,accountId);
+    }
+  }
+  if(accountId && storedProfile===null){
+    if(!owner || owner===accountId){
+      const anonymousProfile=normalizeBusinessProfile(Store.get(`${BUSINESS_PROFILE_STORAGE_PREFIX}:local`,{}));
+      storedProfile={quoteNextNumber:anonymousProfile.quoteNextNumber};
+      Store.set(profileKey,storedProfile);
+    }
+  }
+  studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
+  businessProfile=normalizeBusinessProfile(storedProfile||{});
+  syncSettingsPreferenceControls();
   syncBusinessProfileControls(true);
+  if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
+  if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
+  if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
+}
+function readAnonymousStudioSettingsSyncPayload(){
+  return {
+    studioSettings:normalizeStudioSettings(Store.get(SETTINGS_STORAGE_KEY,{})),
+    businessProfile:normalizeBusinessProfile(Store.get(`${BUSINESS_PROFILE_STORAGE_PREFIX}:local`,{})),
+  };
+}
+function studioSettingsSyncCacheState(){
+  const accountProfile=Store.get(businessProfileStorageKey(),null);
+  const accountProfileKeys=accountProfile&&typeof accountProfile==='object'
+    ?Object.keys(accountProfile).filter((key)=>key!=='quoteNextNumber')
+    :[];
+  return {
+    hasStudioSettings:Store.get(studioSettingsStorageKey(),null)!==null,
+    hasBusinessProfile:accountProfileKeys.length>0,
+    hasAnonymousStudioSettings:Store.get(SETTINGS_STORAGE_KEY,null)!==null,
+    hasAnonymousBusinessProfile:Store.get(`${BUSINESS_PROFILE_STORAGE_PREFIX}:local`,null)!==null,
+  };
 }
 function businessProfileHasPaymentDetails(){
   return !!(businessProfile.paymentAccountName && businessProfile.paymentAccountNumber);
@@ -12350,6 +12416,21 @@ function syncSettingsPreferenceControls(){
     button.setAttribute('aria-pressed',String(selected));
   });
 }
+function bindSettingsAccountGuard(input){
+  if(!input || input.getAttribute('data-settings-account-guard-bound')==='true')return;
+  input.setAttribute('data-settings-account-guard-bound','true');
+  input.addEventListener('focus',()=>{
+    input.setAttribute('data-settings-edit-account',activeAccountKey());
+  });
+}
+function settingsControlCanCommit(input){
+  if(!input)return true;
+  const editAccount=String(input.getAttribute('data-settings-edit-account')||'');
+  if(!editAccount || editAccount===activeAccountKey())return true;
+  input.removeAttribute('data-settings-edit-account');
+  reloadBusinessProfileForAccount();
+  return false;
+}
 const BUSINESS_PROFILE_BASE_FIELDS=[
   {id:'settingsBusinessName',key:'businessName'},
   {id:'settingsBusinessContactName',key:'contactName'},
@@ -12380,6 +12461,7 @@ function bindBusinessProfileControls(){
   BUSINESS_PROFILE_BASE_FIELDS.forEach((field)=>{
     const input=$(field.id);
     if(!input || input.getAttribute('data-business-profile-bound')==='true')return;
+    bindSettingsAccountGuard(input);
     input.setAttribute('data-business-profile-bound','true');
     input.addEventListener('input',()=>{
       const isDirty=BUSINESS_PROFILE_BASE_FIELDS.some((f)=>{
@@ -12389,6 +12471,7 @@ function bindBusinessProfileControls(){
       setSettingsSectionSaveState('BusinessProfile',isDirty?'dirty':'idle');
     });
     const commit=()=>{
+      if(!settingsControlCanCommit(input))return;
       businessProfile[field.key]=String(input.value||'').trim();
       input.value=businessProfile[field.key];
       const ok=saveBusinessProfile();
@@ -12415,6 +12498,7 @@ function bindBusinessProfileControls(){
   PAYMENT_DETAILS_FIELDS.forEach((field)=>{
     const input=$(field.id);
     if(!input || input.getAttribute('data-payment-details-bound')==='true')return;
+    bindSettingsAccountGuard(input);
     input.setAttribute('data-payment-details-bound','true');
     input.addEventListener('input',()=>{
       const isDirty=PAYMENT_DETAILS_FIELDS.some((f)=>{
@@ -12424,6 +12508,7 @@ function bindBusinessProfileControls(){
       setSettingsSectionSaveState('PaymentDetails',isDirty?'dirty':'idle');
     });
     const commit=()=>{
+      if(!settingsControlCanCommit(input))return;
       businessProfile[field.key]=String(input.value||'').trim();
       input.value=businessProfile[field.key];
       const ok=saveBusinessProfile();
@@ -12449,6 +12534,7 @@ function bindBusinessProfileControls(){
 
   const quotePrefixInput=$('settingsQuotePrefix');
   if(quotePrefixInput && quotePrefixInput.getAttribute('data-quote-numbering-bound')!=='true'){
+    bindSettingsAccountGuard(quotePrefixInput);
     quotePrefixInput.setAttribute('data-quote-numbering-bound','true');
     quotePrefixInput.addEventListener('input',()=>{
       const currentPrefix=String(quotePrefixInput.value||'').trim();
@@ -12460,6 +12546,7 @@ function bindBusinessProfileControls(){
       setSettingsSectionSaveState('QuoteNumbering',isDirty?'dirty':'idle');
     });
     const commitPrefix=()=>{
+      if(!settingsControlCanCommit(quotePrefixInput))return;
       businessProfile.quotePrefix=String(quotePrefixInput.value||'').trim();
       quotePrefixInput.value=businessProfile.quotePrefix;
       const ok=saveBusinessProfile();
@@ -12472,6 +12559,7 @@ function bindBusinessProfileControls(){
 
   const nextNumberInput=$('settingsQuoteNextNumber');
   if(nextNumberInput && nextNumberInput.getAttribute('data-business-profile-bound')!=='true'){
+    bindSettingsAccountGuard(nextNumberInput);
     nextNumberInput.setAttribute('data-business-profile-bound','true');
     nextNumberInput.addEventListener('input',()=>{
       const currentPrefix=quotePrefixInput?String(quotePrefixInput.value||'').trim():businessProfile.quotePrefix;
@@ -12482,6 +12570,7 @@ function bindBusinessProfileControls(){
       setSettingsSectionSaveState('QuoteNumbering',isDirty?'dirty':'idle');
     });
     const commitNextNumber=()=>{
+      if(!settingsControlCanCommit(nextNumberInput))return;
       businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
       nextNumberInput.value=String(businessProfile.quoteNextNumber);
       const ok=saveBusinessProfile();
@@ -12549,12 +12638,14 @@ function bindSettingsControls(){
     },1200);
   };
   if(taxRateInput){
+    bindSettingsAccountGuard(taxRateInput);
     taxRateInput.value=String(activeTaxRate());
     taxRateInput.addEventListener('input',()=>{
       const isDirty=String(taxRateInput.value||'').trim()!==String(activeTaxRate());
       setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
     });
     const saveTaxRate=()=>{
+      if(!settingsControlCanCommit(taxRateInput))return;
       studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
       taxRateInput.value=String(studioSettings.taxRate);
       const ok=saveStudioSettings();
@@ -12574,12 +12665,14 @@ function bindSettingsControls(){
   const defaultLabourRateSavedLabel=$('settingsDefaultLabourRateSaved');
   let defaultLabourRateSavedTimer=null;
   if(defaultLabourRateInput){
+    bindSettingsAccountGuard(defaultLabourRateInput);
     defaultLabourRateInput.value=String(activeDefaultLabourRate());
     defaultLabourRateInput.addEventListener('input',()=>{
       const isDirty=String(defaultLabourRateInput.value||'').trim()!==String(activeDefaultLabourRate());
       setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
     });
     const saveDefaultLabourRate=()=>{
+      if(!settingsControlCanCommit(defaultLabourRateInput))return;
       studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
       defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
       if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
@@ -12789,4 +12882,6 @@ window.savedBuildRecords=savedBuildRecords;
 window.saveBuildRecords=(records)=>{Store.set('klabs-workshop-builds',Array.isArray(records)?records:[]);};
 window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
 window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
+window.readAnonymousStudioSettingsSyncPayload=readAnonymousStudioSettingsSyncPayload;
+window.studioSettingsSyncCacheState=studioSettingsSyncCacheState;
 window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
