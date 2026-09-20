@@ -5028,7 +5028,7 @@ textarea::-moz-selection,
 
 #workshopScreen .quote-builder{
   gap:9px;
-  padding-bottom:calc(188px + var(--safe-bottom));
+  padding-bottom:calc(24px + var(--safe-bottom));
 }
 
 .studio-landing-shell{

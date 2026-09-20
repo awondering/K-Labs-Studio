@@ -413,9 +413,9 @@
       </section>
 
       <section id="studioWorkflowPanel" class="quote-builder" aria-label="Rod Builder Quote" hidden>
-        <button id="activeBuildReturnBtn" class="workshop-tool-nav-back" type="button" aria-label="Return to Active Builds list" hidden>
+        <button id="activeBuildReturnBtn" class="workshop-tool-nav-back" type="button" aria-label="Return to Studio" hidden>
           <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-          <span>ACTIVE BUILDS</span>
+          <span>STUDIO</span>
         </button>
         <button id="customerFinderReturnBtn" class="workshop-tool-nav-back" type="button" aria-label="Return to Customers list" hidden>
           <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
@@ -428,7 +428,6 @@
             <span id="quoteBuilderOverviewStatus" class="saved-build-card__status quote-builder__overview-status">Active</span>
             <span id="quoteBuilderOverviewDue" class="quote-builder__overview-due"></span>
           </p>
-          <p id="quoteBuilderIntroHint" class="subtle">Start a build, then complete each section in order.</p>
         </header>
 
         <div id="quoteBuilderEntryActions" class="quote-builder__entry-actions" aria-label="Studio entry actions">
@@ -619,6 +618,7 @@
                   <div class="workshop-build-actions-menu-wrap">
                     <button id="currentBuildActionsMenuBtn" class="ghost-action saved-build-card__menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Build actions">&hellip;</button>
                     <div id="currentBuildActionsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="Build actions menu" hidden>
+                      <button id="currentBuildActionsConfirm" class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="confirm-build" hidden>Confirm Build</button>
                       <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="rename">Rename Build</button>
                       <button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-current-build-action="delete">Delete Build</button>
                     </div>

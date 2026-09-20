@@ -8505,6 +8505,10 @@ function openChoicePicker(type,index,openerEl,options){
   choicePickerCategoryFilter='all';
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
+  const sheetBody=sheet.querySelector('.component-sheet__body');
+  const optionList=$('choicePickerList');
+  if(sheetBody)sheetBody.scrollTop=0;
+  if(optionList)optionList.scrollTop=0;
   sheet.hidden=false;
   lockModalLayer(openerEl||document.activeElement);
   hideBlankRowMenu();
@@ -8524,6 +8528,8 @@ function openChoicePicker(type,index,openerEl,options){
   syncChoicePickerFilterControls();
   syncComponentPickerBackButton();
   renderChoicePickerOptions('');
+  if(sheetBody)sheetBody.scrollTop=0;
+  if(optionList)optionList.scrollTop=0;
   bindChoicePickerViewportHandlers();
   scheduleChoicePickerViewportSync(40);
 }
@@ -10296,6 +10302,33 @@ function openCurrentBuildActionsMenu(){
   const menu=$('currentBuildActionsMenu');
   if(menuButton){menuButton.setAttribute('aria-expanded','true');}
   if(menu){menu.hidden=false;}
+  window.requestAnimationFrame(positionCurrentBuildActionsMenu);
+}
+function positionCurrentBuildActionsMenu(){
+  if(!currentBuildActionsMenuOpen)return;
+  const trigger=$('currentBuildActionsMenuBtn');
+  const menu=$('currentBuildActionsMenu');
+  if(!trigger || !menu || menu.hidden)return;
+  menu.style.setProperty('right','auto','important');
+  menu.style.setProperty('bottom','auto','important');
+  const viewport=window.visualViewport;
+  const viewportLeft=Math.round(viewport?viewport.offsetLeft:0);
+  const viewportTop=Math.round(viewport?viewport.offsetTop:0);
+  const viewportWidth=Math.round(viewport?viewport.width:document.documentElement.clientWidth||window.innerWidth);
+  const viewportHeight=Math.round(viewport?viewport.height:document.documentElement.clientHeight||window.innerHeight);
+  const inset=8;
+  const triggerRect=trigger.getBoundingClientRect();
+  const menuRect=menu.getBoundingClientRect();
+  const left=Math.max(viewportLeft+inset,Math.min(viewportLeft+viewportWidth-inset-menuRect.width,triggerRect.right-menuRect.width));
+  const spaceBelow=viewportTop+viewportHeight-triggerRect.bottom-inset;
+  const spaceAbove=triggerRect.top-viewportTop-inset;
+  const opensUpward=spaceBelow<menuRect.height && spaceAbove>=menuRect.height;
+  const top=opensUpward
+    ?triggerRect.top-menuRect.height-6
+    :Math.min(viewportTop+viewportHeight-inset-menuRect.height,triggerRect.bottom+6);
+  menu.style.left=`${left}px`;
+  menu.style.top=`${Math.max(viewportTop+inset,top)}px`;
+  menu.style.maxHeight=`${Math.max(80,viewportHeight-(inset*2))}px`;
 }
 function toggleCurrentBuildActionsMenu(){
   if(currentBuildActionsMenuOpen){
@@ -10317,6 +10350,8 @@ function updateWorkshopBuildActionsUi(){
   const isQuote=lifecycle==='quote';
   const confirmBtn=$('confirmBuildBtn');
   if(confirmBtn)confirmBtn.hidden=!isQuote;
+  const menuConfirmBtn=$('currentBuildActionsConfirm');
+  if(menuConfirmBtn)menuConfirmBtn.hidden=!isQuote;
   const toggleButton=$('toggleCurrentBuildStatusBtn');
   if(toggleButton){
     toggleButton.hidden=isQuote;
@@ -10344,10 +10379,8 @@ function updateWorkshopBuildOverview(){
     titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} â€” ${buildName}`:(customerName||buildName)):'Studio';
   }
   // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
-  const introHintEl=$('quoteBuilderIntroHint');
-  if(introHintEl)introHintEl.hidden=hasIdentity;
   const entryActionsEl=$('quoteBuilderEntryActions');
-  if(entryActionsEl)entryActionsEl.hidden=hasIdentity;
+  if(entryActionsEl)entryActionsEl.hidden=hasActiveBuildRef||hasIdentity;
   if(!overviewEl)return;
   overviewEl.hidden=!hasIdentity;
   if(!hasIdentity)return;
@@ -10553,6 +10586,7 @@ function openSavedBuildRecord(source,index,options){
   // preserveWorkshopQuoteOnEntry also re-expands a section via onScreenChange's focusWorkshopSection
   // call; only opt into that for the non-openAtTop path, which wants a section auto-focused.
   preserveWorkshopQuoteOnEntry=!settings.openAtTop;
+  if(settings.openAtTop)window.KLABS_NAV?.forgetScreenScroll?.('workshopScreen');
   goScreen('workshopScreen');
   if(settings.openAtTop){
     // Land on the collapsed build overview rather than forcing the Customer Details form open.
@@ -11508,7 +11542,10 @@ function bindWorkshopQuoteBuilder(){
     activeBuildReturnBtn.setAttribute('data-active-build-return-bound','true');
     activeBuildReturnBtn.addEventListener('click',()=>{
       clearWorkflowCustomerOrigin();
-      openActiveBuildsList();
+      preserveWorkshopQuoteOnEntry=false;
+      showStudioLanding();
+      window.KLABS_NAV?.forgetScreenScroll?.('workshopScreen');
+      window.scrollTo(0,0);
     });
   }
   const customerFinderReturnBtn=$('customerFinderReturnBtn');
@@ -11855,6 +11892,12 @@ function bindWorkshopQuoteBuilder(){
       if(event.key!=='Escape' || !currentBuildActionsMenuOpen)return;
       closeCurrentBuildActionsMenu();
     });
+    window.addEventListener('resize',positionCurrentBuildActionsMenu,{passive:true});
+    window.addEventListener('scroll',positionCurrentBuildActionsMenu,{passive:true});
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',positionCurrentBuildActionsMenu,{passive:true});
+      window.visualViewport.addEventListener('scroll',positionCurrentBuildActionsMenu,{passive:true});
+    }
   }
   updateQuoteActionPriority();
   updateWorkshopBuildActionsUi();
