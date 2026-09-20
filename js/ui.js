@@ -1,4 +1,4 @@
-const $=id=>document.getElementById(id);
+﻿const $=id=>document.getElementById(id);
 function normalizeLayoutState(input){
   const raw=input&&typeof input==='object'?input:{};
   return {
@@ -13,8 +13,8 @@ let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,gu
 const DEFAULT_CATEGORY_NAMES=['Blank','Reel Seat','Grip','Winding Checks','Butt Cap','Hook Keeper','Guides','Tip Top','Thread & Finish','Epoxy','Clear coat','Freight','Decals','Other'];
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 const CUSTOM_CATEGORY_STORAGE_KEY='klabs-workshop-custom-categories';
-// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "—" option).
-const SUBCATEGORY_CLEAR_LABEL='—';
+// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "â€”" option).
+const SUBCATEGORY_CLEAR_LABEL='â€”';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
 const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
@@ -892,7 +892,7 @@ function copySpiralGuideOffsets(){
   const dirLabel=spiral.method==='standard'?'STANDARD':String(spiral.direction||'left').toUpperCase();
   const unitSuffix=workshopUnitSuffix(spiral.unit);
   const lines=[
-    `SPIRAL GUIDE MAPPER — ${methodLabel} (${dirLabel})`,
+    `SPIRAL GUIDE MAPPER â€” ${methodLabel} (${dirLabel})`,
     `Unit: ${spiral.unit.toUpperCase()} | Guides: ${guides.length}`,
     '----------------------------------------',
   ];
@@ -1107,8 +1107,8 @@ function renderSpiralGuideMapper(){
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
     visualDirection.textContent=spiral.method==='standard'
-      ?'STANDARD · NO TRANSITION'
-      :`STRIPPER G1 · ${spiral.direction.toUpperCase()} TRANSITION`;
+      ?'STANDARD Â· NO TRANSITION'
+      :`STRIPPER G1 Â· ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
   renderSpiralMapperVisual(spiral);
@@ -1243,7 +1243,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <span>${guideType}</span>
             <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT)}</span>
             <span>${labels.rotationText}</span>
-            <span class="spiral-guide-row__disclosure" aria-hidden="true">⌄</span>
+            <span class="spiral-guide-row__disclosure" aria-hidden="true">âŒ„</span>
           </button>
           ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
           ${showPhysicalOffsets && labels.offsetText?`<p class="spiral-guide-row__offset">${labels.offsetText}</p>`:''}
@@ -1260,10 +1260,10 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <label>
               <span>Rotation</span>
               <div class="spiral-rotation-control" role="group" aria-label="Guide ${displayGuideNumber} rotation control">
-                <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">−</button>
+                <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">âˆ’</button>
                 <div class="spiral-rotation-control__value-wrap">
                   <input class="spiral-rotation-control__value" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="angle" data-guide-index="${index}" value="${escapeHtml(formatDecimal(guide.angleDeg,1))}" aria-label="Guide ${displayGuideNumber} rotation value" />
-                  <span class="spiral-rotation-control__unit" aria-hidden="true">°</span>
+                  <span class="spiral-rotation-control__unit" aria-hidden="true">Â°</span>
                 </div>
                 <button class="layout-control-card__button" type="button" data-spiral-angle-action="increment" data-guide-index="${index}" aria-label="Increase guide ${displayGuideNumber} rotation by 5 degrees">+</button>
               </div>
@@ -1687,7 +1687,7 @@ function openGripCutTemplatePrint(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Grip wrap cut template preview">
       <header class="component-sheet__header">
         <h2>Cut Template Preview</h2>
-        <button class="component-sheet__close" type="button" data-grip-template-action="close" aria-label="Close template preview">×</button>
+        <button class="component-sheet__close" type="button" data-grip-template-action="close" aria-label="Close template preview">Ã—</button>
       </header>
       <div class="component-sheet__body grip-template-preview__body">
         <div class="grip-template-preview__actions">
@@ -2371,11 +2371,11 @@ function migrateBlankWorkflow(merged){
 function quoteTaxAvailable(){
   return activeTaxEnabled() && quote.taxEnabled!==false;
 }
-// Customer-facing sell value for a component row: qty × Sell Price. A blank/zero Sell Price contributes $0 (never falls back to Buy Price).
+// Customer-facing sell value for a component row: qty Ã— Sell Price. A blank/zero Sell Price contributes $0 (never falls back to Buy Price).
 function componentRowSellValue(item){
   return numberOrZero(item&&item.unitPrice)*componentRowQuantity(item);
 }
-// The natural (unadjusted) customer price: sum of every component's qty×SellPrice (this also covers charge line-items
+// The natural (unadjusted) customer price: sum of every component's qtyÃ—SellPrice (this also covers charge line-items
 // such as Freight/Postage/Repair, which are stored as components) plus the existing labour cost model.
 function naturalCustomerPrice(){
   const componentsSellTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowSellValue(item),0);
@@ -2638,9 +2638,9 @@ function blankSpecificationSummary(){
   const specifications=specificationValue(blankComponent&&blankComponent.specifications)
     || specificationValue(blankComponent&&blankComponent.blankNotes)
     || specificationValue(quote.blankNotes)
-    || (legacySpecs.length?legacySpecs.join(' • '):'');
+    || (legacySpecs.length?legacySpecs.join(' â€¢ '):'');
   const details=[brand,variant,specifications].filter(Boolean);
-  return details.join(' • ');
+  return details.join(' â€¢ ');
 }
 // Single source of truth for the saved customer address lines: reused by the internal customer preview
 // and the customer-facing quote's Delivery section so both read the exact same stored fields.
@@ -2666,7 +2666,7 @@ function customerAddressLines(){
 }
 function customerPreviewLines(){
   const lines=[];
-  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' • ');
+  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' â€¢ ');
   if(identity)lines.push(identity);
   return lines.concat(customerAddressLines());
 }
@@ -2675,7 +2675,7 @@ function customerCardSecondarySummary(){
   const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
   const phone=specificationValue(quote.phone);
   const email=specificationValue(quote.email);
-  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' • ');
+  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' â€¢ ');
 }
 function customerGripConfigurationValue(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
@@ -2696,7 +2696,7 @@ function customerGripConfigurationValue(){
   if(rear)parts.push(`Rear ${rear}`);
   if(lower)parts.push(`Lower ${lower}`);
   if(fore)parts.push(`Fore ${fore}`);
-  return parts.join(' • ');
+  return parts.join(' â€¢ ');
 }
 function customerGripFeatureSummary(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
@@ -2799,7 +2799,7 @@ function customerFinishDetailsSummary(){
     if(details.some((value)=>normalizeNameKey(value)===normalized))return;
     details.push(detail);
   });
-  return details.join(' • ');
+  return details.join(' â€¢ ');
 }
 function customerRodIdentity(){
   const buildName=customerSafeText(quote.buildName);
@@ -2971,7 +2971,7 @@ function normalizeQuote(inputQuote){
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
   merged.guideSpecification=normalizeGuideSpecification(inputQuote&&inputQuote.guideSpecification);
   migrateBlankWorkflow(merged);
-  // Natural price = qty×SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
+  // Natural price = qtyÃ—SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
   const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours)));
   merged.naturalCustomerPrice=naturalPrice;
   const hasStoredAdjustment=(inputQuote&&inputQuote.priceAdjustment)!==undefined;
@@ -3312,10 +3312,10 @@ function refreshComponentLibraryViews(){
 }
 function componentSyncStatusLabel(state){
   switch(state&&state.status){
-    case 'synced':return 'COMPONENT LIBRARY • SYNCED';
-    case 'syncing':return 'COMPONENT LIBRARY • SYNCING…';
-    case 'error':return 'COMPONENT LIBRARY • SYNC ERROR';
-    default:return 'COMPONENT LIBRARY • LOCAL';
+    case 'synced':return 'COMPONENT LIBRARY â€¢ SYNCED';
+    case 'syncing':return 'COMPONENT LIBRARY â€¢ SYNCINGâ€¦';
+    case 'error':return 'COMPONENT LIBRARY â€¢ SYNC ERROR';
+    default:return 'COMPONENT LIBRARY â€¢ LOCAL';
   }
 }
 // Account section status line: only visible while signed in. Retry is offered only for a recoverable error.
@@ -3357,7 +3357,7 @@ function promptComponentLibraryMigration(){
     }
     window.KLABS_SYNC?.copyToAccount?.().then((result)=>{
       if(result&&result.ok){
-        openConfirmDialog({title:'Component library synced',message:`Component library synced • ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        openConfirmDialog({title:'Component library synced',message:`Component library synced â€¢ ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
       }else{
         openConfirmDialog({title:'Sync failed',message:(result&&result.error)?result.error:'Could not copy your component library. Your local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
       }
@@ -3429,25 +3429,15 @@ function categorySubcategoryOptionsMarkup(selectedCategoryName,selectedSubcatego
     .concat(sourceSubcategories.map((subcategory)=>`<option value="${escapeAttributeValue(subcategory.name)}"${normalizeNameKey(subcategory.name)===normalizeNameKey(selectedSubcategoryName)?' selected':''}>${escapeHtml(subcategory.name)}</option>`));
   return {categoryOptions:categoryOptions.join(''),subcategoryOptions:subcategoryOptions.join('')};
 }
-function supplierOptionsMarkup(selectedSupplierName){
-  const taxonomy=ensureStudioComponentTaxonomyLoaded();
-  const options=['<option value="">Unassigned</option>']
-    .concat(taxonomy.suppliers.map((supplier)=>`<option value="${escapeAttributeValue(supplier.name)}"${normalizeNameKey(supplier.name)===normalizeNameKey(selectedSupplierName)?' selected':''}>${escapeHtml(supplier.name)}</option>`));
-  return options.join('');
-}
 function studioComponentDetailPayloadFromDom(){
   const stockInput=$('studioComponentStockOnHand');
   const rawStock=String(stockInput&&stockInput.value||'').trim();
   const stockOnHand=rawStock===''?undefined:numberOrZero(rawStock);
   return {
     name:String(($('studioComponentName')&&$('studioComponentName').value)||'').trim(),
+    brand:String(($('studioComponentBrand')&&$('studioComponentBrand').value)||'').trim(),
     category:String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim(),
     subcategory:String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim(),
-    supplier:String(($('studioComponentSupplier')&&$('studioComponentSupplier').value)||'').trim(),
-    brand:String(($('studioComponentBrand')&&$('studioComponentBrand').value)||'').trim(),
-    variant:String(($('studioComponentVariant')&&$('studioComponentVariant').value)||'').trim(),
-    specifications:String(($('studioComponentSpecifications')&&$('studioComponentSpecifications').value)||'').trim(),
-    notes:String(($('studioComponentNotes')&&$('studioComponentNotes').value)||'').trim(),
     cost:studioComponentCurrencyFieldValue('studioComponentCost'),
     unitPrice:studioComponentCurrencyFieldValue('studioComponentUnitPrice'),
     stockOnHand,
@@ -3480,7 +3470,7 @@ function syncStudioComponentSaveButtonState(){
   }
   if(studioComponentDetailContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='✓ SAVED';
+    button.textContent='âœ“ SAVED';
     button.classList.add('is-saved');
     return;
   }
@@ -3506,17 +3496,13 @@ function syncStudioTaxonomySupplierSaveButtonState(){
   }
   if(studioSupplierEditContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='✓ SAVED';
+    button.textContent='âœ“ SAVED';
     button.className='ghost-action studio-taxonomy-editor__save is-saved';
     return;
   }
   button.disabled=!dirty;
   button.textContent='SAVE';
   button.className=dirty?'primary-action studio-taxonomy-editor__save':'ghost-action studio-taxonomy-editor__save';
-}
-function studioComponentListMeta(record){
-  const parts=[String(record&&record.category||'').trim(),String(record&&record.subcategory||'').trim(),String(record&&record.supplier||'').trim()].filter(Boolean);
-  return parts.length?parts.join(' • '):'No category or supplier';
 }
 // Display-only ordering for the Components list: case-insensitive, locale-aware, numeric-natural (e.g. "Size 2"
 // before "Size 10"), never mutates the underlying records/storage. Array.sort is spec-stable, so equal names
@@ -3531,11 +3517,9 @@ function studioComponentMatchesSearch(record,queryKey){
   if(!queryKey)return true;
   const haystack=[
     record&&record.name,
+    record&&record.brand,
     record&&record.category,
     record&&record.subcategory,
-    record&&record.supplier,
-    record&&record.description,
-    record&&record.specifications,
   ].map((value)=>String(value||'').toLowerCase()).join(' ');
   return haystack.includes(queryKey);
 }
@@ -3547,15 +3531,7 @@ function studioComponentCurrencyFieldValue(id){
 }
 function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
-  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">×</button></span>`;
-}
-function studioMergedSpecificationValue(record){
-  const specs=String(record&&record.specifications||'').trim();
-  const details=String(record&&record.description||'').trim();
-  if(specs && details && normalizeNameKey(specs)!==normalizeNameKey(details)){
-    return `${details} | ${specs}`;
-  }
-  return specs || details;
+  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">Ã—</button></span>`;
 }
 // AVAILABLE SIZES editor for the component form. Generic to any category; stays collapsed until sizes exist.
 function studioComponentSizesSectionMarkup(){
@@ -3650,13 +3626,9 @@ function renderStudioComponentDetails(record,options){
     return;
   }
   const name=String(record.name||'').trim();
+  const brand=String(record.brand||'').trim();
   const category=String(record.category||'').trim();
   const subcategory=String(record.subcategory||'').trim();
-  const supplier=String(record.supplier||'').trim();
-  const brand=String(record.brand||'').trim();
-  const variant=String(record.variant||'').trim();
-  const notes=String(record.notes||'').trim();
-  const specifications=studioMergedSpecificationValue(record);
   const stockOnHand=componentLibraryStockValue(record);
   const trackStock=activeTrackComponentStock();
   const optionMarkup=categorySubcategoryOptionsMarkup(category,subcategory);
@@ -3666,18 +3638,14 @@ function renderStudioComponentDetails(record,options){
       <p>${isAddMode?'Add this component to your reusable parts library.':'Update this reusable component and save your changes.'}</p>
     </div>
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
-    <input id="studioComponentSupplier" type="hidden" value="${escapeHtml(supplier)}" />
-    <input id="studioComponentBrand" type="hidden" value="${escapeHtml(brand)}" />
-    <input id="studioComponentVariant" type="hidden" value="${escapeHtml(variant)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
       <label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
+      <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" value="${escapeHtml(brand)}" placeholder="Brand or manufacturer" /></label>
       <label class="quote-component-field"><span>Category</span><select id="studioComponentCategory">${optionMarkup.categoryOptions}</select></label>
       <label class="quote-component-field"><span>Subcategory</span><select id="studioComponentSubcategory">${optionMarkup.subcategoryOptions}</select></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
-      <label class="quote-component-field quote-component-field--description studio-component-details__field--full"><span>Specifications</span><input id="studioComponentSpecifications" type="text" placeholder="80mm x 28mm x 19mm, ID 9mm, Black EVA" value="${escapeHtml(specifications)}" /></label>
-      <label class="quote-component-field quote-component-field--description studio-component-details__field--full"><span>Notes</span><input id="studioComponentNotes" type="text" placeholder="Any extra notes..." value="${escapeHtml(notes)}" /></label>
     </div>
     ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
@@ -3689,13 +3657,9 @@ function renderStudioComponentDetails(record,options){
     isAddMode,
     baseline:studioComponentPayloadSignature({
       name,
+      brand,
       category,
       subcategory,
-      supplier,
-      brand,
-      variant,
-      specifications,
-      notes,
       cost:record.cost===undefined?undefined:numberOrZero(record.cost),
       unitPrice:record.unitPrice===undefined?undefined:numberOrZero(record.unitPrice),
       stockOnHand:trackStock?(stockOnHand===undefined?undefined:numberOrZero(stockOnHand)):undefined,
@@ -3726,21 +3690,27 @@ function saveStudioComponentDetails(){
   if(!studioComponentDetailContext.isAddMode && payloadSignature===studioComponentDetailContext.baseline){
     return;
   }
+  // Supplier / Variant / Specifications / Notes / Unit are no longer part of the editor. Any value an older
+  // record already carries is read back and passed through untouched so saving here never strips it.
+  const existingRecord=findComponentLibraryRecordByName(originalName)||findComponentLibraryRecordByName(nextName);
+  const legacy=existingRecord||{};
   const sourceRecord={
     categoryId:'',
     category:payload.category,
     subcategory:payload.subcategory,
-    supplier:payload.supplier,
     brand:payload.brand,
-    variant:payload.variant,
-    // Keep legacy description in sync for backward compatibility paths.
-    description:payload.specifications,
-    specifications:payload.specifications,
-    notes:payload.notes,
     cost:payload.cost,
     unitPrice:payload.unitPrice,
     stockOnHand:activeTrackComponentStock()?payload.stockOnHand:undefined,
     sizeOptions:normalizeComponentSizeOptions(payload.sizeOptions),
+    supplier:String(legacy.supplier||''),
+    variant:String(legacy.variant||''),
+    description:String(legacy.description||''),
+    specifications:String(legacy.specifications||''),
+    notes:String(legacy.notes||''),
+    unit:String(legacy.unit||''),
+    customerLabel:String(legacy.customerLabel||''),
+    quantity:legacy.quantity,
   };
   if(normalizeNameKey(originalName) && normalizeNameKey(originalName)!==normalizeNameKey(nextName)){
     removeComponentLibraryRecord(originalName);
@@ -3759,11 +3729,6 @@ function saveStudioComponentDetails(){
   const subcategoryKey=normalizeNameKey(subcategoryName);
   if(targetCategory && subcategoryKey && !targetCategory.subcategories.some((row)=>normalizeNameKey(row.name)===subcategoryKey)){
     targetCategory.subcategories.push({id:studioTaxonomyId('sub'),name:subcategoryName});
-  }
-  const supplierName=String(sourceRecord.supplier||'').trim();
-  const supplierKey=normalizeNameKey(supplierName);
-  if(supplierKey && !studioSupplierByName(supplierName)){
-    studioComponentTaxonomyState.suppliers.push({id:studioTaxonomyId('sup'),name:supplierName});
   }
   saveStudioComponentTaxonomy();
   studioComponentDraft=null;
@@ -3934,7 +3899,7 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
   `:'';
   const showSaved=mode==='edit' && selectedSupplier && studioSupplierEditContext.savedFlash;
   const saveButtonClass=showSaved?'ghost-action studio-taxonomy-editor__save is-saved':'ghost-action studio-taxonomy-editor__save';
-  const saveButtonLabel=showSaved?'✓ SAVED':'SAVE';
+  const saveButtonLabel=showSaved?'âœ“ SAVED':'SAVE';
   const editMarkup=mode==='edit' && selectedSupplier?`
     <div class="studio-taxonomy-modal">
       <div class="studio-taxonomy-modal__scrim" data-taxonomy-ui-action="supplier-cancel"></div>
@@ -4121,7 +4086,7 @@ function ensureCategoryMergeSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Move category contents">
       <header class="component-sheet__header">
         <h2 id="categoryMergeTitle">Delete Category</h2>
-        <button class="component-sheet__close" type="button" data-category-merge-action="cancel" aria-label="Close dialog">×</button>
+        <button class="component-sheet__close" type="button" data-category-merge-action="cancel" aria-label="Close dialog">Ã—</button>
       </header>
       <div class="component-sheet__body">
         <div class="studio-component-details__head"><p id="categoryMergeMessage"></p></div>
@@ -4714,7 +4679,6 @@ function renderStudioComponentsLibrary(){
   const details=$('studioComponentDetails');
   const searchInput=$('studioComponentsSearch');
   const addBtn=$('studioComponentsAddBtn');
-  const utilityBtn=$('studioComponentsUtilityBtn');
   const backLabel=$('studioComponentsBackLabel');
   const title=$('studioComponentsTitle');
   const subtitle=$('studioComponentsSubtitle');
@@ -4825,9 +4789,6 @@ function renderStudioComponentsLibrary(){
     addBtn.disabled=false;
     addBtn.textContent=studioLibraryPath.level==='categories'?'ADD CATEGORY':studioLibraryPath.level==='category'?'ADD SUBCATEGORY':'ADD COMPONENT';
   }
-  if(utilityBtn){
-    utilityBtn.hidden=studioLibraryPath.level!=='categories';
-  }
   if(searchInput){
     searchInput.hidden=studioLibraryPath.level==='component' || studioLibraryPath.level==='supplier-component';
   }
@@ -4889,9 +4850,7 @@ function renderStudioComponentsLibrary(){
       }else{
         list.innerHTML=unassignedRecords.map((record)=>{
           const name=String(record&&record.name||'').trim();
-          const supplier=String(record&&record.supplier||'').trim();
-          const specifications=studioMergedSpecificationValue(record);
-          const secondary=[supplier,specifications].filter(Boolean).join(' • ');
+          const secondary=String(record&&record.brand||'').trim();
           return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}</button>`;
         }).join('');
       }
@@ -4919,19 +4878,19 @@ function renderStudioComponentsLibrary(){
     }else{
       list.innerHTML=visible.map((record)=>{
         const name=String(record&&record.name||'').trim();
-        const supplier=String(record&&record.supplier||'').trim();
+        const brand=String(record&&record.brand||'').trim();
         const buyValue=record&&record.unitCost!==undefined?numberOrZero(record.unitCost):(record&&record.cost!==undefined?numberOrZero(record.cost):undefined);
         const sellValue=record&&record.unitPrice!==undefined?numberOrZero(record.unitPrice):undefined;
         const priceBits=[];
         if(buyValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--buy">BUY $${buyValue.toFixed(2)}</span>`);
         if(sellValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--sell">SELL $${sellValue.toFixed(2)}</span>`);
         const secondaryParts=[];
-        if(supplier)secondaryParts.push(supplier);
+        if(brand)secondaryParts.push(brand);
         if(trackStock){
           const stockValue=componentLibraryStockValue(record);
           secondaryParts.push(`In Stock ${stockValue===undefined?0:stockValue}`);
         }
-        const secondary=secondaryParts.join(' • ');
+        const secondary=secondaryParts.join(' â€¢ ');
         const pricingMarkup=priceBits.length?`<span class="studio-components-price-row">${priceBits.join('')}</span>`:'';
         return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}${pricingMarkup}</button>`;
       }).join('');
@@ -5022,11 +4981,9 @@ function bindStudioComponentsPanel(){
       }else if(studioLibraryPath.level==='subcategory'){
         studioComponentDraft={
           name:'',
+          brand:'',
           category:studioLibraryPath.categoryId,
           subcategory:studioLibraryPath.subcategoryId,
-          supplier:'',
-          description:'',
-          specifications:'',
           cost:undefined,
           unitPrice:undefined,
         };
@@ -5036,13 +4993,6 @@ function bindStudioComponentsPanel(){
       renderStudioComponentsLibrary();
       const nameInput=$('studioComponentName')||$('studioLibraryCategoryName')||$('studioLibrarySubcategoryName');
       if(nameInput)nameInput.focus();
-    });
-  }
-
-  const utilityBtn=$('studioComponentsUtilityBtn');
-  if(utilityBtn){
-    utilityBtn.addEventListener('click',()=>{
-      showStudioTaxonomyManager();
     });
   }
 
@@ -6111,7 +6061,7 @@ function selectedBlankViewModel(){
 function selectedBlankSummaryLines(blank){
   const lines=[];
   const maker=String(blank&&blank.maker||'').trim();
-  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
+  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' â€¢ ');
   const pieces=String(blank&&blank.pieces||'').trim();
   const pieceLabel=pieces?`${pieces} Piece${pieces==='1'?'':'s'}`:'';
   const cost=numberOrZero(blank&&blank.cost);
@@ -6124,7 +6074,7 @@ function selectedBlankSummaryLines(blank){
 function selectedBlankSummaryMarkup(blank){
   const lines=selectedBlankSummaryLines(blank);
   const title=escapeHtml(blankModelName(blank)||'Choose Blank');
-  const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">⋯</button>`:'';
+  const menuButton=blank?`<button id="selectedBlankMenuTrigger" class="component-sheet__menu-trigger selected-blank__menu-trigger" type="button" data-selected-blank-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankModelName(blank)||'selected blank')}">â‹¯</button>`:'';
   const menu=blank?`<div id="selectedBlankMenu" class="component-picker-menu selected-blank__menu" hidden data-selected-blank-menu><button class="component-picker-menu__item" type="button" data-selected-blank-action="edit">Edit Blank</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="duplicate">Duplicate</button><button class="component-picker-menu__item" type="button" data-selected-blank-action="delete">Delete</button></div>`:'';
   return blank
     ?`<div class="selected-blank-card" data-selected-blank-state="summary"><div class="selected-blank-card__head"><strong class="selected-blank-card__name">${title}</strong></div><div class="selected-blank-card__summary">${lines.map((line)=>`<div>${escapeHtml(line)}</div>`).join('')}</div><div class="selected-blank-card__actions"><button id="quoteBlankPickerTrigger" class="ghost-action selected-blank-card__change" type="button" aria-haspopup="dialog">Change Blank</button>${menuButton}</div>${menu}</div>`
@@ -6661,10 +6611,10 @@ function componentPickerLeafSecondaryText(record){
   const bits=[];
   const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
   const sell=numberOrZero(record.unitPrice);
-  if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} · Sell $${sell.toFixed(2)}`);
+  if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} Â· Sell $${sell.toFixed(2)}`);
   const sizeCount=componentRecordSizeOptions(record).length;
   if(sizeCount)bits.push(`${sizeCount} size${sizeCount===1?'':'s'}`);
-  return bits.join(' • ');
+  return bits.join(' â€¢ ');
 }
 function syncComponentPickerBackButton(){
   const backButton=$('choicePickerBack');
@@ -6739,9 +6689,9 @@ function ensureChoicePicker(){
       <header class="component-sheet__header">
         <h2 id="choicePickerTitle">Select Item</h2>
         <div class="component-sheet__header-actions">
-          <button id="choicePickerBack" class="component-sheet__close" type="button" hidden aria-label="Back">‹</button>
+          <button id="choicePickerBack" class="component-sheet__close" type="button" hidden aria-label="Back">â€¹</button>
           <button id="choicePickerAdd" class="component-sheet__add component-sheet__add--header" type="button">Add Component</button>
-          <button class="component-sheet__close" type="button" data-sheet-action="close" aria-label="Close picker">×</button>
+          <button class="component-sheet__close" type="button" data-sheet-action="close" aria-label="Close picker">Ã—</button>
         </div>
       </header>
       <div class="component-sheet__body">
@@ -7495,15 +7445,10 @@ function applyComponentLibraryRecordToRow(index,name){
   row.libraryComponentId=String(record.id||'').trim();
   if(record.stockOnHand!==undefined)row.stockOnHand=numberOrZero(record.stockOnHand);
   if(specificationValue(record.subcategory))row.subcategory=record.subcategory;
-  if(specificationValue(record.supplier))row.supplier=record.supplier;
-  if(specificationValue(record.description))row.description=record.description;
   if(specificationValue(record.customerLabel))row.customerLabel=record.customerLabel;
-  if(specificationValue(record.unit))row.unit=record.unit;
   if(Number.isFinite(Number(record.quantity)))row.quantity=Number(record.quantity);
   if(record.unitCost!==undefined)row.unitCost=numberOrZero(record.unitCost);
   if(record.unitPrice!==undefined)row.unitPrice=numberOrZero(record.unitPrice);
-  if(specificationValue(record.notes))row.notes=record.notes;
-  if(specificationValue(record.specifications))row.specifications=record.specifications;
   if(record.cost!==undefined)row.cost=numberOrZero(record.cost);
   saveQuoteCurrent();
   markQuoteDirty();
@@ -7523,21 +7468,9 @@ function syncComponentRowEditorInputs(index){
   if(unitPriceInput && document.activeElement!==unitPriceInput){
     unitPriceInput.value=String(numberOrZero(row.unitPrice));
   }
-  const specsInput=document.querySelector(`#quoteComponentsList [data-component-key="specifications"][data-component-index="${index}"]`);
-  if(specsInput && document.activeElement!==specsInput){
-    specsInput.value=String(row.specifications||'');
-  }
-  const notesInput=document.querySelector(`#quoteComponentsList [data-component-key="notes"][data-component-index="${index}"]`);
-  if(notesInput && document.activeElement!==notesInput){
-    notesInput.value=String(row.notes||'');
-  }
-  const supplierTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-supplier-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
-  if(supplierTrigger){
-    supplierTrigger.textContent=String(row.supplier||'').trim()||'—';
-  }
   const subcategoryTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-subcategory-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
   if(subcategoryTrigger){
-    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'—';
+    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'â€”';
   }
 }
 function defaultChoiceNameSet(type){
@@ -7633,7 +7566,7 @@ function blankRowMenuMarkup(blank){
   const actions=blank.archived
     ?`<button class="component-picker-menu__item" data-blank-action="restore" data-blank-id="${blankId}" type="button">Restore</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`
     :`<button class="component-picker-menu__item" data-blank-action="select" data-blank-id="${blankId}" type="button">Select</button><button class="component-picker-menu__item" data-blank-action="rename" data-blank-id="${blankId}" type="button">Rename</button><button class="component-picker-menu__item" data-blank-action="duplicate" data-blank-id="${blankId}" type="button">Duplicate</button><button class="component-picker-menu__item" data-blank-action="delete" data-blank-id="${blankId}" type="button">Delete</button>`;
-  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">⋯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
+  return `<button class="component-sheet__menu-trigger blank-card__menu-trigger" type="button" data-blank-menu-trigger data-blank-id="${blankId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(blankDisplayName(blank))}">â‹¯</button><div class="component-picker-menu blank-card__menu" hidden data-blank-menu data-blank-id="${blankId}">${actions}</div>`;
 }
 function addCustomChoice(name,options){
   const context=options&&typeof options==='object'?options:{};
@@ -7850,7 +7783,7 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
     if(trigger){
-      trigger.textContent=selectedName||'—';
+      trigger.textContent=selectedName||'â€”';
     }
     updateQuoteSummary();
   }
@@ -7900,11 +7833,11 @@ function choiceOptionSecondaryText(type,item){
   if(type==='blank'){
     const blank=item&&item.blank;
     if(!blank)return '';
-    return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
+    return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' â€¢ ');
   }
   if(type==='category'){
     const bits=[String(item&&item.category||'').trim(),String(item&&item.supplier||'').trim()].filter(Boolean);
-    return bits.join(' • ');
+    return bits.join(' â€¢ ');
   }
   return item&&item.isCustom?'Custom':'';
 }
@@ -7966,7 +7899,7 @@ function renderChoicePickerOptions(query){
       list.innerHTML='<div class="component-sheet__empty">No matching components</div>';
       return;
     }
-    list.innerHTML='<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">◌</div><p class="component-sheet__empty">No components yet</p><button class="component-sheet__add component-sheet__add--inline" data-choice-add-inline="true" type="button">Add Component</button></div>';
+    list.innerHTML='<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">â—Œ</div><p class="component-sheet__empty">No components yet</p><button class="component-sheet__add component-sheet__add--inline" data-choice-add-inline="true" type="button">Add Component</button></div>';
     return;
   }
   const rowsMarkup=options.map((item)=>{
@@ -7976,7 +7909,7 @@ function renderChoicePickerOptions(query){
     const favourite=choiceRecordIsFavourite(activeChoicePicker.type,item);
     const tools=(activeChoicePicker.type==='component-size' || activeChoicePicker.type==='subcategory')
       ? ''
-      : `<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">★</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">⋯</button>`:''}</div>`;
+      : `<div class="component-sheet__row-tools"><button class="component-sheet__favorite" data-choice-favourite-option="${escapeHtml(item.name)}" data-choice-favourite-id="${escapeHtml(item.id||'')}" type="button" aria-pressed="${favourite?'true':'false'}" aria-label="${favourite?'Unfavourite':'Favourite'}"><span aria-hidden="true">â˜…</span></button>${hasMenu?`<button class="component-sheet__menu-trigger" data-choice-menu-option="${escapeHtml(item.name)}" data-choice-menu-id="${escapeHtml(item.id||'')}" type="button" aria-label="More actions for ${escapeHtml(item.name)}">â‹¯</button>`:''}</div>`;
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${tools}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup;
@@ -7992,14 +7925,14 @@ function renderComponentPickerCascadeOptions(query){
   if(!options.length){
     list.innerHTML=hasQuery
       ?'<div class="component-sheet__empty">No matching results</div>'
-      :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">◌</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
+      :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">â—Œ</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
     return;
   }
   const stage=activeChoicePicker.stage||'category';
   list.innerHTML=options.map((item)=>{
     const selected=choiceOptionIsSelected(item);
     const secondary=stage==='component'?componentPickerLeafSecondaryText(item.record):'';
-    const chevron=item.isDrill?'<span class="component-sheet__row-tools" aria-hidden="true">›</span>':'';
+    const chevron=item.isDrill?'<span class="component-sheet__row-tools" aria-hidden="true">â€º</span>':'';
     const drillAttr=item.isDrill?' data-choice-drill="true"':'';
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr}><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr} type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${chevron}</div>`;
   }).join('');
@@ -8167,7 +8100,7 @@ function buildSpecSummaryData(){
   if(blankName)parts.push(blankName);
   if(method)parts.push(method);
   if(guideCount)parts.push(`${guideCount} guide${guideCount===1?'':'s'}`);
-  return parts.length?parts.join(' · '):'Add rod specification';
+  return parts.length?parts.join(' Â· '):'Add rod specification';
 }
 function updateBuildSpecSummary(){
   const textEl=$('workshopBuildSpecsSummaryText');
@@ -8190,7 +8123,7 @@ function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
   const deleteLabel=componentRowIsEffectivelyEmpty(item)?'Remove Component':'Delete Component';
   const updateAction=componentRowIsEffectivelyEmpty(item)?'':`<button class="component-picker-menu__item" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button>`;
-  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">⋯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
+  return `<div class="quote-component-row__menu-wrap"><button class="component-sheet__menu-trigger component-row-menu-trigger" data-component-action="toggle-row-menu" data-component-index="${index}" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${escapeHtml(itemName)}">â‹¯</button><div class="component-picker-menu quote-component-row__menu" hidden data-component-row-menu="${index}">${updateAction}<button class="component-picker-menu__item" data-component-action="request-delete-row" data-component-index="${index}" type="button">${deleteLabel}</button></div></div>`;
 }
 function componentRowSubcategoryNames(categoryName,currentSubcategory){
   // Resolve the persisted taxonomy category record first (self-heals a stale in-memory taxonomy cache),
@@ -8209,7 +8142,7 @@ function componentRowSubcategoryNames(categoryName,currentSubcategory){
 }
 function componentRowSubcategoryFieldMarkup(item,index){
   const value=specificationValue(item&&item.subcategory);
-  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'—')}</span><b>▾</b></button></label>`;
+  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'â€”')}</span><b>â–¾</b></button></label>`;
 }
 // Shown only when this line has a snapshot size, or its master component still offers sizes to pick from.
 function componentRowSizeFieldMarkup(item,index){
@@ -8217,10 +8150,10 @@ function componentRowSizeFieldMarkup(item,index){
   const hasMasterSizes=componentRecordSizeOptions(componentLibraryRecordForRow(item)).length>0;
   if(!size && !hasMasterSizes)return '';
   const action=hasMasterSizes?` data-component-action="open-size-sheet" data-component-index="${index}"`:' disabled';
-  return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>▾</b></button></label>`;
+  return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>â–¾</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>▾</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label><label class="quote-component-field quote-component-field--description"><span>Specifications</span><input data-component-index="${index}" data-component-key="specifications" type="text" placeholder="Specifications" value="${escapeHtml(item.specifications||'')}" /></label><label class="quote-component-field quote-component-field--description"><span>Notes</span><input data-component-index="${index}" data-component-key="notes" type="text" placeholder="Library notes" value="${escapeHtml(item.notes||'')}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'â€”')}</span><b>â–¾</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="â€”" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -8435,7 +8368,7 @@ function renderQuoteComponents(){
             </span>
             <span class="quote-component-row__summary-trailing">
               ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
-              <span class="quote-component-row__disclosure" aria-hidden="true">›</span>
+              <span class="quote-component-row__disclosure" aria-hidden="true">â€º</span>
             </span>
           </button>
         </div>
@@ -8887,7 +8820,7 @@ function setCustomerFinderCreateButtonState(saved){
   const button=$('customerFinderSubmitNewCustomerBtn');
   if(!button)return;
   const isSaved=!!saved;
-  button.textContent=isSaved?'✓ SAVED':'CREATE CUSTOMER';
+  button.textContent=isSaved?'âœ“ SAVED':'CREATE CUSTOMER';
   button.disabled=isSaved;
   button.classList.toggle('is-saved',isSaved);
 }
@@ -9178,7 +9111,7 @@ function ensureCustomerRenameSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Rename Customer">
       <header class="component-sheet__header">
         <h2>Rename Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-rename-action="close" aria-label="Close rename customer">×</button>
+        <button class="component-sheet__close" type="button" data-customer-rename-action="close" aria-label="Close rename customer">Ã—</button>
       </header>
       <div class="component-sheet__body">
         <label><span>Customer Name</span><input id="customerRenameName" type="text" placeholder="Customer name" autocomplete="name" /></label>
@@ -9340,7 +9273,7 @@ function ensureCustomerEditSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Edit Customer">
       <header class="component-sheet__header">
         <h2>Edit Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-edit-action="close" aria-label="Close edit customer">×</button>
+        <button class="component-sheet__close" type="button" data-customer-edit-action="close" aria-label="Close edit customer">Ã—</button>
       </header>
       <div class="component-sheet__body">
         <div class="customer-finder__new-form">${fieldsMarkup}</div>
@@ -9703,7 +9636,7 @@ function ensureCustomerFinderSheet(){
     <section class="component-sheet__panel customer-finder__panel" role="dialog" aria-modal="true" aria-label="Find Customer">
       <header class="component-sheet__header">
         <h2>Find Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">×</button>
+        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">Ã—</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
         <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their build history.</p>
@@ -10143,7 +10076,7 @@ function updateWorkshopBuildOverview(){
   if(returnBtn)returnBtn.hidden=!(studioScreenView==='workflow' && hasActiveBuildRef && !isCustomerOrigin);
   if(customersReturnBtn)customersReturnBtn.hidden=!(studioScreenView==='workflow' && (isCustomerOrigin || (!hasActiveBuildRef && !!customerName)));
   if(titleEl){
-    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
+    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} â€” ${buildName}`:(customerName||buildName)):'Studio';
   }
   // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
   const introHintEl=$('quoteBuilderIntroHint');
@@ -10418,7 +10351,7 @@ function ensureConfirmSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Confirmation dialog">
       <header class="component-sheet__header">
         <h2 id="confirmSheetTitle">Confirm</h2>
-        <button class="component-sheet__close" type="button" data-confirm-action="cancel" aria-label="Close dialog">×</button>
+        <button class="component-sheet__close" type="button" data-confirm-action="cancel" aria-label="Close dialog">Ã—</button>
       </header>
       <div class="component-sheet__body">
         <p id="confirmSheetMessage" class="component-sheet__empty" style="padding:2px 0 10px;text-transform:none;letter-spacing:0;font-size:12px;color:#c9c3b8"></p>
@@ -10542,7 +10475,7 @@ function ensureViewQuoteSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer quote">
       <header class="component-sheet__header">
         <h2>Customer Quote</h2>
-        <button class="component-sheet__close" type="button" data-view-quote-action="close" aria-label="Close customer quote">×</button>
+        <button class="component-sheet__close" type="button" data-view-quote-action="close" aria-label="Close customer quote">Ã—</button>
       </header>
       <div class="component-sheet__body">
         <div id="viewQuoteBody"></div>
@@ -10681,7 +10614,7 @@ function emailCurrentQuote(){
     '',
     `Thank you for choosing ${businessName} for your custom rod build.`,
     '',
-    `Custom Rod Build — ${quoteNumber||'Quote'}`,
+    `Custom Rod Build â€” ${quoteNumber||'Quote'}`,
     '',
     `Total: ${currency(math.total)}`,
     `Deposit required: ${currency(math.depositAmount)}`,
@@ -10708,7 +10641,7 @@ function emailCurrentQuote(){
   if(businessProfileLines.length){
     lines.push('', ...businessProfileLines);
   }
-  const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
+  const subject=`${businessName} Custom Rod Build Quote â€” ${quoteNumber||'Quote'}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -11113,7 +11046,7 @@ const GUIDE_ORIENTATION_METHOD_LABELS={standard:'Standard / Conventional',acute:
 function guideOrientationMethodLabel(method){
   return GUIDE_ORIENTATION_METHOD_LABELS[normalizeSpiralMethod(method)]||GUIDE_ORIENTATION_METHOD_LABELS.progressive;
 }
-// Build Specification's Guide section is a live read-out of Guide Spacing + Guide Orientation — no separate guide data is stored/edited here.
+// Build Specification's Guide section is a live read-out of Guide Spacing + Guide Orientation â€” no separate guide data is stored/edited here.
 function renderGuideSpecificationSummary(){
   const countEl=$('guideSpecCount');
   const methodEl=$('guideSpecMethod');
@@ -11666,7 +11599,7 @@ function renderWorkshopQuote(){
   if(customerSummaryTextEl){
     const customerName=specificationValue(quote.customerName);
     const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
-    const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'Add customer details';
+    const summary=customerName?(locality?`${customerName} â€¢ ${locality}`:customerName):'Add customer details';
     customerSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   const buildDetailsSummaryTextEl=$('quoteBuildDetailsSummaryText');
@@ -11674,7 +11607,7 @@ function renderWorkshopQuote(){
     const buildName=specificationValue(quote.buildName);
     const dueRaw=specificationValue(quote.estimatedCompletionDate);
     const dueText=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'';
-    const summary=buildName?(dueText?`${buildName} • ${dueText}`:buildName):(dueText||'Add build name and due date');
+    const summary=buildName?(dueText?`${buildName} â€¢ ${dueText}`:buildName):(dueText||'Add build name and due date');
     buildDetailsSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   updateBuildPricingSummary();
@@ -11788,7 +11721,7 @@ function ensureBlankEditorSheet(){
     <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Blank editor">
       <header class="component-sheet__header">
         <h2 id="blankEditorTitle">Blank</h2>
-        <button class="component-sheet__close" type="button" data-blank-editor-action="close" aria-label="Close blank editor">×</button>
+        <button class="component-sheet__close" type="button" data-blank-editor-action="close" aria-label="Close blank editor">Ã—</button>
       </header>
       <div class="component-sheet__body">
         <div class="blank-editor-grid">
@@ -12003,7 +11936,7 @@ function renderBlanks(){
   host.innerHTML=filtered.map((blank)=>{
     const idx=blanks.findIndex((item)=>item.id===blank.id);
     const isFavourite=blankIsFavourite(blank);
-    return `<article class="blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.pieces||'Piece n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Unfavourite blank':'Favourite blank'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">★</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
+    return `<article class="blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.length||'Length n/a')} â€¢ ${escapeHtml(blank.pieces||'Piece n/a')} â€¢ ${escapeHtml(blank.power||'Power n/a')} â€¢ ${escapeHtml(blank.action||'Action n/a')}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Unfavourite blank':'Favourite blank'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">â˜…</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
   }).join('');
 }
 function bindBlankLibraryControls(){
@@ -12337,7 +12270,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
     SETTINGS_PENDING_SYNC_SECTIONS.add(sectionKey);
     btn.hidden=false;
     btn.disabled=true;
-    btn.textContent=message||'✓ SAVED';
+    btn.textContent=message||'âœ“ SAVED';
     btn.className='ghost-action settings-context-action settings-save-btn is-saved';
     SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=window.setTimeout(()=>{
       btn.hidden=true;
