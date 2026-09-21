@@ -8331,7 +8331,7 @@ body.klabs-auth-resolving::after {
   grid-column:span 3;
 }
 
-.studio-component-details__fields.quote-component-row__fields > label:first-child,
+.studio-component-details__fields.quote-component-row__fields > label:first-child:not(.quote-component-field--cost),
 .studio-component-details__fields.quote-component-row__fields > .studio-component-details__field--full{
   grid-column:1 / -1;
 }
