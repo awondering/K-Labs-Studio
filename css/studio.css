@@ -7416,7 +7416,7 @@ textarea::-moz-selection,
 #workshopToolDiameter,
 #workshopToolGrip,
 #workshopToolSpiral{
-  gap:14px;
+  gap:8px;
 }
 
 #workshopToolDiameter .workshop-tool-head,
@@ -7522,6 +7522,48 @@ textarea::-moz-selection,
   grid-template-columns:repeat(2,minmax(0,1fr));
 }
 
+#workshopToolSpiral .workshop-tool-unit-row[data-spiral-method-row="true"] .ghost-action,
+#workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"] .ghost-action{
+  min-height:38px;
+  font-size:9px;
+}
+
+.spiral-control-group{
+  display:grid;
+  gap:5px;
+  min-width:0;
+}
+
+.spiral-control-label{
+  display:block;
+  color:rgba(214,210,200,.7);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+.spiral-primary-band{
+  display:grid;
+  grid-template-columns:minmax(132px,.78fr) minmax(0,1fr);
+  align-items:stretch;
+  gap:8px;
+}
+
+.spiral-control-group--direction{
+  padding:8px;
+  border:1px solid rgba(214,210,200,.12);
+  border-radius:12px;
+  background:rgba(255,255,255,.012);
+}
+
+.spiral-secondary-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  align-items:center;
+}
+
 .workshop-tool-stack-actions{
   display:grid;
   align-items:end;
@@ -7549,7 +7591,8 @@ textarea::-moz-selection,
   display:flex;
   justify-content:flex-end;
   gap:8px;
-  margin:-6px 0 2px;
+  margin:0;
+  padding-top:2px;
 }
 
 #workshopToolSpiral .spiral-reset-action{
@@ -7577,41 +7620,31 @@ textarea::-moz-selection,
   background:rgba(var(--kl-red-rgb),.15);
 }
 
-#workshopToolSpiral .spiral-count-grid{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:8px;
-}
-
 #workshopToolSpiral .spiral-count-card{
-  padding:8px;
+  padding:8px 9px;
   border-color:rgba(214,210,200,.14);
   background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.012));
 }
 
 #workshopToolSpiral .spiral-count-card .layout-control-card__title{
-  margin-bottom:6px;
+  margin-bottom:4px;
   text-align:left;
+  font-size:8px;
 }
 
 #workshopToolSpiral .spiral-count-card .layout-control-card__body--compact{
-  min-height:44px;
+  min-height:40px;
 }
 
 #workshopToolSpiral .spiral-count-card .layout-control-card__button{
-  width:40px;
-  height:40px;
+  width:38px;
+  height:38px;
   border-radius:11px;
 }
 
 #workshopToolSpiral .spiral-count-card .layout-control-card__value{
-  min-height:42px;
-  font-size:30px;
-}
-
-#workshopToolSpiral .spiral-count-card .layout-control-card__meta{
-  margin-top:5px;
-  text-align:left;
+  min-height:38px;
+  font-size:29px;
 }
 
 #workshopToolSpiral .spiral-advanced-toggle{
@@ -8067,6 +8100,10 @@ textarea::-moz-selection,
     gap:12px;
   }
 
+  #workshopToolSpiral{
+    gap:8px;
+  }
+
   #workshopToolDiameter .workshop-tool-fields input,
   #workshopToolGrip .workshop-tool-fields input,
   #workshopToolSpiral .workshop-tool-fields input{
@@ -8080,10 +8117,13 @@ textarea::-moz-selection,
   }
 
   #workshopToolSpiral .workshop-tool-unit-row,
-  #workshopToolSpiral .workshop-tool-unit-row[data-spiral-method-row="true"],
-  #workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"],
   #workshopToolSpiral .spiral-guide-row__fields{
     grid-template-columns:1fr;
+  }
+
+  #workshopToolSpiral .workshop-tool-unit-row[data-spiral-method-row="true"],
+  #workshopToolSpiral .workshop-tool-unit-row[data-spiral-direction-row="true"]{
+    grid-template-columns:repeat(2,minmax(0,1fr));
   }
 
   #workshopToolSpiral .spiral-count-grid{
