@@ -6414,6 +6414,54 @@ function hideSelectedBlankEditState(){
   selectedBlankEditState=null;
   hideSelectedBlankMenu();
 }
+function positionAnchoredActionMenu(menu,trigger,options){
+  if(!menu || !trigger)return;
+  const settings={boundary:null,gap:6,inset:8,...(options||{})};
+  const viewport=window.visualViewport||null;
+  const viewportLeft=viewport?viewport.offsetLeft:0;
+  const viewportTop=viewport?viewport.offsetTop:0;
+  const viewportWidth=viewport?viewport.width:(document.documentElement.clientWidth||window.innerWidth);
+  const viewportHeight=viewport?viewport.height:(document.documentElement.clientHeight||window.innerHeight);
+  const viewportRight=viewportLeft+viewportWidth;
+  const viewportBottom=viewportTop+viewportHeight;
+  const boundaryRect=settings.boundary&&settings.boundary.getBoundingClientRect
+    ?settings.boundary.getBoundingClientRect()
+    :null;
+  const bounds={
+    left:Math.max(viewportLeft+settings.inset,boundaryRect?boundaryRect.left+settings.inset:-Infinity),
+    right:Math.min(viewportRight-settings.inset,boundaryRect?boundaryRect.right-settings.inset:Infinity),
+    top:Math.max(viewportTop+settings.inset,boundaryRect?boundaryRect.top+settings.inset:-Infinity),
+    bottom:Math.min(viewportBottom-settings.inset,boundaryRect?boundaryRect.bottom-settings.inset:Infinity),
+  };
+  const availableWidth=Math.max(0,bounds.right-bounds.left);
+  const availableHeight=Math.max(0,bounds.bottom-bounds.top);
+  menu.style.setProperty('position','fixed','important');
+  menu.style.setProperty('right','auto','important');
+  menu.style.setProperty('bottom','auto','important');
+  menu.style.maxWidth=`${availableWidth}px`;
+  menu.style.maxHeight=`${availableHeight}px`;
+  const triggerRect=trigger.getBoundingClientRect();
+  let menuRect=menu.getBoundingClientRect();
+  const menuWidth=Math.min(menuRect.width,availableWidth);
+  const spaceBelow=Math.max(0,bounds.bottom-triggerRect.bottom-settings.gap);
+  const spaceAbove=Math.max(0,triggerRect.top-bounds.top-settings.gap);
+  const opensUpward=spaceBelow<menuRect.height && spaceAbove>spaceBelow;
+  menu.style.maxHeight=`${opensUpward?spaceAbove:spaceBelow}px`;
+  menuRect=menu.getBoundingClientRect();
+  const left=Math.max(bounds.left,Math.min(bounds.right-menuWidth,triggerRect.right-menuWidth));
+  const desiredTop=opensUpward
+    ?triggerRect.top-settings.gap-menuRect.height
+    :triggerRect.bottom+settings.gap;
+  const top=Math.max(bounds.top,Math.min(bounds.bottom-menuRect.height,desiredTop));
+  menu.style.left=`${left}px`;
+  menu.style.top=`${top}px`;
+  const positionedRect=menu.getBoundingClientRect();
+  const leftCorrection=left-positionedRect.left;
+  const topCorrection=top-positionedRect.top;
+  if(Math.abs(leftCorrection)>.5)menu.style.left=`${left+leftCorrection}px`;
+  if(Math.abs(topCorrection)>.5)menu.style.top=`${top+topCorrection}px`;
+  menu.dataset.menuPlacement=opensUpward?'up':'down';
+}
 function handleSelectedBlankAction(action){
   if(action==='edit'){
     hideSelectedBlankMenu();
@@ -6461,24 +6509,7 @@ function toggleSelectedBlankMenu(triggerEl){
   menu.style.zIndex='80';
   menu.style.visibility='hidden';
   menu.hidden=false;
-  const triggerRect=triggerEl.getBoundingClientRect();
-  const menuRect=menu.getBoundingClientRect();
-  const viewportPadding=8;
-  const gap=10;
-  const menuWidth=menuRect.width||164;
-  const menuHeight=menuRect.height||120;
-  const rightSpace=window.innerWidth-triggerRect.right;
-  const leftSpace=triggerRect.left;
-  const openLeft=rightSpace < menuWidth + gap && leftSpace > menuWidth + gap;
-  const desiredLeft=openLeft ? triggerRect.left-menuWidth-gap : triggerRect.right+gap;
-  const left=Math.max(viewportPadding,Math.min(window.innerWidth-menuWidth-viewportPadding,desiredLeft));
-  const belowSpace=window.innerHeight-triggerRect.bottom;
-  const aboveSpace=triggerRect.top;
-  const openUp=belowSpace < menuHeight + gap && aboveSpace > menuHeight + gap;
-  const desiredTop=openUp ? triggerRect.top-menuHeight-gap : triggerRect.bottom+gap;
-  const top=Math.max(viewportPadding,Math.min(window.innerHeight-menuHeight-viewportPadding,desiredTop));
-  menu.style.left=`${left}px`;
-  menu.style.top=`${top}px`;
+  positionAnchoredActionMenu(menu,triggerEl,{gap:10});
   menu.style.visibility='visible';
   triggerEl.setAttribute('aria-expanded','true');
 }
@@ -9163,27 +9194,8 @@ function positionCustomerFinderInlineMenu(){
   const menu=sheet.querySelector('.customer-finder__inline-menu');
   const trigger=sheet.querySelector('.customer-finder__detail-more[aria-expanded="true"], .customer-finder__work-more[aria-expanded="true"]');
   if(!menu || !trigger)return;
-  menu.style.setProperty('position','fixed','important');
-  menu.style.setProperty('right','auto','important');
-  menu.style.setProperty('bottom','auto','important');
-  const viewport=window.visualViewport;
-  const viewportLeft=Math.round(viewport?viewport.offsetLeft:0);
-  const viewportTop=Math.round(viewport?viewport.offsetTop:0);
-  const viewportWidth=Math.round(viewport?viewport.width:document.documentElement.clientWidth||window.innerWidth);
-  const viewportHeight=Math.round(viewport?viewport.height:document.documentElement.clientHeight||window.innerHeight);
-  const inset=8;
-  const triggerRect=trigger.getBoundingClientRect();
-  const menuRect=menu.getBoundingClientRect();
-  const left=Math.max(viewportLeft+inset,Math.min(viewportLeft+viewportWidth-inset-menuRect.width,triggerRect.right-menuRect.width));
-  const spaceBelow=viewportTop+viewportHeight-triggerRect.bottom-inset;
-  const spaceAbove=triggerRect.top-viewportTop-inset;
-  const opensUpward=spaceBelow<menuRect.height && spaceAbove>=menuRect.height;
-  const top=opensUpward
-    ?triggerRect.top-menuRect.height-6
-    :Math.min(viewportTop+viewportHeight-inset-menuRect.height,triggerRect.bottom+6);
-  menu.style.left=`${left}px`;
-  menu.style.top=`${Math.max(viewportTop+inset,top)}px`;
-  menu.style.maxHeight=`${Math.max(80,viewportHeight-(inset*2))}px`;
+  const panel=sheet.querySelector('.customer-finder__panel');
+  positionAnchoredActionMenu(menu,trigger,{boundary:panel});
 }
 function customerFinderBuildRowMenuMarkup(entry){
   const lifecycle=buildLifecycleStatusKey(entry&&entry.record);
@@ -9743,6 +9755,7 @@ function bindCustomerFinderViewportHandlers(){
   }
   window.addEventListener('resize',scheduleCustomerFinderViewportSync);
   window.addEventListener('orientationchange',scheduleCustomerFinderViewportSync);
+  sheet.addEventListener('scroll',positionCustomerFinderInlineMenu,true);
   sheet.addEventListener('focusin',handleCustomerFinderFocusIn);
   sheet.addEventListener('focusout',handleCustomerFinderFocusOut);
   scheduleCustomerFinderViewportSync();
@@ -9759,6 +9772,7 @@ function unbindCustomerFinderViewportHandlers(){
   window.removeEventListener('resize',scheduleCustomerFinderViewportSync);
   window.removeEventListener('orientationchange',scheduleCustomerFinderViewportSync);
   if(sheet){
+    sheet.removeEventListener('scroll',positionCustomerFinderInlineMenu,true);
     sheet.removeEventListener('focusin',handleCustomerFinderFocusIn);
     sheet.removeEventListener('focusout',handleCustomerFinderFocusOut);
   }
@@ -10139,20 +10153,8 @@ function positionSavedBuildRowMenu(){
   const trigger=document.querySelector(`[data-build-action="toggle-menu"][data-build-source="${CSS.escape(source)}"][data-build-index="${CSS.escape(index)}"]`);
   const menu=document.querySelector(`[data-build-row-menu][data-build-source="${CSS.escape(source)}"][data-build-index="${CSS.escape(index)}"]`);
   if(!trigger || !menu)return;
-  const triggerRect=trigger.getBoundingClientRect();
-  const menuRect=menu.getBoundingClientRect();
   const inset=Math.max(8,Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-gutter'))||8);
-  const viewportWidth=document.documentElement.clientWidth||window.innerWidth;
-  const viewportHeight=document.documentElement.clientHeight||window.innerHeight;
-  const left=Math.max(inset,Math.min(viewportWidth-inset-menuRect.width,triggerRect.right-menuRect.width));
-  const spaceBelow=viewportHeight-triggerRect.bottom-inset;
-  const spaceAbove=triggerRect.top-inset;
-  const opensUpward=spaceBelow<menuRect.height && spaceAbove>=menuRect.height;
-  const top=opensUpward
-    ?Math.max(inset,triggerRect.top-menuRect.height-6)
-    :Math.min(viewportHeight-inset-menuRect.height,triggerRect.bottom+6);
-  menu.style.left=`${left}px`;
-  menu.style.top=`${Math.max(inset,top)}px`;
+  positionAnchoredActionMenu(menu,trigger,{inset});
 }
 function isSavedBuildRowMenuOpen(source,index){
   return activeBuildRowMenu===savedBuildMenuKey(source,index);
@@ -10243,26 +10245,7 @@ function positionCurrentBuildActionsMenu(){
   const trigger=$('currentBuildActionsMenuBtn');
   const menu=$('currentBuildActionsMenu');
   if(!trigger || !menu || menu.hidden)return;
-  menu.style.setProperty('right','auto','important');
-  menu.style.setProperty('bottom','auto','important');
-  const viewport=window.visualViewport;
-  const viewportLeft=Math.round(viewport?viewport.offsetLeft:0);
-  const viewportTop=Math.round(viewport?viewport.offsetTop:0);
-  const viewportWidth=Math.round(viewport?viewport.width:document.documentElement.clientWidth||window.innerWidth);
-  const viewportHeight=Math.round(viewport?viewport.height:document.documentElement.clientHeight||window.innerHeight);
-  const inset=8;
-  const triggerRect=trigger.getBoundingClientRect();
-  const menuRect=menu.getBoundingClientRect();
-  const left=Math.max(viewportLeft+inset,Math.min(viewportLeft+viewportWidth-inset-menuRect.width,triggerRect.right-menuRect.width));
-  const spaceBelow=viewportTop+viewportHeight-triggerRect.bottom-inset;
-  const spaceAbove=triggerRect.top-viewportTop-inset;
-  const opensUpward=spaceBelow<menuRect.height && spaceAbove>=menuRect.height;
-  const top=opensUpward
-    ?triggerRect.top-menuRect.height-6
-    :Math.min(viewportTop+viewportHeight-inset-menuRect.height,triggerRect.bottom+6);
-  menu.style.left=`${left}px`;
-  menu.style.top=`${Math.max(viewportTop+inset,top)}px`;
-  menu.style.maxHeight=`${Math.max(80,viewportHeight-(inset*2))}px`;
+  positionAnchoredActionMenu(menu,trigger);
 }
 function toggleCurrentBuildActionsMenu(){
   if(currentBuildActionsMenuOpen){
@@ -12398,6 +12381,10 @@ function bindBuildsControls(){
     });
     window.addEventListener('resize',positionSavedBuildRowMenu,{passive:true});
     window.addEventListener('scroll',positionSavedBuildRowMenu,{passive:true});
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',positionSavedBuildRowMenu,{passive:true});
+      window.visualViewport.addEventListener('scroll',positionSavedBuildRowMenu,{passive:true});
+    }
   }
 }
 function onScreenChange(screenId){
