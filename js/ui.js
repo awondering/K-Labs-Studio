@@ -3522,12 +3522,15 @@ function explicitBrandForSubcategory(categoryName,subcategoryName){
   };
   return explicitBrands[key]||'';
 }
+function studioComponentNameInput(){
+  return $('studioComponentName')||$('studioComponentRenameInput');
+}
 function studioComponentDetailPayloadFromDom(){
   const stockInput=$('studioComponentStockOnHand');
   const rawStock=String(stockInput&&stockInput.value||'').trim();
   const stockOnHand=rawStock===''?undefined:numberOrZero(rawStock);
   return {
-    name:String(($('studioComponentName')&&$('studioComponentName').value)||'').trim(),
+    name:String((studioComponentNameInput()&&studioComponentNameInput().value)||'').trim(),
     brand:String(($('studioComponentBrand')&&$('studioComponentBrand').value)||'').trim(),
     category:String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim(),
     subcategory:String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim(),
@@ -3712,9 +3715,14 @@ function renderStudioComponentDetails(record,options){
   const details=$('studioComponentDetails');
   if(!details)return;
   const isAddMode=!!(options&&options.addMode);
+  const renameButton=$('studioComponentRenameBtn');
+  const renameEditor=$('studioComponentRenameEditor');
+  const renameInput=$('studioComponentRenameInput');
   if(!record){
     studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
     studioComponentSizeDraft=[];
+    if(renameButton)renameButton.hidden=true;
+    if(renameEditor)renameEditor.hidden=true;
     details.innerHTML='<p class="studio-component-details__empty">Select a component to view details.</p>';
     return;
   }
@@ -3725,13 +3733,16 @@ function renderStudioComponentDetails(record,options){
   const stockOnHand=componentLibraryStockValue(record);
   const trackStock=activeTrackComponentStock();
   studioComponentSizeDraft=componentRecordSizeOptions(record);
+  if(renameButton)renameButton.hidden=isAddMode;
+  if(renameEditor)renameEditor.hidden=true;
+  if(renameInput)renameInput.value=name;
   details.innerHTML=`
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
     <input id="studioComponentBrand" type="hidden" value="${escapeHtml(brand)}" />
     <input id="studioComponentCategory" type="hidden" value="${escapeHtml(category)}" />
     <input id="studioComponentSubcategory" type="hidden" value="${escapeHtml(subcategory)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
-      <label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>
+      ${isAddMode?`<label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>`:''}
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
@@ -3889,7 +3900,7 @@ function commitComponentMove(){
   saveStudioComponentDetails();
 }
 function saveStudioComponentDetails(){
-  const nameInput=$('studioComponentName');
+  const nameInput=studioComponentNameInput();
   if(!nameInput)return;
   const nextName=String(nameInput.value||'').trim();
   if(!nextName){
@@ -4962,8 +4973,12 @@ function renderStudioComponentsLibrary(){
   const backLabel=$('studioComponentsBackLabel');
   const title=$('studioComponentsTitle');
   const subtitle=$('studioComponentsSubtitle');
+  const renameButton=$('studioComponentRenameBtn');
+  const renameEditor=$('studioComponentRenameEditor');
   const listCard=list?list.closest('.studio-components-shell__list-card'):null;
   if(!list || !details)return;
+  if(renameButton)renameButton.hidden=true;
+  if(renameEditor)renameEditor.hidden=true;
 
   const libraryData=studioComponentLibrarySelectionData();
   const {taxonomy,records}=libraryData;
@@ -5060,7 +5075,7 @@ function renderStudioComponentsLibrary(){
   }else{
     const selected=currentStudioComponentRecord();
     if(backLabel)backLabel.textContent=(studioLibraryPath.level==='supplier-component'?String(studioLibraryPath.subcategoryId||studioLibraryPath.categoryId||studioLibraryPath.supplierName||'SUPPLIER'):(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)?UNASSIGNED_COMPONENT_CATEGORY:String(studioLibraryPath.subcategoryId||'SUBCATEGORY'))).toUpperCase();
-    if(title)title.textContent=String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
+    if(title)title.textContent=studioComponentDraft?'NEW COMPONENT':String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
     if(subtitle)subtitle.textContent='';
   }
 
@@ -5194,6 +5209,45 @@ function bindStudioComponentsPanel(){
   if(!panel || panel.getAttribute('data-studio-components-bound')==='true')return;
   panel.setAttribute('data-studio-components-bound','true');
   ensureStudioComponentTaxonomyLoaded();
+
+  const renameButton=$('studioComponentRenameBtn');
+  const renameEditor=$('studioComponentRenameEditor');
+  const renameInput=$('studioComponentRenameInput');
+  const renameSave=$('studioComponentRenameSave');
+  const renameCancel=$('studioComponentRenameCancel');
+  const closeRenameEditor=()=>{
+    if(renameInput){
+      renameInput.value=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'');
+    }
+    if(renameEditor)renameEditor.hidden=true;
+    if(renameButton)renameButton.hidden=false;
+    syncStudioComponentSaveButtonState();
+  };
+  if(renameButton){
+    renameButton.addEventListener('click',()=>{
+      if(!renameEditor || !renameInput)return;
+      renameInput.value=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'');
+      renameButton.hidden=true;
+      renameEditor.hidden=false;
+      renameInput.focus();
+      renameInput.select();
+    });
+  }
+  if(renameInput){
+    renameInput.addEventListener('input',syncStudioComponentSaveButtonState);
+    renameInput.addEventListener('keydown',(event)=>{
+      if(event.key==='Escape'){
+        event.preventDefault();
+        closeRenameEditor();
+      }
+      if(event.key==='Enter'){
+        event.preventDefault();
+        saveStudioComponentDetails();
+      }
+    });
+  }
+  if(renameSave)renameSave.addEventListener('click',saveStudioComponentDetails);
+  if(renameCancel)renameCancel.addEventListener('click',closeRenameEditor);
 
   const backBtn=$('studioComponentsBackBtn');
   if(backBtn){

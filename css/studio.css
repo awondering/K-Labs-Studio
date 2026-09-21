@@ -5113,6 +5113,13 @@ textarea::-moz-selection,
   gap:10px;
 }
 
+.studio-components-shell__identity{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  min-width:0;
+}
+
 .studio-components-shell__intro h1{
   margin:0;
   color:#f4efe6;
@@ -5129,6 +5136,53 @@ textarea::-moz-selection,
   font-size:12px;
   line-height:1.45;
   letter-spacing:.08em;
+}
+
+.studio-component-rename-trigger{
+  flex:0 0 auto;
+  min-height:28px;
+  margin-bottom:1px;
+  padding:0 8px;
+  border:1px solid rgba(214,210,200,.16);
+  border-radius:6px;
+  background:rgba(255,255,255,.02);
+  color:rgba(214,210,200,.66);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+
+.studio-component-rename-trigger:hover,
+.studio-component-rename-trigger:focus-visible{
+  border-color:rgba(214,210,200,.34);
+  color:#eee6da;
+  outline:none;
+}
+
+.studio-component-rename-editor{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:6px;
+  width:min(100%,430px);
+  margin-top:8px;
+}
+
+.studio-component-rename-editor input{
+  width:100%;
+  min-width:0;
+  min-height:36px;
+  padding:7px 9px;
+  border:1px solid rgba(214,210,200,.22);
+  border-radius:7px;
+  background:rgba(7,8,10,.94);
+  color:#f5efe5;
+  font-size:13px;
+}
+
+.studio-component-rename-editor button{
+  min-height:36px;
+  padding:0 10px;
+  border-radius:7px;
 }
 
 .studio-components-shell__controls{

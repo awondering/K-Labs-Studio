@@ -375,7 +375,15 @@
             <span id="studioComponentsBackLabel">BACK TO STUDIO</span>
           </button>
           <div class="studio-components-shell__intro">
-            <h1 id="studioComponentsTitle">COMPONENTS</h1>
+            <div class="studio-components-shell__identity">
+              <h1 id="studioComponentsTitle">COMPONENTS</h1>
+              <button id="studioComponentRenameBtn" class="studio-component-rename-trigger" type="button" hidden>RENAME</button>
+            </div>
+            <div id="studioComponentRenameEditor" class="studio-component-rename-editor" hidden>
+              <input id="studioComponentRenameInput" type="text" aria-label="Component Name" />
+              <button id="studioComponentRenameSave" class="primary-action" type="button">Save</button>
+              <button id="studioComponentRenameCancel" class="ghost-action" type="button">Cancel</button>
+            </div>
             <p id="studioComponentsSubtitle">Manage the parts used in your builds.</p>
           </div>
         </header>
