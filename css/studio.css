@@ -7431,6 +7431,21 @@ textarea::-moz-selection,
   color:rgba(223,216,206,.82);
 }
 
+#workshopToolSpiral .workshop-tool-nav-back{
+  width:max-content;
+  min-height:24px;
+  padding:0;
+}
+
+#workshopToolSpiral .workshop-tool-nav-back:hover,
+#workshopToolSpiral .workshop-tool-nav-back:focus-visible{
+  text-decoration:none;
+}
+
+#workshopToolSpiral .workshop-tool-nav-back .workshop-tool-nav-back__arrow{
+  font-size:20px;
+}
+
 #workshopToolsPanel .workshop-tool-unit-row{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
