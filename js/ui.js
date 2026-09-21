@@ -2827,6 +2827,117 @@ function humanizeComponentCode(value){
 function componentRowSizeLabel(item){
   return specificationValue(item&&item.selectedSize);
 }
+function componentIdentityTitle(value){
+  const text=specificationValue(value);
+  if(!text)return '';
+  return text.replace(/\s+/g,' ').trim().split(' ').map((token)=>{
+    if(/[A-Z]{2,}|[0-9#/'\-]/.test(token))return token;
+    return token.charAt(0).toUpperCase()+token.slice(1).toLowerCase();
+  }).join(' ');
+}
+function singularComponentType(value){
+  const text=specificationValue(value);
+  const key=normalizeNameKey(text);
+  if(!key)return '';
+  if(key.includes('winding check'))return 'Winding Check';
+  if(key.includes('reel seat'))return 'Reel Seat';
+  if(key.includes('guide set'))return 'Guide Set';
+  if(key.includes('guide'))return 'Guide';
+  if(key.includes('tip top'))return 'Tip Top';
+  if(key.includes('hook keeper'))return 'Hook Keeper';
+  if(key.includes('butt cap') || key.includes('buttcap'))return 'Butt Cap';
+  if(key.includes('thread'))return 'Thread';
+  if(key.includes('grip'))return 'Grip';
+  if(key.includes('blank'))return 'Blank';
+  return '';
+}
+function componentNameCarriesType(value){
+  return !!singularComponentType(value);
+}
+function componentColorVariantText(value){
+  const text=componentIdentityTitle(value);
+  const colorKey=normalizeNameKey(text).replace(/[\/\-]+/g,' ');
+  const colorWords=['black','blue','silver','grey','gray','red','gold','green','white','orange','purple','pink','brown'];
+  const parts=colorKey.split(/\s+/).filter(Boolean);
+  if(parts.length>1 && parts.every((part)=>colorWords.includes(part))){
+    return parts.map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join('/');
+  }
+  return text;
+}
+function componentIdentityDedupeParts(values){
+  const parts=[];
+  values.map(componentIdentityTitle).filter(Boolean).forEach((part)=>{
+    const key=normalizeNameKey(part);
+    const longerIndex=parts.findIndex((existing)=>normalizeNameKey(existing).includes(key));
+    if(longerIndex>=0)return;
+    for(let i=parts.length-1;i>=0;i-=1){
+      if(key.includes(normalizeNameKey(parts[i])))parts.splice(i,1);
+    }
+    parts.push(part);
+  });
+  return parts;
+}
+function componentIdentityVariantParts(item,record,what){
+  const values=[
+    record&&record.brand,
+    record&&record.variant,
+    record&&record.name,
+    item&&item.brand,
+    item&&item.description,
+    item&&item.category,
+  ];
+  const parts=[];
+  const whatKey=normalizeNameKey(what);
+  values.forEach((value)=>{
+    const text=componentColorVariantText(value);
+    const key=normalizeNameKey(text);
+    if(!key || key===whatKey)return;
+    if(whatKey && key.includes(whatKey) && componentNameCarriesType(text))return;
+    if(parts.some((part)=>normalizeNameKey(part)===key))return;
+    parts.push(text);
+  });
+  return parts;
+}
+function componentIdentityBlankParts(item,record){
+  const variant=[
+    record&&record.blankMaker,item&&item.blankMaker,record&&record.maker,item&&item.maker,
+    quote&&quote.blankMaker,
+    record&&record.blankSeries,item&&item.blankSeries,record&&record.series,item&&item.series,
+    quote&&quote.blankSeries,
+    record&&record.blankName,item&&item.blankName,record&&record.description,item&&item.description,
+    quote&&quote.blankName,
+    record&&record.blankLength,item&&item.blankLength,record&&record.length,item&&item.length,
+    quote&&quote.blankLength,
+  ].map(specificationValue).filter(Boolean);
+  const size=[
+    record&&record.blankPieces,item&&item.blankPieces,record&&record.pieces,item&&item.pieces,
+    quote&&quote.blankPieces,
+    record&&record.blankPower,item&&item.blankPower,record&&record.power,item&&item.power,
+    quote&&quote.blankPower,
+  ].map(specificationValue).filter(Boolean);
+  const cleanVariant=componentIdentityDedupeParts(variant);
+  const cleanSize=Array.from(new Set(size)).join(' ');
+  return ['Blank',cleanVariant.join(' '),cleanSize].filter(Boolean).join(' · ');
+}
+function componentDisplayIdentity(item,options){
+  const settings={fallback:'',includeSize:true,...(options||{})};
+  const record=settings.record || componentLibraryRecordForRow(item) || null;
+  if(isBlankCategory(item&&item.category) || isBlankCategory(record&&record.category)){
+    const blankLabel=componentIdentityBlankParts(item,record);
+    return blankLabel || settings.fallback;
+  }
+  const name=specificationValue(record&&record.name)||specificationValue(item&&item.category);
+  const what=componentNameCarriesType(name)
+    ? componentIdentityTitle(name)
+    : singularComponentType(record&&record.category)||singularComponentType(item&&item.category)||singularComponentType(record&&record.subcategory)||singularComponentType(item&&item.subcategory);
+  if(!what)return settings.fallback || componentIdentityTitle(name);
+  const parts=[what];
+  const variant=componentIdentityVariantParts(item,record,what).join(' ');
+  if(variant)parts.push(variant);
+  const size=settings.includeSize?componentRowSizeLabel(item):'';
+  if(size && !parts.some((part)=>normalizeNameKey(part).includes(normalizeNameKey(size))))parts.push(size);
+  return parts.filter(Boolean).join(' · ');
+}
 // Appends the build line's snapshot size so every downstream surface shows it consistently.
 function appendComponentSizeLabel(label,item){
   const size=componentRowSizeLabel(item);
@@ -2840,10 +2951,22 @@ function savedComponentDisplayLabel(item){
   if(customerLabel)return appendComponentSizeLabel(customerLabel,item);
   const category=specificationValue(item&&item.category);
   const description=specificationValue(item&&item.description);
+  const fallback=(()=>{
+    if(description && normalizeNameKey(description)!==normalizeNameKey(category)){
+      return appendComponentSizeLabel(description,item);
+    }
+    return appendComponentSizeLabel(category||description,item);
+  })();
+  return componentDisplayIdentity(item,{fallback});
+}
+function legacyComponentRowItemLabel(item){
+  const description=specificationValue(item&&item.description);
+  const category=specificationValue(item&&item.category);
   if(description && normalizeNameKey(description)!==normalizeNameKey(category)){
     return appendComponentSizeLabel(description,item);
   }
-  return appendComponentSizeLabel(category||description,item);
+  if(category && !isBlankCategory(category))return appendComponentSizeLabel(category,item);
+  return isBlankCategory(item&&item.category)?'Choose blank':'New component';
 }
 function friendlyComponentCategoryName(category){
   const key=normalizeNameKey(category);
@@ -8124,9 +8247,12 @@ function renderComponentPickerCascadeOptions(query){
   list.innerHTML=options.map((item)=>{
     const selected=choiceOptionIsSelected(item);
     const secondary=stage==='component'?componentPickerLeafSecondaryText(item.record):'';
+    const displayName=stage==='component'
+      ? componentDisplayIdentity({category:item.name},{record:item.record,includeSize:false,fallback:item.name})
+      : item.name;
     const chevron=item.isDrill?'<span class="component-sheet__row-tools" aria-hidden="true">&#8250;</span>':'';
     const drillAttr=item.isDrill?' data-choice-drill="true"':'';
-    return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr}><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr} type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${chevron}</div>`;
+    return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr}><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"${drillAttr} type="button" title="${escapeHtml(displayName)}"><span class="component-sheet__option-title">${escapeHtml(displayName)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${chevron}</div>`;
   }).join('');
 }
 function choiceReferences(type,name){
@@ -8222,11 +8348,7 @@ function componentRowCategoryLabel(item){
   return specificationValue(item&&item.category)||'';
 }
 function componentRowItemLabel(item){
-  const description=specificationValue(item&&item.description);
-  if(description)return description;
-  const category=specificationValue(item&&item.category);
-  if(category && !isBlankCategory(category))return category;
-  return isBlankCategory(item&&item.category)?'Choose blank':'New component';
+  return componentDisplayIdentity(item,{fallback:legacyComponentRowItemLabel(item)});
 }
 function componentRowSupplierLabel(item){
   return specificationValue(item&&item.supplier);
@@ -8234,19 +8356,6 @@ function componentRowSupplierLabel(item){
 function componentRowSummaryMetaParts(item){
   if(componentRowIsEffectivelyEmpty(item))return[];
   const parts=[];
-  const size=componentRowSizeLabel(item);
-  if(size){
-    parts.push(`Size ${size}`);
-  }
-  const category=componentRowCategoryLabel(item);
-  const subcategory=specificationValue(item&&item.subcategory);
-  const description=specificationValue(item&&item.description);
-  if(category && description && normalizeNameKey(category)!==normalizeNameKey(description)){
-    parts.push(category);
-  }
-  if(subcategory){
-    parts.push(subcategory);
-  }
   const quantity=componentRowQuantity(item);
   if(quantity>1){
     parts.push(`Qty ${quantity}`);
@@ -10887,6 +10996,7 @@ function emailCurrentQuote(){
   const email=specificationValue(quote.email);
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
   const dueText=dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed';
+  const includedParts=customerIncludedParts();
   const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
   const quoteNumber=specificationValue(quote.quoteNumber);
   const lines=[
@@ -10901,6 +11011,9 @@ function emailCurrentQuote(){
     `Balance remaining: ${currency(math.remainingBalance)}`,
     `Estimated completion: ${dueText}`,
   ];
+  if(includedParts.length){
+    lines.push('', 'Components Included', ...includedParts.map((part)=>`- ${part}`));
+  }
   if(businessProfileHasPaymentDetails()){
     lines.push(
       '',
