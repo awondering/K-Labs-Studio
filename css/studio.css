@@ -2596,6 +2596,24 @@ textarea::placeholder{
   text-overflow:ellipsis;
 }
 
+.component-sheet__size-add{
+  position:sticky;
+  bottom:0;
+  width:100%;
+  min-height:42px;
+  margin-top:2px;
+  border-radius:10px;
+  font-size:11px;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  z-index:2;
+}
+
+.component-sheet__size-add:disabled{
+  opacity:.42;
+  cursor:not-allowed;
+}
+
 .component-sheet__row-tools{
   display:grid;
   grid-template-columns:auto auto;

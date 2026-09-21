@@ -100,6 +100,7 @@ let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
 let activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:''};
+let activeChoicePickerSizeSelections=new Set();
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 const choicePickerSessionFavourites={category:new Set(),supplier:new Set()};
@@ -7100,6 +7101,7 @@ function ensureChoicePicker(){
           <option value="all">All Categories</option>
         </select>
         <div id="choicePickerList" class="component-sheet__list"></div>
+        <button id="choicePickerSizeAdd" class="primary-action component-sheet__size-add" type="button" data-choice-size-add hidden disabled>Add Component</button>
         <div id="choicePickerMenu" class="component-picker-menu" hidden>
           <button id="choicePickerMenuSelect" class="component-picker-menu__item" type="button">Select</button>
           <button id="choicePickerMenuRename" class="component-picker-menu__item" type="button">Rename</button>
@@ -7120,6 +7122,10 @@ function ensureChoicePicker(){
   const commitChoiceSelection=(selectedName,selectedId)=>{
     const pickerContext={...activeChoicePicker};
     hideChoicePickerMenu();
+    if(componentSizePickerUsesMultiSelect(pickerContext)){
+      toggleComponentSizePickerSelection(selectedName);
+      return;
+    }
     if(pickerContext.type==='blank'){
       applyChoiceSelection(selectedName,selectedId,pickerContext);
       closeComponentSheet();
@@ -7132,6 +7138,16 @@ function ensureChoicePicker(){
   sheet.addEventListener('click',(event)=>{
     const actionEl=event.target.closest('[data-sheet-action]');
     if(actionEl && actionEl.getAttribute('data-sheet-action')==='close'){closeComponentSheet();}
+    const sizeAddAction=event.target.closest('[data-choice-size-add]');
+    if(sizeAddAction){
+      event.preventDefault();
+      if(sizeAddAction.disabled || !activeChoicePickerSizeSelections.size)return;
+      const pickerContext={...activeChoicePicker};
+      const selectedSizes=Array.from(activeChoicePickerSizeSelections);
+      closeComponentSheet();
+      applyComponentSizeSelections(pickerContext.index,pickerContext.sizeComponent,selectedSizes);
+      return;
+    }
     const menuTrigger=event.target.closest('button[data-choice-menu-option]');
     if(menuTrigger){
       event.preventDefault();
@@ -8075,9 +8091,16 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
   }
   if(context.index>=0){
     // A master component with configured sizes must not be added until a size is chosen.
-    if(context.type==='category' && componentRecordSizeOptions(findComponentLibraryRecordByName(selectedName)).length){
-      openComponentSizePicker(context.index,selectedName);
-      return;
+    if(context.type==='category'){
+      const sizeOptions=componentSizePickerOptions(selectedName);
+      if(sizeOptions.length>1){
+        openComponentSizePicker(context.index,selectedName);
+        return;
+      }
+      if(sizeOptions.length===1){
+        applyComponentSizeSelection(context.index,selectedName,sizeOptions[0]);
+        return;
+      }
     }
     const merged=setChoiceValue(context.type,context.index,selectedName);
     if(merged){
@@ -8121,6 +8144,55 @@ function applyComponentSizeSelection(index,componentName,size){
   saveQuoteCurrent();
   markQuoteDirty();
   expandedComponentRowIndex=targetIndex;
+  renderQuoteComponents();
+  updateQuoteSummary();
+}
+function componentSizePickerOptions(componentName){
+  return componentRecordSizeOptions(findComponentLibraryRecordByName(componentName));
+}
+function componentSizePickerUsesMultiSelect(context){
+  const picker=context||activeChoicePicker;
+  const row=picker&&Number.isInteger(picker.index)?quote.components[picker.index]:null;
+  const isNewDraft=!!row && (pendingComponentDraftRows.has(row) || componentRowIsEffectivelyEmpty(row));
+  return picker&&picker.type==='component-size' && isNewDraft && componentSizePickerOptions(picker.sizeComponent).length>1;
+}
+function syncComponentSizePickerAddAction(){
+  const action=$('choicePickerSizeAdd');
+  if(!action)return;
+  const useMulti=componentSizePickerUsesMultiSelect(activeChoicePicker);
+  action.hidden=!useMulti;
+  if(!useMulti)return;
+  const count=activeChoicePickerSizeSelections.size;
+  action.disabled=count<1;
+  action.textContent=count<2?'Add Component':`Add ${count} Components`;
+}
+function toggleComponentSizePickerSelection(size){
+  const value=String(size||'').trim();
+  if(!value)return;
+  const key=normalizeNameKey(value);
+  const existing=Array.from(activeChoicePickerSizeSelections).find((item)=>normalizeNameKey(item)===key);
+  if(existing){
+    activeChoicePickerSizeSelections.delete(existing);
+  }else{
+    activeChoicePickerSizeSelections.add(value);
+  }
+  renderChoicePickerOptions($('choicePickerSearch')?$('choicePickerSearch').value:'');
+}
+function prependComponentDraftRow(){
+  quote.components.unshift(defaultComponentRow());
+  pendingComponentDraftRows.add(quote.components[0]);
+  return 0;
+}
+function applyComponentSizeSelections(index,componentName,sizes){
+  const selectedSizes=Array.from(new Set((sizes||[]).map((size)=>String(size||'').trim()).filter(Boolean)));
+  if(index<0 || !quote.components[index] || !componentName || !selectedSizes.length)return;
+  selectedSizes.slice().reverse().forEach((size,selectionIndex)=>{
+    const targetIndex=selectionIndex===0?index:prependComponentDraftRow();
+    applyComponentSizeSelection(targetIndex,componentName,size);
+  });
+  quote.components=normalizeUniqueComponents(quote.components,{keepDraftRows:false}).filter((item)=>componentRowHasMeaningfulData(item));
+  saveQuoteCurrent();
+  markQuoteDirty();
   renderQuoteComponents();
   updateQuoteSummary();
 }
@@ -8174,6 +8246,10 @@ function currentPickerSelectionContext(){
   };
 }
 function choiceOptionIsSelected(item){
+  if(componentSizePickerUsesMultiSelect(activeChoicePicker)){
+    const optionKey=normalizeNameKey(item&&item.name);
+    return Array.from(activeChoicePickerSizeSelections).some((size)=>normalizeNameKey(size)===optionKey);
+  }
   const selection=currentPickerSelectionContext();
   const optionId=String(item&&item.id||'').trim();
   const optionName=normalizeNameKey(item&&item.name);
@@ -8200,6 +8276,7 @@ function renderChoicePickerOptions(query){
   const list=$('choicePickerList');
   if(!list)return;
   syncChoicePickerFilterControls();
+  syncComponentSizePickerAddAction();
   if(activeChoicePicker.type==='category'){
     renderComponentPickerCascadeOptions(query);
     return;
@@ -8228,6 +8305,7 @@ function renderChoicePickerOptions(query){
     return `<div class="component-sheet__row${selected?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-choice-option="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}" type="button" title="${escapeHtml(item.name)}"><span class="component-sheet__option-title">${escapeHtml(item.name)}</span>${secondary?`<small class="component-sheet__option-meta">${escapeHtml(secondary)}</small>`:''}</button>${tools}</div>`;
   }).join('');
   list.innerHTML=rowsMarkup;
+  syncComponentSizePickerAddAction();
 }
 // Renders the Active Build "Add Component" cascade (Category -> Subcategory -> Component). Navigation
 // rows (data-choice-drill) advance the stage; only the final Component row commits a selection.
@@ -8611,6 +8689,7 @@ function openChoicePicker(type,index,openerEl,options){
     categoryName:'',
     subcategoryName:'',
   };
+  activeChoicePickerSizeSelections=new Set();
   choicePickerCategoryFilter='all';
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
@@ -8636,6 +8715,7 @@ function openChoicePicker(type,index,openerEl,options){
   if($('choicePickerCustomInput'))$('choicePickerCustomInput').placeholder='Component name';
   syncChoicePickerFilterControls();
   syncComponentPickerBackButton();
+  syncComponentSizePickerAddAction();
   renderChoicePickerOptions('');
   if(sheetBody)sheetBody.scrollTop=0;
   if(optionList)optionList.scrollTop=0;
@@ -8654,6 +8734,8 @@ function closeComponentSheet(){
   unbindChoicePickerViewportHandlers();
   if($('choicePickerAdd'))$('choicePickerAdd').hidden=false;
   activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:''};
+  activeChoicePickerSizeSelections=new Set();
+  syncComponentSizePickerAddAction();
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   syncComponentPickerBackButton();
   unlockModalLayer({restoreFocus:true});
@@ -8893,7 +8975,9 @@ function quoteForPersistence(currentQuote){
   const persistedComponents=normalizeUniqueComponents(rawComponents,{keepDraftRows:false})
     .filter((component)=>componentRowHasMeaningfulData(component) && !pendingComponentDraftRows.has(component))
     .map(normalizeComponent);
-  return normalizeQuote({...source,components:persistedComponents,guideSpecification:captureGuideSpecificationSnapshot()});
+  const persistedQuote=normalizeQuote({...source,components:persistedComponents,guideSpecification:captureGuideSpecificationSnapshot()});
+  persistedQuote.components=persistedComponents;
+  return persistedQuote;
 }
 function savedQuoteRecords(){
   const records=Store.get('klabs-workshop-quotes',[]);
