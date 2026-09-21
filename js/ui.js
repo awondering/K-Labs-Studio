@@ -2727,7 +2727,8 @@ function blankSpecificationSummary(){
     || specificationValue(blankComponent&&blankComponent.blankNotes)
     || specificationValue(quote.blankNotes)
     || (legacySpecs.length?legacySpecs.join(' • '):'');
-  const details=[brand,variant,specifications].filter(Boolean);
+  const variantText=brand && normalizeNameKey(variant).startsWith(normalizeNameKey(brand))?variant:[brand,variant].filter(Boolean).join(' ');
+  const details=[variantText,specifications].filter(Boolean);
   return details.join(' • ');
 }
 // Single source of truth for the saved customer address lines: reused by the internal customer preview
@@ -3021,7 +3022,6 @@ function customerRodIdentity(){
 }
 function customerSpecificationRows(){
   const rows=[];
-  appendCustomerSpecRow(rows,'Blank',blankSpecificationSummary());
   appendCustomerSpecRow(rows,'Grip Feature',customerGripFeatureSummary());
   BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer' && !['rearGripLength','gripBelowReelSeatLength','foreGripLength'].includes(field.key)).forEach((field)=>{
     appendCustomerSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
