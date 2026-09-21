@@ -8193,9 +8193,9 @@ textarea::-moz-selection,
   }
 
   .spiral-guide-row__summary{
-    grid-template-columns:auto auto minmax(64px,1fr) auto;
+    grid-template-columns:auto auto minmax(58px,1fr) minmax(78px,auto) 12px;
     gap:6px;
-    min-height:28px;
+    min-height:32px;
   }
 
   .spiral-guide-row__summary strong{
