@@ -1324,6 +1324,14 @@ body.component-sheet-open .workshop-back-to-top{
   grid-column:1/-1;
 }
 
+.quote-component-field--secondary{
+  opacity:.72;
+}
+
+.quote-component-field--secondary input{
+  color:rgba(214,210,200,.78);
+}
+
 .quote-component-field--category,
 .quote-component-field--supplier{
   grid-column:1/-1;
@@ -1404,6 +1412,12 @@ body.component-sheet-open .workshop-back-to-top{
   font-size:10px;
   letter-spacing:.07em;
   text-transform:uppercase;
+}
+
+.quote-component-row__library{
+  border-color:rgba(214,210,200,.12);
+  background:rgba(255,255,255,.012);
+  color:rgba(214,210,200,.6);
 }
 
 .quote-component-row__delete{
@@ -1997,6 +2011,14 @@ body.component-sheet-open .workshop-back-to-top{
   color:rgba(214,210,200,.38);
   font-size:11px;
   font-weight:450;
+}
+
+input::placeholder,
+textarea::placeholder{
+  color:rgba(214,210,200,.38);
+  font-size:.9em;
+  font-weight:400;
+  opacity:1;
 }
 
 .customer-finder__new-form-full{
@@ -6115,6 +6137,66 @@ textarea::-moz-selection,
   color:rgba(214,210,200,.78);
 }
 
+.quote-builder__meta{
+  display:grid;
+  grid-template-columns:minmax(156px,220px) minmax(0,1fr);
+  gap:6px;
+  margin-top:6px;
+  align-items:start;
+}
+
+.quote-builder__meta label{
+  display:grid;
+  gap:3px;
+}
+
+.quote-builder__meta span{
+  color:rgba(214,210,200,.58);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.quote-builder__meta input,
+.quote-builder__meta textarea{
+  width:100%;
+  min-height:30px;
+  border:1px solid rgba(214,210,200,.12);
+  border-radius:8px;
+  background:rgba(7,8,10,.58);
+  color:rgba(239,232,220,.9);
+  padding:6px 8px;
+  font-size:12px;
+  font-weight:550;
+}
+
+.quote-builder__meta textarea{
+  resize:vertical;
+  min-height:30px;
+}
+
+.quote-builder__note-toggle{
+  align-self:end;
+  min-height:30px;
+  border:1px solid rgba(214,210,200,.12);
+  border-radius:8px;
+  background:rgba(255,255,255,.014);
+  color:rgba(214,210,200,.62);
+  padding:0 10px;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.quote-builder__note-toggle:hover,
+.quote-builder__note-toggle:focus-visible{
+  border-color:rgba(214,210,200,.24);
+  color:rgba(239,232,220,.82);
+  outline:none;
+}
+
 #workshopScreen .quote-builder__entry-actions{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -6129,6 +6211,10 @@ textarea::-moz-selection,
 }
 
 @media (max-width:520px){
+  .quote-builder__meta{
+    grid-template-columns:1fr;
+  }
+
   #workshopScreen .quote-builder__entry-actions{
     grid-template-columns:1fr;
   }

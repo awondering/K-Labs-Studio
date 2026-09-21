@@ -64,7 +64,7 @@ const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
-const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildDetailsBody','workshopBuildSpecsBody','quoteComponentsList','workshopQuoteSummaryBody','workshopBuildActionsBody'];
+const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','quoteComponentsList','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
@@ -8345,7 +8345,7 @@ function componentRowSizeFieldMarkup(item,index){
   return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>&#9662;</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><p class="quote-component-row__scope">Edit This Build Only. Use Update Library Component to save for future builds.</p><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Category</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>&#9662;</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description"><span>Component Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Component</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>&#9662;</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description quote-component-field--secondary"><span>Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -10368,6 +10368,14 @@ function updateWorkshopBuildOverview(){
     const dueRaw=specificationValue(quote&&quote.estimatedCompletionDate);
     dueEl.textContent=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'No due date set';
   }
+  const metaEl=$('quoteBuilderMeta');
+  const noteField=$('quoteBuilderNoteField');
+  const noteButton=$('quoteBuilderAddNoteBtn');
+  const noteInput=$('quoteNotes');
+  const hasNote=!!specificationValue(quote&&quote.notes);
+  if(metaEl)metaEl.hidden=!hasIdentity;
+  if(noteField)noteField.hidden=!hasNote && document.activeElement!==noteInput;
+  if(noteButton)noteButton.hidden=!hasIdentity || hasNote || document.activeElement===noteInput;
 }
 async function ensureCurrentBuildReference(){
   const target=findCurrentSavedBuildTarget();
@@ -10435,13 +10443,6 @@ async function confirmCurrentBuildAsActive(){
     await setCurrentBuildLifecycle('active',{message:'Build confirmed \u2014 now Active'});
   });
 }
-function focusBuildNameField(){
-  const input=$('quoteBuildName');
-  if(!input)return;
-  setWorkshopSectionCollapsed('workshopBuildDetailsBody',false);
-  try{input.focus({preventScroll:false});}catch{input.focus();}
-  try{input.select();}catch{}
-}
 function handleCurrentBuildAction(action){
   if(action==='confirm-build'){
     closeCurrentBuildActionsMenu();
@@ -10451,12 +10452,6 @@ function handleCurrentBuildAction(action){
   if(action==='toggle-status'){
     toggleCurrentBuildLifecycle();
     closeCurrentBuildActionsMenu();
-    return;
-  }
-  if(action==='rename'){
-    closeCurrentBuildActionsMenu();
-    focusBuildNameField();
-    flashWorkshopStatus('Rename build in Build Details section',{pending:true,duration:1900});
     return;
   }
   if(action==='delete'){
@@ -11274,7 +11269,7 @@ function workshopInputMap(){
   return[
     ['quoteCustomerName','customerName'],['quoteCustomerPhone','phone'],['quoteCustomerEmail','email'],
     ['quoteAddressLine1','addressLine1'],['quoteAddressLine2','addressLine2'],['quoteSuburbLocality','suburbLocality'],['quoteCityTown','cityTown'],['quoteRegionState','regionState'],['quotePostcode','postcode'],['quoteCountry','country'],
-    ['quoteBuildName','buildName'],['quoteEstimatedCompletionDate','estimatedCompletionDate'],['quoteNotes','notes'],
+    ['quoteEstimatedCompletionDate','estimatedCompletionDate'],['quoteNotes','notes'],
     ['quoteBlankName','blankName'],['quoteBlankMaker','blankMaker'],['quoteBlankSeries','blankSeries'],['quoteBlankLength','blankLength'],['quoteBlankPower','blankPower'],['quoteBlankAction','blankAction'],['quoteBlankPieces','blankPieces'],
     ['quoteBlankCost','blankCost'],['quoteLabourRate','labourRate'],['quoteLabourHours','labourHours']
   ];
@@ -11517,6 +11512,19 @@ function bindWorkshopQuoteBuilder(){
       showStudioLanding();
       window.KLABS_NAV?.forgetScreenScroll?.('workshopScreen');
       window.scrollTo(0,0);
+    });
+  }
+  const addNoteBtn=$('quoteBuilderAddNoteBtn');
+  if(addNoteBtn && addNoteBtn.getAttribute('data-build-note-bound')!=='true'){
+    addNoteBtn.setAttribute('data-build-note-bound','true');
+    addNoteBtn.addEventListener('click',()=>{
+      const noteField=$('quoteBuilderNoteField');
+      const noteInput=$('quoteNotes');
+      if(noteField)noteField.hidden=false;
+      addNoteBtn.hidden=true;
+      if(noteInput){
+        try{noteInput.focus({preventScroll:true});}catch{noteInput.focus();}
+      }
     });
   }
   const customerFinderReturnBtn=$('customerFinderReturnBtn');

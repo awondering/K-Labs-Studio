@@ -436,6 +436,11 @@
             <span id="quoteBuilderOverviewStatus" class="saved-build-card__status quote-builder__overview-status">Active</span>
             <span id="quoteBuilderOverviewDue" class="quote-builder__overview-due"></span>
           </p>
+          <div id="quoteBuilderMeta" class="quote-builder__meta" hidden>
+            <label class="quote-builder__meta-date"><span>Estimated Completion</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
+            <button id="quoteBuilderAddNoteBtn" class="quote-builder__note-toggle" type="button">Build Note</button>
+            <label id="quoteBuilderNoteField" class="quote-builder__meta-note" hidden><span>Build Note</span><textarea id="quoteNotes" rows="1" placeholder="Thread, trim, finish or workshop note"></textarea></label>
+          </div>
         </header>
 
         <div id="quoteBuilderEntryActions" class="quote-builder__entry-actions" aria-label="Studio entry actions">
@@ -464,23 +469,6 @@
             <label><span>Region / State</span><input id="quoteRegionState" type="text" placeholder="Region, province, state or county" /></label>
             <label><span>Postcode / ZIP</span><input id="quotePostcode" type="text" inputmode="text" placeholder="Postal or ZIP code" /></label>
             <label class="quote-grid__full"><span>Country</span><input id="quoteCountry" type="text" list="quoteCountryList" placeholder="Country" /></label>
-          </div>
-        </article>
-
-        <article id="workshopBuildDetailsSection" class="quote-section quote-section--collapsible quote-section--collapsed">
-          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildDetailsBody">
-            <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Build Details</span>
-              <span id="quoteBuildDetailsSummaryText" class="quote-section__toggle-summary" aria-live="polite">
-                <span>Add build name and due date</span>
-              </span>
-            </span>
-            <b class="quote-section__chevron" aria-hidden="true">▾</b>
-          </button>
-          <div id="workshopBuildDetailsBody" class="quote-grid quote-grid--two quote-section__body">
-            <label><span>Build Name</span><input id="quoteBuildName" type="text" placeholder="Build name" /></label>
-            <label><span>Estimated Completion Date</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
-            <label class="quote-grid__full"><span>Notes</span><textarea id="quoteNotes" rows="2" placeholder="Build notes"></textarea></label>
           </div>
         </article>
 
@@ -627,7 +615,6 @@
                     <button id="currentBuildActionsMenuBtn" class="ghost-action saved-build-card__menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Build actions">&hellip;</button>
                     <div id="currentBuildActionsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="Build actions menu" hidden>
                       <button id="currentBuildActionsConfirm" class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="confirm-build" hidden>Confirm Build</button>
-                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="rename">Rename Build</button>
                       <button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-current-build-action="delete">Delete Build</button>
                     </div>
                   </div>
@@ -646,7 +633,7 @@
       </button>
       <div class="screen-head"><h1 id="buildsScreenTitle">Active Builds</h1><p id="buildsScreenSubtitle" class="subtle">Continue rods currently in progress.</p></div>
       <div class="saved-builds-status-tabs" role="tablist" aria-label="Build status">
-        <button class="ghost-action saved-builds-status-tab active" type="button" data-builds-status-filter="active" aria-pressed="true">Active</button>
+        <button class="ghost-action saved-builds-status-tab active" type="button" data-builds-status-filter="active" aria-pressed="true">Builds</button>
         <button class="ghost-action saved-builds-status-tab" type="button" data-builds-status-filter="quote" aria-pressed="false">Quotes</button>
       </div>
       <div class="blank-library-controls saved-builds-controls">
