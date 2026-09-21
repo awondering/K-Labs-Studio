@@ -5905,7 +5905,7 @@ textarea::-moz-selection,
 
 .studio-size-range__btn{
   grid-column:1 / -1;
-  justify-self:start;
+  justify-self:stretch;
 }
 
 .studio-component-details__actions{
