@@ -7558,10 +7558,69 @@ textarea::-moz-selection,
 }
 
 .spiral-secondary-actions{
-  display:flex;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
   gap:7px;
   align-items:center;
+}
+
+.spiral-secondary-actions > *,
+.spiral-reset-row > *{
+  min-width:0;
+  width:100%;
+}
+
+#workshopToolSpiral .spiral-secondary-actions .spiral-advanced-toggle,
+#workshopToolSpiral .spiral-secondary-actions .workshop-tool-stack-actions{
+  display:grid;
+  justify-content:stretch;
+  align-items:stretch;
+}
+
+#workshopToolSpiral .spiral-secondary-actions .ghost-action,
+#workshopToolSpiral .spiral-reset-action{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  min-height:36px;
+  padding:0 8px;
+  border-radius:7px;
+  border-width:1px;
+  border-color:rgba(214,210,200,.16);
+  background:rgba(12,14,15,.72);
+  color:rgba(225,218,205,.72);
+  box-shadow:none;
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.045em;
+  line-height:1.05;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+@media (max-width:380px){
+  #workshopToolSpiral .spiral-secondary-actions,
+  #workshopToolSpiral .spiral-reset-row{
+    gap:6px;
+  }
+
+  #workshopToolSpiral .spiral-secondary-actions .ghost-action,
+  #workshopToolSpiral .spiral-reset-action{
+    padding:0 6px;
+    font-size:7.5px;
+    letter-spacing:.02em;
+  }
+}
+
+#workshopToolSpiral .spiral-secondary-actions .spiral-advanced-toggle .ghost-action,
+#workshopToolSpiral .spiral-secondary-actions .workshop-tool-stack-actions .ghost-action{
+  min-height:36px;
+  padding:0 8px;
+  border-radius:7px;
+  font-size:8px;
+  letter-spacing:.045em;
+  border-color:rgba(214,210,200,.16);
+  color:rgba(225,218,205,.72);
 }
 
 .workshop-tool-stack-actions{
@@ -7577,34 +7636,18 @@ textarea::-moz-selection,
 }
 
 #workshopToolSpiral .workshop-tool-stack-actions .spiral-import-action{
-  width:auto;
-  min-height:32px;
-  padding:0 11px;
-  border-radius:999px;
-  font-size:9px;
-  letter-spacing:.08em;
-  border-color:rgba(214,210,200,.18);
-  color:rgba(225,218,205,.82);
+  color:rgba(225,218,205,.72);
 }
 
 .spiral-reset-row{
-  display:flex;
-  justify-content:flex-end;
-  gap:8px;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
   margin:0;
   padding-top:2px;
 }
 
 #workshopToolSpiral .spiral-reset-action{
-  width:auto;
-  min-height:30px;
-  padding:0 12px;
-  border-radius:999px;
-  font-size:9px;
-  letter-spacing:.06em;
-  border-color:rgba(214,210,200,.14);
-  color:rgba(225,218,205,.62);
-  background:transparent;
   transition:border-color var(--micro-motion) ease,color var(--micro-motion) ease,background-color var(--micro-motion) ease;
 }
 
