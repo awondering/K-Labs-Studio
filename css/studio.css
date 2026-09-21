@@ -5725,8 +5725,8 @@ textarea::-moz-selection,
 }
 
 .studio-size-list{
-  display:flex;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(68px,1fr));
   gap:4px;
   margin-bottom:8px;
 }
@@ -5738,16 +5738,30 @@ textarea::-moz-selection,
 }
 
 .studio-size-chip{
-  display:inline-flex;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 28px;
   align-items:center;
+  width:100%;
+  height:36px;
+  min-width:0;
   min-height:28px;
-  gap:3px;
-  padding:0 2px 0 8px;
+  gap:1px;
+  padding:0 1px 0 7px;
   border:1px solid rgba(214,210,200,.14);
   border-radius:5px;
   background:rgba(255,255,255,.025);
   color:rgba(245,239,229,.9);
-  font-size:11px;
+  font-size:10px;
+}
+
+.studio-size-chip__label{
+  display:-webkit-box;
+  min-width:0;
+  overflow:hidden;
+  overflow-wrap:break-word;
+  line-height:1.05;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
 }
 
 .studio-size-chip__remove{
@@ -5845,6 +5859,23 @@ textarea::-moz-selection,
   justify-content:flex-start;
   gap:8px;
   flex-wrap:wrap;
+}
+
+.studio-component-details__actions:has(#studioComponentDeleteBtn){
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:stretch;
+  gap:6px;
+}
+
+.studio-component-details__actions:has(#studioComponentDeleteBtn) > button{
+  width:100%;
+  min-width:0;
+  min-height:42px;
+  padding:0 6px;
+  font-size:9px;
+  letter-spacing:.04em;
+  white-space:nowrap;
 }
 
 .studio-component-details__move{
@@ -8294,5 +8325,11 @@ body.klabs-auth-resolving::after {
   }
   .studio-size-section{
     margin-bottom:14px;
+  }
+}
+
+@media (max-width:420px){
+  .studio-size-list{
+    grid-template-columns:repeat(4,minmax(0,1fr));
   }
 }
