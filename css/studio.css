@@ -5686,48 +5686,49 @@ textarea::-moz-selection,
 
 /* Optional AVAILABLE SIZES editor on the component form: quiet until it has content. */
 .studio-size-section{
-  margin:10px 0 14px;
-  padding:10px 12px;
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:10px;
-  background:rgba(255,255,255,.02);
+  margin:7px 0 10px;
+  padding:9px 10px 10px;
+  border:1px solid rgba(214,210,200,.1);
+  border-radius:7px;
+  background:rgba(255,255,255,.015);
 }
 
 .studio-size-section__summary{
   cursor:pointer;
   list-style:none;
-  font-size:11.5px;
+  font-size:10.5px;
   font-weight:700;
-  letter-spacing:.12em;
+  letter-spacing:.1em;
   text-transform:uppercase;
-  color:var(--ds-text-muted,#8f938c);
+  color:rgba(214,210,200,.78);
 }
 
 .studio-size-section__summary::-webkit-details-marker{display:none}
 
 .studio-size-section__count{
   display:inline-block;
-  min-width:18px;
-  padding:0 5px;
-  margin-left:6px;
-  border-radius:999px;
-  background:rgba(255,255,255,.08);
-  font-size:10.5px;
+  min-width:17px;
+  padding:1px 4px 0;
+  margin-left:5px;
+  border:1px solid rgba(214,210,200,.12);
+  border-radius:4px;
+  background:rgba(255,255,255,.025);
+  font-size:9.5px;
   letter-spacing:0;
   text-align:center;
 }
 
 .studio-size-section__help{
-  margin:8px 0 10px;
-  font-size:12px;
+  margin:5px 0 7px;
+  font-size:10.5px;
   color:var(--ds-text-muted,#8f938c);
 }
 
 .studio-size-list{
   display:flex;
   flex-wrap:wrap;
-  gap:6px;
-  margin-bottom:10px;
+  gap:4px;
+  margin-bottom:8px;
 }
 
 .studio-size-list__empty{
@@ -5739,47 +5740,64 @@ textarea::-moz-selection,
 .studio-size-chip{
   display:inline-flex;
   align-items:center;
-  gap:6px;
-  padding:4px 6px 4px 10px;
-  border:1px solid rgba(255,255,255,.12);
-  border-radius:999px;
-  background:rgba(255,255,255,.05);
-  font-size:12.5px;
+  min-height:28px;
+  gap:3px;
+  padding:0 2px 0 8px;
+  border:1px solid rgba(214,210,200,.14);
+  border-radius:5px;
+  background:rgba(255,255,255,.025);
+  color:rgba(245,239,229,.9);
+  font-size:11px;
 }
 
 .studio-size-chip__remove{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:20px;
-  height:20px;
+  width:28px;
+  height:28px;
   padding:0;
   border:0;
-  border-radius:999px;
-  background:rgba(255,255,255,.08);
-  color:inherit;
-  font-size:13px;
+  border-radius:4px;
+  background:transparent;
+  color:rgba(214,210,200,.5);
+  font-size:12px;
   line-height:1;
   cursor:pointer;
 }
 
-.studio-size-entry,
-.studio-size-range{
-  display:flex;
-  flex-wrap:wrap;
+.studio-size-chip__remove:hover,
+.studio-size-chip__remove:focus-visible{
+  background:rgba(206,44,58,.1);
+  color:#f0c7ca;
+  outline:1px solid rgba(206,44,58,.34);
+  outline-offset:-1px;
+}
+
+.studio-size-entry{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
   align-items:end;
-  gap:8px;
+  gap:6px;
+}
+
+.studio-size-range{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:end;
+  gap:7px 6px;
+  margin-top:8px;
 }
 
 .studio-size-entry input,
 .studio-size-range input{
-  min-height:40px;
-  border:1px solid rgba(214,210,200,.22);
-  border-radius:9px;
+  min-height:36px;
+  border:1px solid rgba(214,210,200,.18);
+  border-radius:6px;
   background:#080a0b;
   color:#f5efe5;
-  padding:8px 10px;
-  font-size:14px;
+  padding:7px 9px;
+  font-size:13px;
 }
 
 .studio-size-entry input::placeholder,
@@ -5787,23 +5805,12 @@ textarea::-moz-selection,
   color:rgba(214,210,200,.42);
 }
 
-.studio-size-range{
-  margin-top:10px;
-}
-
 .studio-size-entry .quote-component-field{
-  /* Compact, left-aligned size value field: suits "9 mm"–"Medium"-length values
-     without stretching across the card; may shrink on narrow screens. */
-  flex:0 1 auto;
-  width:min(220px,100%);
+  width:100%;
   min-width:0;
 }
 
 .studio-size-range .quote-component-field{
-  /* Compact range inputs. The 60px basis keeps each field usable; once the card is
-     too narrow for four fields plus the button, the button wraps to its own row
-     instead of the fields being squeezed into overflow. */
-  flex:1 1 60px;
   min-width:0;
 }
 
@@ -5818,17 +5825,19 @@ textarea::-moz-selection,
 
 .studio-size-entry__btn,
 .studio-size-range__btn{
-  min-height:40px;
-  border-radius:9px;
-  padding:0 14px;
+  min-height:36px;
+  border-radius:6px;
+  padding:0 12px;
+  border-color:rgba(214,210,200,.16);
+  background:rgba(255,255,255,.025);
+  font-size:10px;
+  letter-spacing:.08em;
   white-space:nowrap;
 }
 
-@media (max-width:520px){
-  .studio-size-entry__btn,
-  .studio-size-range__btn{
-    flex:1 1 100%;
-  }
+.studio-size-range__btn{
+  grid-column:1 / -1;
+  justify-self:start;
 }
 
 .studio-component-details__actions{
