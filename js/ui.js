@@ -5273,7 +5273,7 @@ function bindStudioComponentsPanel(){
       }
       renderStudioComponentsLibrary();
       const nameInput=$('studioComponentName')||$('studioLibraryCategoryName')||$('studioLibrarySubcategoryName');
-      if(nameInput)nameInput.focus();
+      if(nameInput && !shouldAvoidMobileTextAutoFocus())nameInput.focus();
     });
   }
 
@@ -6505,7 +6505,7 @@ function beginSelectedBlankEdit(){
   renderWorkshopQuote();
   waitForDomRender(()=>{
     const firstField=$('[data-selected-blank-field="model"]');
-    if(firstField){
+    if(firstField && !shouldAvoidMobileTextAutoFocus()){
       try{firstField.focus({preventScroll:true});}catch{firstField.focus();}
       if(typeof firstField.select==='function')firstField.select();
     }
@@ -7612,8 +7612,10 @@ function startChoiceEditor(mode,originalName){
   activeChoiceEditor={mode,originalName:originalName||'',blankId:activeChoiceEditor.blankId||''};
   customBox.hidden=false;
   customInput.value=mode==='rename'?(originalName||''):'';
-  customInput.focus();
-  customInput.select();
+  if(!shouldAvoidMobileTextAutoFocus()){
+    customInput.focus();
+    customInput.select();
+  }
   if(customTitle){customTitle.textContent=mode==='rename'?'Rename Component':'Add Component';}
 }
 // 'category' is the Active Build "Add Component" picker: it is select-only and must never expose
@@ -8617,6 +8619,7 @@ function revealComponentsSectionHeader(){
   return true;
 }
 function focusNewComponentDescription(index){
+  if(shouldAvoidMobileTextAutoFocus())return false;
   const selector=`#quoteComponentsList [data-component-key="description"][data-component-index="${index}"]`;
   const field=document.querySelector(selector);
   if(!field)return false;
@@ -8957,7 +8960,7 @@ function setCustomerFinderNewBuildStep(step){
   updateCustomerFinderIntentUi();
   if(customerFinderNewBuildStep==='search'){
     const search=$('customerFinderSearch');
-    if(search){
+    if(search && !shouldAvoidMobileTextAutoFocus()){
       try{search.focus({preventScroll:true});}catch{search.focus();}
       search.select();
     }
@@ -8969,7 +8972,7 @@ function setCustomerFinderNewBuildStep(step){
     const body=document.querySelector('.customer-finder__body');
     if(body)body.scrollTop=0;
     const nameInput=$('customerFinderNewCustomerName');
-    if(nameInput){
+    if(nameInput && !shouldAvoidMobileTextAutoFocus()){
       try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
     }
     scheduleCustomerFinderViewportSync(40);
@@ -9299,8 +9302,10 @@ function openCustomerRenameSheet(customerKey,currentName){
   input.value=existing;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
-  try{input.focus({preventScroll:true});}catch{input.focus();}
-  if(typeof input.select==='function')input.select();
+  if(!shouldAvoidMobileTextAutoFocus()){
+    try{input.focus({preventScroll:true});}catch{input.focus();}
+    if(typeof input.select==='function')input.select();
+  }
 }
 function ensureCustomerRenameSheet(){
   if($('customerRenameSheet'))return;
@@ -9526,7 +9531,9 @@ function openCustomerEditSheet(customerKey){
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   const nameInput=$('customerEditName');
-  if(nameInput){try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}}
+  if(nameInput && !shouldAvoidMobileTextAutoFocus()){
+    try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
+  }
 }
 function requestEditCustomer(customerKey){
   openCustomerEditSheet(customerKey);
@@ -9801,7 +9808,7 @@ function openCustomerFinderSheet(intent){
   bindCustomerFinderViewportHandlers();
   if(customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add'){
     const nameInput=$('customerFinderNewCustomerName');
-    if(nameInput && !nameInput.hidden){
+    if(nameInput && !nameInput.hidden && !shouldAvoidMobileTextAutoFocus()){
       try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
     }
   }
@@ -10937,7 +10944,7 @@ function persistLayoutControlState(){
   pendingControlPersist=false;
   save();
 }
-function shouldAvoidWorkshopToolAutoFocus(){
+function shouldAvoidMobileTextAutoFocus(){
   return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 }
 function focusWorkshopToolPrimaryInput(tool){
@@ -10948,7 +10955,7 @@ function focusWorkshopToolPrimaryInput(tool){
       :'workshopDcDiameter';
   const input=$(targetId);
   if(!input || input.disabled || input.hidden)return;
-  if(shouldAvoidWorkshopToolAutoFocus()){
+  if(shouldAvoidMobileTextAutoFocus()){
     window.requestAnimationFrame(()=>{
       if(document.activeElement===input){
         input.blur();
