@@ -289,6 +289,10 @@ function settingsObjectPatch(previous,next){
   Object.keys(after).forEach((key)=>{
     if(JSON.stringify(before[key])!==JSON.stringify(after[key]))patch[key]=after[key];
   });
+  if(Object.prototype.hasOwnProperty.call(patch,'measurementUnits') || Object.prototype.hasOwnProperty.call(patch,'imperialDisplay')){
+    patch.measurementUnits=after.measurementUnits;
+    patch.imperialDisplay=after.imperialDisplay;
+  }
   return patch;
 }
 function saveStudioSettings(){
