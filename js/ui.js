@@ -96,6 +96,7 @@ let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 const CORE_MEASUREMENT_FORMAT={decimalsMetric:3,decimalsImperial:3,forceDecimal:true};
+const SPIRAL_GUIDE_ROW_POSITION_FORMAT={decimalsMetric:1,decimalsImperial:1};
 let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
@@ -1324,7 +1325,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
           <button class="spiral-guide-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}">
             <strong>Guide ${displayGuideNumber}</strong>
             <span>${guideType}</span>
-            <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT)}</span>
+            <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,SPIRAL_GUIDE_ROW_POSITION_FORMAT)}</span>
             <span>${labels.rotationText}</span>
             <span class="spiral-guide-row__disclosure" aria-hidden="true">&#8964;</span>
           </button>
