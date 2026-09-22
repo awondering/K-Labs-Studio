@@ -96,7 +96,7 @@ let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 const CORE_MEASUREMENT_FORMAT={decimalsMetric:3,decimalsImperial:3,forceDecimal:true};
-const SPIRAL_GUIDE_ROW_POSITION_FORMAT={decimalsMetric:1,decimalsImperial:1};
+const SPIRAL_GUIDE_ROW_POSITION_FORMAT={decimalsMetric:0,decimalsImperial:1,fractionDenominator:8};
 let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
@@ -245,7 +245,18 @@ function normalizeDateFormat(value){
   return DATE_FORMAT_VALUES.includes(next)?next:'dd/mm/yyyy';
 }
 function normalizeImperialDisplay(value){
-  return 'decimal';
+  const next=String(value||'').trim().toLowerCase();
+  return IMPERIAL_DISPLAY_VALUES.includes(next)?next:'decimal';
+}
+function measurementDisplayMode(){
+  if(activeMeasurementUnits()!=='imperial')return 'metric';
+  return activeImperialDisplay()==='fractional'?'fractional-inch':'decimal-inch';
+}
+function measurementDisplaySettings(mode){
+  const next=String(mode||'').trim().toLowerCase();
+  if(next==='decimal-inch')return{measurementUnits:'imperial',imperialDisplay:'decimal'};
+  if(next==='fractional-inch')return{measurementUnits:'imperial',imperialDisplay:'fractional'};
+  return{measurementUnits:'metric',imperialDisplay:'decimal'};
 }
 function loadChoicePickerFavourites(){
   const stored=Store.get(CHOICE_PICKER_FAVOURITES_KEY,{});
@@ -557,6 +568,7 @@ function formatMeasurementNumber(valueMm,options){
   const settings=options&&typeof options==='object'?options:{};
   if(activeMeasurementUnits()==='imperial'){
     const inchesValue=mmToInches(valueMm);
+    if(activeImperialDisplay()==='fractional')return formatImperialFractionInches(inchesValue,settings.fractionDenominator||8);
     const decimals=settings.decimalsImperial===undefined?3:settings.decimalsImperial;
     return formatDecimal(inchesValue,decimals);
   }
@@ -606,6 +618,7 @@ function formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options){
   const normalizedUnit=normalizeWorkshopUnit(unit);
   if(normalizedUnit==='imperial'){
     const inchesValue=mmToInches(valueMm);
+    if(normalizeWorkshopImperialDisplay(imperialDisplay)==='fractional')return formatImperialFractionInches(inchesValue,settings.fractionDenominator||8);
     const decimals=settings.decimalsImperial===undefined?3:settings.decimalsImperial;
     return formatDecimal(inchesValue,decimals);
   }
@@ -12797,8 +12810,8 @@ function setSettingsSectionSaveState(sectionKey,state,message){
 }
 
 function syncSettingsPreferenceControls(){
-  document.querySelectorAll('[data-settings-units]').forEach((button)=>{
-    const selected=button.getAttribute('data-settings-units')===activeMeasurementUnits();
+  document.querySelectorAll('[data-settings-measurement-display]').forEach((button)=>{
+    const selected=button.getAttribute('data-settings-measurement-display')===measurementDisplayMode();
     button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',String(selected));
   });
@@ -13115,16 +13128,17 @@ function bindSettingsControls(){
       setSettingsSectionSaveState('TrackStock',ok?'saved':'error');
     });
   }
-  document.querySelectorAll('[data-settings-units]').forEach((button)=>{
+  document.querySelectorAll('[data-settings-measurement-display]').forEach((button)=>{
     if(button.getAttribute('data-settings-bound')==='true')return;
     button.setAttribute('data-settings-bound','true');
     button.addEventListener('click',()=>{
-      const next=normalizeMeasurementUnits(button.getAttribute('data-settings-units'));
-      if(studioSettings.measurementUnits===next){
+      const next=measurementDisplaySettings(button.getAttribute('data-settings-measurement-display'));
+      if(studioSettings.measurementUnits===next.measurementUnits && studioSettings.imperialDisplay===next.imperialDisplay){
         setSettingsSectionSaveState('MeasurementUnits','saved');
         return;
       }
-      studioSettings.measurementUnits=next;
+      studioSettings.measurementUnits=next.measurementUnits;
+      studioSettings.imperialDisplay=next.imperialDisplay;
       const ok=saveStudioSettings();
       syncSettingsPreferenceControls();
       renderMeasurementPresentation();

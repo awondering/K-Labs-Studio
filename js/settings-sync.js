@@ -26,6 +26,10 @@
     const next = String(value || "").trim().toLowerCase();
     return next === "imperial" ? "imperial" : "metric";
   }
+  function normalizeImperialDisplay(value) {
+    const next = String(value || "").trim().toLowerCase();
+    return next === "fractional" ? "fractional" : "decimal";
+  }
   function normalizeDateFormat(value) {
     const next = String(value || "").trim().toLowerCase();
     return next === "mm/dd/yyyy" ? "mm/dd/yyyy" : "dd/mm/yyyy";
@@ -39,7 +43,7 @@
       defaultLabourRate: Math.max(0, numberOrDefault(source.defaultLabourRate, 0) || 0),
       trackComponentStock: !!source.trackComponentStock,
       measurementUnits: normalizeMeasurementUnits(source.measurementUnits),
-      imperialDisplay: "decimal",
+      imperialDisplay: normalizeImperialDisplay(source.imperialDisplay),
       dateFormat: normalizeDateFormat(source.dateFormat),
     };
   }
