@@ -100,8 +100,8 @@
           </div>
           <div id="workshopToolsList" class="workshop-landing-tools" aria-label="Workshop tool list">
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="guide-spacing">
-              <span class="workshop-tool-launch__title">Guide Spacing</span>
-              <span class="workshop-tool-launch__meta">Where the guides sit along the blank.</span>
+              <span class="workshop-tool-launch__title">Guide Setup</span>
+              <span class="workshop-tool-launch__meta">Guide spacing and orientation.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="grip">
               <span class="workshop-tool-launch__title">Grip Wrap</span>
@@ -110,10 +110,6 @@
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="diameter">
               <span class="workshop-tool-launch__title">Diameter &amp; Circumference</span>
               <span class="workshop-tool-launch__meta">Quick measurement conversion.</span>
-            </button>
-            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="spiral">
-              <span class="workshop-tool-launch__title">Guide Orientation</span>
-              <span class="workshop-tool-launch__meta">Where the guides sit around the blank.</span>
             </button>
           </div>
 
@@ -193,80 +189,6 @@
 
             <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
           </article>
-
-          <article id="workshopToolSpiral" class="layout-control-card workshop-tool-card" aria-label="Guide Orientation tool" hidden>
-            <div class="workshop-tool-head">
-              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
-                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
-                <span>Workshop</span>
-              </button>
-              <h3>Guide Orientation</h3>
-              <p>Where the guides sit around the blank, applied to your Guide Spacing positions.</p>
-              <button id="openGuideSpacingFromSpiralBtn" class="guide-specification__edit" type="button">Guide Spacing <span aria-hidden="true">&#x203a;</span></button>
-            </div>
-
-            <div class="spiral-control-group spiral-control-group--method">
-              <span class="spiral-control-label">Orientation Mode</span>
-              <div class="workshop-tool-unit-row" data-spiral-method-row="true" role="group" aria-label="Orientation mode">
-                <button class="ghost-action" type="button" data-spiral-method="standard" aria-pressed="false">Standard</button>
-                <button class="ghost-action" type="button" data-spiral-method="acute" aria-pressed="false">Acute</button>
-                <button class="ghost-action active" type="button" data-spiral-method="progressive" aria-pressed="true">Progressive</button>
-                <button class="ghost-action" type="button" data-spiral-method="offset" aria-pressed="false">Offset</button>
-              </div>
-              <p id="workshopSpiralMethodNote" class="workshop-tool-note spiral-method-note" aria-live="polite"></p>
-            </div>
-
-            <div class="spiral-primary-band">
-              <article class="layout-control-card spiral-count-card" aria-label="Number of guides control">
-                <div class="layout-control-card__title">Guide Count</div>
-                <div class="layout-control-card__body layout-control-card__body--compact">
-                  <button id="workshopSpiralGuideCountDecrement" class="layout-control-card__button" data-spiral-count-action="decrement" data-spiral-count-target="guideCount" type="button" aria-label="Decrease number of guides">−</button>
-                  <div id="workshopSpiralGuideCountValue" class="layout-control-card__value" role="status" aria-live="polite" aria-label="Number of guides">0</div>
-                  <button id="workshopSpiralGuideCountIncrement" class="layout-control-card__button" data-spiral-count-action="increment" data-spiral-count-target="guideCount" type="button" aria-label="Increase number of guides">+</button>
-                </div>
-              </article>
-
-              <div class="spiral-control-group spiral-control-group--direction">
-                <span class="spiral-control-label">Transition Direction</span>
-                <div class="workshop-tool-unit-row" data-spiral-direction-row="true" role="group" aria-label="Spiral direction">
-                  <button class="ghost-action active" type="button" data-spiral-direction="left" aria-pressed="true">Left</button>
-                  <button class="ghost-action" type="button" data-spiral-direction="right" aria-pressed="false">Right</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="spiral-secondary-actions">
-              <div class="spiral-advanced-toggle">
-                <button id="workshopSpiralOffsetsToggle" class="ghost-action" type="button" aria-pressed="false">Show Offsets on Blank</button>
-              </div>
-
-              <div class="workshop-tool-stack-actions">
-                <button id="workshopSpiralImportBtn" class="ghost-action spiral-import-action" type="button" aria-label="Re-sync from Guide Spacing" title="Re-sync guide count and positions from Guide Spacing">Re-sync from Spacing</button>
-              </div>
-            </div>
-
-            <div id="workshopSpiralOffsetStartWrap" class="workshop-tool-fields" hidden>
-              <label>
-                <span>Offset Start Angle</span>
-                <input id="workshopSpiralOffsetStart" type="number" inputmode="decimal" min="0" max="25" step="0.1" autocomplete="off" />
-              </label>
-            </div>
-
-            <section class="spiral-mapper-visual" aria-label="Guide orientation view">
-              <div class="spiral-mapper-visual__head">
-                <span>Orientation View</span>
-                <strong id="workshopSpiralVisualDirection">LEFT TRANSITION</strong>
-              </div>
-              <div id="workshopSpiralVisualCanvas" class="spiral-mapper-visual__canvas" aria-live="polite"></div>
-            </section>
-
-            <div id="workshopSpiralGuideRows" class="spiral-guide-rows" aria-live="polite"></div>
-
-            <div class="spiral-reset-row">
-              <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy each guide's position and angle to the clipboard">Copy Guide Angles</button>
-              <button id="workshopSpiralResetBtn" class="ghost-action spiral-reset-action" type="button" title="Restore the Progressive pattern using Guide Spacing positions">Reset Pattern</button>
-            </div>
-          </article>
         </section>
       </div>
     </section>
@@ -278,10 +200,16 @@
             <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
             <span>Workshop</span>
           </button>
-          <h3>Guide Spacing</h3>
-          <p>Where the guides sit along the blank.</p>
-          <button id="openGuideOrientationBtn" class="guide-specification__edit" type="button">Guide Orientation <span aria-hidden="true">&#x203a;</span></button>
+          <h3>Guide Setup</h3>
         </div>
+
+        <header class="guide-setup-heading">
+          <span class="guide-setup-heading__step" aria-hidden="true">1</span>
+          <div>
+            <h4>Guide Spacing</h4>
+            <p>Where the guides sit along the blank.</p>
+          </div>
+        </header>
 
         <article class="layout-control-card">
           <div class="layout-control-card__title">Running Guides</div>
@@ -341,12 +269,76 @@
         </section>
 
         <section class="guide-spacing-panel" aria-live="polite">
-          <div class="guide-spacing-panel__header workshop-guide-spacing-panel__header">
-            <p class="eyebrow">Guide Spacing</p>
-          </div>
+          <div class="guide-spacing-columns" aria-hidden="true"><span>Guide</span><span>Position</span><span>Spacing</span></div>
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
-          <p id="layoutGuideNotice" class="subtle">Guide only. Confirm final placement by static testing and builder judgement.</p>
         </section>
+
+        <header class="guide-setup-heading guide-setup-heading--next">
+          <span class="guide-setup-heading__step" aria-hidden="true">2</span>
+          <div>
+            <h4>Guide Orientation</h4>
+            <p>Where the guides sit around the blank.</p>
+          </div>
+        </header>
+
+        <section id="workshopToolSpiral" class="guide-setup-orientation" aria-label="Guide Orientation">
+          <div class="spiral-control-group spiral-control-group--method">
+            <span class="spiral-control-label">Orientation Mode</span>
+            <div class="workshop-tool-unit-row" data-spiral-method-row="true" role="group" aria-label="Orientation mode">
+              <button class="ghost-action" type="button" data-spiral-method="standard" aria-pressed="false">Standard</button>
+              <button class="ghost-action" type="button" data-spiral-method="acute" aria-pressed="false">Acute</button>
+              <button class="ghost-action active" type="button" data-spiral-method="progressive" aria-pressed="true">Progressive</button>
+              <button class="ghost-action" type="button" data-spiral-method="offset" aria-pressed="false">Offset</button>
+            </div>
+            <p id="workshopSpiralMethodNote" class="workshop-tool-note spiral-method-note" aria-live="polite"></p>
+          </div>
+
+          <div class="spiral-primary-band">
+            <div class="spiral-count-summary">
+              <span class="spiral-control-label">Guides</span>
+              <strong id="workshopSpiralGuideCountValue" aria-live="polite">0</strong>
+              <span class="spiral-count-summary__source">From Guide Spacing</span>
+            </div>
+
+            <div class="spiral-control-group spiral-control-group--direction">
+              <span class="spiral-control-label">Transition Direction</span>
+              <div class="workshop-tool-unit-row" data-spiral-direction-row="true" role="group" aria-label="Spiral direction">
+                <button class="ghost-action active" type="button" data-spiral-direction="left" aria-pressed="true">Left</button>
+                <button class="ghost-action" type="button" data-spiral-direction="right" aria-pressed="false">Right</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="spiral-secondary-actions">
+            <div class="spiral-advanced-toggle">
+              <button id="workshopSpiralOffsetsToggle" class="ghost-action" type="button" aria-pressed="false">Show Offsets on Blank</button>
+            </div>
+          </div>
+
+          <div id="workshopSpiralOffsetStartWrap" class="workshop-tool-fields" hidden>
+            <label>
+              <span>Offset Start Angle</span>
+              <input id="workshopSpiralOffsetStart" type="number" inputmode="decimal" min="0" max="25" step="0.1" autocomplete="off" />
+            </label>
+          </div>
+
+          <section class="spiral-mapper-visual" aria-label="Guide orientation view">
+            <div class="spiral-mapper-visual__head">
+              <span>Orientation View</span>
+              <strong id="workshopSpiralVisualDirection">LEFT TRANSITION</strong>
+            </div>
+            <div id="workshopSpiralVisualCanvas" class="spiral-mapper-visual__canvas" aria-live="polite"></div>
+          </section>
+
+          <div id="workshopSpiralGuideRows" class="spiral-guide-rows" aria-live="polite"></div>
+
+          <div class="spiral-reset-row">
+            <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy each guide's position and angle to the clipboard">Copy Guide Angles</button>
+            <button id="workshopSpiralResetBtn" class="ghost-action spiral-reset-action" type="button" title="Restore the Progressive pattern using Guide Spacing positions">Reset Pattern</button>
+          </div>
+        </section>
+
+        <p id="layoutGuideNotice" class="subtle">Guide only. Confirm final placement by static testing and builder judgement.</p>
       </div>
     </section>
 

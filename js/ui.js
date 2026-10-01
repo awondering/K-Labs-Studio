@@ -98,6 +98,8 @@ let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 const CORE_MEASUREMENT_FORMAT={decimalsMetric:3,decimalsImperial:3,forceDecimal:true};
 const SPIRAL_GUIDE_ROW_POSITION_FORMAT={decimalsMetric:0,decimalsImperial:1,fractionDenominator:8};
+// Read-only guide position/spacing lists; inputs and copied text keep CORE precision.
+const GUIDE_LIST_FORMAT={decimalsMetric:1,decimalsImperial:2,fractionDenominator:8};
 let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
@@ -737,29 +739,6 @@ function spiralStripperIndex(guideCount){
 function spiralGuideFallbackPositionMm(index){
   return Math.max(0,120+(index*180));
 }
-function setSpiralGuideCount(nextCount){
-  const spiral=workshopToolsState.spiral;
-  const clamped=clampSpiralGuideCount(nextCount);
-  if(spiral.guideCount===clamped)return;
-  markGuideDataDirty();
-  const existing=Array.isArray(spiral.guides)?spiral.guides:[];
-  const layout=calcGuideLayout(+state.firstGuide,clamped,+state.targetStripper);
-  const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
-  spiral.guideCount=clamped;
-  spiral.guides=rows.map((row,index)=>{
-    const previous=existing[index]&&typeof existing[index]==='object'?existing[index]:{};
-    const previousOd=Number(previous.odMm);
-    return {
-      positionMm:Math.max(0,numberOrZero(row&&row.cum)),
-      odMm:Number.isFinite(previousOd) && previousOd>0 ? previousOd : null,
-      angleDeg:180,
-    };
-  });
-  syncSpiralGuidesLength({resetAngles:true});
-}
-function applySpiralCountDelta(target,delta){
-  setSpiralGuideCount(workshopToolsState.spiral.guideCount+delta);
-}
 function setSpiralGuideAngle(index,nextAngle){
   const spiral=workshopToolsState.spiral;
   if(!Number.isFinite(index) || !spiral.guides[index])return;
@@ -936,58 +915,6 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
     directionText:`${side} SIDE`,
   };
 }
-// USE GUIDE SPACING POSITIONS: unlike syncSpiralWithGuideLayout()'s automatic count mirroring (unchanged,
-// used elsewhere), this manual import must never silently overwrite the mapper's own chosen guide count.
-// When the saved Guide Spacing count differs from the mapper's count, the user explicitly chooses which to keep.
-function importSpiralFromGuideSpacing(){
-  const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
-  const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
-  if(!rows.length){
-    flashWorkshopStatus('Set a valid Guide Spacing result first',{pending:true,duration:2000});
-    return;
-  }
-  const spiral=workshopToolsState.spiral;
-  const currentCount=clampSpiralGuideCount(spiral.guideCount);
-  const savedCount=rows.length;
-  if(savedCount===currentCount){
-    applySpiralGuideSpacingImport(rows,currentCount);
-    return;
-  }
-  openConfirmDialog({
-    title:'Guide Count Differs',
-    message:`Guide Spacing has ${savedCount} guide${savedCount===1?'':'s'} saved, but Guide Orientation is set to ${currentCount}. Choose how to import the positions.`,
-    actions:[
-      {id:'update',label:'Update To Guide Spacing Count',kind:'ghost'},
-      {id:'retain',label:'Retain Current Count',kind:'primary'},
-    ]
-  },(action)=>{
-    if(action==='retain'){
-      applySpiralGuideSpacingImport(rows,currentCount);
-    }else if(action==='update'){
-      applySpiralGuideSpacingImport(rows,savedCount);
-    }
-  });
-}
-// Imports positions for an explicitly chosen count (never a silent/default decision); if the saved result has
-// fewer usable positions than required, the mapper is left unchanged with a clear explanatory message.
-function applySpiralGuideSpacingImport(rows,targetCount){
-  const spiral=workshopToolsState.spiral;
-  const count=clampSpiralGuideCount(targetCount);
-  if(rows.length<count){
-    flashWorkshopStatus(`Guide Spacing only has ${rows.length} usable position${rows.length===1?'':'s'} - need ${count}. Mapper left unchanged.`,{pending:true,duration:2600});
-    return;
-  }
-  markGuideDataDirty();
-  const countChanged=spiral.guideCount!==count || !Array.isArray(spiral.guides) || spiral.guides.length!==count;
-  spiral.guideCount=count;
-  syncSpiralGuidesLength(countChanged?{resetAngles:true}:undefined);
-  spiral.guides.forEach((guide,index)=>{
-    const row=rows[index];
-    if(row)guide.positionMm=Math.max(0,numberOrZero(row.cum));
-  });
-  flashWorkshopStatus('Applied Guide Spacing positions',{pending:true,duration:2000});
-  renderWorkshopCalculator();
-}
 
 function copySpiralGuideOffsets(){
   const spiral=workshopToolsState.spiral;
@@ -1009,7 +936,7 @@ function copySpiralGuideOffsets(){
     const guide=guides[i];
     if(!guide)continue;
     const isStripper=i===stripperIndex;
-    const displayNum=guides.length-i;
+    const displayNum=i+1;
     const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
     const posText=formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,CORE_MEASUREMENT_FORMAT);
     const typeLabel=isStripper?'STRIPPER':(clampSpiralAngle(guide.angleDeg)<=0.05||clampSpiralAngle(guide.angleDeg)>=179.95)?'RUNNING':'TRANSITION';
@@ -1199,13 +1126,6 @@ function renderSpiralGuideMapper(){
     showOffsetsToggle.textContent=showPhysicalOffsets?'Hide Offsets on Blank':'Show Offsets on Blank';
   }
 
-  const canDecreaseGuideCount=spiral.guideCount>1;
-  const canIncreaseGuideCount=spiral.guideCount<20;
-  const guideDecrement=$('workshopSpiralGuideCountDecrement');
-  const guideIncrement=$('workshopSpiralGuideCountIncrement');
-  if(guideDecrement)guideDecrement.disabled=!canDecreaseGuideCount;
-  if(guideIncrement)guideIncrement.disabled=!canIncreaseGuideCount;
-
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
 
@@ -1220,7 +1140,7 @@ function renderSpiralGuideMapper(){
   if(visualDirection){
     visualDirection.textContent=spiral.method==='standard'
       ?'STANDARD · NO TRANSITION'
-      :`STRIPPER G1 · ${spiral.direction.toUpperCase()} TRANSITION`;
+      :`STRIPPER G${spiral.guides.length} · ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
   renderSpiralMapperVisual(spiral);
@@ -1267,7 +1187,7 @@ function renderSpiralMapperVisual(spiral){
       y=42;
     }
     markerPoints.push({index,x,y});
-    const displayGuideNumber=guides.length-index;
+    const displayGuideNumber=index+1;
     const markerRotation=(isUnderside||isTopside)?0:visualAngleDegrees+90;
     const sharedLabel=isUnderside?' running guide at 180 degrees underside':isTopside?' running guide at 0 degrees top line':'';
     return `
@@ -1339,7 +1259,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       if(!guide)return '';
       const isStripper=index===stripperIndex;
       const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
-      const displayGuideNumber=guides.length-index;
+      const displayGuideNumber=index+1;
       const angle=clampSpiralAngle(guide.angleDeg);
       const isReferenceAngle=angle<=0.05 || angle>=179.95;
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
@@ -1353,11 +1273,9 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
           <button class="spiral-guide-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}">
             <strong>Guide ${displayGuideNumber}</strong>
             <span>${guideType}</span>
-            <span>${formatWorkshopMeasurementValue(guide.positionMm,spiral.unit,spiral.imperialDisplay,SPIRAL_GUIDE_ROW_POSITION_FORMAT)}</span>
             <span>${labels.rotationText}</span>
             <span class="spiral-guide-row__disclosure" aria-hidden="true">&#8964;</span>
           </button>
-          ${isStripper?'<p class="spiral-guide-row__stripper">STRIPPER</p>':''}
           ${showPhysicalOffsets && labels.offsetText?`<p class="spiral-guide-row__offset">${labels.offsetText}</p>`:''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
@@ -1427,12 +1345,10 @@ function renderWorkshopToolVisibility(){
   const list=$('workshopToolsList');
   const diameterCard=$('workshopToolDiameter');
   const gripCard=$('workshopToolGrip');
-  const spiralCard=$('workshopToolSpiral');
   const activeTool=workshopToolsState.activeTool;
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
-  if(spiralCard)spiralCard.hidden=activeTool!=='spiral';
 }
 function isWorkshopLandingScreenActive(){
   const workshopLandingScreen=$('workshopLandingScreen');
@@ -1453,8 +1369,7 @@ function syncLayoutReturnControl(){
   if(label)label.textContent=fromBuild?'RETURN TO BUILD':'Workshop';
   button.setAttribute('aria-label',fromBuild?'Save and return to the build being edited':'Return to Workshop landing screen');
 }
-// Mirrors syncLayoutReturnControl for the currently visible Workshop tool card (Diameter/Grip/Spiral), so
-// Guide Orientation (Spiral) also offers "Return to Build" when reached from Guide Spacing's Active Build context.
+// Mirrors syncLayoutReturnControl for the currently visible Workshop tool card (Diameter/Grip).
 function syncWorkshopToolBackControl(){
   const activeCard=document.querySelector('.workshop-tool-card:not([hidden])');
   const button=activeCard&&activeCard.querySelector('[data-workshop-tool-back]');
@@ -1545,17 +1460,14 @@ function openActiveBuildsList(){
   goScreen('buildsScreen');
 }
 function openWorkshopTool(tool){
-  if(tool==='guide-spacing'){
+  // Guide Orientation now lives on the Guide Setup (layoutScreen) page alongside Guide Spacing.
+  if(tool==='guide-spacing' || tool==='spiral'){
     clearLayoutEntryOrigin();
     goScreen('layoutScreen');
     return;
   }
-  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='spiral'?'spiral':'diameter';
+  workshopToolsState.activeTool=tool==='grip'?'grip':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
-  if(workshopToolsState.activeTool==='spiral'){
-    // Guide Spacing owns count/longitudinal positions, so adopt its current layout on every open (no-ops with no layout data).
-    syncSpiralWithGuideLayout();
-  }
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
     renderWorkshopCalculator();
@@ -1998,13 +1910,6 @@ function bindWorkshopCalculatorControls(){
     });
   });
 
-  const openGuideSpacingFromSpiralButton=$('openGuideSpacingFromSpiralBtn');
-  if(openGuideSpacingFromSpiralButton && openGuideSpacingFromSpiralButton.getAttribute('data-guide-spacing-link-bound')!=='true'){
-    openGuideSpacingFromSpiralButton.setAttribute('data-guide-spacing-link-bound','true');
-    // Deliberately does not clear layoutEntryOrigin/layoutEntryBuildRef, mirroring Guide Spacing's own link to Guide Orientation.
-    openGuideSpacingFromSpiralButton.addEventListener('click',()=>goScreen('layoutScreen'));
-  }
-
   const diameterInput=$('workshopDcDiameter');
   const circumferenceInput=$('workshopDcCircumference');
   bindWorkshopCalculatorInput(diameterInput,()=>{
@@ -2066,12 +1971,13 @@ function bindWorkshopCalculatorControls(){
     renderWorkshopCalculator();
   });
 
-  bindWorkshopToggleButtons(panel,'[data-spiral-method]',(button)=>{
+  const spiralCard=$('workshopToolSpiral');
+  bindWorkshopToggleButtons(spiralCard,'[data-spiral-method]',(button)=>{
     setSpiralMethod(button.getAttribute('data-spiral-method'));
     renderWorkshopCalculator();
   });
 
-  bindWorkshopToggleButtons(panel,'[data-spiral-direction]',(button)=>{
+  bindWorkshopToggleButtons(spiralCard,'[data-spiral-direction]',(button)=>{
     workshopToolsState.spiral.direction=normalizeSpiralDirection(button.getAttribute('data-spiral-direction'));
     markGuideDataDirty();
     renderWorkshopCalculator();
@@ -2087,75 +1993,6 @@ function bindWorkshopCalculatorControls(){
   }
 
   const spiralOffsetStartInput=$('workshopSpiralOffsetStart');
-  const spiralCountButtons=Array.from(panel.querySelectorAll('[data-spiral-count-action][data-spiral-count-target]'));
-  const spiralCountHoldState={delayTimer:0,repeatTimer:0,target:'',delta:0,repeating:false};
-  const clearSpiralCountHold=()=>{
-    if(spiralCountHoldState.delayTimer){
-      clearTimeout(spiralCountHoldState.delayTimer);
-      spiralCountHoldState.delayTimer=0;
-    }
-    if(spiralCountHoldState.repeatTimer){
-      clearInterval(spiralCountHoldState.repeatTimer);
-      spiralCountHoldState.repeatTimer=0;
-    }
-    spiralCountHoldState.repeating=false;
-  };
-  const beginSpiralCountHold=(target,delta)=>{
-    clearSpiralCountHold();
-    spiralCountHoldState.target=target;
-    spiralCountHoldState.delta=delta;
-    spiralCountHoldState.delayTimer=window.setTimeout(()=>{
-      spiralCountHoldState.repeating=true;
-      applySpiralCountDelta(target,delta);
-      renderWorkshopCalculator();
-      spiralCountHoldState.repeatTimer=window.setInterval(()=>{
-        applySpiralCountDelta(target,delta);
-        renderWorkshopCalculator();
-      },135);
-    },500);
-  };
-  spiralCountButtons.forEach((button)=>{
-    if(button.getAttribute('data-spiral-count-bound')==='true')return;
-    button.setAttribute('data-spiral-count-bound','true');
-    const target=button.getAttribute('data-spiral-count-target')||'guideCount';
-    const delta=button.getAttribute('data-spiral-count-action')==='increment'?1:-1;
-    let pointerHandled=false;
-    button.style.touchAction='manipulation';
-    button.addEventListener('pointerdown',(event)=>{
-      if(event.button!==0 || !event.isPrimary)return;
-      pointerHandled=false;
-      event.preventDefault();
-      beginSpiralCountHold(target,delta);
-    });
-    const finishPointer=()=>{
-      if(!spiralCountHoldState.repeating){
-        applySpiralCountDelta(target,delta);
-        renderWorkshopCalculator();
-        pointerHandled=true;
-      }
-      clearSpiralCountHold();
-    };
-    button.addEventListener('pointerup',finishPointer);
-    button.addEventListener('pointercancel',clearSpiralCountHold);
-    button.addEventListener('pointerleave',()=>{
-      clearSpiralCountHold();
-    });
-    button.addEventListener('click',(event)=>{
-      event.preventDefault();
-      if(pointerHandled){
-        pointerHandled=false;
-        return;
-      }
-      applySpiralCountDelta(target,delta);
-      renderWorkshopCalculator();
-    });
-    button.addEventListener('keydown',(event)=>{
-      if(event.key!=='Enter' && event.key!==' ')return;
-      event.preventDefault();
-      applySpiralCountDelta(target,delta);
-      renderWorkshopCalculator();
-    });
-  });
   bindWorkshopCalculatorInput(spiralOffsetStartInput,()=>{
     const spiral=workshopToolsState.spiral;
     const parsed=Number(spiralOffsetStartInput.value);
@@ -2167,15 +2004,6 @@ function bindWorkshopCalculatorControls(){
     markGuideDataDirty();
     renderWorkshopCalculator();
   });
-
-  const spiralImportBtn=$('workshopSpiralImportBtn');
-  if(spiralImportBtn && spiralImportBtn.getAttribute('data-spiral-import-bound')!=='true'){
-    spiralImportBtn.setAttribute('data-spiral-import-bound','true');
-    spiralImportBtn.addEventListener('click',()=>{
-      importSpiralFromGuideSpacing();
-      renderWorkshopCalculator();
-    });
-  }
 
   const spiralCopyBtn=$('workshopSpiralCopyBtn');
   if(spiralCopyBtn && spiralCopyBtn.getAttribute('data-spiral-copy-bound')!=='true'){
@@ -2194,8 +2022,8 @@ function bindWorkshopCalculatorControls(){
     });
   }
 
-  if(panel.getAttribute('data-spiral-row-bound')!=='true'){
-    panel.setAttribute('data-spiral-row-bound','true');
+  if(spiralCard && spiralCard.getAttribute('data-spiral-row-bound')!=='true'){
+    spiralCard.setAttribute('data-spiral-row-bound','true');
     const handleSpiralFieldChange=(target)=>{
       const input=target&&target.closest?target.closest('[data-spiral-field]'):null;
       if(!input)return;
@@ -2224,7 +2052,7 @@ function bindWorkshopCalculatorControls(){
       markGuideDataDirty();
       renderWorkshopCalculator();
     };
-    panel.addEventListener('click',(event)=>{
+    spiralCard.addEventListener('click',(event)=>{
       const marker=event.target.closest('[data-guide-index].spiral-map-marker');
       if(marker){
         const index=Number(marker.getAttribute('data-guide-index'));
@@ -2252,8 +2080,8 @@ function bindWorkshopCalculatorControls(){
       setSpiralGuideAngle(index,numberOrZero(guide.angleDeg)+delta);
       renderWorkshopCalculator();
     });
-    panel.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
-    panel.addEventListener('input',(event)=>{
+    spiralCard.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
+    spiralCard.addEventListener('input',(event)=>{
       const target=event.target;
       if(!(target instanceof HTMLInputElement))return;
       if(!target.closest('[data-spiral-field]'))return;
@@ -11205,9 +11033,7 @@ function shouldAvoidMobileTextAutoFocus(){
 function dismissWorkshopToolPrimaryInputFocus(tool){
   const targetId=tool==='grip'
     ?'workshopGripDiameter'
-    :tool==='spiral'
-      ?'workshopSpiralGuideCountIncrement'
-      :'workshopDcDiameter';
+    :'workshopDcDiameter';
   const input=$(targetId);
   if(!input)return;
   if(document.activeElement===input)input.blur();
@@ -11319,14 +11145,6 @@ function bindLayoutControls(){
       }
       goToWorkshopLandingScreen();
     });
-  }
-
-  const openOrientationButton=$('openGuideOrientationBtn');
-  if(openOrientationButton && openOrientationButton.getAttribute('data-guide-orientation-bound')!=='true'){
-    openOrientationButton.setAttribute('data-guide-orientation-bound','true');
-    // Deliberately does not clear layoutEntryOrigin/layoutEntryBuildRef, so the same Active Build context
-    // carries over from Guide Spacing to Guide Orientation (Spiral tool).
-    openOrientationButton.addEventListener('click',()=>openWorkshopTool('spiral'));
   }
 
   const statusBadge=$('layoutStatusBadge');
@@ -11562,7 +11380,7 @@ function renderGuideSpecificationSummary(){
       const guide=guides[index];
       const angle=guide?clampSpiralAngle(guide.angleDeg):NaN;
       const angleText=Number.isFinite(angle)?`${formatDecimal(angle,1)}\u00b0`:'\u2014';
-      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${formatMeasurementValue(row.cum,CORE_MEASUREMENT_FORMAT)}</strong><em>${angleText}</em></div>`;
+      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${formatMeasurementValue(row.cum,GUIDE_LIST_FORMAT)}</strong><em>${angleText}</em></div>`;
     }).join('');
   }
 }
@@ -12682,6 +12500,9 @@ function onScreenChange(screenId){
   }
   if(screenId==='layoutScreen'){
     syncLayoutReturnControl();
+    // Guide Spacing owns count/positions; adopt them on every entry (same rule the separate Orientation tool used).
+    syncSpiralWithGuideLayout();
+    renderSpiralGuideMapper();
   }
   if(screenId==='workshopScreen'){
     closeCurrentBuildActionsMenu();
@@ -12706,8 +12527,6 @@ function onScreenChange(screenId){
     syncWorkshopToolBackControl();
     const selector=workshopLandingReturnFocusTool==='grip'
       ?'[data-workshop-tool-open="grip"]'
-      :workshopLandingReturnFocusTool==='spiral'
-        ?'[data-workshop-tool-open="spiral"]'
       :workshopLandingReturnFocusTool==='guide-spacing'
         ?'[data-workshop-tool-open="guide-spacing"]'
         :'[data-workshop-tool-open="diameter"]';
@@ -13219,17 +13038,17 @@ function render(options){
   const guideSpacingCards=$('guideSpacingCards');
   if(guideSpacingCards){
     guideSpacingCards.innerHTML=r.rows.map((row,i)=>`
-      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,CORE_MEASUREMENT_FORMAT)}. Spacing ${formatMeasurementValue(row.spacing,CORE_MEASUREMENT_FORMAT)}" aria-current="${i===state.workshopIndex?'true':'false'}">
+      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,GUIDE_LIST_FORMAT)}. Spacing ${formatMeasurementValue(row.spacing,GUIDE_LIST_FORMAT)}" aria-current="${i===state.workshopIndex?'true':'false'}">
         <div class="guide-spacing-row__meta">
           <span class="guide-spacing-row__guide-name">Guide ${row.g}</span>
         </div>
         <div class="guide-spacing-row__meta">
           <small>Position</small>
-          <span class="guide-spacing-row__position-value">${formatMeasurementValue(row.cum,CORE_MEASUREMENT_FORMAT)}</span>
+          <span class="guide-spacing-row__position-value">${formatMeasurementValue(row.cum,GUIDE_LIST_FORMAT)}</span>
         </div>
         <div class="guide-spacing-row__spacing">
           <span class="guide-spacing-row__spacing-label">Spacing</span>
-          <strong class="guide-spacing-row__spacing-value">${formatMeasurementValue(row.spacing,CORE_MEASUREMENT_FORMAT)}</strong>
+          <strong class="guide-spacing-row__spacing-value">${formatMeasurementValue(row.spacing,GUIDE_LIST_FORMAT)}</strong>
         </div>
       </article>
     `).join('');
@@ -13241,7 +13060,7 @@ function render(options){
     statusBadge.setAttribute('title',state.locked?'Locked. Tap to unlock controls.':'Live. Tap to lock controls.');
   }
   const guideNotice=$('layoutGuideNotice');
-  if(guideNotice){guideNotice.textContent='Tap a row to inspect spacing quickly. Guide only. Confirm final placement by static testing and builder judgement.';}
+  if(guideNotice){guideNotice.textContent='Guide only. Confirm final placement by static testing and builder judgement.';}
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
   const workshopScreen=$('workshopScreen');
   if(workshopScreen && workshopScreen.classList.contains('active')){
