@@ -776,6 +776,13 @@ function setSpiralGuideAngle(index,nextAngle){
     syncSpiralGuidesLength({resetAngles:true});
   }
 }
+// Copy mirrors buildSpiralPresetAngles(): stripper is the reference guide, transitions end with running guides underneath (180°).
+const SPIRAL_METHOD_NOTES={
+  standard:'All guides on top \u00b7 0\u00b0 throughout. No spiral transition.',
+  acute:'Quick transition: stripper on top, one guide at 90\u00b0, the rest underneath.',
+  progressive:'Gradual transition from on top (0\u00b0) to underneath (180\u00b0).',
+  offset:'Stripper set off the top line, then a gradual transition underneath.'
+};
 function buildSpiralPresetAngles(method,guideCount,offsetStartAngle,guides){
   const total=clampSpiralGuideCount(guideCount);
   const mode=normalizeSpiralMethod(method);
@@ -1205,6 +1212,9 @@ function renderSpiralGuideMapper(){
   const directionRow=card.querySelector('[data-spiral-direction-row]');
   const showDirection=spiral.method!=='standard';
   if(directionRow)directionRow.hidden=!showDirection;
+
+  const methodNote=$('workshopSpiralMethodNote');
+  if(methodNote)methodNote.textContent=SPIRAL_METHOD_NOTES[spiral.method]||'';
 
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){

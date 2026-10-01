@@ -101,7 +101,7 @@
           <div id="workshopToolsList" class="workshop-landing-tools" aria-label="Workshop tool list">
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="guide-spacing">
               <span class="workshop-tool-launch__title">Guide Spacing</span>
-              <span class="workshop-tool-launch__meta">Set and tune guide positions.</span>
+              <span class="workshop-tool-launch__meta">Where the guides sit along the blank.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="grip">
               <span class="workshop-tool-launch__title">Grip Wrap</span>
@@ -112,8 +112,8 @@
               <span class="workshop-tool-launch__meta">Quick measurement conversion.</span>
             </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="spiral">
-              <span class="workshop-tool-launch__title">Spiral Guide Mapper</span>
-              <span class="workshop-tool-launch__meta">Map rotational offsets around the blank.</span>
+              <span class="workshop-tool-launch__title">Guide Orientation</span>
+              <span class="workshop-tool-launch__meta">Where the guides sit around the blank.</span>
             </button>
           </div>
 
@@ -194,24 +194,25 @@
             <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
           </article>
 
-          <article id="workshopToolSpiral" class="layout-control-card workshop-tool-card" aria-label="Spiral guide mapper tool" hidden>
+          <article id="workshopToolSpiral" class="layout-control-card workshop-tool-card" aria-label="Guide Orientation tool" hidden>
             <div class="workshop-tool-head">
               <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
                 <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
               </button>
-              <h3>Spiral Guide Mapper</h3>
-              <p>Map each guide rotation into a physical offset around the blank.</p>
+              <h3>Guide Orientation</h3>
+              <p>Where the guides sit around the blank, applied to your Guide Spacing positions.</p>
               <button id="openGuideSpacingFromSpiralBtn" class="guide-specification__edit" type="button">Guide Spacing <span aria-hidden="true">&#x203a;</span></button>
             </div>
 
             <div class="spiral-control-group spiral-control-group--method">
-              <span class="spiral-control-label">Layout Style</span>
-              <div class="workshop-tool-unit-row" data-spiral-method-row="true" role="group" aria-label="Spiral method">
-                <button class="ghost-action" type="button" data-spiral-method="standard" aria-pressed="false" title="Standard / Conventional — no spiral transition">Standard</button>
+              <span class="spiral-control-label">Orientation Mode</span>
+              <div class="workshop-tool-unit-row" data-spiral-method-row="true" role="group" aria-label="Orientation mode">
+                <button class="ghost-action" type="button" data-spiral-method="standard" aria-pressed="false">Standard</button>
                 <button class="ghost-action" type="button" data-spiral-method="acute" aria-pressed="false">Acute</button>
                 <button class="ghost-action active" type="button" data-spiral-method="progressive" aria-pressed="true">Progressive</button>
                 <button class="ghost-action" type="button" data-spiral-method="offset" aria-pressed="false">Offset</button>
               </div>
+              <p id="workshopSpiralMethodNote" class="workshop-tool-note spiral-method-note" aria-live="polite"></p>
             </div>
 
             <div class="spiral-primary-band">
@@ -277,7 +278,7 @@
             <span>Workshop</span>
           </button>
           <h3>Guide Spacing</h3>
-          <p>Set and tune guide positions along the rod blank.</p>
+          <p>Where the guides sit along the blank.</p>
           <button id="openGuideOrientationBtn" class="guide-specification__edit" type="button">Guide Orientation <span aria-hidden="true">&#x203a;</span></button>
         </div>
 
