@@ -328,20 +328,20 @@ body.component-sheet-open .workshop-back-to-top{
    contextual control, not a large pill competing with the bottom nav or page content. */
 @media (max-width:640px){
   .workshop-back-to-top{
-    right:14px;
-    width:46px;
-    height:46px;
-    min-height:46px;
+    right:6px;
+    width:34px;
+    height:34px;
+    min-height:34px;
     padding:0;
     border-radius:50%;
-    border-color:rgba(214,210,200,.18);
-    background:#14171a;
+    border-color:rgba(214,210,200,.16);
+    background:rgba(20,23,26,.92);
     color:#cfc9bc;
-    box-shadow:0 4px 10px rgba(0,0,0,.2);
+    box-shadow:0 3px 8px rgba(0,0,0,.2);
   }
 
   .workshop-back-to-top__icon{
-    font-size:18px;
+    font-size:15px;
     line-height:1;
   }
 
@@ -6223,8 +6223,16 @@ textarea::-moz-selection,
 }
 
 @media (max-width:520px){
+  /* Right column carries Orientation (e.g. "Progressive · Casting"), so it gets the extra width to stay on one line. */
   #workshopScreen .build-details .guide-specification__summary{
-    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+  }
+
+  #workshopScreen .build-details .guide-specification__summary span,
+  #workshopScreen .build-details .guide-specification__summary strong{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
 }
 
@@ -7658,6 +7666,35 @@ textarea::-moz-selection,
   line-height:1.4;
 }
 
+#workshopToolSpiral .spiral-rod-style{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:12px;
+  padding-bottom:8px;
+  border-bottom:1px solid rgba(214,210,200,.1);
+}
+
+#workshopToolSpiral .spiral-rod-style__options{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+}
+
+#workshopToolSpiral .spiral-rod-style__options .ghost-action{
+  min-height:32px;
+  padding:0 8px;
+  border-radius:9px;
+  font-size:9px;
+  letter-spacing:.08em;
+}
+
+#workshopToolSpiral .spiral-rod-style__options .ghost-action.active{
+  border-color:rgba(var(--kl-red-rgb),.75);
+  background:rgba(var(--kl-red-rgb),.18);
+  color:#fff0eb;
+}
+
 .spiral-primary-band{
   display:grid;
   grid-template-columns:auto minmax(0,1fr);
@@ -7674,6 +7711,26 @@ textarea::-moz-selection,
 
 .spiral-control-group--direction:has(> [data-spiral-direction-row][hidden]){
   display:none;
+}
+
+/* Standard (no direction control): the guide count collapses to a single quiet status line. */
+.spiral-primary-band:has(.spiral-control-group--direction > [data-spiral-direction-row][hidden]){
+  grid-template-columns:minmax(0,1fr);
+}
+
+#workshopToolSpiral .spiral-primary-band:has(.spiral-control-group--direction > [data-spiral-direction-row][hidden]) .spiral-count-summary{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  width:auto;
+  max-width:none;
+  padding:2px 2px 0;
+  border:0;
+  background:none;
+}
+
+#workshopToolSpiral .spiral-primary-band:has(.spiral-control-group--direction > [data-spiral-direction-row][hidden]) .spiral-count-summary strong{
+  font-size:14px;
 }
 
 .spiral-secondary-actions{
@@ -7894,6 +7951,11 @@ textarea::-moz-selection,
   font-size:7.7px;
   letter-spacing:.08em;
   text-transform:uppercase;
+}
+
+.spiral-map-label--reel{
+  fill:#f2ebdf;
+  font-weight:700;
 }
 
 .spiral-map-marker circle{

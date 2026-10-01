@@ -207,6 +207,8 @@ const workshopToolsState={
     showPhysicalOffsets:false,
     expandedGuideIndex:-1,
     guides:[],
+    // 'spinning' | 'casting' | '' - presentation context only; saved with a build's guideSpecification when chosen.
+    rodStyle:'',
   },
 };
 let gripCutTemplateSnapshot=null;
@@ -755,13 +757,23 @@ function setSpiralGuideAngle(index,nextAngle){
     syncSpiralGuidesLength({resetAngles:true});
   }
 }
-// Copy mirrors buildSpiralPresetAngles(): stripper is the reference guide, transitions end with running guides underneath (180°).
+// Copy mirrors buildSpiralPresetAngles(): stripper is the reference guide (0° = reel side), transitions end opposite the reel (180°).
 const SPIRAL_METHOD_NOTES={
-  standard:'All guides on top \u00b7 0\u00b0 throughout. No spiral transition.',
-  acute:'Quick transition: stripper on top, one guide at 90\u00b0, the rest underneath.',
-  progressive:'Gradual transition from on top (0\u00b0) to underneath (180\u00b0).',
-  offset:'Stripper set off the top line, then a gradual transition underneath.'
+  standard:'All guides on the reel side \u00b7 0\u00b0 throughout. No spiral transition.',
+  acute:'Quick transition: stripper on the reel side, one guide at 90\u00b0, the rest opposite.',
+  progressive:'Gradual transition from the reel side (0\u00b0) to the opposite side (180\u00b0).',
+  offset:'Stripper set off the reel line, then a gradual transition to the opposite side.'
 };
+const SPINNING_STANDARD_NOTE='Spinning uses Standard: all guides on the reel side, underneath the blank. No spiral transition.';
+function normalizeRodStyle(value){
+  const style=String(value||'').trim().toLowerCase();
+  return style==='spinning'||style==='casting'?style:'';
+}
+// 0° is always the reel side; which physical side that is depends on rod style.
+function spiralOppositeSideLabel(rodStyle){
+  const style=normalizeRodStyle(rodStyle);
+  return style==='casting'?'UNDERSIDE':style==='spinning'?'TOP':'OPPOSITE SIDE';
+}
 function buildSpiralPresetAngles(method,guideCount,offsetStartAngle,guides){
   const total=clampSpiralGuideCount(guideCount);
   const mode=normalizeSpiralMethod(method);
@@ -895,22 +907,23 @@ function spiralOffsetLabel(guide,direction,unit,imperialDisplay,options){
     angleDeg:angle,
   });
   const side=guideDirection==='right'?'RIGHT':'LEFT';
+  const oppositeLabel=spiralOppositeSideLabel(workshopToolsState.spiral.rodStyle);
   if(angle>=179.95){
     return {
-      offsetText:hasValidOd ? `${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - UNDERSIDE` : '',
-      rotationText:'180 deg - UNDERSIDE',
-      directionText:'UNDERSIDE',
+      offsetText:hasValidOd ? `${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - ${oppositeLabel}` : '',
+      rotationText:`180 deg - ${oppositeLabel}`,
+      directionText:oppositeLabel,
     };
   }
   if(angle<=0.05){
     return {
-      offsetText:hasValidOd ? `${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - TOP LINE` : '',
-      rotationText:'0 deg - TOP LINE',
-      directionText:'TOP LINE',
+      offsetText:hasValidOd ? `${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} - REEL SIDE` : '',
+      rotationText:'0 deg - REEL SIDE',
+      directionText:'REEL SIDE',
     };
   }
   return {
-    offsetText:hasValidOd ? `${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} ${side} OF TOP LINE` : '',
+    offsetText:hasValidOd ? `${formatWorkshopMeasurementValue(offsetMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT)} ${side} OF REEL LINE` : '',
     rotationText:`${formatDecimal(angle,1)} deg ${side}`,
     directionText:`${side} SIDE`,
   };
@@ -928,7 +941,7 @@ function copySpiralGuideOffsets(){
   const dirLabel=spiral.method==='standard'?'STANDARD':String(spiral.direction||'left').toUpperCase();
   const unitSuffix=workshopUnitSuffix(spiral.unit);
   const lines=[
-    `GUIDE ORIENTATION — ${methodLabel} (${dirLabel})`,
+    `GUIDE ORIENTATION — ${methodLabel} (${dirLabel})${spiral.rodStyle?` · ${String(spiral.rodStyle).toUpperCase()}`:''}`,
     `Unit: ${spiral.unit.toUpperCase()} | Guides: ${guides.length}`,
     '----------------------------------------',
   ];
@@ -1038,6 +1051,7 @@ function captureGuideSpecificationSnapshot(){
     spiralDirection:normalizeSpiralDirection(spiral.direction),
     spiralOffsetStartAngle:clampSpiralStripperAngle(spiral.offsetStartAngle),
     spiralAngles:guides.map((guide)=>clampSpiralAngle(guide&&guide.angleDeg)),
+    ...(normalizeRodStyle(spiral.rodStyle)?{rodStyle:normalizeRodStyle(spiral.rodStyle)}:{}),
   };
 }
 function normalizeGuideSpecification(inputSpec){
@@ -1051,11 +1065,14 @@ function normalizeGuideSpecification(inputSpec){
     spiralDirection:spec.spiralDirection?normalizeSpiralDirection(spec.spiralDirection):'',
     spiralOffsetStartAngle:Number.isFinite(Number(spec.spiralOffsetStartAngle))?clampSpiralStripperAngle(spec.spiralOffsetStartAngle):null,
     spiralAngles:Array.isArray(spec.spiralAngles)?spec.spiralAngles.map((value)=>clampSpiralAngle(value)):[],
+    // Optional: omitted (not written as '') so builds without a chosen rod style keep their exact shape.
+    ...(normalizeRodStyle(spec.rodStyle)?{rodStyle:normalizeRodStyle(spec.rodStyle)}:{}),
   };
 }
 // Restores a saved build's Guide Spacing + Guide Orientation into the live workshop tools; no-ops for older builds with no stored specification.
 function applyGuideSpecificationSnapshot(spec){
   const source=spec&&typeof spec==='object'?spec:null;
+  workshopToolsState.spiral.rodStyle=normalizeRodStyle(source&&source.rodStyle);
   if(!source || !Number.isFinite(source.guideCount))return;
   state.guideCount=clampValue(source.guideCount,5,20);
   if(Number.isFinite(source.firstGuideMm))state.firstGuide=clampMeasurementValue(source.firstGuideMm,50,300);
@@ -1128,18 +1145,25 @@ function renderSpiralGuideMapper(){
 
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
+  spiral.rodStyle=normalizeRodStyle(spiral.rodStyle);
+  syncWorkshopToggleButtons(card,'[data-spiral-rod-style]','data-spiral-rod-style',spiral.rodStyle);
+  const isSpinning=spiral.rodStyle==='spinning';
+
+  const methodRow=card.querySelector('[data-spiral-method-row]');
+  if(methodRow)methodRow.hidden=isSpinning;
 
   const directionRow=card.querySelector('[data-spiral-direction-row]');
-  const showDirection=spiral.method!=='standard';
+  const showDirection=spiral.method!=='standard' && !isSpinning;
   if(directionRow)directionRow.hidden=!showDirection;
 
   const methodNote=$('workshopSpiralMethodNote');
-  if(methodNote)methodNote.textContent=SPIRAL_METHOD_NOTES[spiral.method]||'';
+  if(methodNote)methodNote.textContent=isSpinning?SPINNING_STANDARD_NOTE:(SPIRAL_METHOD_NOTES[spiral.method]||'');
 
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
+    const standardCaption=isSpinning?'STANDARD · UNDERNEATH':spiral.rodStyle==='casting'?'STANDARD · ON TOP':'STANDARD · NO TRANSITION';
     visualDirection.textContent=spiral.method==='standard'
-      ?'STANDARD · NO TRANSITION'
+      ?standardCaption
       :`STRIPPER G${spiral.guides.length} · ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
@@ -1167,6 +1191,12 @@ function renderSpiralMapperVisual(spiral){
   const topsideRankByIndex=new Map(topsideIndexes.map((guideIndex,rank)=>[guideIndex,rank]));
   const topsideFanStep=topsideCount>1?Math.min(7,60/(topsideCount-1)):0;
   const selectedIndex=Number.isInteger(spiral.expandedGuideIndex)?spiral.expandedGuideIndex:-1;
+  const rodStyle=normalizeRodStyle(spiral.rodStyle);
+  // Spinning: reel side (0 deg) hangs underneath, so the whole view is rotated 180 deg. Angles are unchanged.
+  const flipView=rodStyle==='spinning';
+  const viewX=(value)=>flipView?220-value:value;
+  const viewY=(value)=>flipView?220-value:value;
+  const oppositeLabel=spiralOppositeSideLabel(rodStyle).toLowerCase();
   const markerPoints=[];
   const markerEntries=guides.map((guide,index)=>{
     const isStripper=index===stripperIndex;
@@ -1186,10 +1216,12 @@ function renderSpiralMapperVisual(spiral){
       x=110+((rank-((topsideCount-1)/2))*topsideFanStep);
       y=42;
     }
+    x=viewX(x);
+    y=viewY(y);
     markerPoints.push({index,x,y});
     const displayGuideNumber=index+1;
-    const markerRotation=(isUnderside||isTopside)?0:visualAngleDegrees+90;
-    const sharedLabel=isUnderside?' running guide at 180 degrees underside':isTopside?' running guide at 0 degrees top line':'';
+    const markerRotation=((isUnderside||isTopside)?0:visualAngleDegrees+90)+(flipView?180:0);
+    const sharedLabel=isUnderside?` running guide at 180 degrees ${oppositeLabel}`:isTopside?' running guide at 0 degrees reel side':'';
     return `
       <g class="spiral-map-marker${isStripper?' spiral-map-marker--stripper':''}${isUnderside?' spiral-map-marker--underside-member':''}${isTopside?' spiral-map-marker--topside-member':''}${isSelected?' spiral-map-marker--selected':''}" data-guide-index="${index}" tabindex="0" role="button" transform="translate(${formatDecimal(x,2)} ${formatDecimal(y,2)}) rotate(${formatDecimal(markerRotation,2)})" aria-label="Guide ${displayGuideNumber}${isStripper?' stripper':''}${sharedLabel}" aria-pressed="${isSelected?'true':'false'}">
         <line class="spiral-map-marker__stem" x1="0" y1="7" x2="0" y2="-13"></line>
@@ -1214,28 +1246,37 @@ function renderSpiralMapperVisual(spiral){
     :'';
 
   const undersideCountLabel=undersideCount>1
-    ?`<text class="spiral-map-underside-count" x="110" y="193" text-anchor="middle">&#215;${undersideCount}</text>`
+    ?`<text class="spiral-map-underside-count" x="110" y="${viewY(193)}" text-anchor="middle">&#215;${undersideCount}</text>`
     :'';
   const topsideCountLabel=topsideCount>1
-    ?`<text class="spiral-map-underside-count" x="110" y="57" text-anchor="middle">&#215;${topsideCount}</text>`
+    ?`<text class="spiral-map-underside-count" x="110" y="${viewY(57)}" text-anchor="middle">&#215;${topsideCount}</text>`
     :'';
+  // Standard keeps the tip top in line with the guide train (reel side); spiral patterns finish opposite.
+  const tipAtReelSide=spiral.method==='standard';
+  const tipY=viewY(tipAtReelSide?17:203);
+  const reelSideLabel=rodStyle==='casting'?'TOP · REEL SIDE 0 deg':rodStyle==='spinning'?'UNDERSIDE · REEL SIDE 0 deg':'REEL SIDE 0 deg';
+  const oppositeSideLabel=`${spiralOppositeSideLabel(rodStyle)} 180 deg`;
+  const topLabel=flipView?oppositeSideLabel:reelSideLabel;
+  const bottomLabel=flipView?reelSideLabel:oppositeSideLabel;
+  const leftLabel=flipView?'90 deg':'LEFT 90 deg';
+  const rightLabel=flipView?'90 deg':'RIGHT 90 deg';
 
   visualCanvas.innerHTML=`
-    <svg viewBox="0 0 220 220" role="img" aria-label="Spiral mapper reference">
+    <svg viewBox="0 0 220 220" role="img" aria-label="Guide orientation reference">
       <circle class="spiral-map-ring" cx="110" cy="110" r="80"></circle>
       <line class="spiral-map-axis" x1="110" y1="26" x2="110" y2="194"></line>
       <line class="spiral-map-axis" x1="26" y1="110" x2="194" y2="110"></line>
-      <text class="spiral-map-label" x="110" y="14" text-anchor="middle">TOP 0 deg</text>
-      <text class="spiral-map-label" x="10" y="66" text-anchor="start">LEFT 90 deg</text>
-      <text class="spiral-map-label" x="210" y="66" text-anchor="end">RIGHT 90 deg</text>
-      <text class="spiral-map-label spiral-map-label--underside" x="110" y="216" text-anchor="middle">UNDERSIDE 180 deg</text>
+      <text class="spiral-map-label${flipView?'':' spiral-map-label--reel'}" x="110" y="8" text-anchor="middle">${topLabel}</text>
+      <text class="spiral-map-label" x="10" y="66" text-anchor="start">${leftLabel}</text>
+      <text class="spiral-map-label" x="210" y="66" text-anchor="end">${rightLabel}</text>
+      <text class="spiral-map-label spiral-map-label--underside${flipView?' spiral-map-label--reel':''}" x="110" y="216" text-anchor="middle">${bottomLabel}</text>
       ${progressionPolyline}
       ${markerSvg}
       ${undersideCountLabel}
       ${topsideCountLabel}
-      <g class="spiral-map-tiptop" aria-label="Tip top at 180 degrees underside">
-        <circle cx="110" cy="203" r="4.7"></circle>
-        <text x="110" y="201" text-anchor="middle">TIP TOP</text>
+      <g class="spiral-map-tiptop" aria-label="Tip top ${tipAtReelSide?'on the reel side at 0 degrees':`at 180 degrees ${oppositeLabel}`}">
+        <circle cx="110" cy="${tipY}" r="4.7"></circle>
+        <text x="117" y="${tipY+11.5}" text-anchor="start">TIP TOP</text>
       </g>
     </svg>
   `;
@@ -1265,7 +1306,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
       const showOdField=showPhysicalOffsets && !isReferenceAngle;
       const showOffsetRow=showPhysicalOffsets && !isReferenceAngle && hasValidOd && !!labels.offsetText;
-      const referenceText=angle>=179.95?'UNDERSIDE':'TOP LINE';
+      const referenceText=angle>=179.95?spiralOppositeSideLabel(spiral.rodStyle):'REEL SIDE';
       const isExpanded=index===spiral.expandedGuideIndex;
       const guideType=isStripper?'STRIPPER':isReferenceAngle?'RUNNING':'TRANSITION';
       return `
@@ -1972,6 +2013,20 @@ function bindWorkshopCalculatorControls(){
   });
 
   const spiralCard=$('workshopToolSpiral');
+  bindWorkshopToggleButtons(spiralCard,'[data-spiral-rod-style]',(button)=>{
+    const spiral=workshopToolsState.spiral;
+    const nextStyle=normalizeRodStyle(button.getAttribute('data-spiral-rod-style'));
+    if(!nextStyle || spiral.rodStyle===nextStyle)return;
+    spiral.rodStyle=nextStyle;
+    // Spinning only uses Standard; reuse the existing Standard pattern rather than any new angle logic.
+    if(nextStyle==='spinning' && spiral.method!=='standard'){
+      setSpiralMethod('standard');
+    }else{
+      markGuideDataDirty();
+    }
+    renderWorkshopCalculator();
+  });
+
   bindWorkshopToggleButtons(spiralCard,'[data-spiral-method]',(button)=>{
     setSpiralMethod(button.getAttribute('data-spiral-method'));
     renderWorkshopCalculator();
@@ -2018,6 +2073,7 @@ function bindWorkshopCalculatorControls(){
     spiralResetBtn.setAttribute('data-spiral-reset-bound','true');
     spiralResetBtn.addEventListener('click',()=>{
       resetSpiralGuideMapper();
+      if(workshopToolsState.spiral.rodStyle==='spinning')setSpiralMethod('standard');
       renderWorkshopCalculator();
     });
   }
@@ -5884,6 +5940,7 @@ function beginFreshQuote(options){
   clearLayoutEntryOrigin();
   clearWorkflowCustomerOrigin();
   quote=normalizeQuote(newQuoteTemplate());
+  workshopToolsState.spiral.rodStyle='';
   saveQuoteCurrent();
   markQuoteSaved();
   showStudioWorkflow();
@@ -5929,6 +5986,7 @@ async function startFreshQuoteForCustomer(record,options){
     clearWorkflowCustomerOrigin();
   }
   quote=normalizeQuote(next);
+  workshopToolsState.spiral.rodStyle='';
   try{
     // A customer-linked build is a genuine quote. Signed-in allocation must complete atomically before
     // the draft can be persisted; anonymous mode uses the local allocator above.
@@ -11371,7 +11429,11 @@ function renderGuideSpecificationSummary(){
   const method=normalizeSpiralMethod(spiral.method);
   const showDirection=method!=='standard';
   if(countEl)countEl.textContent=`${rows.length}`;
-  if(methodEl)methodEl.textContent=guideOrientationMethodLabel(method);
+  if(methodEl){
+    const rodStyle=normalizeRodStyle(spiral.rodStyle);
+    const methodLabel=method==='standard'?'Standard':guideOrientationMethodLabel(method);
+    methodEl.textContent=`${methodLabel}${rodStyle?` · ${rodStyle==='spinning'?'Spinning':'Casting'}`:''}`;
+  }
   if(directionRow)directionRow.hidden=!showDirection;
   if(directionEl)directionEl.textContent=normalizeSpiralDirection(spiral.direction)==='right'?'Right':'Left';
   if(stripperEl)stripperEl.textContent=formatMeasurementValue(+state.targetStripper,CORE_MEASUREMENT_FORMAT);
@@ -11428,7 +11490,8 @@ function updateWorkshopBackToTopVisibility(){
   const workshop=$('workshopScreen');
   const workshopActive=!!(workshop && workshop.classList.contains('active'));
   const blockedByModal=document.body.classList.contains('component-sheet-open') || expandedComponentRowIndex>=0;
-  const shouldShow=workshopActive && !blockedByModal && window.scrollY>320;
+  // Only once the user has scrolled most of a screen; short pages never need it.
+  const shouldShow=workshopActive && !blockedByModal && window.scrollY>Math.max(320,window.innerHeight*0.75);
   button.hidden=!shouldShow;
   button.classList.toggle('is-visible',shouldShow);
 }
