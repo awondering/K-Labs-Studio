@@ -90,6 +90,7 @@ let customerFinderIntent='browse';
 let customerFinderNewBuildStep='actions';
 let customerFinderCreateInFlight=false;
 let activeCustomerRenameContext={key:'',existingName:''};
+let buildRenameQuoteRef=null;
 let activeCustomerEditContext={key:''};
 let selectedBlankEditState=null;
 let selectedBlankControlsBound=false;
@@ -10524,6 +10525,10 @@ function updateWorkshopBuildOverview(){
   if(titleEl){
     titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
   }
+  const renameEditor=$('quoteBuildRenameEditor');
+  if(renameEditor && !renameEditor.hidden && (!hasIdentity || buildRenameQuoteRef!==quote))closeBuildRenameEditor();
+  const renameBtn=$('quoteBuildRenameBtn');
+  if(renameBtn)renameBtn.hidden=!hasIdentity || !!(renameEditor && !renameEditor.hidden);
   // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
   const entryActionsEl=$('quoteBuilderEntryActions');
   if(entryActionsEl)entryActionsEl.hidden=hasActiveBuildRef||hasIdentity;
@@ -10677,7 +10682,44 @@ function positionWorkshopScreenAtTop(){
 }
 // Presentation-only reset when landing on an opened build: closes any leftover modal/picker/menu
 // and drops the in-progress component-row editor, without touching saved quote/customer/component data.
+function openBuildRenameEditor(){
+  const editor=$('quoteBuildRenameEditor');
+  const input=$('quoteBuildRenameInput');
+  if(!editor || !input)return;
+  buildRenameQuoteRef=quote;
+  input.value=specificationValue(quote&&quote.buildName);
+  editor.hidden=false;
+  const renameBtn=$('quoteBuildRenameBtn');
+  if(renameBtn)renameBtn.hidden=true;
+  try{input.focus({preventScroll:true});}catch{input.focus();}
+  try{input.select();}catch{}
+}
+function closeBuildRenameEditor(){
+  const editor=$('quoteBuildRenameEditor');
+  if(editor)editor.hidden=true;
+  buildRenameQuoteRef=null;
+  const renameBtn=$('quoteBuildRenameBtn');
+  if(renameBtn)renameBtn.hidden=!(specificationValue(quote&&quote.customerName)||specificationValue(quote&&quote.buildName));
+}
+function saveBuildRename(){
+  const input=$('quoteBuildRenameInput');
+  if(!input || buildRenameQuoteRef!==quote)return;
+  const nextName=input.value.trim();
+  if(!nextName){
+    input.focus();
+    return;
+  }
+  if(nextName!==specificationValue(quote.buildName)){
+    quote.buildName=nextName;
+    saveQuoteCurrent();
+    markQuoteDirty();
+    scheduleQuoteAutosave({immediate:true});
+  }
+  closeBuildRenameEditor();
+  updateWorkshopBuildOverview();
+}
 function resetWorkshopEntryTransientState(){
+  closeBuildRenameEditor();
   expandedComponentRowIndex=-1;
   closeCurrentBuildActionsMenu();
   closeSavedBuildRowMenu();
@@ -11671,6 +11713,22 @@ function bindWorkshopQuoteBuilder(){
       showStudioLanding();
       window.KLABS_NAV?.forgetScreenScroll?.('workshopScreen');
       window.scrollTo(0,0);
+    });
+  }
+  const buildRenameBtn=$('quoteBuildRenameBtn');
+  if(buildRenameBtn && buildRenameBtn.getAttribute('data-build-rename-bound')!=='true'){
+    buildRenameBtn.setAttribute('data-build-rename-bound','true');
+    buildRenameBtn.addEventListener('click',openBuildRenameEditor);
+    $('quoteBuildRenameSave')?.addEventListener('click',saveBuildRename);
+    $('quoteBuildRenameCancel')?.addEventListener('click',closeBuildRenameEditor);
+    $('quoteBuildRenameInput')?.addEventListener('keydown',(event)=>{
+      if(event.key==='Escape'){
+        event.preventDefault();
+        closeBuildRenameEditor();
+      }else if(event.key==='Enter'){
+        event.preventDefault();
+        saveBuildRename();
+      }
     });
   }
   const customerFinderReturnBtn=$('customerFinderReturnBtn');

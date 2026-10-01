@@ -437,7 +437,15 @@
         </button>
         <header class="quote-builder__head">
           <p class="eyebrow">Build</p>
-          <h1 id="quoteBuilderTitle">Studio</h1>
+          <div class="quote-builder__identity">
+            <h1 id="quoteBuilderTitle">Studio</h1>
+            <button id="quoteBuildRenameBtn" class="studio-component-rename-trigger" type="button" hidden>RENAME</button>
+          </div>
+          <div id="quoteBuildRenameEditor" class="studio-component-rename-editor" hidden>
+            <input id="quoteBuildRenameInput" type="text" aria-label="Build Name" placeholder="Build name" />
+            <button id="quoteBuildRenameSave" class="primary-action" type="button">Save</button>
+            <button id="quoteBuildRenameCancel" class="ghost-action" type="button">Cancel</button>
+          </div>
           <p id="quoteBuilderOverview" class="quote-builder__overview" hidden>
             <span id="quoteBuilderOverviewStatus" class="saved-build-card__status quote-builder__overview-status">Active</span>
             <span id="quoteBuilderOverviewDue" class="quote-builder__overview-due"></span>
