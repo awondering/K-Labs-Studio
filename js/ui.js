@@ -1548,7 +1548,7 @@ function openWorkshopTool(tool){
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
     renderWorkshopCalculator();
-    focusWorkshopToolPrimaryInput(workshopToolsState.activeTool);
+    dismissWorkshopToolPrimaryInputFocus(workshopToolsState.activeTool);
   },0);
 }
 function renderDiameterCircumferenceTool(){
@@ -5374,8 +5374,6 @@ function bindStudioComponentsPanel(){
       renameInput.value=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'');
       renameButton.hidden=true;
       renameEditor.hidden=false;
-      renameInput.focus();
-      renameInput.select();
     });
   }
   if(renameInput){
@@ -5471,8 +5469,6 @@ function bindStudioComponentsPanel(){
         studioLibraryPath={level:'component',categoryId:studioLibraryPath.categoryId,subcategoryId:studioLibraryPath.subcategoryId};
       }
       renderStudioComponentsLibrary();
-      const nameInput=$('studioComponentName')||$('studioLibraryCategoryName')||$('studioLibrarySubcategoryName');
-      if(nameInput && !shouldAvoidMobileTextAutoFocus())nameInput.focus();
     });
   }
 
@@ -6733,13 +6729,6 @@ function beginSelectedBlankEdit(){
     archived:selectedBlankLibraryRecord()?selectedBlankLibraryRecord().archived:false,
   })};
   renderWorkshopQuote();
-  waitForDomRender(()=>{
-    const firstField=$('[data-selected-blank-field="model"]');
-    if(firstField && !shouldAvoidMobileTextAutoFocus()){
-      try{firstField.focus({preventScroll:true});}catch{firstField.focus();}
-      if(typeof firstField.select==='function')firstField.select();
-    }
-  });
 }
 function cancelSelectedBlankEdit(){
   hideSelectedBlankEditState();
@@ -7857,10 +7846,6 @@ function startChoiceEditor(mode,originalName){
   activeChoiceEditor={mode,originalName:originalName||'',blankId:activeChoiceEditor.blankId||''};
   customBox.hidden=false;
   customInput.value=mode==='rename'?(originalName||''):'';
-  if(!shouldAvoidMobileTextAutoFocus()){
-    customInput.focus();
-    customInput.select();
-  }
   if(customTitle){customTitle.textContent=mode==='rename'?'Rename Component':'Add Component';}
 }
 // 'category' is the Active Build "Add Component" picker: it is select-only and must never expose
@@ -9258,11 +9243,6 @@ function setCustomerFinderNewBuildStep(step){
   if(back)back.hidden=!(customerFinderIntent==='new-build' && customerFinderNewBuildStep!=='actions');
   updateCustomerFinderIntentUi();
   if(customerFinderNewBuildStep==='search'){
-    const search=$('customerFinderSearch');
-    if(search && !shouldAvoidMobileTextAutoFocus()){
-      try{search.focus({preventScroll:true});}catch{search.focus();}
-      search.select();
-    }
     renderCustomerFinder();
     scheduleCustomerFinderViewportSync(40);
     return;
@@ -9270,10 +9250,6 @@ function setCustomerFinderNewBuildStep(step){
   if(customerFinderNewBuildStep==='add'){
     const body=document.querySelector('.customer-finder__body');
     if(body)body.scrollTop=0;
-    const nameInput=$('customerFinderNewCustomerName');
-    if(nameInput && !shouldAvoidMobileTextAutoFocus()){
-      try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
-    }
     scheduleCustomerFinderViewportSync(40);
     return;
   }
@@ -9582,10 +9558,6 @@ function openCustomerRenameSheet(customerKey,currentName){
   input.value=existing;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
-  if(!shouldAvoidMobileTextAutoFocus()){
-    try{input.focus({preventScroll:true});}catch{input.focus();}
-    if(typeof input.select==='function')input.select();
-  }
 }
 function ensureCustomerRenameSheet(){
   if($('customerRenameSheet'))return;
@@ -9810,10 +9782,6 @@ function openCustomerEditSheet(customerKey){
   setCustomerEditValidation('');
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
-  const nameInput=$('customerEditName');
-  if(nameInput && !shouldAvoidMobileTextAutoFocus()){
-    try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
-  }
 }
 function requestEditCustomer(customerKey){
   openCustomerEditSheet(customerKey);
@@ -10088,12 +10056,6 @@ function openCustomerFinderSheet(intent){
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   bindCustomerFinderViewportHandlers();
-  if(customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add'){
-    const nameInput=$('customerFinderNewCustomerName');
-    if(nameInput && !nameInput.hidden && !shouldAvoidMobileTextAutoFocus()){
-      try{nameInput.focus({preventScroll:true});}catch{nameInput.focus();}
-    }
-  }
   scheduleCustomerFinderViewportSync(40);
 }
 function dismissCustomerFinderKeyboardFocus(){
@@ -11197,33 +11159,21 @@ function persistLayoutControlState(){
 function shouldAvoidMobileTextAutoFocus(){
   return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 }
-function focusWorkshopToolPrimaryInput(tool){
+function dismissWorkshopToolPrimaryInputFocus(tool){
   const targetId=tool==='grip'
     ?'workshopGripDiameter'
     :tool==='spiral'
       ?'workshopSpiralGuideCountIncrement'
       :'workshopDcDiameter';
   const input=$(targetId);
-  if(!input || input.disabled || input.hidden)return;
-  if(shouldAvoidMobileTextAutoFocus()){
-    window.requestAnimationFrame(()=>{
-      if(document.activeElement===input){
-        input.blur();
-      }
-      try{
-        const end=String(input.value||'').length;
-        if(typeof input.setSelectionRange==='function')input.setSelectionRange(end,end);
-      }catch{}
-      const selection=window.getSelection?window.getSelection():null;
-      if(selection && selection.rangeCount>0){
-        selection.removeAllRanges();
-      }
-    });
-    return;
-  }
-  window.requestAnimationFrame(()=>{
-    try{input.focus({preventScroll:true});}catch{input.focus();}
-  });
+  if(!input)return;
+  if(document.activeElement===input)input.blur();
+  try{
+    const end=String(input.value||'').length;
+    if(typeof input.setSelectionRange==='function')input.setSelectionRange(end,end);
+  }catch{}
+  const selection=window.getSelection?window.getSelection():null;
+  if(selection && selection.rangeCount>0)selection.removeAllRanges();
 }
 function bindWorkshopToolEnterFlow(inputIds){
   const inputs=inputIds
