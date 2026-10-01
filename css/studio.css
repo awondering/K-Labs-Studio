@@ -5153,6 +5153,16 @@ textarea::-moz-selection,
   gap:10px;
 }
 
+#studioComponentsBackBtn{
+  max-width:100%;
+  min-width:0;
+  overflow:visible;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:1.35;
+  text-align:left;
+}
+
 .studio-components-shell__identity{
   display:flex;
   align-items:flex-end;

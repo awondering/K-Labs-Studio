@@ -5216,7 +5216,10 @@ function renderStudioComponentsLibrary(){
     if(subtitle)subtitle.textContent='';
   }else{
     const selected=currentStudioComponentRecord();
-    if(backLabel)backLabel.textContent=(studioLibraryPath.level==='supplier-component'?String(studioLibraryPath.subcategoryId||studioLibraryPath.categoryId||studioLibraryPath.supplierName||'SUPPLIER'):(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)?UNASSIGNED_COMPONENT_CATEGORY:String(studioLibraryPath.subcategoryId||'SUBCATEGORY'))).toUpperCase();
+    const breadcrumbParts=studioLibraryPath.level==='supplier-component'
+      ? ['SUPPLIERS',studioLibraryPath.supplierName,studioLibraryPath.categoryId,studioLibraryPath.subcategoryId]
+      : ['COMPONENTS',studioLibraryPath.categoryId,studioLibraryPath.subcategoryId];
+    if(backLabel)backLabel.textContent=breadcrumbParts.filter((part)=>String(part||'').trim()).join(' › ').toUpperCase();
     if(title)title.textContent=studioComponentDraft?'NEW COMPONENT':String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
     if(subtitle)subtitle.textContent='';
   }
