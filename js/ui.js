@@ -71,7 +71,7 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecGripBelowReelSeatLength',key:'gripBelowReelSeatLength',label:'Grip Below Reel Seat Length',visibility:'customer'},
   {id:'quoteSpecForeGripLength',key:'foreGripLength',label:'Fore Grip Length',visibility:'customer'},
   {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'customer'},
-  {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Builder Notes',visibility:'workshop'}
+  {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Workshop Notes',visibility:'workshop'}
 ];
 let studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
 let businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
