@@ -208,7 +208,7 @@ const workshopToolsState={
 };
 let gripCutTemplateSnapshot=null;
 let workshopLandingReturnFocusTool='';
-// '' = Guide Spacing opened normally from Workshop; 'build' = opened contextually from an open build's Rod Specification.
+// '' = Guide Spacing opened normally from Workshop; 'build' = opened contextually from an open build's Build Details.
 let layoutEntryOrigin='';
 // Snapshot of activeSavedBuildRef taken at entry, so the return control targets that exact build even if the active ref moves on.
 let layoutEntryBuildRef=null;
@@ -1464,7 +1464,7 @@ function findSavedBuildTargetByRef(ref){
   const found=records.findIndex((record)=>normalizeNameKey(record&&record.buildNumber)===buildNumber);
   return found>=0?{index:found,record:records[found]}:null;
 }
-// Saves live Guide Spacing/Guide Orientation edits to the originating build (existing save mechanism), then reopens it with Rod Specification expanded and the Guide Specification card in view.
+// Saves live Guide Spacing/Guide Orientation edits to the originating build (existing save mechanism), then reopens it with Build Details expanded.
 async function returnToOriginatingBuildFromGuideLayout(){
   const originRef=layoutEntryBuildRef;
   clearQuoteAutosaveTimer();
@@ -8485,7 +8485,7 @@ function buildSpecSummaryData(){
   if(blankName)parts.push(blankName);
   if(method)parts.push(method);
   if(guideCount)parts.push(`${guideCount} guide${guideCount===1?'':'s'}`);
-  return parts.length?parts.join(' · '):'Add rod specification';
+  return parts.length?parts.join(' · '):'Add build details';
 }
 function updateBuildSpecSummary(){
   const textEl=$('workshopBuildSpecsSummaryText');
@@ -10544,14 +10544,6 @@ function updateWorkshopBuildOverview(){
     const dueRaw=specificationValue(quote&&quote.estimatedCompletionDate);
     dueEl.textContent=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'No due date set';
   }
-  const metaEl=$('quoteBuilderMeta');
-  const noteField=$('quoteBuilderNoteField');
-  const noteButton=$('quoteBuilderAddNoteBtn');
-  const noteInput=$('quoteNotes');
-  const hasNote=!!specificationValue(quote&&quote.notes);
-  if(metaEl)metaEl.hidden=!hasIdentity;
-  if(noteField)noteField.hidden=!hasNote && document.activeElement!==noteInput;
-  if(noteButton)noteButton.hidden=!hasIdentity || hasNote || document.activeElement===noteInput;
 }
 async function ensureCurrentBuildReference(){
   const target=findCurrentSavedBuildTarget();
@@ -11680,19 +11672,6 @@ function bindWorkshopQuoteBuilder(){
       showStudioLanding();
       window.KLABS_NAV?.forgetScreenScroll?.('workshopScreen');
       window.scrollTo(0,0);
-    });
-  }
-  const addNoteBtn=$('quoteBuilderAddNoteBtn');
-  if(addNoteBtn && addNoteBtn.getAttribute('data-build-note-bound')!=='true'){
-    addNoteBtn.setAttribute('data-build-note-bound','true');
-    addNoteBtn.addEventListener('click',()=>{
-      const noteField=$('quoteBuilderNoteField');
-      const noteInput=$('quoteNotes');
-      if(noteField)noteField.hidden=false;
-      addNoteBtn.hidden=true;
-      if(noteInput){
-        try{noteInput.focus({preventScroll:true});}catch{noteInput.focus();}
-      }
     });
   }
   const customerFinderReturnBtn=$('customerFinderReturnBtn');

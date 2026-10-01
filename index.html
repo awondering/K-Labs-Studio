@@ -442,11 +442,6 @@
             <span id="quoteBuilderOverviewStatus" class="saved-build-card__status quote-builder__overview-status">Active</span>
             <span id="quoteBuilderOverviewDue" class="quote-builder__overview-due"></span>
           </p>
-          <div id="quoteBuilderMeta" class="quote-builder__meta" hidden>
-            <label class="quote-builder__meta-date"><span>Estimated Completion</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
-            <button id="quoteBuilderAddNoteBtn" class="quote-builder__note-toggle" type="button">Build Note</button>
-            <label id="quoteBuilderNoteField" class="quote-builder__meta-note" hidden><span>Build Note</span><textarea id="quoteNotes" rows="1" placeholder="Thread, trim, finish or workshop note"></textarea></label>
-          </div>
         </header>
 
         <div id="quoteBuilderEntryActions" class="quote-builder__entry-actions" aria-label="Studio entry actions">
@@ -504,23 +499,33 @@
           <option value="Mexico"></option>
         </datalist>
 
-        <article id="workshopSpecsSection" class="quote-section quote-section--collapsible quote-section--collapsed" data-internal-only aria-label="Rod Specification">
+        <article id="workshopSpecsSection" class="quote-section quote-section--collapsible quote-section--collapsed" data-internal-only aria-label="Build Details">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildSpecsBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Rod Specification</span>
+              <span class="quote-section__toggle-title">Build Details</span>
               <span id="workshopBuildSpecsSummary" class="quote-section__toggle-summary" aria-live="polite">
-                <span id="workshopBuildSpecsSummaryText">Add rod specification</span>
+                <span id="workshopBuildSpecsSummaryText">Add build details</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
-          <div id="workshopBuildSpecsBody" class="quote-grid quote-grid--two quote-section__body">
-            <div class="quote-grid__full guide-specification" aria-label="Guide Specification, synced from Guide Spacing and Guide Orientation">
-              <div class="guide-specification__head">
-                <span class="guide-specification__title">Guide Specification</span>
-                <button id="editGuideLayoutBtn" class="guide-specification__edit" type="button">Edit Guide Layout <span aria-hidden="true">&#x203a;</span></button>
-                <span class="guide-specification__source">Synced from Guide Spacing &amp; Guide Orientation</span>
-              </div>
+          <div id="workshopBuildSpecsBody" class="quote-grid quote-grid--two quote-section__body build-details">
+            <div class="quote-grid__full build-details__group"><h3>Build</h3></div>
+            <label><span>Estimated Completion</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
+            <label class="quote-grid__full"><span>Build Note</span><textarea id="quoteNotes" rows="2" placeholder="Thread, trim, finish or workshop note"></textarea></label>
+            <div class="quote-grid__full build-details__group"><h3>Rod</h3></div>
+            <label><span>Reel Seat Position</span><input id="quoteSpecReelSeatPosition" type="text" placeholder="e.g. 350 mm from butt" /></label>
+            <label><span>Hook Keeper Position</span><input id="quoteSpecHookKeeperPosition" type="text" placeholder="e.g. Above reel seat" /></label>
+            <label><span>Rear Grip Length</span><input id="quoteSpecRearGripLength" type="text" placeholder="e.g. 280 mm" /></label>
+            <label><span>Fore Grip Length</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
+            <label class="quote-grid__full"><span>Lower Grip Length (Grip below reel seat)</span><input id="quoteSpecGripBelowReelSeatLength" type="text" placeholder="e.g. 90 mm" /></label>
+            <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Build notes..."></textarea></label>
+            <div class="quote-grid__full build-details__group">
+              <h3>Guide Setup</h3>
+              <button id="editGuideLayoutBtn" class="guide-specification__edit" type="button">Edit Guide Layout <span aria-hidden="true">&#x203a;</span></button>
+            </div>
+            <div class="quote-grid__full guide-specification" aria-label="Guide Setup, synced from Guide Spacing and Guide Orientation">
+              <span class="guide-specification__source">Synced from Guide Spacing &amp; Guide Orientation</span>
               <div class="guide-specification__summary">
                 <div><span>Guide Count</span><strong id="guideSpecCount">—</strong></div>
                 <div><span>Orientation</span><strong id="guideSpecMethod">—</strong></div>
@@ -532,12 +537,6 @@
                 <div id="guideSpecRows" class="guide-specification__rows"></div>
               </details>
             </div>
-            <label><span>Reel Seat Position</span><input id="quoteSpecReelSeatPosition" type="text" placeholder="e.g. 350 mm from butt" /></label>
-            <label><span>Rear Grip Length</span><input id="quoteSpecRearGripLength" type="text" placeholder="e.g. 280 mm" /></label>
-            <label><span>Lower Grip Length (Grip below reel seat)</span><input id="quoteSpecGripBelowReelSeatLength" type="text" placeholder="e.g. 90 mm" /></label>
-            <label><span>Fore Grip Length</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
-            <label><span>Hook Keeper Position</span><input id="quoteSpecHookKeeperPosition" type="text" placeholder="e.g. Above reel seat" /></label>
-            <label class="quote-grid__full"><span>Builder Notes</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Build notes..."></textarea></label>
           </div>
         </article>
 
