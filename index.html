@@ -198,6 +198,7 @@
             <div class="workshop-tool-head">
               <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
                 <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
               </button>
               <h3>Guide Orientation</h3>
               <p>Where the guides sit around the blank, applied to your Guide Spacing positions.</p>
@@ -236,11 +237,11 @@
 
             <div class="spiral-secondary-actions">
               <div class="spiral-advanced-toggle">
-                <button id="workshopSpiralOffsetsToggle" class="ghost-action" type="button" aria-pressed="false">Show Physical Offsets</button>
+                <button id="workshopSpiralOffsetsToggle" class="ghost-action" type="button" aria-pressed="false">Show Offsets on Blank</button>
               </div>
 
               <div class="workshop-tool-stack-actions">
-                <button id="workshopSpiralImportBtn" class="ghost-action spiral-import-action" type="button">Use Saved Guide Spacing</button>
+                <button id="workshopSpiralImportBtn" class="ghost-action spiral-import-action" type="button" aria-label="Re-sync from Guide Spacing" title="Re-sync guide count and positions from Guide Spacing">Re-sync from Spacing</button>
               </div>
             </div>
 
@@ -251,9 +252,9 @@
               </label>
             </div>
 
-            <section class="spiral-mapper-visual" aria-label="Spiral progression visual">
+            <section class="spiral-mapper-visual" aria-label="Guide orientation view">
               <div class="spiral-mapper-visual__head">
-                <span>Visual Mapper</span>
+                <span>Orientation View</span>
                 <strong id="workshopSpiralVisualDirection">LEFT TRANSITION</strong>
               </div>
               <div id="workshopSpiralVisualCanvas" class="spiral-mapper-visual__canvas" aria-live="polite"></div>
@@ -262,8 +263,8 @@
             <div id="workshopSpiralGuideRows" class="spiral-guide-rows" aria-live="polite"></div>
 
             <div class="spiral-reset-row">
-              <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy full guide offset and orientation results to clipboard">Copy All Offsets</button>
-              <button id="workshopSpiralResetBtn" class="ghost-action spiral-reset-action" type="button" title="Restore the default Progressive spiral layout">Reset to Default</button>
+              <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy each guide's position and angle to the clipboard">Copy Guide Angles</button>
+              <button id="workshopSpiralResetBtn" class="ghost-action spiral-reset-action" type="button" title="Restore the Progressive pattern using Guide Spacing positions">Reset Pattern</button>
             </div>
           </article>
         </section>

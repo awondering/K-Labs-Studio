@@ -1001,7 +1001,7 @@ function copySpiralGuideOffsets(){
   const dirLabel=spiral.method==='standard'?'STANDARD':String(spiral.direction||'left').toUpperCase();
   const unitSuffix=workshopUnitSuffix(spiral.unit);
   const lines=[
-    `SPIRAL GUIDE MAPPER — ${methodLabel} (${dirLabel})`,
+    `GUIDE ORIENTATION — ${methodLabel} (${dirLabel})`,
     `Unit: ${spiral.unit.toUpperCase()} | Guides: ${guides.length}`,
     '----------------------------------------',
   ];
@@ -1032,7 +1032,7 @@ function copySpiralGuideOffsets(){
         copyBtn.classList.remove('is-copied');
       },1600);
     }
-    flashWorkshopStatus('Guide offsets copied',{pending:true,duration:1800});
+    flashWorkshopStatus('Guide angles copied',{pending:true,duration:1800});
   };
   if(navigator.clipboard && typeof navigator.clipboard.writeText==='function'){
     navigator.clipboard.writeText(text).then(onCopied).catch(()=>{
@@ -1196,7 +1196,7 @@ function renderSpiralGuideMapper(){
   if(showOffsetsToggle){
     showOffsetsToggle.classList.toggle('active',showPhysicalOffsets);
     showOffsetsToggle.setAttribute('aria-pressed',showPhysicalOffsets?'true':'false');
-    showOffsetsToggle.textContent=showPhysicalOffsets?'Hide Physical Offsets':'Show Physical Offsets';
+    showOffsetsToggle.textContent=showPhysicalOffsets?'Hide Offsets on Blank':'Show Offsets on Blank';
   }
 
   const canDecreaseGuideCount=spiral.guideCount>1;
