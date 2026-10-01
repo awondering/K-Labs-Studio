@@ -10936,7 +10936,7 @@ function ensureViewQuoteSheet(){
       <div class="component-sheet__body">
         <div id="viewQuoteBody"></div>
         <div class="quote-preview-actions">
-          <button id="viewQuoteEmailBtn" type="button" class="ghost-action">Email Quote</button>
+          <button id="viewQuoteEmailBtn" type="button" class="ghost-action">Open Email Draft</button>
           <button id="viewQuoteCloseBtn" type="button" class="primary-action">Close</button>
         </div>
       </div>
