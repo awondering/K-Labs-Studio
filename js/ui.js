@@ -3045,7 +3045,6 @@ function customerSpecificationRows(){
   BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer' && !['rearGripLength','gripBelowReelSeatLength','foreGripLength'].includes(field.key)).forEach((field)=>{
     appendCustomerSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
   });
-  appendCustomerSpecRow(rows,'Customer Requests',customerRequestText(quote.notes));
   return rows;
 }
 function customerIncludedPartLabel(item){
