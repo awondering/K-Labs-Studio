@@ -268,8 +268,9 @@
           </svg>
         </section>
 
-        <section class="guide-spacing-panel" aria-live="polite">
-          <div class="guide-spacing-columns" aria-hidden="true"><span>Guide</span><span>Position</span><span>Spacing</span></div>
+        <section class="guide-spacing-panel" aria-label="Guides" aria-live="polite">
+          <div class="guide-spacing-panel__head"><span>Guides</span><small>Measured from tip &middot; 0&deg; = reel side</small></div>
+          <div class="guide-spacing-columns" aria-hidden="true"><span>Guide</span><span>Position</span><span>Spacing</span><span>Orientation</span></div>
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
         </section>
 
@@ -337,8 +338,6 @@
             </div>
             <div id="workshopSpiralVisualCanvas" class="spiral-mapper-visual__canvas" aria-live="polite"></div>
           </section>
-
-          <div id="workshopSpiralGuideRows" class="spiral-guide-rows" aria-live="polite"></div>
 
           <div class="spiral-reset-row">
             <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy each guide's position and angle to the clipboard">Copy Guide Angles</button>

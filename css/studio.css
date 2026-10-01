@@ -7482,18 +7482,47 @@ textarea::-moz-selection,
   box-shadow:0 9px 18px rgba(0,0,0,.18);
 }
 
-/* Guide Setup spacing list: one compact line per guide, column labels once in the header. */
+/* Guide Setup: one unified guide list (position, spacing, orientation); column labels once in the header. */
+#layoutScreen .guide-spacing-panel__head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  padding:0 8px 6px;
+}
+
+#layoutScreen .guide-spacing-panel__head span{
+  flex:0 0 auto;
+  color:#e9e2d5;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+
+#layoutScreen .guide-spacing-panel__head small{
+  min-width:0;
+  overflow:hidden;
+  color:rgba(214,210,200,.62);
+  font-size:9px;
+  letter-spacing:.04em;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
 #layoutScreen .guide-spacing-columns,
-#layoutScreen .guide-spacing-list .guide-spacing-row{
+#layoutScreen .guide-spacing-row__summary{
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
+  grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,1.3fr);
   align-items:center;
   gap:8px;
   padding:0 8px;
 }
 
 #layoutScreen .guide-spacing-columns{
-  margin-bottom:4px;
+  margin-bottom:2px;
+  padding-bottom:5px;
+  border-bottom:1px solid rgba(214,210,200,.08);
   color:rgba(214,210,200,.6);
   font-size:8px;
   font-weight:700;
@@ -7505,39 +7534,221 @@ textarea::-moz-selection,
   text-align:right;
 }
 
-#layoutScreen .guide-spacing-list{
-  gap:2px;
+#layoutScreen .guide-spacing-columns span:last-child{
+  text-align:left;
 }
 
 #layoutScreen .guide-spacing-list .guide-spacing-row{
+  display:block;
+  min-height:0;
+  padding:0;
+  border:0;
+  border-top:1px solid rgba(255,255,255,.045);
+  border-radius:8px;
+  background:transparent;
+  box-shadow:none;
+  transition:background-color var(--micro-motion) ease,box-shadow var(--micro-motion) ease;
+}
+
+#layoutScreen .guide-spacing-list .guide-spacing-row:first-child{
+  border-top-color:transparent;
+}
+
+#layoutScreen .guide-spacing-row__summary{
+  width:100%;
   min-height:34px;
+  margin:0;
   padding-top:4px;
   padding-bottom:4px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
 }
 
-#layoutScreen .guide-spacing-list .guide-spacing-row .guide-spacing-row__meta{
+#layoutScreen .guide-spacing-row__summary > *{
   grid-column:auto;
-  align-self:center;
+  justify-self:stretch;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
-#layoutScreen .guide-spacing-list .guide-spacing-row .guide-spacing-row__meta:nth-child(2){
+#layoutScreen .guide-spacing-row__summary:focus-visible{
+  outline:1px solid rgba(var(--kl-red-rgb),.6);
+  outline-offset:-1px;
+}
+
+#layoutScreen .guide-spacing-list .guide-spacing-row--active{
+  background:rgba(255,255,255,.03);
+  box-shadow:none;
+}
+
+#layoutScreen .guide-spacing-list .guide-spacing-row--selected{
+  border-top-color:transparent;
+  background:rgba(var(--kl-red-rgb),.08);
+  box-shadow:inset 2px 0 0 rgba(var(--kl-red-rgb),.8);
+}
+
+#layoutScreen .guide-spacing-list .guide-spacing-row--selected + .guide-spacing-row{
+  border-top-color:transparent;
+}
+
+#layoutScreen .guide-spacing-row__guide-name{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  color:#ece5d8;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+}
+
+#layoutScreen .guide-spacing-row__tag{
+  color:rgba(var(--kl-red-rgb),.95);
+  font-size:8px;
+  font-style:normal;
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+
+#layoutScreen .guide-spacing-row--stripper .guide-spacing-row__guide-name{
   flex-direction:column;
-  align-items:flex-end;
+  align-items:flex-start;
+  gap:0;
+  line-height:1.15;
 }
 
 #layoutScreen .guide-spacing-list .guide-spacing-row__position-value{
+  color:#e6dece;
+  font-size:13px;
+  font-weight:760;
+  letter-spacing:.01em;
+  text-align:right;
   text-transform:none;
+  font-variant-numeric:tabular-nums;
 }
 
-#layoutScreen .guide-spacing-list .guide-spacing-row__meta small,
-#layoutScreen .guide-spacing-list .guide-spacing-row__spacing-label{
+#layoutScreen .guide-spacing-list .guide-spacing-row__spacing-value{
+  color:#f0e8d9;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.01em;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+
+#layoutScreen .guide-spacing-row__orientation{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr);
+  align-items:baseline;
+  gap:6px;
+}
+
+#layoutScreen .guide-spacing-list{
+  display:grid;
+  gap:0;
+}
+
+#layoutScreen .guide-spacing-row__orientation strong{
+  grid-column:1;
+  justify-self:end;
+  color:#f0e8d9;
+  font-size:13px;
+  font-weight:700;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+
+#layoutScreen .guide-spacing-row__orientation small{
+  overflow:hidden;
+  color:rgba(214,210,200,.68);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-overflow:ellipsis;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+#layoutScreen .guide-spacing-row--selected .guide-spacing-row__guide-name{
+  color:#fff6ee;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__offset{
+  margin:-2px 0 0;
+  padding:0 8px 5px;
+  text-align:right;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__edit{
+  display:grid;
+  gap:6px;
+  padding:2px 8px 9px;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__edit--collapsed{
   display:none;
 }
 
-#layoutScreen .guide-spacing-list .guide-spacing-row .guide-spacing-row__spacing{
-  display:block;
-  align-self:center;
-  text-align:right;
+#layoutScreen .guide-spacing-row .spiral-guide-row__fields{
+  grid-template-columns:repeat(2,minmax(0,260px));
+  justify-content:end;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__fields--basic{
+  grid-template-columns:minmax(0,260px);
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__fields label > span{
+  color:rgba(214,210,200,.62);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__details{
+  justify-self:end;
+  width:min(100%,528px);
+}
+
+.rod-marker--selected .rod-marker__halo{
+  opacity:.62;
+}
+
+.rod-marker--selected .rod-marker__core{
+  fill:var(--kl-red-active);
+}
+
+.rod-marker--selected .rod-marker__dot{
+  fill:#fff;
+}
+
+@media (max-width:640px){
+  #layoutScreen .guide-spacing-columns,
+  #layoutScreen .guide-spacing-row__summary{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,1.55fr);
+    gap:6px;
+  }
+
+  #layoutScreen .guide-spacing-row__orientation{
+    grid-template-columns:38px minmax(0,1fr);
+  }
+
+  #layoutScreen .guide-spacing-row .spiral-guide-row__fields,
+  #layoutScreen .guide-spacing-row .spiral-guide-row__fields--basic{
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  #layoutScreen .guide-spacing-row .spiral-guide-row__details{
+    width:100%;
+  }
 }
 
 #layoutScreen #layoutGuideNotice{

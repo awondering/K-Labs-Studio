@@ -1288,19 +1288,26 @@ function assertSpiralMapperMarkerCount(visualCanvas,expectedCount){
     console.warn(`Spiral mapper marker mismatch: rendered ${rendered}, expected ${expectedCount}`);
   }
 }
+// Read-only guide list display: whole mm, or nearest 1/8" as a workshop fraction. Stored values keep full precision.
+function formatGuideListMeasurement(valueMm){
+  if(activeMeasurementUnits()==='imperial')return `${formatImperialFractionInches(mmToInches(valueMm),8)}"`;
+  return `${Math.round(numberOrZero(valueMm))} mm`;
+}
+// One guide list on Guide Setup: Guide Spacing rows (position/spacing) + Guide Orientation angles share index i.
 function renderSpiralGuideRows(spiral,showPhysicalOffsets){
-  const rowsHost=$('workshopSpiralGuideRows');
+  const rowsHost=$('guideSpacingCards');
   if(rowsHost){
     const guides=Array.isArray(spiral.guides)?spiral.guides:[];
-    const stripperIndex=Math.max(0,guides.length-1);
+    const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
+    const layoutRows=Array.isArray(layout&&layout.rows)?layout.rows:[];
+    const stripperIndex=Math.max(0,layoutRows.length-1);
     const focusMemo=captureSpiralRowFocus(rowsHost);
-    const displayIndexes=Array.from({length:guides.length},(_,offset)=>stripperIndex-offset);
-    rowsHost.innerHTML=displayIndexes.map((index)=>{
+    rowsHost.innerHTML=layoutRows.map((row,index)=>{
       const guide=guides[index];
       if(!guide)return '';
       const isStripper=index===stripperIndex;
       const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
-      const displayGuideNumber=index+1;
+      const displayGuideNumber=row.g;
       const angle=clampSpiralAngle(guide.angleDeg);
       const isReferenceAngle=angle<=0.05 || angle>=179.95;
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
@@ -1308,22 +1315,22 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const showOffsetRow=showPhysicalOffsets && !isReferenceAngle && hasValidOd && !!labels.offsetText;
       const referenceText=angle>=179.95?spiralOppositeSideLabel(spiral.rodStyle):'REEL SIDE';
       const isExpanded=index===spiral.expandedGuideIndex;
-      const guideType=isStripper?'STRIPPER':isReferenceAngle?'RUNNING':'TRANSITION';
+      const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
+        :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
+      const positionText=formatGuideListMeasurement(row.cum);
+      const spacingText=formatGuideListMeasurement(row.spacing);
+      const angleText=`${formatDecimal(angle,1)}\u00b0`;
       return `
-        <article class="spiral-guide-row${isStripper?' spiral-guide-row--stripper':''}${isExpanded?' spiral-guide-row--expanded':''}" data-spiral-row="${index}">
-          <button class="spiral-guide-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}">
-            <strong>Guide ${displayGuideNumber}</strong>
-            <span>${guideType}</span>
-            <span>${labels.rotationText}</span>
-            <span class="spiral-guide-row__disclosure" aria-hidden="true">&#8964;</span>
+        <article class="guide-spacing-row${isStripper?' guide-spacing-row--stripper':''}${isExpanded?' guide-spacing-row--selected':''}" data-guide-index="${index}">
+          <button class="guide-spacing-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}. Spacing ${spacingText}. Orientation ${angleText} ${sideText}`)}">
+            <span class="guide-spacing-row__guide-name">Guide ${displayGuideNumber}${isStripper?'<em class="guide-spacing-row__tag">Stripper</em>':''}</span>
+            <span class="guide-spacing-row__position-value">${positionText}</span>
+            <strong class="guide-spacing-row__spacing-value">${spacingText}</strong>
+            <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </button>
           ${showPhysicalOffsets && labels.offsetText?`<p class="spiral-guide-row__offset">${labels.offsetText}</p>`:''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
-            <label>
-              <span>Position From Tip (${workshopUnitSuffix(spiral.unit)})</span>
-              <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="position" data-guide-index="${index}" value="${escapeHtml(workshopMeasurementInputText(guide.positionMm,spiral.unit,spiral.imperialDisplay))}" />
-            </label>
             ${showOdField?`<label>
               <span>Blank OD</span>
               <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" />
@@ -1340,21 +1347,31 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
               </div>
             </label>
             </div>
-            <div class="spiral-guide-row__details">
+            ${showOffsetRow || (showPhysicalOffsets && isReferenceAngle)?`<div class="spiral-guide-row__details">
               ${showOffsetRow?`<div><span>Surface Distance From Top</span><strong>${labels.offsetText}</strong></div>`:''}
               ${showPhysicalOffsets && isReferenceAngle?`<div><span>Reference</span><strong>${referenceText}</strong></div>`:''}
-            </div>
+            </div>`:''}
           </div>
         </article>
       `;
     }).join('');
     restoreSpiralRowFocus(rowsHost,focusMemo);
   }
+  syncRodBlankSelectedMarker();
+}
+// Mirrors the selected guide row onto the Guide Spacing rod-blank marker of the same index.
+function syncRodBlankSelectedMarker(){
+  const selectedIndex=workshopToolsState.spiral.expandedGuideIndex;
+  document.querySelectorAll('#rodBlankMarkerLayer .rod-marker').forEach((marker)=>{
+    marker.classList.toggle('rod-marker--selected',Number(marker.getAttribute('data-guide-index'))===selectedIndex);
+  });
 }
 // Rows are rebuilt on every keystroke so the mapper stays live; keep the caret where the user left it.
 function captureSpiralRowFocus(rowsHost){
   const active=document.activeElement;
   if(!active || !rowsHost.contains(active))return null;
+  const expandIndex=active.getAttribute&&active.getAttribute('data-spiral-expand-index');
+  if(expandIndex!==null && expandIndex!==undefined)return {selector:`[data-spiral-expand-index="${expandIndex}"]`};
   const field=active.getAttribute&&active.getAttribute('data-spiral-field');
   const angleAction=active.getAttribute&&active.getAttribute('data-spiral-angle-action');
   const index=active.getAttribute&&active.getAttribute('data-guide-index');
@@ -2078,8 +2095,10 @@ function bindWorkshopCalculatorControls(){
     });
   }
 
-  if(spiralCard && spiralCard.getAttribute('data-spiral-row-bound')!=='true'){
-    spiralCard.setAttribute('data-spiral-row-bound','true');
+  // Guide rows live in the Guide Spacing panel, Orientation View in spiralCard: delegate from their shared screen.
+  const spiralRowHost=$('layoutScreen')||spiralCard;
+  if(spiralRowHost && spiralRowHost.getAttribute('data-spiral-row-bound')!=='true'){
+    spiralRowHost.setAttribute('data-spiral-row-bound','true');
     const handleSpiralFieldChange=(target)=>{
       const input=target&&target.closest?target.closest('[data-spiral-field]'):null;
       if(!input)return;
@@ -2108,7 +2127,7 @@ function bindWorkshopCalculatorControls(){
       markGuideDataDirty();
       renderWorkshopCalculator();
     };
-    spiralCard.addEventListener('click',(event)=>{
+    spiralRowHost.addEventListener('click',(event)=>{
       const marker=event.target.closest('[data-guide-index].spiral-map-marker');
       if(marker){
         const index=Number(marker.getAttribute('data-guide-index'));
@@ -2136,8 +2155,8 @@ function bindWorkshopCalculatorControls(){
       setSpiralGuideAngle(index,numberOrZero(guide.angleDeg)+delta);
       renderWorkshopCalculator();
     });
-    spiralCard.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
-    spiralCard.addEventListener('input',(event)=>{
+    spiralRowHost.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
+    spiralRowHost.addEventListener('input',(event)=>{
       const target=event.target;
       if(!(target instanceof HTMLInputElement))return;
       if(!target.closest('[data-spiral-field]'))return;
@@ -11220,35 +11239,6 @@ function bindLayoutControls(){
     });
   }
 
-  const guideSpacingCards=$('guideSpacingCards');
-  if(guideSpacingCards && guideSpacingCards.getAttribute('data-layout-row-bound')!=='true'){
-    guideSpacingCards.setAttribute('data-layout-row-bound','true');
-    guideSpacingCards.addEventListener('click',(event)=>{
-      const row=event.target.closest('[data-guide-index]');
-      if(!row)return;
-      const index=Number(row.getAttribute('data-guide-index'));
-      if(!Number.isFinite(index) || state.workshopIndex===index)return;
-      state.workshopIndex=index;
-      save();
-      render();
-      const selected=guideSpacingCards.querySelector(`[data-guide-index="${index}"]`);
-      if(selected && typeof selected.scrollIntoView==='function')selected.scrollIntoView({block:'nearest'});
-    });
-    guideSpacingCards.addEventListener('keydown',(event)=>{
-      if(event.key!=='Enter' && event.key!==' ')return;
-      const row=event.target.closest('[data-guide-index]');
-      if(!row)return;
-      event.preventDefault();
-      const index=Number(row.getAttribute('data-guide-index'));
-      if(!Number.isFinite(index) || state.workshopIndex===index)return;
-      state.workshopIndex=index;
-      save();
-      render();
-      const selected=guideSpacingCards.querySelector(`[data-guide-index="${index}"]`);
-      if(selected && typeof selected.scrollIntoView==='function')selected.scrollIntoView({block:'nearest'});
-    });
-  }
-
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
     const field=el.getAttribute('data-field');
     if(!field || !controlMeta[field])return;
@@ -13098,24 +13088,6 @@ function render(options){
   document.querySelectorAll('.layout-control-card__button[data-action]').forEach((button)=>{
     button.disabled=!!state.locked;
   });
-  const guideSpacingCards=$('guideSpacingCards');
-  if(guideSpacingCards){
-    guideSpacingCards.innerHTML=r.rows.map((row,i)=>`
-      <article class="guide-spacing-row${i===state.workshopIndex?' guide-spacing-row--active':''}" data-guide-index="${i}" tabindex="0" role="button" aria-label="Guide ${row.g}. Position ${formatMeasurementValue(row.cum,GUIDE_LIST_FORMAT)}. Spacing ${formatMeasurementValue(row.spacing,GUIDE_LIST_FORMAT)}" aria-current="${i===state.workshopIndex?'true':'false'}">
-        <div class="guide-spacing-row__meta">
-          <span class="guide-spacing-row__guide-name">Guide ${row.g}</span>
-        </div>
-        <div class="guide-spacing-row__meta">
-          <small>Position</small>
-          <span class="guide-spacing-row__position-value">${formatMeasurementValue(row.cum,GUIDE_LIST_FORMAT)}</span>
-        </div>
-        <div class="guide-spacing-row__spacing">
-          <span class="guide-spacing-row__spacing-label">Spacing</span>
-          <strong class="guide-spacing-row__spacing-value">${formatMeasurementValue(row.spacing,GUIDE_LIST_FORMAT)}</strong>
-        </div>
-      </article>
-    `).join('');
-  }
   const statusBadge=$('layoutStatusBadge');
   if(statusBadge){
     statusBadge.textContent=state.locked?'Locked':'Live';
@@ -13125,6 +13097,7 @@ function render(options){
   const guideNotice=$('layoutGuideNotice');
   if(guideNotice){guideNotice.textContent='Guide only. Confirm final placement by static testing and builder judgement.';}
   if(window.StudioVisuals && typeof window.StudioVisuals.update==='function'){window.StudioVisuals.update(r,state);}
+  syncRodBlankSelectedMarker();
   const workshopScreen=$('workshopScreen');
   if(workshopScreen && workshopScreen.classList.contains('active')){
     renderStudioScreenMode();
