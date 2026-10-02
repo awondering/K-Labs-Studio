@@ -3632,6 +3632,85 @@ function studioComponentDetailPayloadFromDom(){
 function studioComponentPayloadSignature(payload){
   return JSON.stringify(payload||{});
 }
+let explicitSaveFeedbackTimer=0;
+let explicitSaveFeedbackSequence=0;
+let activeExplicitSaveFeedback=null;
+const explicitSavesInFlight=new WeakSet();
+function showExplicitSaveFeedback(state,retry,error){
+  let feedback=$('explicitSaveFeedback');
+  if(!feedback){
+    feedback=document.createElement('div');
+    feedback.id='explicitSaveFeedback';
+    feedback.className='explicit-save-feedback';
+    feedback.innerHTML='<span role="status" aria-live="polite" aria-atomic="true"></span><button type="button" class="ghost-action" hidden>Retry</button>';
+    document.body.appendChild(feedback);
+  }
+  clearTimeout(explicitSaveFeedbackTimer);
+  feedback.hidden=false;
+  feedback.dataset.state=state;
+  feedback.querySelector('span').textContent=state==='saving'?'Saving…':state==='saved'?'✓ Saved':`Save failed. ${error&&error.message||'Please retry.'}`;
+  const retryButton=feedback.querySelector('button');
+  retryButton.hidden=state!=='error' || !retry;
+  retryButton.onclick=retry||null;
+  positionExplicitSaveFeedback();
+  if(state==='saved')explicitSaveFeedbackTimer=window.setTimeout(()=>{feedback.hidden=true;},2200);
+}
+function positionExplicitSaveFeedback(){
+  const feedback=$('explicitSaveFeedback');
+  if(!feedback || feedback.hidden)return;
+  const viewport=window.visualViewport;
+  const left=viewport?viewport.offsetLeft:0;
+  const width=viewport?viewport.width:window.innerWidth;
+  const bottom=Math.min(viewport?viewport.offsetTop+viewport.height:window.innerHeight,viewportVisibleBottom(0));
+  feedback.style.left=`${left+width/2}px`;
+  feedback.style.bottom=`${Math.max(0,window.innerHeight-bottom)+12}px`;
+  feedback.style.maxWidth=`${Math.max(0,width-24)}px`;
+}
+window.addEventListener('resize',positionExplicitSaveFeedback,{passive:true});
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',positionExplicitSaveFeedback,{passive:true});
+  window.visualViewport.addEventListener('scroll',positionExplicitSaveFeedback,{passive:true});
+}
+async function runExplicitSave(button,saveAction,options){
+  const settings=options||{};
+  if(button && explicitSavesInFlight.has(button))return false;
+  const sequence=++explicitSaveFeedbackSequence;
+  activeExplicitSaveFeedback={sequence,button,saveAction,settings};
+  const wasDisabled=button&&button.disabled;
+  let succeeded=false;
+  if(button){
+    explicitSavesInFlight.add(button);
+    button.disabled=true;
+    button.setAttribute('aria-busy','true');
+  }
+  if(settings.sectionKey)setSettingsSectionSaveState(settings.sectionKey,'saving');
+  showExplicitSaveFeedback('saving');
+  try{
+    await new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const result=await saveAction();
+    if(result===false || result===null)throw new Error('Please retry.');
+    if(sequence===explicitSaveFeedbackSequence)showExplicitSaveFeedback('saved');
+    if(settings.sectionKey)setSettingsSectionSaveState(settings.sectionKey,'saved');
+    succeeded=true;
+    return true;
+  }catch(error){
+    if(sequence===explicitSaveFeedbackSequence)showExplicitSaveFeedback('error',()=>{
+      if(button && (!button.isConnected || button.closest('[hidden]'))){
+        showExplicitSaveFeedback('error',null,new Error('Open the editor and save again.'));
+        return;
+      }
+      runExplicitSave(button,saveAction,settings);
+    },error);
+    if(settings.sectionKey)setSettingsSectionSaveState(settings.sectionKey,'error');
+    return false;
+  }finally{
+    if(button){
+      explicitSavesInFlight.delete(button);
+      button.removeAttribute('aria-busy');
+      if(!settings.sectionKey)button.disabled=succeeded&&settings.keepDisabledOnSuccess?true:wasDisabled;
+    }
+  }
+}
 function clearStudioComponentSavedTimer(){
   if(studioComponentDetailContext.savedTimer){
     clearTimeout(studioComponentDetailContext.savedTimer);
@@ -3655,7 +3734,7 @@ function syncStudioComponentSaveButtonState(){
   }
   if(studioComponentDetailContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='✓ SAVED';
+    button.textContent='✓ Saved';
     button.classList.add('is-saved');
     return;
   }
@@ -3989,24 +4068,27 @@ function commitComponentMove(){
   saveStudioComponentDetails();
 }
 function saveStudioComponentDetails(){
+  return runExplicitSave($('studioComponentSaveBtn'),commitStudioComponentDetails);
+}
+function commitStudioComponentDetails(){
   const nameInput=studioComponentNameInput();
-  if(!nameInput)return;
+  if(!nameInput)return false;
   const nextName=String(nameInput.value||'').trim();
   if(!nextName){
     openInfoDialog('Component Name Required','Enter a component name before saving.');
     nameInput.focus();
-    return;
+    return false;
   }
   if(NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizeNameKey(nextName))){
     openInfoDialog('Not a Physical Component','Business charges like Freight, Postage or Repair are not stored as physical Components. Add these directly on the build/quote instead.');
-    return;
+    return false;
   }
   const originalName=String(($('studioComponentOriginalName')&&$('studioComponentOriginalName').value)||'').trim();
   const supplierBrowseName=studioLibraryPath.level.startsWith('supplier')?String(studioLibraryPath.supplierName||'').trim():'';
   const payload=studioComponentDetailPayloadFromDom();
   const payloadSignature=studioComponentPayloadSignature(payload);
   if(!studioComponentDetailContext.isAddMode && payloadSignature===studioComponentDetailContext.baseline){
-    return;
+    return true;
   }
   // Supplier / Variant / Specifications / Notes / Unit are no longer part of the editor. Any value an older
   // record already carries is read back and passed through untouched so saving here never strips it.
@@ -4071,6 +4153,7 @@ function saveStudioComponentDetails(){
     studioComponentDetailContext.savedTimer=0;
     syncStudioComponentSaveButtonState();
   },1700);
+  return true;
 }
 function studioTaxonomySectionMode(section){
   const scope=studioTaxonomyUiState&&studioTaxonomyUiState[section]?studioTaxonomyUiState[section]:null;
@@ -9418,8 +9501,12 @@ function saveCustomerRecordFromDraft(draft){
   });
 }
 function handleCreateCustomerFromNewBuildForm(){
-  // A second tap must never write a second record while the first save is still settling.
   if(customerFinderCreateInFlight)return;
+  return runExplicitSave($('customerFinderSubmitNewCustomerBtn'),commitCreateCustomerFromNewBuildForm,{keepDisabledOnSuccess:true});
+}
+function commitCreateCustomerFromNewBuildForm(){
+  // A second tap must never write a second record while the first save is still settling.
+  if(customerFinderCreateInFlight)return false;
   const draft=customerFinderDraftFromForm();
   if(!specificationValue(draft.customerName)){
     setCustomerFinderNameValidation('Enter a customer name to continue.');
@@ -9427,7 +9514,7 @@ function handleCreateCustomerFromNewBuildForm(){
     if(input){
       try{input.focus({preventScroll:true});}catch{input.focus();}
     }
-    return;
+    return false;
   }
   setCustomerFinderNameValidation('');
   customerFinderCreateInFlight=true;
@@ -9441,7 +9528,7 @@ function handleCreateCustomerFromNewBuildForm(){
     customerFinderCreateInFlight=false;
     setCustomerFinderCreateButtonState(false);
     setCustomerFinderNameValidation('Customer could not be saved. Check the customer name and try again.');
-    return;
+    return false;
   }
   customerFinderSelectedKey=normalizeNameKey(savedCustomer.customerName)||'__no_customer__';
   setCustomerFinderCreateButtonState(true);
@@ -9458,6 +9545,7 @@ function handleCreateCustomerFromNewBuildForm(){
       if(await startFreshQuoteForCustomer(savedCustomer))flashWorkshopStatus('Customer saved');
     });
   },220);
+  return true;
 }
 function customerFinderPrimaryRecord(group){
   const selected=(group && Array.isArray(group.records))?group.records:[];
@@ -9608,8 +9696,12 @@ function submitCustomerRename(){
     return;
   }
   const key=String(activeCustomerRenameContext.key||'');
-  closeCustomerRenameSheet();
-  applyCustomerRename(key,nextName);
+  return runExplicitSave(document.querySelector('[data-customer-rename-action="save"]'),()=>{
+    if($('customerRenameSheet').hidden || activeCustomerRenameContext.key!==key)return false;
+    applyCustomerRename(key,nextName);
+    closeCustomerRenameSheet();
+    return true;
+  });
 }
 function openCustomerRenameSheet(customerKey,currentName){
   ensureCustomerRenameSheet();
@@ -9781,8 +9873,12 @@ function submitCustomerEdit(){
     return;
   }
   const key=String(activeCustomerEditContext.key||'');
-  closeCustomerEditSheet();
-  applyCustomerEdit(key,draft);
+  return runExplicitSave(document.querySelector('[data-customer-edit-action="save"]'),()=>{
+    if($('customerEditSheet').hidden || activeCustomerEditContext.key!==key)return false;
+    applyCustomerEdit(key,draft);
+    closeCustomerEditSheet();
+    return true;
+  });
 }
 function ensureCustomerEditSheet(){
   if($('customerEditSheet'))return;
@@ -10773,14 +10869,21 @@ function saveBuildRename(){
     input.focus();
     return;
   }
-  if(nextName!==specificationValue(quote.buildName)){
-    quote.buildName=nextName;
-    saveQuoteCurrent();
-    markQuoteDirty();
-    scheduleQuoteAutosave({immediate:true});
-  }
-  closeBuildRenameEditor();
-  updateWorkshopBuildOverview();
+  const needsSave=nextName!==specificationValue(quote.buildName) || hasUnsavedQuoteChanges;
+  return runExplicitSave($('quoteBuildRenameSave'),async()=>{
+    if(buildRenameQuoteRef!==quote)return false;
+    if(needsSave){
+      quote.buildName=nextName;
+      markQuoteDirty();
+      clearQuoteAutosaveTimer();
+      saveQuoteCurrent();
+      if(!await persistCurrentQuoteRecord())return false;
+      markQuoteSaved();
+    }
+    closeBuildRenameEditor();
+    updateWorkshopBuildOverview();
+    return true;
+  });
 }
 function resetWorkshopEntryTransientState(){
   closeBuildRenameEditor();
@@ -13213,6 +13316,10 @@ function onSettingsSyncStatus(status,detail){
   }else if(status==='error'){
     SETTINGS_PENDING_SYNC_SECTIONS.forEach((sectionKey)=>{
       setSettingsSectionSaveState(sectionKey,'error');
+      const active=activeExplicitSaveFeedback;
+      if(active && active.sequence===explicitSaveFeedbackSequence && active.settings.sectionKey===sectionKey){
+        showExplicitSaveFeedback('error',()=>runExplicitSave(active.button,active.saveAction,active.settings),new Error('Settings sync failed. Please retry.'));
+      }
     });
     SETTINGS_PENDING_SYNC_SECTIONS.clear();
   }
@@ -13222,6 +13329,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
   const btnId=`settings${sectionKey}SaveBtn`;
   const btn=$(btnId);
   if(!btn)return;
+  btn.style.visibility='';
   if(SETTINGS_SECTION_SAVE_TIMERS[sectionKey]){
     clearTimeout(SETTINGS_SECTION_SAVE_TIMERS[sectionKey]);
     SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=null;
@@ -13236,16 +13344,17 @@ function setSettingsSectionSaveState(sectionKey,state,message){
   }else if(state==='saving'){
     btn.hidden=false;
     btn.disabled=true;
-    btn.textContent=message||'SAVING...';
+    btn.textContent=message||'Saving…';
     btn.className='ghost-action settings-context-action settings-save-btn is-saving';
   }else if(state==='saved'){
     SETTINGS_PENDING_SYNC_SECTIONS.add(sectionKey);
     btn.hidden=false;
     btn.disabled=true;
-    btn.textContent=message||'✓ SAVED';
+    btn.textContent=message||'✓ Saved';
     btn.className='ghost-action settings-context-action settings-save-btn is-saved';
     SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=window.setTimeout(()=>{
-      btn.hidden=true;
+      btn.style.visibility='hidden';
+      btn.disabled=false;
       btn.className='ghost-action settings-context-action settings-save-btn';
       SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=null;
     },2200);
@@ -13253,7 +13362,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
     SETTINGS_PENDING_SYNC_SECTIONS.delete(sectionKey);
     btn.hidden=false;
     btn.disabled=false;
-    btn.textContent=message||'SAVE FAILED';
+    btn.textContent=message||'Save failed · Retry';
     btn.className='ghost-action settings-context-action settings-save-btn is-error';
     btn.setAttribute('aria-label',`Save failed for ${sectionKey}, click to retry`);
   }else{
@@ -13344,15 +13453,15 @@ function bindBusinessProfileControls(){
   const saveBusinessProfileBtn=$('settingsBusinessProfileSaveBtn');
   if(saveBusinessProfileBtn && saveBusinessProfileBtn.getAttribute('data-business-profile-bound')!=='true'){
     saveBusinessProfileBtn.setAttribute('data-business-profile-bound','true');
-    saveBusinessProfileBtn.addEventListener('click',()=>{
+    saveBusinessProfileBtn.addEventListener('click',()=>runExplicitSave(saveBusinessProfileBtn,()=>{
       BUSINESS_PROFILE_BASE_FIELDS.forEach((f)=>{
         const el=$(f.id);
         if(el)businessProfile[f.key]=String(el.value||'').trim();
       });
       const ok=saveBusinessProfile();
       syncBusinessProfileControls(true);
-      setSettingsSectionSaveState('BusinessProfile',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'BusinessProfile'}));
   }
 
   PAYMENT_DETAILS_FIELDS.forEach((field)=>{
@@ -13381,15 +13490,15 @@ function bindBusinessProfileControls(){
   const savePaymentDetailsBtn=$('settingsPaymentDetailsSaveBtn');
   if(savePaymentDetailsBtn && savePaymentDetailsBtn.getAttribute('data-payment-details-bound')!=='true'){
     savePaymentDetailsBtn.setAttribute('data-payment-details-bound','true');
-    savePaymentDetailsBtn.addEventListener('click',()=>{
+    savePaymentDetailsBtn.addEventListener('click',()=>runExplicitSave(savePaymentDetailsBtn,()=>{
       PAYMENT_DETAILS_FIELDS.forEach((f)=>{
         const el=$(f.id);
         if(el)businessProfile[f.key]=String(el.value||'').trim();
       });
       const ok=saveBusinessProfile();
       syncBusinessProfileControls(true);
-      setSettingsSectionSaveState('PaymentDetails',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'PaymentDetails'}));
   }
 
   const quotePrefixInput=$('settingsQuotePrefix');
@@ -13443,13 +13552,13 @@ function bindBusinessProfileControls(){
   const saveQuoteNumberingBtn=$('settingsQuoteNumberingSaveBtn');
   if(saveQuoteNumberingBtn && saveQuoteNumberingBtn.getAttribute('data-quote-numbering-bound')!=='true'){
     saveQuoteNumberingBtn.setAttribute('data-quote-numbering-bound','true');
-    saveQuoteNumberingBtn.addEventListener('click',()=>{
+    saveQuoteNumberingBtn.addEventListener('click',()=>runExplicitSave(saveQuoteNumberingBtn,()=>{
       if(quotePrefixInput)businessProfile.quotePrefix=String(quotePrefixInput.value||'').trim();
       if(nextNumberInput)businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
       const ok=saveBusinessProfile();
       syncBusinessProfileControls(true);
-      setSettingsSectionSaveState('QuoteNumbering',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'QuoteNumbering'}));
   }
 
   syncBusinessProfileControls();
@@ -13509,7 +13618,8 @@ function bindSettingsControls(){
       studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
       taxRateInput.value=String(studioSettings.taxRate);
       const ok=saveStudioSettings();
-      showTaxSaved();
+      if(ok)showTaxSaved();
+      else if(taxSavedLabel)taxSavedLabel.hidden=true;
       setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     };
     taxRateInput.addEventListener('change',saveTaxRate);
@@ -13540,7 +13650,8 @@ function bindSettingsControls(){
         saveQuoteCurrent();
       }
       const ok=saveStudioSettings();
-      if(defaultLabourRateSavedLabel){
+      if(!ok && defaultLabourRateSavedLabel)defaultLabourRateSavedLabel.hidden=true;
+      if(ok && defaultLabourRateSavedLabel){
         defaultLabourRateSavedLabel.hidden=false;
         if(defaultLabourRateSavedTimer){clearTimeout(defaultLabourRateSavedTimer);}
         defaultLabourRateSavedTimer=window.setTimeout(()=>{
@@ -13562,7 +13673,7 @@ function bindSettingsControls(){
   const pricingTaxSaveBtn=$('settingsPricingTaxSaveBtn');
   if(pricingTaxSaveBtn && pricingTaxSaveBtn.getAttribute('data-settings-bound')!=='true'){
     pricingTaxSaveBtn.setAttribute('data-settings-bound','true');
-    pricingTaxSaveBtn.addEventListener('click',()=>{
+    pricingTaxSaveBtn.addEventListener('click',()=>runExplicitSave(pricingTaxSaveBtn,()=>{
       if(taxRateInput)studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
       if(defaultLabourRateInput)studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
       if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
@@ -13572,16 +13683,16 @@ function bindSettingsControls(){
       const ok=saveStudioSettings();
       if(taxRateInput)taxRateInput.value=String(studioSettings.taxRate);
       if(defaultLabourRateInput)defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
-      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'PricingTax'}));
   }
   const trackStockSaveBtn=$('settingsTrackStockSaveBtn');
   if(trackStockSaveBtn && trackStockSaveBtn.getAttribute('data-settings-bound')!=='true'){
     trackStockSaveBtn.setAttribute('data-settings-bound','true');
-    trackStockSaveBtn.addEventListener('click',()=>{
+    trackStockSaveBtn.addEventListener('click',()=>runExplicitSave(trackStockSaveBtn,()=>{
       const ok=saveStudioSettings();
-      setSettingsSectionSaveState('TrackStock',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'TrackStock'}));
   }
   document.querySelectorAll('[data-settings-measurement-display]').forEach((button)=>{
     if(button.getAttribute('data-settings-bound')==='true')return;
@@ -13606,10 +13717,10 @@ function bindSettingsControls(){
   const measurementUnitsSaveBtn=$('settingsMeasurementUnitsSaveBtn');
   if(measurementUnitsSaveBtn && measurementUnitsSaveBtn.getAttribute('data-settings-bound')!=='true'){
     measurementUnitsSaveBtn.setAttribute('data-settings-bound','true');
-    measurementUnitsSaveBtn.addEventListener('click',()=>{
+    measurementUnitsSaveBtn.addEventListener('click',()=>runExplicitSave(measurementUnitsSaveBtn,()=>{
       const ok=saveStudioSettings();
-      setSettingsSectionSaveState('MeasurementUnits',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'MeasurementUnits'}));
   }
   document.querySelectorAll('[data-settings-date-format]').forEach((button)=>{
     if(button.getAttribute('data-settings-bound')==='true')return;
@@ -13631,10 +13742,10 @@ function bindSettingsControls(){
   const dateFormatSaveBtn=$('settingsDateFormatSaveBtn');
   if(dateFormatSaveBtn && dateFormatSaveBtn.getAttribute('data-settings-bound')!=='true'){
     dateFormatSaveBtn.setAttribute('data-settings-bound','true');
-    dateFormatSaveBtn.addEventListener('click',()=>{
+    dateFormatSaveBtn.addEventListener('click',()=>runExplicitSave(dateFormatSaveBtn,()=>{
       const ok=saveStudioSettings();
-      setSettingsSectionSaveState('DateFormat',ok?'saved':'error');
-    });
+      return ok;
+    },{sectionKey:'DateFormat'}));
   }
   syncSettingsPreferenceControls();
 }

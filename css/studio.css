@@ -9434,3 +9434,24 @@ body.klabs-auth-resolving::after {
 .quote-component-row__add-details[hidden]{
   display:none;
 }
+
+.explicit-save-feedback{
+  position:fixed;
+  z-index:1000;
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  width:max-content;
+  padding:10px 14px;
+  border:1px solid rgba(214,210,200,.24);
+  border-radius:8px;
+  background:#101416;
+  color:#ddd6ca;
+  font-size:12px;
+  box-shadow:0 8px 18px rgba(0,0,0,.26);
+}
+.explicit-save-feedback[hidden]{display:none}
+.explicit-save-feedback span{min-width:0;overflow-wrap:anywhere}
+.explicit-save-feedback[data-state="error"]{border-color:rgba(166,70,80,.5);color:#e4aeb4}
+.explicit-save-feedback .ghost-action{min-height:34px;padding:0 10px;font-size:11px;flex:none}
