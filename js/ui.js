@@ -4292,17 +4292,6 @@ function studioCategoryComponentCount(category){
     return normalizeNameKey(record&&record.category)===categoryKey;
   }).length;
 }
-// "Reel Seat" vs "Reel Seats" style near-duplicates: reuses the existing alias-group list plus a light
-// singular/plural fallback, purely to choose "Merge" wording - never to auto-select a destination.
-function categoriesLookLikeDuplicates(nameA,nameB){
-  const keyA=normalizeNameKey(nameA);
-  const keyB=normalizeNameKey(nameB);
-  if(!keyA || !keyB || keyA===keyB)return false;
-  const aliasA=categoryAliasGroupKeyFor(nameA);
-  if(aliasA && aliasA===categoryAliasGroupKeyFor(nameB))return true;
-  const stripTrailingS=(key)=>key.endsWith('s')?key.slice(0,-1):key;
-  return stripTrailingS(keyA)===stripTrailingS(keyB);
-}
 // Every other category is a valid Move/Merge destination; the source category itself is always excluded.
 function studioCandidateMergeDestinationCategories(sourceCategory){
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
@@ -4390,7 +4379,15 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
   }
   return {ok:true,movedCount,subcategoryCount:sourceSubcategoriesSnapshot.length};
 }
-let categoryMergeDialogState={sourceCategoryId:'',destCategoryId:''};
+let categoryMergeDialogState={sourceCategoryId:'',destCategoryId:'',mode:'merge'};
+function studioCategoryContentsSummary(category){
+  const componentCount=studioCategoryComponentCount(category);
+  const subcategoryCount=(category&&Array.isArray(category.subcategories)?category.subcategories:[]).length;
+  const parts=[];
+  if(componentCount>0)parts.push(`${componentCount} component${componentCount===1?'':'s'}`);
+  if(subcategoryCount>0)parts.push(`${subcategoryCount} subcategor${subcategoryCount===1?'y':'ies'}`);
+  return parts.length?parts.join(' and '):'nothing';
+}
 function ensureCategoryMergeSheet(){
   if($('categoryMergeSheet'))return;
   const sheet=document.createElement('div');
@@ -4407,7 +4404,7 @@ function ensureCategoryMergeSheet(){
       <div class="component-sheet__body">
         <div class="studio-component-details__head"><p id="categoryMergeMessage"></p></div>
         <section class="component-hierarchy-picker__group" aria-labelledby="categoryMergeDestinationLabel">
-          <h3 id="categoryMergeDestinationLabel">Move To</h3>
+          <h3 id="categoryMergeDestinationLabel">Into</h3>
           <div id="categoryMergeDestinationOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination category"></div>
         </section>
         <p id="categoryMergeHint" class="workshop-tool-note"></p>
@@ -4431,46 +4428,49 @@ function renderCategoryMergeSheet(){
   const sourceCategory=studioCategoryById(categoryMergeDialogState.sourceCategoryId);
   const sheet=$('categoryMergeSheet');
   if(!sourceCategory || !sheet)return;
-  const componentCount=studioCategoryComponentCount(sourceCategory);
-  const subcategoryCount=(sourceCategory.subcategories||[]).length;
+  const isMerge=categoryMergeDialogState.mode!=='delete';
   const candidates=studioCandidateMergeDestinationCategories(sourceCategory);
   const titleEl=$('categoryMergeTitle');
-  if(titleEl)titleEl.textContent=`Delete "${sourceCategory.name}"?`;
+  if(titleEl)titleEl.textContent=isMerge?`Merge \u201c${sourceCategory.name}\u201d Into`:`Move Contents of \u201c${sourceCategory.name}\u201d`;
+  const panel=sheet.querySelector('.component-sheet__panel');
+  if(panel)panel.setAttribute('aria-label',isMerge?'Merge category':'Move category contents then delete');
+  const labelEl=$('categoryMergeDestinationLabel');
+  if(labelEl)labelEl.textContent=isMerge?'Into':'Move to';
   if(!candidates.some((item)=>item.id===categoryMergeDialogState.destCategoryId)){
     categoryMergeDialogState.destCategoryId='';
   }
   const messageEl=$('categoryMergeMessage');
   if(messageEl){
-    const parts=[];
-    if(componentCount>0)parts.push(`${componentCount} component${componentCount===1?'':'s'}`);
-    if(subcategoryCount>0)parts.push(`${subcategoryCount} subcategor${subcategoryCount===1?'y':'ies'}`);
-    const subject=parts.length?parts.join(' and '):'Nothing';
-    const verb=parts.length===1 && componentCount===1 && subcategoryCount===0?'uses':'use';
-    messageEl.textContent=`${subject} ${verb} this category. Choose where they should be moved before deleting it.`;
+    const contents=studioCategoryContentsSummary(sourceCategory);
+    messageEl.textContent=isMerge
+      ?`${contents.charAt(0).toUpperCase()}${contents.slice(1)} will move. Subcategories with the same name are combined.`
+      :`${contents.charAt(0).toUpperCase()}${contents.slice(1)} will move, then \u201c${sourceCategory.name}\u201d is deleted.`;
   }
   const optionsHost=$('categoryMergeDestinationOptions');
   if(optionsHost){
     optionsHost.innerHTML=candidates.map((item)=>componentHierarchyOptionMarkup(item.id,item.name,item.id===categoryMergeDialogState.destCategoryId,'data-category-merge-destination')).join('');
   }
   const destCategory=candidates.find((item)=>item.id===categoryMergeDialogState.destCategoryId)||null;
-  const isDuplicate=!!destCategory && categoriesLookLikeDuplicates(sourceCategory.name,destCategory.name);
   const hintEl=$('categoryMergeHint');
-  if(hintEl)hintEl.textContent=(destCategory && isDuplicate)?`Merge into "${destCategory.name}".`:'';
+  if(hintEl)hintEl.textContent='';
   const actionsEl=$('categoryMergeActions');
   if(actionsEl){
-    const confirmLabel=isDuplicate?'Merge & Delete':`Move ${componentCount} Component${componentCount===1?'':'s'} & Delete`;
-    actionsEl.innerHTML=`<button class="ghost-action" type="button" data-category-merge-action="cancel">Cancel</button><button class="primary-action" type="button" data-category-merge-action="confirm"${destCategory?'':' disabled'}>${escapeHtml(confirmLabel)}</button>`;
+    const confirmLabel=isMerge
+      ?(destCategory?`Merge Into \u201c${destCategory.name}\u201d`:'Merge')
+      :'Move & Delete';
+    const confirmClass=isMerge?'primary-action':'ghost-action component-sheet__danger';
+    actionsEl.innerHTML=`<button class="ghost-action" type="button" data-category-merge-action="cancel">Cancel</button><button class="${confirmClass}" type="button" data-category-merge-action="confirm"${destCategory?'':' disabled'}>${escapeHtml(confirmLabel)}</button>`;
   }
 }
-function openCategoryMergeDialog(category){
+function openCategoryMergeDialog(category,mode){
   if(!category)return;
   const candidates=studioCandidateMergeDestinationCategories(category);
   if(!candidates.length){
-    openInfoDialog('No Destination Available','Create another category first - then you can move this category\u2019s components and subcategories before deleting it.');
+    openInfoDialog('No Other Category','Create another category first, then merge or move into it.');
     return;
   }
   ensureCategoryMergeSheet();
-  categoryMergeDialogState={sourceCategoryId:category.id,destCategoryId:''};
+  categoryMergeDialogState={sourceCategoryId:category.id,destCategoryId:'',mode:mode==='delete'?'delete':'merge'};
   renderCategoryMergeSheet();
   $('categoryMergeSheet').hidden=false;
   lockModalLayer(document.activeElement);
@@ -4478,16 +4478,17 @@ function openCategoryMergeDialog(category){
 function closeCategoryMergeDialog(){
   const sheet=$('categoryMergeSheet');
   if(sheet)sheet.hidden=true;
-  categoryMergeDialogState={sourceCategoryId:'',destCategoryId:''};
+  categoryMergeDialogState={sourceCategoryId:'',destCategoryId:'',mode:'merge'};
   unlockModalLayer({restoreFocus:true});
 }
 function commitCategoryMergeDialog(){
   const sourceCategory=studioCategoryById(categoryMergeDialogState.sourceCategoryId);
   const destCategory=studioCategoryById(categoryMergeDialogState.destCategoryId);
   if(!sourceCategory || !destCategory)return;
-  const isDuplicate=categoriesLookLikeDuplicates(sourceCategory.name,destCategory.name);
+  const isMerge=categoryMergeDialogState.mode!=='delete';
   const sourceCategoryId=sourceCategory.id;
   const sourceCategoryName=sourceCategory.name;
+  const destCategoryName=destCategory.name;
   const result=studioMoveCategoryContentsAndDelete(sourceCategory.id,destCategory.id);
   closeCategoryMergeDialog();
   if(normalizeNameKey(studioLibraryPath.categoryId)===normalizeNameKey(sourceCategoryName) || studioLibraryEditor.targetId===sourceCategoryId){
@@ -4502,7 +4503,9 @@ function commitCategoryMergeDialog(){
   closeStudioLibraryContextMenu();
   refreshStudioComponentAndTaxonomyViews();
   if(result.ok){
-    openInfoDialog(isDuplicate?'Category Merged':'Category Deleted',`${isDuplicate?'Category merged':'Category deleted'} \u2022 ${result.movedCount} component${result.movedCount===1?'':'s'} moved.`);
+    openInfoDialog(isMerge?'Category Merged':'Category Deleted',isMerge
+      ?`\u201c${sourceCategoryName}\u201d merged into \u201c${destCategoryName}\u201d \u2022 ${result.movedCount} component${result.movedCount===1?'':'s'} moved.`
+      :`\u201c${sourceCategoryName}\u201d deleted \u2022 ${result.movedCount} component${result.movedCount===1?'':'s'} moved to \u201c${destCategoryName}\u201d.`);
   }else{
     openInfoDialog('Move Failed','Nothing was changed - please try again.');
   }
@@ -4776,7 +4779,14 @@ function handleStudioTaxonomyAction(action){
     if(usage>0){
       setStudioTaxonomySectionMode('categories','browse');
       refreshStudioComponentAndTaxonomyViews();
-      openCategoryMergeDialog(category);
+      // Delete never silently merges: the user explicitly chooses to move the contents first.
+      openConfirmDialog({
+        title:'Delete Category',
+        message:`\u201c${category.name}\u201d contains ${studioCategoryContentsSummary(category)}. Move them to another category before deleting it.`,
+        actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'move',label:'Move Contents Then Delete',kind:'danger'}]
+      },(choice)=>{
+        if(choice==='move')openCategoryMergeDialog(category,'delete');
+      });
       return;
     }
     const deleteNow=()=>{
@@ -5040,6 +5050,7 @@ function studioCategoryContextMenuMarkup(categoryName){
   const categoryId=category&&category.id||'';
   return `<div class="studio-components-row-menu" role="menu" aria-label="Category actions">
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-rename" data-studio-library-id="${escapeAttributeValue(categoryId)}">Rename</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-merge" data-studio-library-id="${escapeAttributeValue(categoryId)}">Merge Into…</button>
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-up" data-studio-library-id="${escapeAttributeValue(categoryId)}">Move Up</button>
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-down" data-studio-library-id="${escapeAttributeValue(categoryId)}">Move Down</button>
     <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-library-menu-action="category-delete" data-studio-library-id="${escapeAttributeValue(categoryId)}">Delete</button>
@@ -5456,6 +5467,7 @@ function bindStudioComponentsPanel(){
           }
           if(action==='category-up'){handleStudioTaxonomyAction('category-up');return;}
           if(action==='category-down'){handleStudioTaxonomyAction('category-down');return;}
+          if(action==='category-merge'){openCategoryMergeDialog(category,'merge');return;}
           if(action==='category-delete'){handleStudioTaxonomyAction('category-delete');return;}
         }
         if(action.startsWith('subcategory-')){
