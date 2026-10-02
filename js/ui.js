@@ -119,7 +119,6 @@ let activeBlankEditorId='';
 let pendingControlPersist=false;
 // Rod Build Layout selected item key (view state only, never saved).
 let rodLayoutSelection='';
-let buildGeometryOpenState={key:'',quoteRef:null,open:false};
 let rodLayoutRangeResizeBound=false;
 const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
 const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null,sequenceAnimating:false,sequenceCompleted:false};
@@ -2586,32 +2585,30 @@ function normalizeBuildSpecifications(inputSpecs){
   if(layout)normalized.layout=layout;
   return normalized;
 }
-// Rod Build Layout geometry, all mm from the finished butt end; null = not set.
-function buildLayoutPosition(value){
+// Rod Build Layout fallback values only: everything else is derived from Build Details, components and Guide Setup.
+function buildLayoutLength(value){
   if(value===null || value===undefined || value==='')return null;
   const parsed=Number(value);
-  return Number.isFinite(parsed) && parsed>=0?parsed:null;
-}
-function buildLayoutLength(value){
-  const parsed=buildLayoutPosition(value);
-  return parsed!==null && parsed>0?parsed:null;
+  return Number.isFinite(parsed) && parsed>0?parsed:null;
 }
 function normalizeBuildLayout(input,options){
   const source=input&&typeof input==='object'?input:{};
-  const span=(value)=>({startMm:buildLayoutPosition(value&&value.startMm),lengthMm:buildLayoutLength(value&&value.lengthMm)});
+  const seatRef=String(source.reelSeatPositionRef||'').trim().toLowerCase();
+  // Keys from the earlier committed 10-field layout are carried through untouched (unused) so no saved value is lost.
+  const legacy={};
+  ['buttCap','rearGrip','foreGrip','hookKeeperMm','windingChecksMm'].forEach((key)=>{
+    if(source[key]!==undefined && source[key]!==null)legacy[key]=source[key];
+  });
+  const legacySeat=source.reelSeat&&typeof source.reelSeat==='object'?source.reelSeat:{};
   const layout={
+    ...legacy,
     rodLengthMm:buildLayoutLength(source.rodLengthMm),
-    buttCap:{lengthMm:buildLayoutLength(source.buttCap&&source.buttCap.lengthMm)},
-    rearGrip:span(source.rearGrip),
-    reelSeat:span(source.reelSeat),
-    foreGrip:span(source.foreGrip),
-    hookKeeperMm:buildLayoutPosition(source.hookKeeperMm),
-    windingChecksMm:(Array.isArray(source.windingChecksMm)?source.windingChecksMm:[])
-      .map(buildLayoutPosition).filter((value)=>value!==null).sort((a,b)=>a-b),
+    reelSeat:{...legacySeat,lengthMm:buildLayoutLength(legacySeat.lengthMm)},
+    reelSeatPositionRef:['rear','centre','front'].includes(seatRef)?seatRef:null,
   };
   if(options&&options.keepEmpty)return layout;
-  const hasValue=layout.rodLengthMm!==null || layout.buttCap.lengthMm!==null || layout.hookKeeperMm!==null || layout.windingChecksMm.length>0
-    || ['rearGrip','reelSeat','foreGrip'].some((key)=>layout[key].startMm!==null || layout[key].lengthMm!==null);
+  const hasValue=layout.rodLengthMm!==null || layout.reelSeat.lengthMm!==null || layout.reelSeatPositionRef!==null
+    || Object.keys(legacy).length>0 || Object.keys(legacySeat).some((key)=>key!=='lengthMm');
   return hasValue?layout:null;
 }
 function specificationValue(value){
@@ -11420,25 +11417,12 @@ function bindBuildSpecificationInputs(){
       quote.buildSpecifications[field.key]=el.value;
       saveQuoteCurrent();
       markQuoteDirty();
+      renderRodBuildLayout();
     };
     el.addEventListener('input',onSpecUpdate);
     el.addEventListener('change',onSpecUpdate);
   });
-  document.querySelectorAll('[data-layout-field]').forEach((el)=>{
-    if(el.getAttribute('data-layout-bound')==='true')return;
-    el.setAttribute('data-layout-bound','true');
-    el.addEventListener('input',()=>applyBuildLayoutInput(el));
-    el.addEventListener('change',()=>{
-      applyBuildLayoutInput(el);
-      renderBuildLayoutInputs();
-    });
-  });
   const rodLayout=$('rodBuildLayout');
-  const geometryToggle=$('buildGeometryToggle');
-  if(geometryToggle && geometryToggle.getAttribute('data-geometry-bound')!=='true'){
-    geometryToggle.setAttribute('data-geometry-bound','true');
-    geometryToggle.addEventListener('click',()=>setBuildGeometryOpen(!buildGeometryOpenState.open));
-  }
   if(!rodLayoutRangeResizeBound && rodLayout){
     rodLayoutRangeResizeBound=true;
     // Also fires when collapsed Build Details first reveals the panel, so the bracket never measures a 0-width strip.
@@ -11453,6 +11437,11 @@ function bindBuildSpecificationInputs(){
         editRodLayoutItem(edit.getAttribute('data-layout-edit'));
         return true;
       }
+      const ref=target.closest('[data-layout-seat-ref]');
+      if(ref){
+        setBuildLayoutValue('reelSeatPositionRef',ref.getAttribute('data-layout-seat-ref'));
+        return true;
+      }
       const item=target.closest('[data-layout-item]');
       if(!item)return false;
       const key=item.getAttribute('data-layout-item');
@@ -11462,10 +11451,21 @@ function bindBuildSpecificationInputs(){
     };
     rodLayout.addEventListener('click',(event)=>{activate(event.target);});
     rodLayout.addEventListener('keydown',(event)=>{
+      const fallback=event.target.closest('[data-layout-field]');
+      if(fallback && event.key==='Enter'){
+        event.preventDefault();
+        fallback.blur();
+        return;
+      }
       if(event.key!=='Enter' && event.key!==' ')return;
       if(!event.target.closest('[data-layout-item]'))return;
       event.preventDefault();
       activate(event.target);
+    });
+    // Fallback values commit on change only, so re-rendering the panel never steals the caret mid-entry.
+    rodLayout.addEventListener('change',(event)=>{
+      const input=event.target.closest('[data-layout-field]');
+      if(input)applyBuildLayoutInput(input);
     });
   }
 }
@@ -11476,7 +11476,6 @@ function renderBuildSpecificationInputs(){
     if(document.activeElement===el)return;
     el.value=quote.buildSpecifications[field.key]||'';
   });
-  renderBuildLayoutInputs();
   renderGuideSpecificationSummary();
 }
 const GUIDE_ORIENTATION_METHOD_LABELS={standard:'Standard / Conventional',acute:'Acute',progressive:'Progressive',offset:'Offset'};
@@ -11517,64 +11516,31 @@ function renderGuideSpecificationSummary(){
   }
   renderRodBuildLayout();
 }
-function buildLayoutFieldValue(layout,path){
-  const [head,tail]=String(path||'').split('.');
-  const value=layout?layout[head]:undefined;
-  return tail?(value?value[tail]:undefined):value;
-}
-function renderBuildLayoutInputs(){
-  const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
-  document.querySelectorAll('[data-layout-field]').forEach((el)=>{
-    if(document.activeElement===el)return;
-    const path=el.getAttribute('data-layout-field');
-    if(path==='windingChecksMm'){
-      el.value=layout.windingChecksMm.map(blankMeasurementInputText).join(', ');
-      return;
-    }
-    const value=buildLayoutFieldValue(layout,path);
-    el.value=value===null || value===undefined?'':blankMeasurementInputText(value);
-  });
-  syncBuildGeometryToggle();
-}
-// Edit Geometry starts open only for a build with no geometry yet; it then keeps the user's choice for that build.
-function syncBuildGeometryToggle(){
-  const fields=$('buildGeometryFields');
-  const toggle=$('buildGeometryToggle');
-  if(!fields || !toggle)return;
-  const key=String(quote.buildNumber||'');
-  // Same build = same live quote object (a draft gaining its number) or the same build number reloaded.
-  const sameBuild=buildGeometryOpenState.quoteRef===quote || (key!=='' && key===buildGeometryOpenState.key);
-  if(!sameBuild && !fields.contains(document.activeElement)){
-    buildGeometryOpenState.open=!normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout);
+// Uses a Build Details text value only when it is a plain measurement; bare numbers are in the active display units.
+function buildSpecMeasurementMm(value,options){
+  let text=String(value||'').trim().toLowerCase();
+  if(!text)return {state:'empty',mm:null};
+  if(options&&options.allowFromButt)text=text.replace(/\s*from\s+(?:the\s+)?butt$/,'').trim();
+  let mm=NaN;
+  const metric=text.match(/^(\d+(?:\.\d+)?)\s*(mm|cm)$/);
+  const imperial=text.match(/^(.+?)\s*(?:"|in|inch|inches)$/);
+  if(metric){
+    mm=Number(metric[1])*(metric[2]==='cm'?10:1);
+  }else if(imperial){
+    const inches=parseImperialInchesInput(imperial[1]);
+    mm=Number.isFinite(inches)?inchesToMm(inches):NaN;
+  }else if(/^[\d\s./]+$/.test(text)){
+    mm=parseMeasurementInputValue(text);
   }
-  buildGeometryOpenState.key=key;
-  buildGeometryOpenState.quoteRef=quote;
-  fields.hidden=!buildGeometryOpenState.open;
-  toggle.setAttribute('aria-expanded',String(buildGeometryOpenState.open));
+  return Number.isFinite(mm) && mm>0?{state:'ok',mm}:{state:'unreadable',mm:null};
 }
-function setBuildGeometryOpen(open){
-  buildGeometryOpenState.open=!!open;
-  syncBuildGeometryToggle();
-}
-// Explicit user entry only: never derived from free-text specs, component names or catalogue blank lengths.
-function applyBuildLayoutInput(el){
-  const path=el.getAttribute('data-layout-field')||'';
-  const raw=String(el.value||'').trim();
-  let next=null;
-  if(path==='windingChecksMm'){
-    const parsed=(raw?raw.split(/[,;]+/):[]).map((part)=>part.trim()).filter(Boolean).map(parseMeasurementInputValue);
-    if(parsed.some((value)=>!Number.isFinite(value)))return;
-    next=parsed;
-  }else if(raw){
-    next=parseMeasurementInputValue(raw);
-    if(!Number.isFinite(next))return;
-  }
+function setBuildLayoutValue(path,value){
   const specs=quote.buildSpecifications;
   const layout=normalizeBuildLayout(specs.layout,{keepEmpty:true});
-  const [head,tail]=path.split('.');
+  const [head,tail]=String(path||'').split('.');
   if(!Object.prototype.hasOwnProperty.call(layout,head))return;
-  if(tail)layout[head][tail]=next;
-  else layout[head]=next;
+  if(tail)layout[head][tail]=value;
+  else layout[head]=value;
   const before=JSON.stringify(specs.layout||null);
   const normalized=normalizeBuildLayout(layout);
   if(normalized)specs.layout=normalized;
@@ -11584,36 +11550,78 @@ function applyBuildLayoutInput(el){
   markQuoteDirty();
   renderRodBuildLayout();
 }
+// Fallback values only (finished rod length, reel seat length) - never a copy of Build Details data.
+function applyBuildLayoutInput(el){
+  const path=el.getAttribute('data-layout-field')||'';
+  const raw=String(el.value||'').trim();
+  const next=raw?parseMeasurementInputValue(raw):null;
+  if(raw && !Number.isFinite(next)){
+    renderRodBuildLayout();
+    return;
+  }
+  setBuildLayoutValue(path,next);
+}
+function reelSeatComponentLabel(){
+  const row=(Array.isArray(quote.components)?quote.components:[]).find((item)=>{
+    if(!componentRowHasMeaningfulData(item))return false;
+    return normalizeNameKey(componentRowLibraryCategoryName(item)).includes('reel seat');
+  });
+  return row?componentRowItemLabel(row):'';
+}
+// Generated from Build Details text values + Guide Setup; the layout object only supplies values nothing else holds.
 function rodLayoutModel(){
   const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
+  const specs=quote.buildSpecifications&&typeof quote.buildSpecifications==='object'?quote.buildSpecifications:{};
   const rodLength=layout.rodLengthMm;
+  const rear=buildSpecMeasurementMm(specs.rearGripLength);
+  const lower=buildSpecMeasurementMm(specs.gripBelowReelSeatLength);
+  const fore=buildSpecMeasurementMm(specs.foreGripLength);
+  const seatPosition=buildSpecMeasurementMm(specs.reelSeatPosition,{allowFromButt:true});
+  const seatLength=layout.reelSeat.lengthMm;
+  const seatRef=layout.reelSeatPositionRef;
   const items=[];
-  const missing=[];
-  if(layout.buttCap.lengthMm!==null){
-    items.push({key:'buttCap',label:'Butt Cap',type:'cap',startMm:0,endMm:layout.buttCap.lengthMm,field:'buttCap.lengthMm'});
+  const prompts=[];
+  const waiting=[];
+  const notSet=[];
+  const unreadable=(label,specKey)=>prompts.push({label,reason:'Not a plain measurement in Build Details',spec:specKey});
+  if(rodLength===null)prompts.push({label:'Finished Rod Length',reason:'Required to draw the layout to scale',input:'rodLengthMm'});
+  if(rear.state==='ok')items.push({key:'rearGrip',label:'Rear Grip',type:'grip',startMm:0,endMm:rear.mm,spec:'rearGripLength'});
+  else if(rear.state==='unreadable')unreadable('Rear Grip Length','rearGripLength');
+  else notSet.push('Rear Grip');
+  let seat=null;
+  if(seatPosition.state==='empty'){
+    prompts.push({label:'Reel Seat Position',reason:'Not set in Build Details',spec:'reelSeatPosition'});
+  }else if(seatPosition.state==='unreadable'){
+    unreadable('Reel Seat Position','reelSeatPosition');
   }else{
-    missing.push('Butt Cap');
-  }
-  [['rearGrip','Rear Grip','grip','start'],['reelSeat','Reel Seat','seat','rear edge'],['foreGrip','Fore Grip','grip','start']].forEach(([key,label,type,startLabel])=>{
-    const span=layout[key];
-    if(span.startMm!==null && span.lengthMm!==null){
-      items.push({key,label,type,startMm:span.startMm,endMm:span.startMm+span.lengthMm,field:`${key}.startMm`});
-    }else if(span.startMm!==null || span.lengthMm!==null){
-      missing.push(`${label} ${span.startMm===null?startLabel:'length'}`);
-    }else{
-      missing.push(label);
+    if(!seatRef)prompts.push({label:'Reel Seat Position',reason:`${formatGuideListMeasurement(seatPosition.mm)} from butt, measured to the seat\u2019s:`,choice:true});
+    if(seatRef){
+      // No reel seat length on record: draw with a nominal length that is never saved or shown as a measurement.
+      const approximate=seatLength===null;
+      const drawLength=approximate?130:seatLength;
+      const startMm=seatPosition.mm-({rear:0,centre:drawLength/2,front:drawLength}[seatRef]);
+      seat={key:'reelSeat',label:'Reel Seat',type:'seat',startMm,endMm:startMm+drawLength,approximate,spec:'reelSeatPosition',positionMm:seatPosition.mm,ref:seatRef,component:reelSeatComponentLabel()};
+      items.push(seat);
     }
-  });
-  if(layout.hookKeeperMm!==null){
-    items.push({key:'hookKeeper',label:'Hook Keeper',type:'hook',atMm:layout.hookKeeperMm,field:'hookKeeperMm'});
-  }else{
-    missing.push('Hook Keeper');
   }
-  const checkCount=layout.windingChecksMm.length;
-  layout.windingChecksMm.forEach((mm,index)=>{
-    items.push({key:`check:${index}`,label:checkCount>1?`Winding Check ${index+1}`:'Winding Check',type:'check',atMm:mm,field:'windingChecksMm'});
-  });
-  if(!checkCount)missing.push('Winding Checks');
+  // Grip below the reel seat ends at the seat's rear edge; the fore grip starts at its front edge.
+  let lowerGrip=null;
+  if(lower.state==='ok'){
+    if(seat){
+      lowerGrip={key:'lowerGrip',label:'Lower Grip',type:'grip',startMm:seat.startMm-lower.mm,endMm:seat.startMm,approximate:seat.approximate,spec:'gripBelowReelSeatLength'};
+      items.push(lowerGrip);
+    }else waiting.push('Lower Grip');
+  }else if(lower.state==='unreadable'){
+    unreadable('Lower Grip Length','gripBelowReelSeatLength');
+  }
+  if(fore.state==='ok'){
+    if(seat)items.push({key:'foreGrip',label:'Fore Grip',type:'grip',startMm:seat.endMm,endMm:seat.endMm+fore.mm,approximate:seat.approximate,spec:'foreGripLength'});
+    else waiting.push('Fore Grip');
+  }else if(fore.state==='unreadable'){
+    unreadable('Fore Grip Length','foreGripLength');
+  }else{
+    notSet.push('Fore Grip');
+  }
   const guides=[];
   if(rodLength!==null){
     // Guide Setup positions are tip-referenced; butt position is derived for display only.
@@ -11623,10 +11631,14 @@ function rodLayoutModel(){
       guides.push({key:`guide:${index}`,label:`Guide ${row.g}`,number:row.g,type:'guide',atMm:rodLength-row.cum,fromTipMm:row.cum,isStripper:index===rows.length-1,guide:spiralGuides[index]||null});
     });
   }
-  const itemEnds=items.map((item)=>item.endMm!==undefined?item.endMm:item.atMm);
+  const rearItem=items.find((item)=>item.key==='rearGrip');
+  const nextAfterRear=lowerGrip||seat;
+  // An overlap caused only by the nominal seat length is a drawing artefact, not a build problem.
+  const overlaps=!!(rearItem && nextAfterRear && !nextAfterRear.approximate && rearItem.endMm>nextAfterRear.startMm+0.01);
+  const itemEnds=items.map((item)=>item.endMm);
   const scaleMm=Math.max(rodLength||0,...itemEnds,1);
-  const exceeds=rodLength!==null && (itemEnds.some((mm)=>mm>rodLength) || guides.some((guide)=>guide.atMm<0));
-  return {rodLength,items,guides,missing,scaleMm,exceeds};
+  const exceeds=rodLength!==null && (itemEnds.some((mm)=>mm>rodLength) || items.some((item)=>item.startMm<0) || guides.some((guide)=>guide.atMm<0));
+  return {rodLength,seatLength,seatRef,items,guides,prompts,waiting,notSet,scaleMm,exceeds,overlaps};
 }
 function rodLayoutSvg(model,options){
   const detail=!!(options&&options.detail);
@@ -11698,17 +11710,25 @@ function rodLayoutSvg(model,options){
   const sizing=detail?`width="${width}" height="${height}"`:'preserveAspectRatio="none"';
   return `<svg viewBox="0 0 ${width} ${height}" ${sizing} role="group" aria-label="${detail?'Rod build layout detail':'Rod build layout overview'}">${parts.join('')}</svg>`;
 }
+function rodLayoutFallbackInput(path,valueMm,label,ariaLabel){
+  const value=valueMm===null || valueMm===undefined?'':blankMeasurementInputText(valueMm);
+  return `<label class="rod-layout__fallback">${label?`<span>${escapeHtml(label)}</span>`:''}<input data-layout-field="${escapeHtml(path)}" type="text" inputmode="decimal" autocomplete="off" placeholder="Set" value="${escapeHtml(value)}" aria-label="${escapeHtml(label||ariaLabel||path)}" /><em>${measurementUnitSuffix()}</em></label>`;
+}
+function rodLayoutSeatRefChoice(current){
+  return `<div class="rod-layout__choice" role="group" aria-label="Reel seat position is measured to">${[['rear','Rear'],['centre','Centre'],['front','Front']].map(([value,label])=>`<button type="button" data-layout-seat-ref="${value}" aria-pressed="${current===value?'true':'false'}">${label}</button>`).join('')}</div>`;
+}
 function rodLayoutReadout(model){
   if(!rodLayoutSelection)return '<p class="rod-layout__hint">Tap a part or guide to see where it sits.</p>';
   const f=formatGuideListMeasurement;
   let title='';
   let edit='';
-  let editLabel='Edit';
+  let editLabel='Edit in Build Details';
+  let extra='';
   const rows=[];
   if(rodLayoutSelection==='tipTop'){
     title='Tip Top';
-    edit='rodLengthMm';
     rows.push(['From Butt',f(model.rodLength)]);
+    extra=rodLayoutFallbackInput('rodLengthMm',model.rodLength,'Finished Rod Length');
   }else if(rodLayoutSelection.startsWith('guide:')){
     const guide=model.guides.find((entry)=>entry.key===rodLayoutSelection);
     if(!guide)return '';
@@ -11728,27 +11748,40 @@ function rodLayoutReadout(model){
     const item=model.items.find((entry)=>entry.key===rodLayoutSelection);
     if(!item)return '';
     title=item.label;
-    edit=item.field;
+    edit=`spec:${item.spec}`;
+    // Positions that depend on a nominal seat length are marked approximate rather than shown as measured.
+    const approx=item.approximate?'\u2248 ':'';
     if(item.type==='seat'){
-      rows.push(['Rear Edge',f(item.startMm)]);
-      rows.push(['Centre',f((item.startMm+item.endMm)/2)]);
-      rows.push(['Front Edge',f(item.endMm)]);
-      rows.push(['Length',f(item.endMm-item.startMm)]);
-    }else if(item.startMm!==undefined){
-      rows.push(['Start',f(item.startMm)]);
-      rows.push(['End',f(item.endMm)]);
-      rows.push(['Length',f(item.endMm-item.startMm)]);
+      const refLabel={rear:'Rear Edge',centre:'Centre',front:'Front Edge'}[item.ref];
+      rows.push([refLabel,`${f(item.positionMm)} from butt`]);
+      rows.push(['Length',item.approximate?'Approx. for layout':f(item.endMm-item.startMm)]);
+      if(!item.approximate)rows.push(['From Butt',`${f(item.startMm)} \u2013 ${f(item.endMm)}`]);
+      if(item.component)rows.push(['Component',item.component]);
+      extra=`<div class="rod-layout__fallback"><span>Position measured to</span>${rodLayoutSeatRefChoice(model.seatRef)}</div>`;
     }else{
-      rows.push(['From Butt',f(item.atMm)]);
+      rows.push(['Length',f(item.endMm-item.startMm)]);
+      rows.push(['From Butt',`${approx}${f(item.startMm)} \u2013 ${approx}${f(item.endMm)}`]);
     }
-    const previous={reelSeat:'rearGrip',foreGrip:'reelSeat'}[item.key];
-    const before=previous&&model.items.find((entry)=>entry.key===previous);
-    if(before && item.startMm>before.endMm)rows.push([`Gap After ${before.label}`,f(item.startMm-before.endMm)]);
+    const before={lowerGrip:'rearGrip',reelSeat:'rearGrip'}[item.key];
+    const previous=before&&!(item.key==='reelSeat'&&model.items.some((entry)=>entry.key==='lowerGrip'))&&model.items.find((entry)=>entry.key===before);
+    if(previous && item.startMm>previous.endMm)rows.push([`Gap After ${previous.label}`,`${approx}${f(item.startMm-previous.endMm)}`]);
   }
   return `<div class="rod-layout__readout">
-    <div class="rod-layout__readout-head"><strong>${escapeHtml(title)}</strong><button class="guide-specification__edit" type="button" data-layout-edit="${escapeHtml(edit)}">${editLabel} <span aria-hidden="true">&#x203a;</span></button></div>
+    <div class="rod-layout__readout-head"><strong>${escapeHtml(title)}</strong>${edit?`<button class="guide-specification__edit" type="button" data-layout-edit="${escapeHtml(edit)}">${editLabel} <span aria-hidden="true">&#x203a;</span></button>`:''}</div>
     <div class="rod-layout__readout-rows">${rows.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}</div>
+    ${extra?`<div class="rod-layout__readout-edit">${extra}</div>`:''}
   </div>`;
+}
+function rodLayoutPromptsMarkup(model){
+  if(!model.prompts.length)return '';
+  return `<div class="rod-layout__prompts">${model.prompts.map((prompt)=>{
+    const control=prompt.input
+      ?rodLayoutFallbackInput(prompt.input,null,'',prompt.label)
+      :prompt.choice
+        ?rodLayoutSeatRefChoice(null)
+        :`<button class="guide-specification__edit" type="button" data-layout-edit="spec:${escapeHtml(prompt.spec)}">Edit <span aria-hidden="true">&#x203a;</span></button>`;
+    return `<div class="rod-layout__prompt${prompt.choice?' rod-layout__prompt--choice':''}"><div class="rod-layout__prompt-copy"><strong>${escapeHtml(prompt.label)}</strong><span>${escapeHtml(prompt.reason)}</span></div>${control}</div>`;
+  }).join('')}</div>`;
 }
 function editRodLayoutItem(target){
   if(target==='guides'){
@@ -11756,9 +11789,10 @@ function editRodLayoutItem(target){
     if(editGuideLayoutBtn)editGuideLayoutBtn.click();
     return;
   }
-  const input=document.querySelector(`[data-layout-field="${CSS.escape(target)}"]`);
+  const specKey=String(target||'').startsWith('spec:')?target.slice(5):'';
+  const field=specKey?BUILD_SPEC_FIELDS.find((entry)=>entry.key===specKey):null;
+  const input=field?$(field.id):document.querySelector(`#rodBuildLayout [data-layout-field="${CSS.escape(target)}"]`);
   if(!input)return;
-  setBuildGeometryOpen(true);
   input.scrollIntoView({block:'center',behavior:'smooth'});
   input.focus({preventScroll:true});
 }
@@ -11780,6 +11814,8 @@ function syncRodLayoutRange(host){
 function renderRodBuildLayout(options){
   const host=$('rodBuildLayout');
   if(!host)return;
+  // Unrelated re-renders must not wipe a fallback value the user is still typing; it commits on change.
+  if(document.activeElement && host.contains(document.activeElement) && document.activeElement.matches('[data-layout-field]'))return;
   const model=rodLayoutModel();
   const validKeys=new Set(model.items.concat(model.guides).map((item)=>item.key));
   if(model.rodLength!==null)validKeys.add('tipTop');
@@ -11790,14 +11826,15 @@ function renderRodBuildLayout(options){
   const focusKey=focused?focused.getAttribute('data-layout-item'):'';
   const previousDetail=host.querySelector('.rod-layout__detail');
   const previousScroll=previousDetail?previousDetail.scrollLeft:0;
-  const missingLine=model.missing.length
-    ?`<p class="rod-layout__missing"><span>Not set</span>${model.missing.map(escapeHtml).join(' \u00b7 ')}</p>`
-    :'';
+  const notes=[
+    model.waiting.length?`<p class="rod-layout__missing"><span>Waiting on reel seat</span>${model.waiting.map(escapeHtml).join(' \u00b7 ')}</p>`:'',
+    model.notSet.length?`<p class="rod-layout__missing"><span>Not in Build Details</span>${model.notSet.map(escapeHtml).join(' \u00b7 ')}</p>`:'',
+  ].join('');
+  const prompts=rodLayoutPromptsMarkup(model);
   if(model.rodLength===null){
-    host.innerHTML=`<div class="rod-layout__head"><span>Side elevation \u00b7 0 = butt end</span><strong>Rod length not set</strong></div>
-      <p class="rod-layout__notice">Set Rod Length to draw the layout to scale and place guides from the butt.</p>
-      <div><button class="guide-specification__edit" type="button" data-layout-edit="rodLengthMm">Set Rod Length <span aria-hidden="true">&#x203a;</span></button></div>
-      ${missingLine}`;
+    host.innerHTML=`<div class="rod-layout__head"><span>Side elevation \u00b7 0 = butt end</span></div>
+      ${prompts}
+      ${notes}`;
     return;
   }
   const detailWidth=Math.max(640,Math.round(model.scaleMm*0.75));
@@ -11807,8 +11844,10 @@ function renderRodBuildLayout(options){
     <div class="rod-layout__detail-head"><span>Detail</span><span>Scroll &#8596;</span></div>
     <div class="rod-layout__detail">${rodLayoutSvg(model,{detail:true,width:detailWidth})}</div>
     ${model.exceeds?'<p class="rod-layout__notice">Some positions fall outside the rod length. Check the values.</p>':''}
+    ${model.overlaps?'<p class="rod-layout__notice">The rear grip overlaps the next part. Check the Build Details lengths.</p>':''}
     ${rodLayoutReadout(model)}
-    ${missingLine}`;
+    ${prompts}
+    ${notes}`;
   const detail=host.querySelector('.rod-layout__detail');
   if(!detail)return;
   detail.scrollLeft=previousScroll;
