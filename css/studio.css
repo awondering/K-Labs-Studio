@@ -5661,6 +5661,21 @@ textarea::-moz-selection,
   gap:4px;
 }
 
+[data-anchored-action-menu]::backdrop{
+  background:transparent;
+  pointer-events:none;
+}
+
+@supports not (selector(:popover-open)){
+  :is(.app-shell,.screen,.quote-section,.quote-section__body,.studio-components-shell__list-card,.studio-components-list,.saved-build-card,.component-sheet__panel,.component-sheet__body):has([data-anchored-action-menu]:not([hidden])){
+    overflow:visible !important;
+    transform:none !important;
+    filter:none !important;
+    contain:none !important;
+  }
+  [data-anchored-action-menu]{z-index:80 !important}
+}
+
 .studio-components-row-menu__item{
   width:100%;
   min-height:34px;

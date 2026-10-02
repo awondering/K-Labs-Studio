@@ -5444,6 +5444,13 @@ function bindStudioComponentsPanel(){
           openStudioLibraryContextMenu(type,key);
         }
         renderStudioComponentsLibrary();
+        const menu=list.querySelector('.studio-components-row-menu');
+        const trigger=menu&&menu.closest('.studio-components-list__row').querySelector('[data-studio-library-menu-toggle]');
+        if(menu && trigger){
+          trigger.setAttribute('aria-expanded','true');
+          positionAnchoredActionMenu(menu,trigger);
+          try{trigger.focus({preventScroll:true});}catch{trigger.focus();}
+        }
         return;
       }
       const menuActionButton=event.target.closest('[data-studio-library-menu-action]');
@@ -5697,10 +5704,20 @@ function bindStudioComponentsPanel(){
   }
   document.addEventListener('click',(event)=>{
     if(!studioLibraryContextMenu.type || !studioLibraryContextMenu.key)return;
-    if(panel.contains(event.target) && !event.target.closest('.studio-components-row-menu') && !event.target.closest('[data-studio-library-menu-toggle]')){
+    if(!event.target.closest('.studio-components-row-menu') && !event.target.closest('[data-studio-library-menu-toggle]')){
       closeStudioLibraryContextMenu();
       renderStudioComponentsLibrary();
     }
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(event.key!=='Escape' || !studioLibraryContextMenu.type)return;
+    const trigger=list.querySelector('[data-studio-library-menu-toggle][aria-expanded="true"]');
+    const type=trigger&&trigger.getAttribute('data-studio-library-menu-toggle');
+    const key=trigger&&trigger.getAttribute('data-studio-library-menu-key');
+    closeStudioLibraryContextMenu();
+    renderStudioComponentsLibrary();
+    const restored=Array.from(list.querySelectorAll('[data-studio-library-menu-toggle]')).find((button)=>button.getAttribute('data-studio-library-menu-toggle')===type && button.getAttribute('data-studio-library-menu-key')===key);
+    if(restored)restored.focus({preventScroll:true});
   });
 }
 function bindStudioTaxonomyPanel(){
@@ -6570,8 +6587,38 @@ function hideSelectedBlankEditState(){
   selectedBlankEditState=null;
   hideSelectedBlankMenu();
 }
+const anchoredActionMenus=new Map();
+let anchoredActionMenuFrame=0;
+function scheduleAnchoredActionMenus(event){
+  if(event && event.target instanceof Node && Array.from(anchoredActionMenus.keys()).some((menu)=>menu.contains(event.target)))return;
+  if(anchoredActionMenuFrame)return;
+  anchoredActionMenuFrame=window.requestAnimationFrame(()=>{
+    anchoredActionMenuFrame=0;
+    anchoredActionMenus.forEach(({trigger,options},menu)=>{
+      if(!menu.isConnected || menu.hidden || !trigger.isConnected){
+        if(typeof menu.hidePopover==='function' && menu.matches(':popover-open'))menu.hidePopover();
+        anchoredActionMenus.delete(menu);
+        return;
+      }
+      positionAnchoredActionMenu(menu,trigger,options);
+    });
+  });
+}
+window.addEventListener('scroll',scheduleAnchoredActionMenus,{capture:true,passive:true});
+window.addEventListener('resize',scheduleAnchoredActionMenus,{passive:true});
+if(window.visualViewport){
+  window.visualViewport.addEventListener('scroll',scheduleAnchoredActionMenus,{passive:true});
+  window.visualViewport.addEventListener('resize',scheduleAnchoredActionMenus,{passive:true});
+}
 function positionAnchoredActionMenu(menu,trigger,options){
   if(!menu || !trigger)return;
+  const minimumWidth=anchoredActionMenus.get(menu)?.minimumWidth??(parseFloat(getComputedStyle(menu).minWidth)||0);
+  anchoredActionMenus.set(menu,{trigger,options,minimumWidth});
+  menu.dataset.anchoredActionMenu='true';
+  if(typeof menu.showPopover==='function'){
+    menu.setAttribute('popover','manual');
+    if(!menu.hidden && !menu.matches(':popover-open'))menu.showPopover();
+  }
   const settings={boundary:null,gap:6,inset:8,...(options||{})};
   const viewport=window.visualViewport||null;
   const viewportLeft=viewport?viewport.offsetLeft:0;
@@ -6579,7 +6626,14 @@ function positionAnchoredActionMenu(menu,trigger,options){
   const viewportWidth=viewport?viewport.width:(document.documentElement.clientWidth||window.innerWidth);
   const viewportHeight=viewport?viewport.height:(document.documentElement.clientHeight||window.innerHeight);
   const viewportRight=viewportLeft+viewportWidth;
-  const viewportBottom=viewportTop+viewportHeight;
+  let viewportBottom=viewportTop+viewportHeight;
+  document.querySelectorAll('.bottom-nav,.live-build-status,.offline-ready-status').forEach((overlay)=>{
+    const style=getComputedStyle(overlay);
+    const rect=overlay.getBoundingClientRect();
+    if(!overlay.hidden && style.display!=='none' && style.visibility!=='hidden' && rect.height>0 && rect.bottom>viewportTop && rect.top<viewportBottom){
+      viewportBottom=Math.min(viewportBottom,rect.top);
+    }
+  });
   const boundaryRect=settings.boundary&&settings.boundary.getBoundingClientRect
     ?settings.boundary.getBoundingClientRect()
     :null;
@@ -6594,13 +6648,19 @@ function positionAnchoredActionMenu(menu,trigger,options){
   menu.style.setProperty('position','fixed','important');
   menu.style.setProperty('right','auto','important');
   menu.style.setProperty('bottom','auto','important');
+  menu.style.setProperty('margin','0','important');
+  menu.style.setProperty('min-width',`${Math.min(minimumWidth,availableWidth)}px`,'important');
+  menu.style.setProperty('min-height','0','important');
+  menu.style.setProperty('overflow-y','auto','important');
+  menu.style.setProperty('overscroll-behavior','contain');
+  menu.style.setProperty('grid-auto-rows','max-content');
   menu.style.maxWidth=`${availableWidth}px`;
-  menu.style.maxHeight=`${availableHeight}px`;
+  menu.style.maxHeight='none';
   const triggerRect=trigger.getBoundingClientRect();
   let menuRect=menu.getBoundingClientRect();
   const menuWidth=Math.min(menuRect.width,availableWidth);
-  const spaceBelow=Math.max(0,bounds.bottom-triggerRect.bottom-settings.gap);
-  const spaceAbove=Math.max(0,triggerRect.top-bounds.top-settings.gap);
+  const spaceBelow=Math.min(availableHeight,Math.max(0,bounds.bottom-triggerRect.bottom-settings.gap));
+  const spaceAbove=Math.min(availableHeight,Math.max(0,triggerRect.top-bounds.top-settings.gap));
   const opensUpward=spaceBelow<menuRect.height && spaceAbove>spaceBelow;
   menu.style.maxHeight=`${opensUpward?spaceAbove:spaceBelow}px`;
   menuRect=menu.getBoundingClientRect();
@@ -10871,6 +10931,11 @@ function ensureConfirmSheet(){
 }
 function openConfirmDialog(config,onAction){
   ensureConfirmSheet();
+  anchoredActionMenus.forEach((context,menu)=>{
+    if(typeof menu.hidePopover==='function' && menu.matches(':popover-open'))menu.hidePopover();
+    menu.hidden=true;
+    context.trigger.setAttribute('aria-expanded','false');
+  });
   const titleEl=$('confirmSheetTitle');
   const messageEl=$('confirmSheetMessage');
   const actionsEl=$('confirmSheetActions');
