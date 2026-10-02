@@ -759,6 +759,9 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsScreen .settings-disclosure{
   gap:0;
+  min-height:0;
+  align-content:start;
+  grid-auto-rows:max-content;
 }
 
 #settingsScreen .settings-disclosure__summary{
@@ -816,6 +819,8 @@ body.component-sheet-open .workshop-back-to-top{
   display:grid;
   gap:10px;
   margin-top:13px;
+  padding:0;
+  border-bottom:0;
 }
 
 #settingsScreen .settings-field-grid label,
@@ -850,6 +855,16 @@ body.component-sheet-open .workshop-back-to-top{
   gap:8px;
   justify-content:flex-end;
   margin-top:12px;
+}
+
+#settingsScreen .settings-disclosure > .settings-context-actions{
+  min-height:0;
+  padding:0;
+  border-bottom:0;
+}
+
+#settingsScreen .settings-disclosure > .settings-context-actions:has(> .settings-save-btn[hidden]){
+  margin-top:0;
 }
 
 #settingsScreen .settings-context-action{
@@ -989,6 +1004,12 @@ body.component-sheet-open .workshop-back-to-top{
 #settingsScreen .settings-toggle-row{
   display:flex;
   align-items:center;
+  padding:0;
+  border-bottom:0;
+}
+
+#settingsScreen #settingsTrackStockCard .settings-toggle{
+  min-height:44px;
 }
 
 #settingsScreen .settings-toggle{
