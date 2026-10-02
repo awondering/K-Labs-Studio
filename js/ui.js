@@ -117,6 +117,10 @@ const pendingComponentDraftRows=new WeakSet();
 let activeConfirmHandler=null;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
+// Rod Build Layout selected item key (view state only, never saved).
+let rodLayoutSelection='';
+let buildGeometryOpenState={key:'',quoteRef:null,open:false};
+let rodLayoutRangeResizeBound=false;
 const layoutFieldOrder=['firstGuide','guideCount','targetStripper'];
 const homeRodState={ledCount:9,litCount:0,layoutLitCount:0,componentLitCount:0,ready:false,homeFirstOpen:true,sequenceTimer:null,sequenceAnimating:false,sequenceCompleted:false};
 let modalLockDepth=0;
@@ -2577,7 +2581,38 @@ function normalizeBuildSpecifications(inputSpecs){
   if(!normalized.gripBelowReelSeatLength){
     normalized.gripBelowReelSeatLength=String(inputSpecs&&inputSpecs.lowerReelSeatGripLength||'');
   }
+  // Omitted (not written as an empty shape) when nothing is set, so older builds keep their exact stored form.
+  const layout=normalizeBuildLayout(inputSpecs&&inputSpecs.layout);
+  if(layout)normalized.layout=layout;
   return normalized;
+}
+// Rod Build Layout geometry, all mm from the finished butt end; null = not set.
+function buildLayoutPosition(value){
+  if(value===null || value===undefined || value==='')return null;
+  const parsed=Number(value);
+  return Number.isFinite(parsed) && parsed>=0?parsed:null;
+}
+function buildLayoutLength(value){
+  const parsed=buildLayoutPosition(value);
+  return parsed!==null && parsed>0?parsed:null;
+}
+function normalizeBuildLayout(input,options){
+  const source=input&&typeof input==='object'?input:{};
+  const span=(value)=>({startMm:buildLayoutPosition(value&&value.startMm),lengthMm:buildLayoutLength(value&&value.lengthMm)});
+  const layout={
+    rodLengthMm:buildLayoutLength(source.rodLengthMm),
+    buttCap:{lengthMm:buildLayoutLength(source.buttCap&&source.buttCap.lengthMm)},
+    rearGrip:span(source.rearGrip),
+    reelSeat:span(source.reelSeat),
+    foreGrip:span(source.foreGrip),
+    hookKeeperMm:buildLayoutPosition(source.hookKeeperMm),
+    windingChecksMm:(Array.isArray(source.windingChecksMm)?source.windingChecksMm:[])
+      .map(buildLayoutPosition).filter((value)=>value!==null).sort((a,b)=>a-b),
+  };
+  if(options&&options.keepEmpty)return layout;
+  const hasValue=layout.rodLengthMm!==null || layout.buttCap.lengthMm!==null || layout.hookKeeperMm!==null || layout.windingChecksMm.length>0
+    || ['rearGrip','reelSeat','foreGrip'].some((key)=>layout[key].startMm!==null || layout[key].lengthMm!==null);
+  return hasValue?layout:null;
 }
 function specificationValue(value){
   return String(value||'').trim();
@@ -11389,6 +11424,50 @@ function bindBuildSpecificationInputs(){
     el.addEventListener('input',onSpecUpdate);
     el.addEventListener('change',onSpecUpdate);
   });
+  document.querySelectorAll('[data-layout-field]').forEach((el)=>{
+    if(el.getAttribute('data-layout-bound')==='true')return;
+    el.setAttribute('data-layout-bound','true');
+    el.addEventListener('input',()=>applyBuildLayoutInput(el));
+    el.addEventListener('change',()=>{
+      applyBuildLayoutInput(el);
+      renderBuildLayoutInputs();
+    });
+  });
+  const rodLayout=$('rodBuildLayout');
+  const geometryToggle=$('buildGeometryToggle');
+  if(geometryToggle && geometryToggle.getAttribute('data-geometry-bound')!=='true'){
+    geometryToggle.setAttribute('data-geometry-bound','true');
+    geometryToggle.addEventListener('click',()=>setBuildGeometryOpen(!buildGeometryOpenState.open));
+  }
+  if(!rodLayoutRangeResizeBound && rodLayout){
+    rodLayoutRangeResizeBound=true;
+    // Also fires when collapsed Build Details first reveals the panel, so the bracket never measures a 0-width strip.
+    if(typeof ResizeObserver==='function')new ResizeObserver(()=>syncRodLayoutRange(rodLayout)).observe(rodLayout);
+    else window.addEventListener('resize',()=>syncRodLayoutRange(rodLayout),{passive:true});
+  }
+  if(rodLayout && rodLayout.getAttribute('data-rod-layout-bound')!=='true'){
+    rodLayout.setAttribute('data-rod-layout-bound','true');
+    const activate=(target)=>{
+      const edit=target.closest('[data-layout-edit]');
+      if(edit){
+        editRodLayoutItem(edit.getAttribute('data-layout-edit'));
+        return true;
+      }
+      const item=target.closest('[data-layout-item]');
+      if(!item)return false;
+      const key=item.getAttribute('data-layout-item');
+      rodLayoutSelection=rodLayoutSelection===key?'':key;
+      renderRodBuildLayout({revealSelection:true});
+      return true;
+    };
+    rodLayout.addEventListener('click',(event)=>{activate(event.target);});
+    rodLayout.addEventListener('keydown',(event)=>{
+      if(event.key!=='Enter' && event.key!==' ')return;
+      if(!event.target.closest('[data-layout-item]'))return;
+      event.preventDefault();
+      activate(event.target);
+    });
+  }
 }
 function renderBuildSpecificationInputs(){
   BUILD_SPEC_FIELDS.forEach((field)=>{
@@ -11397,6 +11476,7 @@ function renderBuildSpecificationInputs(){
     if(document.activeElement===el)return;
     el.value=quote.buildSpecifications[field.key]||'';
   });
+  renderBuildLayoutInputs();
   renderGuideSpecificationSummary();
 }
 const GUIDE_ORIENTATION_METHOD_LABELS={standard:'Standard / Conventional',acute:'Acute',progressive:'Progressive',offset:'Offset'};
@@ -11426,14 +11506,322 @@ function renderGuideSpecificationSummary(){
   }
   if(directionRow)directionRow.hidden=!showDirection;
   if(directionEl)directionEl.textContent=normalizeSpiralDirection(spiral.direction)==='right'?'Right':'Left';
-  if(stripperEl)stripperEl.textContent=formatMeasurementValue(+state.targetStripper,CORE_MEASUREMENT_FORMAT);
+  if(stripperEl)stripperEl.textContent=formatGuideListMeasurement(+state.targetStripper);
   if(rowsHost){
     rowsHost.innerHTML=rows.map((row,index)=>{
       const guide=guides[index];
       const angle=guide?clampSpiralAngle(guide.angleDeg):NaN;
       const angleText=Number.isFinite(angle)?`${formatDecimal(angle,1)}\u00b0`:'\u2014';
-      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${formatMeasurementValue(row.cum,GUIDE_LIST_FORMAT)}</strong><em>${angleText}</em></div>`;
+      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${escapeHtml(formatGuideListMeasurement(row.cum))}</strong><em>${angleText}</em></div>`;
     }).join('');
+  }
+  renderRodBuildLayout();
+}
+function buildLayoutFieldValue(layout,path){
+  const [head,tail]=String(path||'').split('.');
+  const value=layout?layout[head]:undefined;
+  return tail?(value?value[tail]:undefined):value;
+}
+function renderBuildLayoutInputs(){
+  const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
+  document.querySelectorAll('[data-layout-field]').forEach((el)=>{
+    if(document.activeElement===el)return;
+    const path=el.getAttribute('data-layout-field');
+    if(path==='windingChecksMm'){
+      el.value=layout.windingChecksMm.map(blankMeasurementInputText).join(', ');
+      return;
+    }
+    const value=buildLayoutFieldValue(layout,path);
+    el.value=value===null || value===undefined?'':blankMeasurementInputText(value);
+  });
+  syncBuildGeometryToggle();
+}
+// Edit Geometry starts open only for a build with no geometry yet; it then keeps the user's choice for that build.
+function syncBuildGeometryToggle(){
+  const fields=$('buildGeometryFields');
+  const toggle=$('buildGeometryToggle');
+  if(!fields || !toggle)return;
+  const key=String(quote.buildNumber||'');
+  // Same build = same live quote object (a draft gaining its number) or the same build number reloaded.
+  const sameBuild=buildGeometryOpenState.quoteRef===quote || (key!=='' && key===buildGeometryOpenState.key);
+  if(!sameBuild && !fields.contains(document.activeElement)){
+    buildGeometryOpenState.open=!normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout);
+  }
+  buildGeometryOpenState.key=key;
+  buildGeometryOpenState.quoteRef=quote;
+  fields.hidden=!buildGeometryOpenState.open;
+  toggle.setAttribute('aria-expanded',String(buildGeometryOpenState.open));
+}
+function setBuildGeometryOpen(open){
+  buildGeometryOpenState.open=!!open;
+  syncBuildGeometryToggle();
+}
+// Explicit user entry only: never derived from free-text specs, component names or catalogue blank lengths.
+function applyBuildLayoutInput(el){
+  const path=el.getAttribute('data-layout-field')||'';
+  const raw=String(el.value||'').trim();
+  let next=null;
+  if(path==='windingChecksMm'){
+    const parsed=(raw?raw.split(/[,;]+/):[]).map((part)=>part.trim()).filter(Boolean).map(parseMeasurementInputValue);
+    if(parsed.some((value)=>!Number.isFinite(value)))return;
+    next=parsed;
+  }else if(raw){
+    next=parseMeasurementInputValue(raw);
+    if(!Number.isFinite(next))return;
+  }
+  const specs=quote.buildSpecifications;
+  const layout=normalizeBuildLayout(specs.layout,{keepEmpty:true});
+  const [head,tail]=path.split('.');
+  if(!Object.prototype.hasOwnProperty.call(layout,head))return;
+  if(tail)layout[head][tail]=next;
+  else layout[head]=next;
+  const before=JSON.stringify(specs.layout||null);
+  const normalized=normalizeBuildLayout(layout);
+  if(normalized)specs.layout=normalized;
+  else delete specs.layout;
+  if(JSON.stringify(specs.layout||null)===before)return;
+  saveQuoteCurrent();
+  markQuoteDirty();
+  renderRodBuildLayout();
+}
+function rodLayoutModel(){
+  const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
+  const rodLength=layout.rodLengthMm;
+  const items=[];
+  const missing=[];
+  if(layout.buttCap.lengthMm!==null){
+    items.push({key:'buttCap',label:'Butt Cap',type:'cap',startMm:0,endMm:layout.buttCap.lengthMm,field:'buttCap.lengthMm'});
+  }else{
+    missing.push('Butt Cap');
+  }
+  [['rearGrip','Rear Grip','grip','start'],['reelSeat','Reel Seat','seat','rear edge'],['foreGrip','Fore Grip','grip','start']].forEach(([key,label,type,startLabel])=>{
+    const span=layout[key];
+    if(span.startMm!==null && span.lengthMm!==null){
+      items.push({key,label,type,startMm:span.startMm,endMm:span.startMm+span.lengthMm,field:`${key}.startMm`});
+    }else if(span.startMm!==null || span.lengthMm!==null){
+      missing.push(`${label} ${span.startMm===null?startLabel:'length'}`);
+    }else{
+      missing.push(label);
+    }
+  });
+  if(layout.hookKeeperMm!==null){
+    items.push({key:'hookKeeper',label:'Hook Keeper',type:'hook',atMm:layout.hookKeeperMm,field:'hookKeeperMm'});
+  }else{
+    missing.push('Hook Keeper');
+  }
+  const checkCount=layout.windingChecksMm.length;
+  layout.windingChecksMm.forEach((mm,index)=>{
+    items.push({key:`check:${index}`,label:checkCount>1?`Winding Check ${index+1}`:'Winding Check',type:'check',atMm:mm,field:'windingChecksMm'});
+  });
+  if(!checkCount)missing.push('Winding Checks');
+  const guides=[];
+  if(rodLength!==null){
+    // Guide Setup positions are tip-referenced; butt position is derived for display only.
+    const rows=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper).rows||[];
+    const spiralGuides=Array.isArray(workshopToolsState.spiral.guides)?workshopToolsState.spiral.guides:[];
+    rows.forEach((row,index)=>{
+      guides.push({key:`guide:${index}`,label:`Guide ${row.g}`,number:row.g,type:'guide',atMm:rodLength-row.cum,fromTipMm:row.cum,isStripper:index===rows.length-1,guide:spiralGuides[index]||null});
+    });
+  }
+  const itemEnds=items.map((item)=>item.endMm!==undefined?item.endMm:item.atMm);
+  const scaleMm=Math.max(rodLength||0,...itemEnds,1);
+  const exceeds=rodLength!==null && (itemEnds.some((mm)=>mm>rodLength) || guides.some((guide)=>guide.atMm<0));
+  return {rodLength,items,guides,missing,scaleMm,exceeds};
+}
+function rodLayoutSvg(model,options){
+  const detail=!!(options&&options.detail);
+  const width=detail?options.width:1000;
+  const height=detail?76:40;
+  const pad=detail?22:6;
+  const mid=detail?30:20;
+  const x=(mm)=>pad+((mm/model.scaleMm)*(width-(pad*2)));
+  const n=(value)=>formatDecimal(value,2);
+  const hitHalf=detail?9:12;
+  const group=(item,cx,body,hit)=>{
+    const selected=item.key===rodLayoutSelection;
+    return `<g class="rl-item${selected?' is-selected':''}" data-layout-item="${escapeHtml(item.key)}" data-x="${n(cx)}" tabindex="0" role="button" aria-pressed="${selected?'true':'false'}" aria-label="${escapeHtml(item.label)}">${hit}${body}</g>`;
+  };
+  const pointHit=(cx)=>{
+    // Neighbouring markers split the gap between them, so closely spaced hardware stays individually tappable.
+    const index=pointXs.indexOf(cx);
+    const left=index>0?Math.max(cx-hitHalf,(pointXs[index-1]+cx)/2):cx-hitHalf;
+    const right=index>=0 && index<pointXs.length-1?Math.min(cx+hitHalf,(pointXs[index+1]+cx)/2):cx+hitHalf;
+    return `<rect class="rl-hit" x="${n(left)}" y="0" width="${n(Math.max(1,right-left))}" height="${height}"></rect>`;
+  };
+  const pointXs=model.items.filter((item)=>item.startMm===undefined).map((item)=>x(item.atMm))
+    .concat(model.guides.filter((guide)=>guide.atMm>=0).map((guide)=>x(guide.atMm)),[x(model.rodLength)])
+    .sort((a,b)=>a-b);
+  const parts=[];
+  if(detail){
+    const imperial=activeMeasurementUnits()==='imperial';
+    const tickMm=imperial?152.4:100;
+    const labelEvery=imperial?2:5;
+    const rulerY=height-18;
+    parts.push(`<line class="rl-ruler" x1="${n(x(0))}" y1="${rulerY}" x2="${n(x(model.scaleMm))}" y2="${rulerY}"></line>`);
+    for(let step=0;step*tickMm<=model.scaleMm+0.01;step+=1){
+      const tx=x(step*tickMm);
+      const major=step%labelEvery===0;
+      parts.push(`<line class="rl-ruler" x1="${n(tx)}" y1="${rulerY}" x2="${n(tx)}" y2="${rulerY+(major?6:3)}"></line>`);
+      if(major)parts.push(`<text class="rl-ruler-label" x="${n(tx)}" y="${height-2}" text-anchor="middle">${imperial?`${step*6}"`:step*100}</text>`);
+    }
+  }
+  parts.push(`<line class="rl-base" x1="${n(x(0))}" y1="${mid}" x2="${n(x(model.rodLength))}" y2="${mid}"></line>`);
+  parts.push(`<line class="rl-end" x1="${n(x(0))}" y1="${mid-5}" x2="${n(x(0))}" y2="${mid+5}"></line>`);
+  model.items.forEach((item)=>{
+    if(item.startMm!==undefined){
+      const x1=x(item.startMm);
+      const x2=x(item.endMm);
+      const half=item.type==='seat'?6:item.type==='cap'?5:4.5;
+      const body=`<rect class="rl-span rl-span--${item.type}" x="${n(x1)}" y="${mid-half}" width="${n(Math.max(1,x2-x1))}" height="${half*2}"></rect>`
+        +(detail && (x2-x1)>=(item.label.length*5.6)+6?`<text class="rl-label" x="${n((x1+x2)/2)}" y="${mid+half+11}" text-anchor="middle">${escapeHtml(item.label.toUpperCase())}</text>`:'');
+      const hitX=Math.min(x1,((x1+x2)/2)-hitHalf);
+      const hitW=Math.max(x2-x1,hitHalf*2);
+      parts.push(group(item,(x1+x2)/2,body,`<rect class="rl-hit" x="${n(hitX)}" y="0" width="${n(hitW)}" height="${height}"></rect>`));
+      return;
+    }
+    const cx=x(item.atMm);
+    const body=item.type==='hook'
+      ?`<line class="rl-point" x1="${n(cx)}" y1="${mid}" x2="${n(cx)}" y2="${mid+11}"></line><line class="rl-point" x1="${n(cx-3)}" y1="${mid+11}" x2="${n(cx+3)}" y2="${mid+11}"></line>`
+      :`<line class="rl-point rl-point--check" x1="${n(cx)}" y1="${mid-7}" x2="${n(cx)}" y2="${mid+7}"></line>`;
+    parts.push(group(item,cx,body,pointHit(cx)));
+  });
+  model.guides.forEach((guide)=>{
+    if(guide.atMm<0)return;
+    const cx=x(guide.atMm);
+    const top=mid-(guide.isStripper?17:13);
+    const body=`<line class="rl-guide${guide.isStripper?' rl-guide--stripper':''}" x1="${n(cx)}" y1="${mid}" x2="${n(cx)}" y2="${top}"></line><line class="rl-guide${guide.isStripper?' rl-guide--stripper':''}" x1="${n(cx-3)}" y1="${top}" x2="${n(cx+3)}" y2="${top}"></line>`
+      +(detail?`<text class="rl-label rl-label--guide" x="${n(cx)}" y="${top-5}" text-anchor="middle">G${guide.number}</text>`:'');
+    parts.push(group(guide,cx,body,pointHit(cx)));
+  });
+  const tipX=x(model.rodLength);
+  parts.push(group({key:'tipTop',label:'Tip Top'},tipX,`<line class="rl-tip" x1="${n(tipX)}" y1="${mid-6}" x2="${n(tipX)}" y2="${mid+6}"></line>`+(detail?`<text class="rl-label" x="${n(tipX)}" y="${mid+17}" text-anchor="end">TIP TOP</text>`:''),pointHit(tipX)));
+  const sizing=detail?`width="${width}" height="${height}"`:'preserveAspectRatio="none"';
+  return `<svg viewBox="0 0 ${width} ${height}" ${sizing} role="group" aria-label="${detail?'Rod build layout detail':'Rod build layout overview'}">${parts.join('')}</svg>`;
+}
+function rodLayoutReadout(model){
+  if(!rodLayoutSelection)return '<p class="rod-layout__hint">Tap a part or guide to see where it sits.</p>';
+  const f=formatGuideListMeasurement;
+  let title='';
+  let edit='';
+  let editLabel='Edit';
+  const rows=[];
+  if(rodLayoutSelection==='tipTop'){
+    title='Tip Top';
+    edit='rodLengthMm';
+    rows.push(['From Butt',f(model.rodLength)]);
+  }else if(rodLayoutSelection.startsWith('guide:')){
+    const guide=model.guides.find((entry)=>entry.key===rodLayoutSelection);
+    if(!guide)return '';
+    title=`${guide.label}${guide.isStripper?' · Stripper':''}`;
+    edit='guides';
+    editLabel='Edit Guide Setup';
+    rows.push(['From Butt',guide.atMm>=0?f(guide.atMm):'Outside rod length']);
+    rows.push(['From Tip',f(guide.fromTipMm)]);
+    if(guide.guide){
+      const spiral=workshopToolsState.spiral;
+      const angle=clampSpiralAngle(guide.guide.angleDeg);
+      const side=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
+        :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper:guide.isStripper,angleDeg:angle})==='right'?'Right':'Left');
+      rows.push(['Orientation',`${formatDecimal(angle,1)}\u00b0 ${side}`]);
+    }
+  }else{
+    const item=model.items.find((entry)=>entry.key===rodLayoutSelection);
+    if(!item)return '';
+    title=item.label;
+    edit=item.field;
+    if(item.type==='seat'){
+      rows.push(['Rear Edge',f(item.startMm)]);
+      rows.push(['Centre',f((item.startMm+item.endMm)/2)]);
+      rows.push(['Front Edge',f(item.endMm)]);
+      rows.push(['Length',f(item.endMm-item.startMm)]);
+    }else if(item.startMm!==undefined){
+      rows.push(['Start',f(item.startMm)]);
+      rows.push(['End',f(item.endMm)]);
+      rows.push(['Length',f(item.endMm-item.startMm)]);
+    }else{
+      rows.push(['From Butt',f(item.atMm)]);
+    }
+    const previous={reelSeat:'rearGrip',foreGrip:'reelSeat'}[item.key];
+    const before=previous&&model.items.find((entry)=>entry.key===previous);
+    if(before && item.startMm>before.endMm)rows.push([`Gap After ${before.label}`,f(item.startMm-before.endMm)]);
+  }
+  return `<div class="rod-layout__readout">
+    <div class="rod-layout__readout-head"><strong>${escapeHtml(title)}</strong><button class="guide-specification__edit" type="button" data-layout-edit="${escapeHtml(edit)}">${editLabel} <span aria-hidden="true">&#x203a;</span></button></div>
+    <div class="rod-layout__readout-rows">${rows.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}</div>
+  </div>`;
+}
+function editRodLayoutItem(target){
+  if(target==='guides'){
+    const editGuideLayoutBtn=$('editGuideLayoutBtn');
+    if(editGuideLayoutBtn)editGuideLayoutBtn.click();
+    return;
+  }
+  const input=document.querySelector(`[data-layout-field="${CSS.escape(target)}"]`);
+  if(!input)return;
+  setBuildGeometryOpen(true);
+  input.scrollIntoView({block:'center',behavior:'smooth'});
+  input.focus({preventScroll:true});
+}
+// Mirrors the detail strip's visible span onto the overview as a thin bracket.
+function syncRodLayoutRange(host){
+  const detail=host&&host.querySelector('.rod-layout__detail');
+  const range=host&&host.querySelector('.rod-layout__range');
+  const svg=detail&&detail.querySelector('svg');
+  if(!detail || !range || !svg)return;
+  const width=Number(svg.getAttribute('width'))||detail.scrollWidth;
+  const pad=22;
+  const fraction=(px)=>Math.max(0,Math.min(1,(px-pad)/Math.max(1,width-(pad*2))));
+  const start=fraction(detail.scrollLeft);
+  const end=fraction(detail.scrollLeft+detail.clientWidth);
+  // Overview viewBox is 1000 wide with 6 units of padding each side.
+  range.style.left=`${(6+(start*988))/10}%`;
+  range.style.width=`${Math.max(0.6,((end-start)*988)/10)}%`;
+}
+function renderRodBuildLayout(options){
+  const host=$('rodBuildLayout');
+  if(!host)return;
+  const model=rodLayoutModel();
+  const validKeys=new Set(model.items.concat(model.guides).map((item)=>item.key));
+  if(model.rodLength!==null)validKeys.add('tipTop');
+  if(rodLayoutSelection && !validKeys.has(rodLayoutSelection))rodLayoutSelection='';
+  const f=formatGuideListMeasurement;
+  const focused=document.activeElement&&host.contains(document.activeElement)?document.activeElement.closest('[data-layout-item]'):null;
+  const focusIn=focused?(focused.closest('.rod-layout__detail')?'.rod-layout__detail':'.rod-layout__overview'):'';
+  const focusKey=focused?focused.getAttribute('data-layout-item'):'';
+  const previousDetail=host.querySelector('.rod-layout__detail');
+  const previousScroll=previousDetail?previousDetail.scrollLeft:0;
+  const missingLine=model.missing.length
+    ?`<p class="rod-layout__missing"><span>Not set</span>${model.missing.map(escapeHtml).join(' \u00b7 ')}</p>`
+    :'';
+  if(model.rodLength===null){
+    host.innerHTML=`<div class="rod-layout__head"><span>Side elevation \u00b7 0 = butt end</span><strong>Rod length not set</strong></div>
+      <p class="rod-layout__notice">Set Rod Length to draw the layout to scale and place guides from the butt.</p>
+      <div><button class="guide-specification__edit" type="button" data-layout-edit="rodLengthMm">Set Rod Length <span aria-hidden="true">&#x203a;</span></button></div>
+      ${missingLine}`;
+    return;
+  }
+  const detailWidth=Math.max(640,Math.round(model.scaleMm*0.75));
+  host.innerHTML=`<div class="rod-layout__head"><span>Side elevation \u00b7 0 = butt end</span><strong>${escapeHtml(f(model.rodLength))}</strong></div>
+    <div class="rod-layout__overview">${rodLayoutSvg(model,{detail:false})}<span class="rod-layout__range" aria-hidden="true"></span></div>
+    <div class="rod-layout__scale"><span>Butt \u00b7 0</span><span>Tip \u00b7 ${escapeHtml(f(model.rodLength))}</span></div>
+    <div class="rod-layout__detail-head"><span>Detail</span><span>Scroll &#8596;</span></div>
+    <div class="rod-layout__detail">${rodLayoutSvg(model,{detail:true,width:detailWidth})}</div>
+    ${model.exceeds?'<p class="rod-layout__notice">Some positions fall outside the rod length. Check the values.</p>':''}
+    ${rodLayoutReadout(model)}
+    ${missingLine}`;
+  const detail=host.querySelector('.rod-layout__detail');
+  if(!detail)return;
+  detail.scrollLeft=previousScroll;
+  detail.addEventListener('scroll',()=>syncRodLayoutRange(host),{passive:true});
+  syncRodLayoutRange(host);
+  if(focusKey){
+    const refocus=host.querySelector(`${focusIn} [data-layout-item="${CSS.escape(focusKey)}"]`);
+    if(refocus)refocus.focus({preventScroll:true});
+  }
+  if(options&&options.revealSelection&&rodLayoutSelection){
+    const target=detail.querySelector(`[data-layout-item="${CSS.escape(rodLayoutSelection)}"]`);
+    const targetX=target?Number(target.getAttribute('data-x')):NaN;
+    if(Number.isFinite(targetX))detail.scrollTo({left:Math.max(0,targetX-(detail.clientWidth/2)),behavior:'smooth'});
   }
 }
 function workshopTopUiOffset(){

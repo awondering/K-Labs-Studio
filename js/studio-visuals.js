@@ -138,7 +138,8 @@
 
     activeRows.forEach((row, index) => {
       const ratio = clamp(row.cum / targetStripper, 0, 1);
-      const x = TRACK.left + (TRACK.right - TRACK.left) * ratio;
+      // App-wide convention is butt left, tip right: tip-measured positions run leftward from the right edge.
+      const x = TRACK.right - (TRACK.right - TRACK.left) * ratio;
       const wobble = index === 0 ? -2 : index === activeRows.length - 1 ? 1 : 0;
       const y = TRACK.y + wobble;
       const marker = markers[index];
