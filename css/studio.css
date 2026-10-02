@@ -6063,6 +6063,11 @@ textarea::-moz-selection,
   justify-self:stretch;
 }
 
+.studio-size-entry .studio-size-entry__btn{
+  border-color:rgba(214,210,200,.3);
+  background:rgba(255,255,255,.055);
+}
+
 .studio-component-details__actions{
   display:flex;
   justify-content:flex-start;
