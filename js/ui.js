@@ -333,6 +333,12 @@ function normalizeBusinessProfile(profile){
     email:String(source.email||'').trim(),
     phone:String(source.phone||'').trim(),
     website:String(source.website||'').trim(),
+    addressLine1:String(source.addressLine1||'').trim(),
+    addressLine2:String(source.addressLine2||'').trim(),
+    cityTown:String(source.cityTown||'').trim(),
+    postcode:String(source.postcode||'').trim(),
+    country:String(source.country||'').trim(),
+    gstNumber:String(source.gstNumber||'').trim(),
     paymentAccountName:String(source.paymentAccountName||'').trim(),
     paymentAccountNumber:String(source.paymentAccountNumber||'').trim(),
     quotePrefix:String(source.quotePrefix||'').trim(),
@@ -11067,6 +11073,12 @@ function customerQuoteBusinessLines(){
     businessProfile.phone,
     businessProfile.email,
     businessProfile.website,
+    businessProfile.addressLine1,
+    businessProfile.addressLine2,
+    businessProfile.cityTown,
+    businessProfile.postcode,
+    businessProfile.country,
+    specificationValue(businessProfile.gstNumber)?`GST Number: ${specificationValue(businessProfile.gstNumber)}`:'',
   ].map((value)=>specificationValue(value)).filter(Boolean);
 }
 // Reuses the saved address fields (no separate delivery-data system) and any recorded delivery method;
@@ -11271,7 +11283,10 @@ function emailCurrentQuote(){
   const includedParts=customerIncludedParts();
   const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
   const quoteNumber=specificationValue(quote.quoteNumber);
+  const businessProfileLines=[specificationValue(businessProfile.businessName),...customerQuoteBusinessLines()].filter(Boolean);
   const lines=[
+    ...businessProfileLines,
+    ...(businessProfileLines.length?['']:[]),
     `Hi ${customerFirstName},`,
     '',
     `Thank you for choosing ${businessName} for your custom rod build.`,
@@ -11296,16 +11311,6 @@ function emailCurrentQuote(){
     );
   }
   lines.push('', 'Once the deposit has been received, your build will be confirmed.');
-  const businessProfileLines=[
-    businessName,
-    specificationValue(businessProfile.contactName),
-    specificationValue(businessProfile.phone),
-    specificationValue(businessProfile.email),
-    specificationValue(businessProfile.website),
-  ].filter(Boolean);
-  if(businessProfileLines.length){
-    lines.push('', ...businessProfileLines);
-  }
   const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
@@ -13406,6 +13411,12 @@ const BUSINESS_PROFILE_BASE_FIELDS=[
   {id:'settingsBusinessEmail',key:'email'},
   {id:'settingsBusinessPhone',key:'phone'},
   {id:'settingsBusinessWebsite',key:'website'},
+  {id:'settingsBusinessAddress1',key:'addressLine1'},
+  {id:'settingsBusinessAddress2',key:'addressLine2'},
+  {id:'settingsBusinessCity',key:'cityTown'},
+  {id:'settingsBusinessPostcode',key:'postcode'},
+  {id:'settingsBusinessCountry',key:'country'},
+  {id:'settingsBusinessGstNumber',key:'gstNumber'},
 ];
 const PAYMENT_DETAILS_FIELDS=[
   {id:'settingsPaymentAccountName',key:'paymentAccountName'},

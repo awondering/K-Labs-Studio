@@ -1156,7 +1156,8 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 #settingsScreen #settingsTaxRate,
-#settingsScreen #settingsDefaultLabourRate{
+#settingsScreen #settingsDefaultLabourRate,
+#settingsScreen #settingsBusinessProfileCard input{
   width:110px;
   min-height:38px;
   padding:7px 10px;
@@ -1169,6 +1170,24 @@ body.component-sheet-open .workshop-back-to-top{
   font-weight:700;
   letter-spacing:.03em;
   text-align:right;
+}
+
+#settingsScreen #settingsBusinessProfileCard input{
+  display:block;
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  text-align:left;
+  font-weight:400;
+  letter-spacing:0;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-field-grid{
+  grid-template-columns:minmax(0,1fr);
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-field-grid label{
+  min-width:0;
 }
 
 #settingsScreen .settings-pricing-tax-fields{
@@ -6760,6 +6779,7 @@ textarea::-moz-selection,
 .component-sheet__custom-input:focus,
 #settingsTaxRate:focus,
 #settingsDefaultLabourRate:focus,
+#settingsBusinessProfileCard input:focus,
 .workshop-tool-fields input:focus{
   border-color:rgba(189,56,68,.52);
   box-shadow:0 0 0 1px rgba(189,56,68,.22);
