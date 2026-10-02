@@ -11442,6 +11442,13 @@ function bindBuildSpecificationInputs(){
         setBuildLayoutValue('reelSeatPositionRef',ref.getAttribute('data-layout-seat-ref'));
         return true;
       }
+      const commit=target.closest('[data-layout-commit]');
+      if(commit){
+        const input=commit.parentElement&&commit.parentElement.querySelector('[data-layout-field]');
+        if(input && String(input.value||'').trim())applyBuildLayoutInput(input);
+        else if(input)input.focus();
+        return true;
+      }
       const item=target.closest('[data-layout-item]');
       if(!item)return false;
       const key=item.getAttribute('data-layout-item');
@@ -11582,19 +11589,18 @@ function rodLayoutModel(){
   const items=[];
   const prompts=[];
   const waiting=[];
-  const notSet=[];
-  const unreadable=(label,specKey)=>prompts.push({label,reason:'Not a plain measurement in Build Details',spec:specKey});
-  if(rodLength===null)prompts.push({label:'Finished Rod Length',reason:'Required to draw the layout to scale',input:'rodLengthMm'});
+  const example=formatGuideListMeasurement(250);
+  const unreadable=(label,specKey)=>prompts.push({label,reason:`\u201c${specificationValue(specs[specKey])}\u201d isn\u2019t a length Studio can read. Enter a plain length such as ${example} to draw this part.`,spec:specKey});
+  if(rodLength===null)prompts.push({label:'Finished rod length needed',reason:'Enter the finished length so Studio can scale the rod and place the guides.',input:'rodLengthMm'});
   if(rear.state==='ok')items.push({key:'rearGrip',label:'Rear Grip',type:'grip',startMm:0,endMm:rear.mm,spec:'rearGripLength'});
-  else if(rear.state==='unreadable')unreadable('Rear Grip Length','rearGripLength');
-  else notSet.push('Rear Grip');
+  else if(rear.state==='unreadable')unreadable('Rear grip length','rearGripLength');
   let seat=null;
   if(seatPosition.state==='empty'){
-    prompts.push({label:'Reel Seat Position',reason:'Not set in Build Details',spec:'reelSeatPosition'});
+    prompts.push({label:'Reel seat position needed',reason:'Add it in Build Details to place the reel seat and the grips around it.',spec:'reelSeatPosition'});
   }else if(seatPosition.state==='unreadable'){
-    unreadable('Reel Seat Position','reelSeatPosition');
+    unreadable('Reel seat position','reelSeatPosition');
   }else{
-    if(!seatRef)prompts.push({label:'Reel Seat Position',reason:`${formatGuideListMeasurement(seatPosition.mm)} from butt, measured to the seat\u2019s:`,choice:true});
+    if(!seatRef)prompts.push({label:'Reel seat position',reason:`You entered ${formatGuideListMeasurement(seatPosition.mm)} from the butt. Where on the reel seat is that measured?`,choice:true});
     if(seatRef){
       // No reel seat length on record: draw with a nominal length that is never saved or shown as a measurement.
       const approximate=seatLength===null;
@@ -11612,15 +11618,13 @@ function rodLayoutModel(){
       items.push(lowerGrip);
     }else waiting.push('Lower Grip');
   }else if(lower.state==='unreadable'){
-    unreadable('Lower Grip Length','gripBelowReelSeatLength');
+    unreadable('Lower grip length','gripBelowReelSeatLength');
   }
   if(fore.state==='ok'){
     if(seat)items.push({key:'foreGrip',label:'Fore Grip',type:'grip',startMm:seat.endMm,endMm:seat.endMm+fore.mm,approximate:seat.approximate,spec:'foreGripLength'});
     else waiting.push('Fore Grip');
   }else if(fore.state==='unreadable'){
-    unreadable('Fore Grip Length','foreGripLength');
-  }else{
-    notSet.push('Fore Grip');
+    unreadable('Fore grip length','foreGripLength');
   }
   const guides=[];
   if(rodLength!==null){
@@ -11635,10 +11639,11 @@ function rodLayoutModel(){
   const nextAfterRear=lowerGrip||seat;
   // An overlap caused only by the nominal seat length is a drawing artefact, not a build problem.
   const overlaps=!!(rearItem && nextAfterRear && !nextAfterRear.approximate && rearItem.endMm>nextAfterRear.startMm+0.01);
+  const approximateOverlap=!!(rearItem && nextAfterRear && nextAfterRear.approximate && rearItem.endMm>nextAfterRear.startMm+0.01);
   const itemEnds=items.map((item)=>item.endMm);
   const scaleMm=Math.max(rodLength||0,...itemEnds,1);
   const exceeds=rodLength!==null && (itemEnds.some((mm)=>mm>rodLength) || items.some((item)=>item.startMm<0) || guides.some((guide)=>guide.atMm<0));
-  return {rodLength,seatLength,seatRef,items,guides,prompts,waiting,notSet,scaleMm,exceeds,overlaps};
+  return {rodLength,seatLength,seatRef,items,guides,prompts,waiting,scaleMm,exceeds,overlaps,approximateOverlap};
 }
 function rodLayoutSvg(model,options){
   const detail=!!(options&&options.detail);
@@ -11710,39 +11715,42 @@ function rodLayoutSvg(model,options){
   const sizing=detail?`width="${width}" height="${height}"`:'preserveAspectRatio="none"';
   return `<svg viewBox="0 0 ${width} ${height}" ${sizing} role="group" aria-label="${detail?'Rod build layout detail':'Rod build layout overview'}">${parts.join('')}</svg>`;
 }
-function rodLayoutFallbackInput(path,valueMm,label,ariaLabel){
+function rodLayoutFallbackInput(path,valueMm,label){
   const value=valueMm===null || valueMm===undefined?'':blankMeasurementInputText(valueMm);
-  return `<label class="rod-layout__fallback">${label?`<span>${escapeHtml(label)}</span>`:''}<input data-layout-field="${escapeHtml(path)}" type="text" inputmode="decimal" autocomplete="off" placeholder="Set" value="${escapeHtml(value)}" aria-label="${escapeHtml(label||ariaLabel||path)}" /><em>${measurementUnitSuffix()}</em></label>`;
+  return `<div class="rod-layout__fallback"><input data-layout-field="${escapeHtml(path)}" type="text" inputmode="decimal" autocomplete="off" placeholder="Length" value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}" /><em>${measurementUnitSuffix()}</em><button class="rod-layout__set" type="button" data-layout-commit>${value?'Update':'Set length'}</button></div>`;
+}
+function rodLayoutSeatRefLabels(){
+  return {rear:'Rear of seat',centre:'Centre of seat',front:'Front of seat'};
 }
 function rodLayoutSeatRefChoice(current){
-  return `<div class="rod-layout__choice" role="group" aria-label="Reel seat position is measured to">${[['rear','Rear'],['centre','Centre'],['front','Front']].map(([value,label])=>`<button type="button" data-layout-seat-ref="${value}" aria-pressed="${current===value?'true':'false'}">${label}</button>`).join('')}</div>`;
+  return `<div class="rod-layout__choice" role="group" aria-label="Where on the reel seat the position is measured">${Object.entries(rodLayoutSeatRefLabels()).map(([value,label])=>`<button type="button" data-layout-seat-ref="${value}" aria-pressed="${current===value?'true':'false'}">${label}</button>`).join('')}</div>`;
 }
 function rodLayoutReadout(model){
-  if(!rodLayoutSelection)return '<p class="rod-layout__hint">Tap a part or guide to see where it sits.</p>';
+  if(!rodLayoutSelection)return '';
   const f=formatGuideListMeasurement;
   let title='';
   let edit='';
   let editLabel='Edit in Build Details';
+  let main='';
   let extra='';
-  const rows=[];
+  const notes=[];
   if(rodLayoutSelection==='tipTop'){
     title='Tip Top';
-    rows.push(['From Butt',f(model.rodLength)]);
-    extra=rodLayoutFallbackInput('rodLengthMm',model.rodLength,'Finished Rod Length');
+    main=`${f(model.rodLength)} from butt \u00b7 finished rod length`;
+    extra=rodLayoutFallbackInput('rodLengthMm',model.rodLength,'Finished rod length');
   }else if(rodLayoutSelection.startsWith('guide:')){
     const guide=model.guides.find((entry)=>entry.key===rodLayoutSelection);
     if(!guide)return '';
-    title=`${guide.label}${guide.isStripper?' · Stripper':''}`;
+    title=`${guide.label}${guide.isStripper?' \u00b7 Stripper':''}`;
     edit='guides';
     editLabel='Edit Guide Setup';
-    rows.push(['From Butt',guide.atMm>=0?f(guide.atMm):'Outside rod length']);
-    rows.push(['From Tip',f(guide.fromTipMm)]);
+    main=guide.atMm>=0?`${f(guide.atMm)} from butt \u00b7 ${f(guide.fromTipMm)} from tip`:`${f(guide.fromTipMm)} from tip \u00b7 beyond the butt end`;
     if(guide.guide){
       const spiral=workshopToolsState.spiral;
       const angle=clampSpiralAngle(guide.guide.angleDeg);
       const side=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper:guide.isStripper,angleDeg:angle})==='right'?'Right':'Left');
-      rows.push(['Orientation',`${formatDecimal(angle,1)}\u00b0 ${side}`]);
+      notes.push(`Orientation ${formatDecimal(angle,1)}\u00b0 \u00b7 ${side}`);
     }
   }else{
     const item=model.items.find((entry)=>entry.key===rodLayoutSelection);
@@ -11752,35 +11760,36 @@ function rodLayoutReadout(model){
     // Positions that depend on a nominal seat length are marked approximate rather than shown as measured.
     const approx=item.approximate?'\u2248 ':'';
     if(item.type==='seat'){
-      const refLabel={rear:'Rear Edge',centre:'Centre',front:'Front Edge'}[item.ref];
-      rows.push([refLabel,`${f(item.positionMm)} from butt`]);
-      rows.push(['Length',item.approximate?'Approx. for layout':f(item.endMm-item.startMm)]);
-      if(!item.approximate)rows.push(['From Butt',`${f(item.startMm)} \u2013 ${f(item.endMm)}`]);
-      if(item.component)rows.push(['Component',item.component]);
-      extra=`<div class="rod-layout__fallback"><span>Position measured to</span>${rodLayoutSeatRefChoice(model.seatRef)}</div>`;
+      main=`${f(item.positionMm)} from butt \u00b7 ${rodLayoutSeatRefLabels()[item.ref]}`;
+      if(item.approximate)notes.push('Seat length shown approximately for layout.');
+      else notes.push(`${f(item.endMm-item.startMm)} long \u00b7 ${f(item.startMm)}\u2013${f(item.endMm)} from butt`);
+      if(item.component)notes.push(item.component);
+      extra=rodLayoutSeatRefChoice(model.seatRef);
     }else{
-      rows.push(['Length',f(item.endMm-item.startMm)]);
-      rows.push(['From Butt',`${approx}${f(item.startMm)} \u2013 ${approx}${f(item.endMm)}`]);
+      main=`${f(item.endMm-item.startMm)} long \u00b7 ${approx}${f(item.startMm)}\u2013${f(item.endMm)} from butt`;
+      const where={rearGrip:'At the butt end',lowerGrip:'Grip below the reel seat',foreGrip:'In front of the reel seat'}[item.key];
+      if(where)notes.push(where);
     }
     const before={lowerGrip:'rearGrip',reelSeat:'rearGrip'}[item.key];
     const previous=before&&!(item.key==='reelSeat'&&model.items.some((entry)=>entry.key==='lowerGrip'))&&model.items.find((entry)=>entry.key===before);
-    if(previous && item.startMm>previous.endMm)rows.push([`Gap After ${previous.label}`,`${approx}${f(item.startMm-previous.endMm)}`]);
+    if(previous && item.startMm>previous.endMm)notes.push(`${approx}${f(item.startMm-previous.endMm)} gap after the rear grip`);
   }
   return `<div class="rod-layout__readout">
     <div class="rod-layout__readout-head"><strong>${escapeHtml(title)}</strong>${edit?`<button class="guide-specification__edit" type="button" data-layout-edit="${escapeHtml(edit)}">${editLabel} <span aria-hidden="true">&#x203a;</span></button>`:''}</div>
-    <div class="rod-layout__readout-rows">${rows.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}</div>
+    <p class="rod-layout__readout-main">${escapeHtml(main)}</p>
+    ${notes.map((note)=>`<p class="rod-layout__readout-note">${escapeHtml(note)}</p>`).join('')}
     ${extra?`<div class="rod-layout__readout-edit">${extra}</div>`:''}
   </div>`;
 }
-function rodLayoutPromptsMarkup(model){
-  if(!model.prompts.length)return '';
-  return `<div class="rod-layout__prompts">${model.prompts.map((prompt)=>{
+function rodLayoutPromptsMarkup(prompts){
+  if(!prompts.length)return '';
+  return `<div class="rod-layout__prompts">${prompts.map((prompt)=>{
     const control=prompt.input
-      ?rodLayoutFallbackInput(prompt.input,null,'',prompt.label)
+      ?rodLayoutFallbackInput(prompt.input,null,prompt.label)
       :prompt.choice
         ?rodLayoutSeatRefChoice(null)
-        :`<button class="guide-specification__edit" type="button" data-layout-edit="spec:${escapeHtml(prompt.spec)}">Edit <span aria-hidden="true">&#x203a;</span></button>`;
-    return `<div class="rod-layout__prompt${prompt.choice?' rod-layout__prompt--choice':''}"><div class="rod-layout__prompt-copy"><strong>${escapeHtml(prompt.label)}</strong><span>${escapeHtml(prompt.reason)}</span></div>${control}</div>`;
+        :`<button class="guide-specification__edit" type="button" data-layout-edit="spec:${escapeHtml(prompt.spec)}">Edit in Build Details <span aria-hidden="true">&#x203a;</span></button>`;
+    return `<div class="rod-layout__prompt"><strong>${escapeHtml(prompt.label)}</strong><span>${escapeHtml(prompt.reason)}</span>${control}</div>`;
   }).join('')}</div>`;
 }
 function editRodLayoutItem(target){
@@ -11826,28 +11835,29 @@ function renderRodBuildLayout(options){
   const focusKey=focused?focused.getAttribute('data-layout-item'):'';
   const previousDetail=host.querySelector('.rod-layout__detail');
   const previousScroll=previousDetail?previousDetail.scrollLeft:0;
-  const notes=[
-    model.waiting.length?`<p class="rod-layout__missing"><span>Waiting on reel seat</span>${model.waiting.map(escapeHtml).join(' \u00b7 ')}</p>`:'',
-    model.notSet.length?`<p class="rod-layout__missing"><span>Not in Build Details</span>${model.notSet.map(escapeHtml).join(' \u00b7 ')}</p>`:'',
-  ].join('');
-  const prompts=rodLayoutPromptsMarkup(model);
+  const waitingLine=model.waiting.length
+    ?`<p class="rod-layout__quiet">${model.waiting.length>1?'Lower grip and fore grip':escapeHtml(model.waiting[0])} will be drawn once the reel seat is placed.</p>`
+    :'';
   if(model.rodLength===null){
-    host.innerHTML=`<div class="rod-layout__head"><span>Side elevation \u00b7 0 = butt end</span></div>
-      ${prompts}
-      ${notes}`;
+    // Setup state: show what this panel will draw and the single next step; other prompts wait until it can draw.
+    host.innerHTML=`<p class="rod-layout__intro">Draws a side view of this rod from your Build Details, Components and Guide Setup.</p>
+      <div class="rod-layout__ghost" aria-hidden="true"><svg viewBox="0 0 1000 24" preserveAspectRatio="none"><line class="rl-ghost" x1="6" y1="12" x2="994" y2="12"></line><line class="rl-ghost-end" x1="6" y1="6" x2="6" y2="18"></line><line class="rl-ghost-end" x1="994" y1="8" x2="994" y2="16"></line></svg></div>
+      <div class="rod-layout__scale"><span>Butt end</span><span>Tip</span></div>
+      ${rodLayoutPromptsMarkup(model.prompts.filter((prompt)=>prompt.input==='rodLengthMm'))}`;
     return;
   }
   const detailWidth=Math.max(640,Math.round(model.scaleMm*0.75));
-  host.innerHTML=`<div class="rod-layout__head"><span>Side elevation \u00b7 0 = butt end</span><strong>${escapeHtml(f(model.rodLength))}</strong></div>
+  host.innerHTML=`<p class="rod-layout__intro">Generated from your Build Details, Components and Guide Setup.</p>
     <div class="rod-layout__overview">${rodLayoutSvg(model,{detail:false})}<span class="rod-layout__range" aria-hidden="true"></span></div>
-    <div class="rod-layout__scale"><span>Butt \u00b7 0</span><span>Tip \u00b7 ${escapeHtml(f(model.rodLength))}</span></div>
-    <div class="rod-layout__detail-head"><span>Detail</span><span>Scroll &#8596;</span></div>
+    <div class="rod-layout__scale"><span>Butt end</span><strong>${escapeHtml(f(model.rodLength))}</strong><span>Tip</span></div>
     <div class="rod-layout__detail">${rodLayoutSvg(model,{detail:true,width:detailWidth})}</div>
-    ${model.exceeds?'<p class="rod-layout__notice">Some positions fall outside the rod length. Check the values.</p>':''}
-    ${model.overlaps?'<p class="rod-layout__notice">The rear grip overlaps the next part. Check the Build Details lengths.</p>':''}
+    <p class="rod-layout__quiet">Close-up \u00b7 scroll sideways, tap any part for details</p>
+    ${model.exceeds?'<p class="rod-layout__notice">Some parts fall outside the finished rod length. Check the lengths in Build Details.</p>':''}
+    ${model.overlaps?'<p class="rod-layout__notice">The rear grip runs into the next part. Check the grip lengths in Build Details.</p>':''}
+    ${model.approximateOverlap?'<p class="rod-layout__quiet">Layout may overlap slightly because reel-seat length is estimated.</p>':''}
     ${rodLayoutReadout(model)}
-    ${prompts}
-    ${notes}`;
+    ${rodLayoutPromptsMarkup(model.prompts)}
+    ${waitingLine}`;
   const detail=host.querySelector('.rod-layout__detail');
   if(!detail)return;
   detail.scrollLeft=previousScroll;
