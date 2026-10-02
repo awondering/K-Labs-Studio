@@ -818,12 +818,14 @@ body.component-sheet-open .workshop-back-to-top{
   margin-top:13px;
 }
 
-#settingsScreen .settings-field-grid label{
+#settingsScreen .settings-field-grid label,
+#settingsScreen .settings-pricing-field{
   display:grid;
   gap:5px;
 }
 
-#settingsScreen .settings-field-grid span{
+#settingsScreen .settings-field-grid span,
+#settingsScreen .settings-pricing-label{
   font-size:10px;
   letter-spacing:.1em;
   text-transform:uppercase;
@@ -1132,7 +1134,8 @@ body.component-sheet-open .workshop-back-to-top{
   }
 }
 
-#settingsScreen #settingsTaxRate{
+#settingsScreen #settingsTaxRate,
+#settingsScreen #settingsDefaultLabourRate{
   width:110px;
   min-height:38px;
   padding:7px 10px;
@@ -1145,6 +1148,62 @@ body.component-sheet-open .workshop-back-to-top{
   font-weight:700;
   letter-spacing:.03em;
   text-align:right;
+}
+
+#settingsScreen .settings-pricing-tax-fields{
+  display:grid;
+  gap:14px;
+  margin-top:13px;
+  max-width:360px;
+}
+
+#settingsScreen .settings-pricing-tax-row{
+  display:grid;
+  grid-template-columns:minmax(106px,1fr) minmax(0,1fr);
+  align-items:end;
+  gap:12px;
+}
+
+#settingsScreen .settings-pricing-field{
+  position:relative;
+  min-width:0;
+}
+
+#settingsScreen .settings-pricing-tax-fields,
+#settingsScreen .settings-pricing-tax-row,
+#settingsScreen .settings-pricing-field{
+  padding:0;
+  border-bottom:0;
+  justify-content:normal;
+}
+
+#settingsScreen .settings-pricing-tax-fields #settingsTaxRate,
+#settingsScreen .settings-pricing-tax-fields #settingsDefaultLabourRate{
+  width:100%;
+  min-width:0;
+  min-height:44px;
+}
+
+#settingsScreen .settings-pricing-tax-fields .settings-toggle{
+  min-height:44px;
+  justify-self:start;
+}
+
+#settingsScreen .settings-pricing-field .settings-inline-saved{
+  position:absolute;
+  top:100%;
+  right:0;
+  margin:0;
+  font-size:10px;
+}
+
+#settingsPricingTaxCard .settings-context-actions:has(> button[hidden]){
+  margin-top:0;
+}
+
+#settingsScreen #settingsPricingTaxCard .settings-context-actions{
+  padding:0;
+  border-bottom:0;
 }
 
 .settings-guide-card h2{
@@ -6679,6 +6738,7 @@ textarea::-moz-selection,
 .component-sheet__search:focus,
 .component-sheet__custom-input:focus,
 #settingsTaxRate:focus,
+#settingsDefaultLabourRate:focus,
 .workshop-tool-fields input:focus{
   border-color:rgba(189,56,68,.52);
   box-shadow:0 0 0 1px rgba(189,56,68,.22);
