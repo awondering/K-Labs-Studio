@@ -112,6 +112,8 @@ const CHOICE_PICKER_FAVOURITES_KEY='klabs-choice-picker-favourites';
 let choicePickerCategoryFilter='all';
 let shouldAnimateComponentRows=false;
 let expandedComponentRowIndex=-1;
+// Presentation-only: which same-family component group is showing its individual items.
+let expandedComponentGroupKey='';
 let componentRowMenuPointerDown={index:-1,expiresAt:0};
 const pendingComponentDraftRows=new WeakSet();
 let activeConfirmHandler=null;
@@ -8693,6 +8695,29 @@ function closeComponentSheet(){
   syncComponentPickerBackButton();
   unlockModalLayer({restoreFocus:true});
 }
+// Same library component (id, else component name) with the same Details text = one family; blanks never group.
+function componentRowFamilyKey(item){
+  if(componentRowIsEffectivelyEmpty(item) || isBlankCategory(item&&item.category))return '';
+  const libraryId=specificationValue(item&&item.libraryComponentId);
+  const nameKey=normalizeNameKey(item&&item.category);
+  if(!libraryId && !nameKey)return '';
+  return `${libraryId?`id:${libraryId}`:`name:${nameKey}`}::${normalizeNameKey(item&&item.description)}`;
+}
+// Display-only size summary: duplicate sizes add their quantities; sizes sort naturally (8 mm before 10 mm).
+function componentFamilySizeSummary(entries){
+  const bySize=new Map();
+  entries.forEach(({item})=>{
+    const size=componentRowSizeLabel(item);
+    const key=normalizeNameKey(size);
+    const current=bySize.get(key)||{label:size,quantity:0};
+    current.quantity+=componentRowQuantity(item);
+    bySize.set(key,current);
+  });
+  return Array.from(bySize.values())
+    .sort((a,b)=>a.label.localeCompare(b.label,undefined,{numeric:true,sensitivity:'base'}))
+    .map(({label,quantity})=>`${label||'No size'}${quantity>1?` \u00d7${quantity}`:''}`)
+    .join(' \u00b7 ');
+}
 function renderQuoteComponents(){
   const componentsList=$('quoteComponentsList');
   if(!componentsList)return;
@@ -8700,13 +8725,16 @@ function renderQuoteComponents(){
     expandedComponentRowIndex=quote.components.length-1;
   }
   const animateClass=shouldAnimateComponentRows?' quote-component-row--shift':'';
-  componentsList.innerHTML=quote.components.map((item,i)=>({item,i})).filter(({item,i})=>!componentRowIsEffectivelyEmpty(item) || expandedComponentRowIndex===i).map(({item,i})=>`
+  const rowMarkup=(item,i,label)=>{
+    const itemLabel=label||componentRowItemLabel(item);
+    const metaParts=componentRowSummaryMetaParts(item);
+    return `
       <article class="quote-component-row${animateClass}${expandedComponentRowIndex===i?' is-expanded':''}" data-component-row-index="${i}" aria-label="Build cost item ${i+1}">
         <div class="quote-component-row__summary">
           <button class="quote-component-row__open" data-component-action="open-row" data-component-index="${i}" type="button" aria-expanded="${expandedComponentRowIndex===i?'true':'false'}" aria-label="${expandedComponentRowIndex===i?'Collapse':'Expand'} component details for ${escapeHtml(componentRowItemLabel(item))}">
             <span class="quote-component-row__summary-copy">
-              <strong class="quote-component-row__summary-item">${escapeHtml(componentRowItemLabel(item))}</strong>
-              ${componentRowSummaryMetaParts(item).length?`<span class="quote-component-row__summary-meta">${componentRowSummaryMetaParts(item).map((part)=>`<span>${escapeHtml(part)}</span>`).join('')}</span>`:''}
+              <strong class="quote-component-row__summary-item">${escapeHtml(itemLabel)}</strong>
+              ${metaParts.length?`<span class="quote-component-row__summary-meta">${metaParts.map((part)=>`<span>${escapeHtml(part)}</span>`).join('')}</span>`:''}
             </span>
             <span class="quote-component-row__summary-trailing">
               ${componentRowCostLabel(item)?`<span class="quote-component-row__summary-cost">${escapeHtml(componentRowCostLabel(item))}</span>`:''}
@@ -8716,7 +8744,44 @@ function renderQuoteComponents(){
         </div>
         ${expandedComponentRowIndex===i?componentRowEditorMarkup(item,i):''}
       </article>
-    `).join('');
+    `;
+  };
+  const visibleRows=quote.components.map((item,i)=>({item,i})).filter(({item,i})=>!componentRowIsEffectivelyEmpty(item) || expandedComponentRowIndex===i);
+  const families=new Map();
+  visibleRows.forEach((entry)=>{
+    const key=componentRowFamilyKey(entry.item);
+    if(!key)return;
+    if(!families.has(key))families.set(key,[]);
+    families.get(key).push(entry);
+  });
+  const renderedFamilies=new Set();
+  componentsList.innerHTML=visibleRows.map((entry)=>{
+    const key=componentRowFamilyKey(entry.item);
+    const members=key?families.get(key):null;
+    if(!members || members.length<2)return rowMarkup(entry.item,entry.i);
+    if(renderedFamilies.has(key))return '';
+    renderedFamilies.add(key);
+    const childEditing=members.some(({i})=>i===expandedComponentRowIndex);
+    const open=childEditing || expandedComponentGroupKey===key;
+    const title=componentDisplayIdentity(members[0].item,{includeSize:false,fallback:componentRowItemLabel(members[0].item)});
+    const children=members.slice().sort((a,b)=>componentRowSizeLabel(a.item).localeCompare(componentRowSizeLabel(b.item),undefined,{numeric:true,sensitivity:'base'}));
+    return `
+      <article class="quote-component-row quote-component-group${animateClass}${open?' is-expanded':''}" data-component-group="${escapeHtml(key)}" aria-label="${escapeHtml(title)}, ${members.length} items">
+        <div class="quote-component-row__summary">
+          <button class="quote-component-row__open" data-component-action="toggle-group" data-component-group="${escapeHtml(key)}" type="button" aria-expanded="${open?'true':'false'}" aria-label="${open?'Hide':'Show'} the ${members.length} items in ${escapeHtml(title)}">
+            <span class="quote-component-row__summary-copy">
+              <strong class="quote-component-row__summary-item">${escapeHtml(title)}</strong>
+              <span class="quote-component-group__sizes">${escapeHtml(componentFamilySizeSummary(members))}</span>
+            </span>
+            <span class="quote-component-row__summary-trailing">
+              <span class="quote-component-row__disclosure" aria-hidden="true">&#8250;</span>
+            </span>
+          </button>
+        </div>
+        ${open?`<div class="quote-component-group__children">${children.map(({item,i})=>rowMarkup(item,i,componentRowSizeLabel(item)||componentRowItemLabel(item))).join('')}</div>`:''}
+      </article>
+    `;
+  }).join('');
   componentsList.querySelectorAll('[data-component-action="request-delete-row"]').forEach((button)=>{
     button.addEventListener('pointerdown',(event)=>{
       const i=Number(button.getAttribute('data-component-index'));
@@ -12249,6 +12314,18 @@ function bindWorkshopQuoteBuilder(){
         if(!quote.components[i])return;
         const step=action==='quantity-increment'?1:-1;
         setComponentRowQuantity(i,componentRowQuantity(quote.components[i])+step);
+        return;
+      }
+      if(action==='toggle-group'){
+        const key=actionButton.getAttribute('data-component-group')||'';
+        const childEditing=expandedComponentRowIndex>=0 && componentRowFamilyKey(quote.components[expandedComponentRowIndex])===key;
+        if(childEditing){
+          toggleComponentRow(expandedComponentRowIndex,{focusDescription:false});
+          expandedComponentGroupKey='';
+        }else{
+          expandedComponentGroupKey=expandedComponentGroupKey===key?'':key;
+        }
+        renderQuoteComponents();
         return;
       }
       if(action==='open-row' || action==='close-row'){

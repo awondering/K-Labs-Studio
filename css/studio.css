@@ -9332,3 +9332,52 @@ body.klabs-auth-resolving::after {
   line-height:1.4;
   color:rgba(232,226,214,.82);
 }
+
+/* Active Build: same-family components share one row; individual items open inside it on fine dividers. */
+#workshopComponentsSection .quote-component-group__sizes{
+  color:#a7ac9f;
+  font-size:11px;
+  letter-spacing:.02em;
+  line-height:1.35;
+  font-variant-numeric:tabular-nums;
+}
+
+#workshopComponentsSection .quote-component-group__children{
+  display:grid;
+  margin:0 10px 6px;
+  border-top:1px solid rgba(214,210,200,.1);
+}
+
+#workshopComponentsSection .quote-component-group__children .quote-component-row{
+  border:0;
+  border-bottom:1px solid rgba(214,210,200,.07);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+#workshopComponentsSection .quote-component-group__children .quote-component-row:last-child{
+  border-bottom:0;
+}
+
+#workshopComponentsSection .quote-component-group__children .quote-component-row__summary{
+  padding:9px 2px;
+}
+
+#workshopComponentsSection .quote-component-group__children .quote-component-row__summary-item{
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+
+#workshopComponentsSection .quote-component-group__children .quote-component-row.is-expanded{
+  box-shadow:inset 2px 0 0 rgba(var(--kl-red-rgb),.8);
+}
+
+#workshopComponentsSection .quote-component-group__children .quote-component-row.is-expanded .quote-component-row__summary{
+  padding-left:10px;
+}
+
+#workshopComponentsSection .quote-component-group.is-expanded .quote-component-group__children .quote-component-row:not(.is-expanded) .quote-component-row__disclosure{
+  color:#99a196;
+  transform:rotate(0deg);
+}
