@@ -6807,7 +6807,6 @@ function bindSelectedBlankControls(){
   });
 }
 function persistBuildRecord(currentQuote){
-  syncMissingComponentLibraryData(currentQuote);
   const records=Store.get('klabs-workshop-builds',[]);
   const target=findCurrentSavedBuildTarget();
   const previousRecord=target?normalizeQuote(target.record):null;
@@ -6852,12 +6851,14 @@ function ensureBuildRecordIdsBackfilled(){
   if(changed)Store.set('klabs-workshop-builds',backfilled);
 }
 function componentStockReferenceKey(component){
-  const primaryName=specificationValue(component&&component.description);
-  const fallbackName=specificationValue(component&&component.category);
-  const candidateName=primaryName||fallbackName;
-  if(!candidateName)return '';
-  const libraryRecord=findComponentLibraryRecordByName(candidateName);
-  return normalizeNameKey((libraryRecord&&libraryRecord.name)||candidateName);
+  // Blank lines keep their blank identity in description; every other line is keyed by its library identity.
+  if(isBlankCategory(component&&component.category)){
+    const blankName=specificationValue(component&&component.description)||specificationValue(component&&component.category);
+    const blankRecord=findComponentLibraryRecordByName(blankName);
+    return normalizeNameKey((blankRecord&&blankRecord.name)||blankName);
+  }
+  const libraryRecord=componentLibraryRecordForRow(component);
+  return normalizeNameKey((libraryRecord&&libraryRecord.name)||specificationValue(component&&component.category));
 }
 function componentCommittedStockQuantity(component){
   const parsed=Number(component&&component.quantity);
@@ -6901,26 +6902,6 @@ function reconcileCommittedBuildStock(previousRecord,nextRecord){
   if(changed){
     saveComponentLibraryRecords(records);
   }
-}
-function syncMissingComponentLibraryData(currentQuote){
-  const sourceQuote=currentQuote&&typeof currentQuote==='object'?currentQuote:{};
-  const rows=Array.isArray(sourceQuote.components)?sourceQuote.components:[];
-  if(!rows.length)return;
-  const mergedByName=new Map();
-  rows.forEach((row)=>{
-    if(!componentRowHasMeaningfulData(row))return;
-    const name=specificationValue(row&&row.description)||specificationValue(row&&row.category);
-    if(!name)return;
-    const key=normalizeNameKey(name);
-    if(!key)return;
-    const baseline=mergedByName.get(key)||findComponentLibraryRecordByName(name)||{name};
-    const merged=mergeAutoSyncedLibraryRecord(baseline,row,name);
-    mergedByName.set(key,merged);
-  });
-  mergedByName.forEach((record,key)=>{
-    if(!record || !key)return;
-    upsertComponentLibraryRecord(record.name,record);
-  });
 }
 function saveBlankLibrarySearch(value){
   blankLibrarySearch=String(value||'');
@@ -7704,44 +7685,6 @@ function cleanupPlaceholderComponentRecordsOnce(){
     console.info('[K-Labs Studio] Kept components matching placeholder names because they contain real data:',kept.join(', '));
   }
   Store.set(PLACEHOLDER_COMPONENT_CLEANUP_STORAGE_KEY,true);
-}
-function componentLibraryTextFieldValue(value){
-  return String(value||'').trim();
-}
-function mergeAutoSyncedLibraryRecord(existingRecord,incomingRecord,componentName){
-  const existing=existingRecord&&typeof existingRecord==='object'?existingRecord:{};
-  const incoming=incomingRecord&&typeof incomingRecord==='object'?incomingRecord:{};
-  const name=componentLibraryTextFieldValue(componentName)||componentLibraryTextFieldValue(existing.name)||componentLibraryTextFieldValue(incoming.name);
-  const pickText=(currentValue,nextValue)=>{
-    const current=componentLibraryTextFieldValue(currentValue);
-    if(current)return current;
-    return componentLibraryTextFieldValue(nextValue);
-  };
-  const existingUnitCost=componentLibraryUnitCostValue(existing);
-  const existingUnitPrice=componentLibraryUnitPriceValue(existing);
-  const existingCost=componentLibraryCostValue(existing);
-  const existingStock=componentLibraryStockValue(existing);
-  const incomingUnitCost=componentLibraryUnitCostValue(incoming);
-  const incomingUnitPrice=componentLibraryUnitPriceValue(incoming);
-  const incomingCost=componentLibraryCostValue(incoming);
-  const incomingStock=componentLibraryStockValue(incoming);
-  return {
-    name,
-    category:pickText(existing.category,incoming.category),
-    subcategory:pickText(existing.subcategory,incoming.subcategory),
-    supplier:pickText(existing.supplier,incoming.supplier),
-    description:pickText(existing.description,incoming.description),
-    customerLabel:pickText(existing.customerLabel,incoming.customerLabel),
-    unit:pickText(existing.unit,incoming.unit),
-    // Quantity is generally build-scoped; keep the saved library quantity unless explicitly set there.
-    quantity:Number.isFinite(Number(existing.quantity))?Number(existing.quantity):undefined,
-    unitCost:existingUnitCost!==undefined?existingUnitCost:incomingUnitCost,
-    unitPrice:existingUnitPrice!==undefined?existingUnitPrice:incomingUnitPrice,
-    stockOnHand:existingStock!==undefined?existingStock:incomingStock,
-    notes:pickText(existing.notes,incoming.notes),
-    specifications:pickText(existing.specifications,incoming.specifications),
-    cost:existingCost!==undefined?existingCost:(incomingUnitCost!==undefined?incomingUnitCost:incomingCost),
-  };
 }
 function removeComponentLibraryRecord(name){
   const targetKey=normalizeNameKey(name);
@@ -8648,7 +8591,9 @@ function requestDeleteComponentRow(index){
 function requestUpdateLibraryComponentFromRow(index){
   const row=quote.components[index];
   if(!row)return;
-  const libraryName=specificationValue(row.category)||specificationValue(row.description);
+  // Library identity comes from the linked record or the component name, never from build-line Details.
+  const linkedRecord=componentLibraryRecordForRow(row);
+  const libraryName=linkedRecord?specificationValue(linkedRecord.name):specificationValue(row.category);
   if(!libraryName || isBlankCategory(row.category)){
     flashWorkshopStatus('Select a component category first',{pending:true,duration:2000});
     return;
@@ -8659,7 +8604,10 @@ function requestUpdateLibraryComponentFromRow(index){
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'update',label:'Update Library Component',kind:'primary'}]
   },(action)=>{
     if(action!=='update')return;
-    upsertComponentLibraryRecord(libraryName,row);
+    const source=linkedRecord
+      ?{...linkedRecord,cost:row.cost,unitCost:row.cost,unitPrice:row.unitPrice}
+      :{...row,description:''};
+    upsertComponentLibraryRecord(libraryName,source);
     flashWorkshopStatus('Library component updated');
   });
 }
