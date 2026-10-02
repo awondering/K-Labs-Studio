@@ -1146,9 +1146,17 @@ function renderSpiralGuideMapper(){
   const guideCountValue=$('workshopSpiralGuideCountValue');
   if(guideCountValue)guideCountValue.textContent=String(spiral.guideCount);
 
+  spiral.rodStyle=normalizeRodStyle(spiral.rodStyle);
+  const isSpinning=spiral.rodStyle==='spinning';
+  const allGuidesAtZero=spiral.guides.every((guide)=>clampSpiralAngle(guide.angleDeg)===0);
+  const hideBlankOffsets=allGuidesAtZero && (isSpinning || (spiral.rodStyle==='casting' && spiral.method==='standard'));
+  if(hideBlankOffsets)spiral.showPhysicalOffsets=false;
   const showOffsetsToggle=$('workshopSpiralOffsetsToggle');
   const showPhysicalOffsets=!!spiral.showPhysicalOffsets;
   if(showOffsetsToggle){
+    showOffsetsToggle.hidden=hideBlankOffsets;
+    const offsetsActions=showOffsetsToggle.closest('.spiral-secondary-actions');
+    if(offsetsActions)offsetsActions.hidden=hideBlankOffsets;
     showOffsetsToggle.classList.toggle('active',showPhysicalOffsets);
     showOffsetsToggle.setAttribute('aria-pressed',showPhysicalOffsets?'true':'false');
     showOffsetsToggle.textContent=showPhysicalOffsets?'Hide Offsets on Blank':'Show Offsets on Blank';
@@ -1156,9 +1164,7 @@ function renderSpiralGuideMapper(){
 
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
   syncWorkshopToggleButtons(card,'[data-spiral-direction]','data-spiral-direction',spiral.direction);
-  spiral.rodStyle=normalizeRodStyle(spiral.rodStyle);
   syncWorkshopToggleButtons(card,'[data-spiral-rod-style]','data-spiral-rod-style',spiral.rodStyle);
-  const isSpinning=spiral.rodStyle==='spinning';
 
   const methodRow=card.querySelector('[data-spiral-method-row]');
   if(methodRow)methodRow.hidden=isSpinning;
