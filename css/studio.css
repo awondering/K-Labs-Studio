@@ -9381,3 +9381,41 @@ body.klabs-auth-resolving::after {
   color:#99a196;
   transform:rotate(0deg);
 }
+
+.quote-component-field[hidden]{
+  display:none;
+}
+
+.quote-component-picker__path{
+  display:block;
+  margin-top:2px;
+  font-size:9px;
+  font-weight:600;
+  line-height:1.3;
+  letter-spacing:.02em;
+  color:#8d9088;
+}
+
+.quote-component-row__add-details{
+  grid-column:1/-1;
+  justify-self:start;
+  padding:2px 0;
+  border:0;
+  background:none;
+  color:#8d9088;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+
+.quote-component-row__add-details:hover,
+.quote-component-row__add-details:focus-visible{
+  color:#d7d0c3;
+  outline:none;
+}
+
+.quote-component-row__add-details[hidden]{
+  display:none;
+}

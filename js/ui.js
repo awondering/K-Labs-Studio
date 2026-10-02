@@ -7793,7 +7793,7 @@ function syncComponentRowEditorInputs(index){
   }
   const subcategoryTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-subcategory-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
   if(subcategoryTrigger){
-    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'—';
+    subcategoryTrigger.textContent=specificationValue(row.subcategory)||'Select subcategory';
   }
 }
 function defaultChoiceNameSet(type){
@@ -8486,9 +8486,41 @@ function componentRowSubcategoryNames(categoryName,currentSubcategory){
   }
   return subcategoryNames;
 }
+// Library-linked lines show their Category › Subcategory from the record; parts repeating the component name are dropped.
+function componentRowLibraryPath(item){
+  const record=componentLibraryRecordForRow(item);
+  if(!record)return '';
+  const nameKey=normalizeNameKey(specificationValue(item&&item.category)||record.name);
+  const parts=[];
+  [record.category,record.subcategory].map(specificationValue).forEach((part)=>{
+    const key=normalizeNameKey(part);
+    if(!key || key===nameKey || parts.some((existing)=>normalizeNameKey(existing)===key))return;
+    parts.push(part);
+  });
+  return parts.join(' › ');
+}
+// Only unlinked lines carry their own subcategory; linked lines take it from the library record.
 function componentRowSubcategoryFieldMarkup(item,index){
+  if(componentLibraryRecordForRow(item))return '';
   const value=specificationValue(item&&item.subcategory);
-  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'—')}</span><b>&#9662;</b></button></label>`;
+  if(value && normalizeNameKey(value)===normalizeNameKey(item&&item.category))return '';
+  if(!value && !componentRowSubcategoryNames(componentRowLibraryCategoryName(item),'').length)return '';
+  return `<label class="quote-component-field quote-component-field--description"><span>Subcategory</span><button class="quote-component-picker__trigger" data-component-action="open-subcategory-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(value||'Select subcategory')}</span><b>&#9662;</b></button></label>`;
+}
+function componentRowComponentFieldMarkup(item,index){
+  const path=componentRowLibraryPath(item);
+  const pathMarkup=path?`<small class="quote-component-picker__path">${escapeHtml(path)}</small>`:'';
+  return `<label class="quote-component-field quote-component-field--category"><span>Component</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'Choose component')}${pathMarkup}</span><b>&#9662;</b></button></label>`;
+}
+// Empty Details collapses to a quiet add control so no blank row is shown.
+function componentRowDetailsFieldMarkup(item,index){
+  const value=String(item&&item.description||'');
+  const hidden=value.trim()?'':' hidden';
+  return `<label class="quote-component-field quote-component-field--description quote-component-field--secondary" data-component-details-field="${index}"${hidden}><span>Details</span><input data-component-index="${index}" data-component-key="description" type="text" value="${escapeHtml(value)}" /></label>`;
+}
+function componentRowAddDetailsMarkup(item,index){
+  if(String(item&&item.description||'').trim())return '';
+  return `<button class="quote-component-row__add-details" data-component-action="show-details" data-component-index="${index}" type="button">+ Details</button>`;
 }
 // Shown only when this line has a snapshot size, or its master component still offers sizes to pick from.
 function componentRowSizeFieldMarkup(item,index){
@@ -8499,7 +8531,7 @@ function componentRowSizeFieldMarkup(item,index){
   return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>&#9662;</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields"><label class="quote-component-field quote-component-field--category"><span>Component</span><button class="quote-component-picker__trigger" data-component-action="open-component-sheet" data-component-index="${index}" type="button" aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(item.category||'—')}</span><b>&#9662;</b></button></label>${componentRowSubcategoryFieldMarkup(item,index)}<label class="quote-component-field quote-component-field--description quote-component-field--secondary"><span>Details</span><input data-component-index="${index}" data-component-key="description" type="text" placeholder="—" value="${escapeHtml(item.description||'')}" /></label>${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields">${componentRowComponentFieldMarkup(item,index)}${componentRowSubcategoryFieldMarkup(item,index)}${componentRowDetailsFieldMarkup(item,index)}${componentRowAddDetailsMarkup(item,index)}${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -12343,6 +12375,15 @@ function bindWorkshopQuoteBuilder(){
       if(action==='open-row' || action==='close-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         toggleComponentRow(i,{focusDescription:false,revealComponentsHeader:action==='close-row'});
+        return;
+      }
+      if(action==='show-details'){
+        const field=actionButton.closest('.quote-component-row__fields')?.querySelector('[data-component-details-field]');
+        if(field){
+          field.hidden=false;
+          actionButton.hidden=true;
+          field.querySelector('input')?.focus();
+        }
         return;
       }
       if(action==='open-component-sheet'){
