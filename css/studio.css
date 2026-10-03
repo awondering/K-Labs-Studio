@@ -8369,6 +8369,91 @@ textarea::-moz-selection,
   transition:border-color var(--micro-motion) ease,color var(--micro-motion) ease,background-color var(--micro-motion) ease;
 }
 
+#workshopToolSpiral .spiral-manual-control-band{
+  display:grid;
+  grid-template-columns:minmax(100px,1fr) minmax(78px,auto) minmax(78px,auto);
+  align-items:center;
+  gap:4px;
+  min-width:0;
+  padding:6px;
+  border:1px solid rgba(214,210,200,.12);
+  border-radius:8px;
+  background:rgba(255,255,255,.014);
+}
+
+#workshopToolSpiral .spiral-offset-start-control{
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+
+#workshopToolSpiral .spiral-offset-start-control__label{
+  overflow:hidden;
+  color:rgba(214,210,200,.68);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.08em;
+  line-height:1;
+  text-overflow:ellipsis;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+#workshopToolSpiral .spiral-offset-start-control__value{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  min-width:0;
+}
+
+#workshopToolSpiral .spiral-offset-start-control input{
+  box-sizing:border-box;
+  width:52px;
+  min-width:52px;
+  min-height:36px;
+  padding:0 5px;
+  border-radius:7px;
+  border:1px solid rgba(214,210,200,.2);
+  background:linear-gradient(180deg,#111618,#0b0e10);
+  color:#ece5d9;
+  font-size:13px;
+  font-weight:700;
+  text-align:center;
+}
+
+#workshopToolSpiral .spiral-offset-start-control input:focus{
+  border-color:rgba(189,56,68,.52);
+  box-shadow:0 0 0 1px rgba(189,56,68,.22);
+  outline:none;
+}
+
+#workshopToolSpiral .spiral-offset-start-control__unit{
+  color:rgba(214,210,200,.78);
+  font-size:11px;
+  line-height:1;
+}
+
+#workshopToolSpiral .spiral-manual-control-band .spiral-reset-action{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  min-height:40px;
+  padding:0 5px;
+  border-radius:7px;
+  border-width:1px;
+  border-color:rgba(214,210,200,.16);
+  background:rgba(12,14,15,.72);
+  color:rgba(225,218,205,.8);
+  box-shadow:none;
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.015em;
+  line-height:1.05;
+  text-align:center;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
 #workshopToolSpiral .spiral-reset-action:hover,
 #workshopToolSpiral .spiral-reset-action:focus-visible{
   color:rgba(225,218,205,.9);

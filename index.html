@@ -325,11 +325,16 @@
             </div>
           </div>
 
-          <div id="workshopSpiralOffsetStartWrap" class="workshop-tool-fields" hidden>
-            <label>
-              <span>Offset Start Angle</span>
-              <input id="workshopSpiralOffsetStart" type="number" inputmode="decimal" min="0" max="25" step="0.1" autocomplete="off" />
+          <div id="workshopSpiralOffsetStartWrap" class="spiral-manual-control-band" hidden>
+            <label class="spiral-offset-start-control">
+              <span class="spiral-offset-start-control__label">Offset Start Angle</span>
+              <span class="spiral-offset-start-control__value">
+                <input id="workshopSpiralOffsetStart" type="number" inputmode="decimal" min="0" max="25" step="0.1" autocomplete="off" />
+                <span class="spiral-offset-start-control__unit" aria-hidden="true">&deg;</span>
+              </span>
             </label>
+            <button id="workshopSpiralResetBtn" class="ghost-action spiral-reset-action" type="button" title="Restore the Progressive pattern using Guide Spacing positions">Reset to Default</button>
+            <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy each guide's position, rotation, and surface offset to the clipboard">Copy All Offsets</button>
           </div>
 
           <section class="spiral-mapper-visual" aria-label="Guide orientation view">
@@ -340,10 +345,6 @@
             <div id="workshopSpiralVisualCanvas" class="spiral-mapper-visual__canvas" aria-live="polite"></div>
           </section>
 
-          <div class="spiral-reset-row">
-            <button id="workshopSpiralCopyBtn" class="ghost-action spiral-reset-action" type="button" title="Copy each guide's position and angle to the clipboard">Copy Guide Angles</button>
-            <button id="workshopSpiralResetBtn" class="ghost-action spiral-reset-action" type="button" title="Restore the Progressive pattern using Guide Spacing positions">Reset Pattern</button>
-          </div>
         </section>
 
         <p id="layoutGuideNotice" class="subtle">Guide only. Confirm final placement by static testing and builder judgement.</p>
