@@ -217,6 +217,10 @@ const workshopToolsState={
   },
 };
 let gripCutTemplateSnapshot=null;
+let guideMapperRevealFrameId=0;
+let guideMapperRevealSequence=0;
+let guideMapperRevealFinishTimer=0;
+let guideMapperSmoothScrollActive=false;
 let workshopLandingReturnFocusTool='';
 // '' = Guide Spacing opened normally from Workshop; 'build' = opened contextually from an open build's Build Details.
 let layoutEntryOrigin='';
@@ -1335,6 +1339,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const positionText=formatGuideListMeasurement(row.cum);
       const spacingText=formatGuideListMeasurement(row.spacing);
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
+      const showOffsetResult=showPhysicalOffsets && (!!labels.offsetText || (isExpanded && showOdField));
       return `
         <article class="guide-spacing-row${isStripper?' guide-spacing-row--stripper':''}${isExpanded?' guide-spacing-row--selected':''}" data-guide-index="${index}">
           <button class="guide-spacing-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}. Spacing ${spacingText}. Orientation ${angleText} ${sideText}`)}">
@@ -1343,7 +1348,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <strong class="guide-spacing-row__spacing-value">${spacingText}</strong>
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </button>
-          ${showPhysicalOffsets && labels.offsetText?`<div class="spiral-guide-row__offset"><span>Surface Distance From Top</span><strong>${labels.offsetText}</strong></div>`:''}
+          ${showOffsetResult?`<div class="spiral-guide-row__offset"><span>Surface Distance From Top</span><strong>${labels.offsetText||'—'}</strong></div>`:''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             ${showOdField?`<label>
@@ -1959,6 +1964,86 @@ function renderWorkshopCalculator(){
   renderSpiralGuideMapper();
   renderGuideSpecificationSummary();
 }
+function cancelGuideMapperReveal(){
+  guideMapperRevealSequence+=1;
+  if(guideMapperRevealFrameId){
+    cancelAnimationFrame(guideMapperRevealFrameId);
+    guideMapperRevealFrameId=0;
+  }
+  if(guideMapperRevealFinishTimer){
+    clearTimeout(guideMapperRevealFinishTimer);
+    guideMapperRevealFinishTimer=0;
+  }
+  if(guideMapperSmoothScrollActive){
+    window.scrollTo({left:window.scrollX,top:window.scrollY,behavior:'instant'});
+    guideMapperSmoothScrollActive=false;
+  }
+}
+function revealSpiralMapperIfNeeded(){
+  const mapper=document.querySelector('#workshopToolSpiral .spiral-mapper-visual');
+  if(!mapper)return;
+  const visualViewport=window.visualViewport;
+  const viewportTop=visualViewport?visualViewport.offsetTop:0;
+  let viewportBottom=visualViewport
+    ?visualViewport.offsetTop+visualViewport.height
+    :(document.documentElement.clientHeight||window.innerHeight);
+  const bottomNav=document.querySelector('.bottom-nav');
+  if(bottomNav && !bottomNav.hidden){
+    const style=window.getComputedStyle(bottomNav);
+    const rect=bottomNav.getBoundingClientRect();
+    if(style.display!=='none' && style.visibility!=='hidden' && rect.height>0
+      && rect.bottom>viewportTop && rect.top<viewportBottom){
+      viewportBottom=Math.min(viewportBottom,rect.top);
+    }
+  }
+  const visibleTop=viewportTop+8;
+  const visibleBottom=viewportBottom-8;
+  const availableHeight=visibleBottom-visibleTop;
+  if(availableHeight<=0)return;
+
+  const mapperRect=mapper.getBoundingClientRect();
+  if(mapperRect.height<=0)return;
+  let scrollDelta=0;
+  if(mapperRect.height>availableHeight){
+    if(mapperRect.top<visibleTop || mapperRect.top>=visibleBottom){
+      scrollDelta=mapperRect.top-visibleTop;
+    }
+  }else if(mapperRect.top<visibleTop){
+    scrollDelta=mapperRect.top-visibleTop;
+  }else if(mapperRect.bottom>visibleBottom){
+    scrollDelta=mapperRect.bottom-visibleBottom;
+  }
+  if(Math.abs(scrollDelta)<1)return;
+
+  const scroller=document.scrollingElement||document.documentElement;
+  const currentScroll=window.scrollY||window.pageYOffset||0;
+  const maxScroll=Math.max(0,scroller.scrollHeight-scroller.clientHeight);
+  const targetScroll=Math.max(0,Math.min(currentScroll+scrollDelta,maxScroll));
+  if(Math.abs(targetScroll-currentScroll)<1)return;
+
+  const reduceMotion=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  guideMapperSmoothScrollActive=!reduceMotion;
+  window.scrollTo({top:targetScroll,behavior:reduceMotion?'instant':'smooth'});
+  if(!reduceMotion){
+    const sequence=guideMapperRevealSequence;
+    guideMapperRevealFinishTimer=window.setTimeout(()=>{
+      if(sequence!==guideMapperRevealSequence)return;
+      guideMapperRevealFinishTimer=0;
+      guideMapperSmoothScrollActive=false;
+    },800);
+  }
+}
+function scheduleSpiralMapperReveal(){
+  cancelGuideMapperReveal();
+  const sequence=guideMapperRevealSequence;
+  guideMapperRevealFrameId=window.requestAnimationFrame(()=>{
+    guideMapperRevealFrameId=window.requestAnimationFrame(()=>{
+      guideMapperRevealFrameId=0;
+      if(sequence!==guideMapperRevealSequence)return;
+      revealSpiralMapperIfNeeded();
+    });
+  });
+}
 function bindWorkshopCalculatorControls(){
   const panel=$('workshopToolsPanel');
   if(!panel || panel.getAttribute('data-workshop-calculator-bound')==='true')return;
@@ -2056,11 +2141,13 @@ function bindWorkshopCalculatorControls(){
       markGuideDataDirty();
     }
     renderWorkshopCalculator();
+    scheduleSpiralMapperReveal();
   });
 
   bindWorkshopToggleButtons(spiralCard,'[data-spiral-method]',(button)=>{
     setSpiralMethod(button.getAttribute('data-spiral-method'));
     renderWorkshopCalculator();
+    scheduleSpiralMapperReveal();
   });
 
   bindWorkshopToggleButtons(spiralCard,'[data-spiral-direction]',(button)=>{

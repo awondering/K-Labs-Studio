@@ -7872,10 +7872,12 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__offset{
+  box-sizing:border-box;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:8px;
+  min-height:32px;
   margin:-2px 0 0;
   padding:2px 8px 6px;
   text-align:left;
@@ -7885,6 +7887,7 @@ textarea::-moz-selection,
   color:rgba(214,210,200,.62);
   font-size:8px;
   letter-spacing:.06em;
+  line-height:1.15;
   flex:0 1 auto;
 }
 
@@ -7893,6 +7896,7 @@ textarea::-moz-selection,
   font-size:10px;
   font-weight:650;
   letter-spacing:0;
+  line-height:1.15;
   text-align:right;
   overflow-wrap:anywhere;
 }
