@@ -211,34 +211,34 @@
           </div>
         </header>
 
-        <article class="layout-control-card">
-          <div class="layout-control-card__title">Running Guides</div>
-          <div class="layout-control-card__body layout-control-card__body--compact">
-            <button class="layout-control-card__button" data-action="decrement" data-target-field="guideCount" type="button" aria-label="Decrease running guides">−</button>
-            <div class="layout-control-card__value" data-field="guideCount" contenteditable="true" spellcheck="false" role="textbox" aria-label="Running guides"></div>
-            <button class="layout-control-card__button" data-action="increment" data-target-field="guideCount" type="button" aria-label="Increase running guides">+</button>
+        <article class="layout-control-card layout-control-card--guide-spacing" aria-label="Guide spacing inputs">
+          <div class="guide-spacing-input-row">
+            <span id="layoutFirstGuideTitle" class="guide-spacing-input-row__label">First Guide From Tip</span>
+            <div class="guide-spacing-input-row__controls">
+              <button class="layout-control-card__button" data-action="decrement" data-target-field="firstGuide" type="button" aria-label="Decrease first guide">−</button>
+              <div class="layout-control-card__value" data-field="firstGuide" contenteditable="true" spellcheck="false" role="textbox" aria-label="First guide from tip"></div>
+              <button class="layout-control-card__button" data-action="increment" data-target-field="firstGuide" type="button" aria-label="Increase first guide">+</button>
+              <span id="layoutFirstGuideMeta" class="guide-spacing-input-row__unit">mm</span>
+            </div>
           </div>
-          <div class="layout-control-card__meta">guides</div>
-        </article>
-
-        <article class="layout-control-card">
-          <div id="layoutFirstGuideTitle" class="layout-control-card__title">First Guide From Tip (mm)</div>
-          <div class="layout-control-card__body layout-control-card__body--compact">
-            <button class="layout-control-card__button" data-action="decrement" data-target-field="firstGuide" type="button" aria-label="Decrease first guide">−</button>
-            <div class="layout-control-card__value" data-field="firstGuide" contenteditable="true" spellcheck="false" role="textbox" aria-label="First guide from tip"></div>
-            <button class="layout-control-card__button" data-action="increment" data-target-field="firstGuide" type="button" aria-label="Increase first guide">+</button>
+          <div class="guide-spacing-input-row">
+            <span id="layoutTargetStripperTitle" class="guide-spacing-input-row__label">Target Stripper Position</span>
+            <div class="guide-spacing-input-row__controls">
+              <button class="layout-control-card__button" data-action="decrement" data-target-field="targetStripper" type="button" aria-label="Decrease target stripper position">−</button>
+              <div class="layout-control-card__value" data-field="targetStripper" contenteditable="true" spellcheck="false" role="textbox" aria-label="Target stripper position"></div>
+              <button class="layout-control-card__button" data-action="increment" data-target-field="targetStripper" type="button" aria-label="Increase target stripper position">+</button>
+              <span id="layoutTargetStripperMeta" class="guide-spacing-input-row__unit">mm</span>
+            </div>
           </div>
-          <div id="layoutFirstGuideMeta" class="layout-control-card__meta">mm</div>
-        </article>
-
-        <article class="layout-control-card">
-          <div id="layoutTargetStripperTitle" class="layout-control-card__title">Target Stripper Position (mm)</div>
-          <div class="layout-control-card__body layout-control-card__body--compact">
-            <button class="layout-control-card__button" data-action="decrement" data-target-field="targetStripper" type="button" aria-label="Decrease target stripper position">−</button>
-            <div class="layout-control-card__value" data-field="targetStripper" contenteditable="true" spellcheck="false" role="textbox" aria-label="Target stripper position"></div>
-            <button class="layout-control-card__button" data-action="increment" data-target-field="targetStripper" type="button" aria-label="Increase target stripper position">+</button>
+          <div class="guide-spacing-input-row">
+            <span class="guide-spacing-input-row__label">Guide Count (excluding tip)</span>
+            <div class="guide-spacing-input-row__controls">
+              <button class="layout-control-card__button" data-action="decrement" data-target-field="guideCount" type="button" aria-label="Decrease guide count excluding tip">−</button>
+              <div class="layout-control-card__value" data-field="guideCount" contenteditable="true" spellcheck="false" role="textbox" aria-label="Guide count excluding tip"></div>
+              <button class="layout-control-card__button" data-action="increment" data-target-field="guideCount" type="button" aria-label="Increase guide count excluding tip">+</button>
+              <span class="guide-spacing-input-row__unit">guides</span>
+            </div>
           </div>
-          <div id="layoutTargetStripperMeta" class="layout-control-card__meta">mm</div>
         </article>
 
         <section id="studioRodContainer" class="rod-blank-visual" aria-label="Rod blank visual">

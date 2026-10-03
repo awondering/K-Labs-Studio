@@ -13786,8 +13786,8 @@ function render(options){
     el.setAttribute('aria-readonly',editable?'false':'true');
   });
   const units=measurementUnitSuffix();
-  if($('layoutFirstGuideTitle'))$('layoutFirstGuideTitle').textContent=`First Guide From Tip (${units})`;
-  if($('layoutTargetStripperTitle'))$('layoutTargetStripperTitle').textContent=`Target Stripper Position (${units})`;
+  if($('layoutFirstGuideTitle'))$('layoutFirstGuideTitle').textContent='First Guide From Tip';
+  if($('layoutTargetStripperTitle'))$('layoutTargetStripperTitle').textContent='Target Stripper Position';
   if($('layoutFirstGuideMeta'))$('layoutFirstGuideMeta').textContent=units;
   if($('layoutTargetStripperMeta'))$('layoutTargetStripperMeta').textContent=units;
   refreshMeasurementPlaceholders();
