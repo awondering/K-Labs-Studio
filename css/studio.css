@@ -7780,6 +7780,10 @@ textarea::-moz-selection,
   cursor:pointer;
 }
 
+#layoutScreen .guide-spacing-row__summary--static{
+  cursor:default;
+}
+
 #layoutScreen .guide-spacing-row__summary > *{
   grid-column:auto;
   justify-self:stretch;

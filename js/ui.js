@@ -784,6 +784,10 @@ function normalizeRodStyle(value){
   const style=String(value||'').trim().toLowerCase();
   return style==='spinning'||style==='casting'?style:'';
 }
+function spiralGuideRowsExpandable(spiral){
+  const source=spiral&&typeof spiral==='object'?spiral:workshopToolsState.spiral;
+  return normalizeRodStyle(source.rodStyle)!=='spinning' && normalizeSpiralMethod(source.method)!=='standard';
+}
 // 0° is always the reel side; which physical side that is depends on rod style.
 function spiralOppositeSideLabel(rodStyle){
   const style=normalizeRodStyle(rodStyle);
@@ -1137,6 +1141,7 @@ function renderSpiralGuideMapper(){
   spiral.expandedGuideIndex=Number.isInteger(expandedGuideIndex) && expandedGuideIndex>=0 && expandedGuideIndex<spiral.guides.length
     ?expandedGuideIndex
     :-1;
+  if(!spiralGuideRowsExpandable(spiral))spiral.expandedGuideIndex=-1;
 
   const offsetWrap=$('workshopSpiralOffsetStartWrap');
   const offsetInput=$('workshopSpiralOffsetStart');
@@ -1318,6 +1323,7 @@ function formatGuideListMeasurement(valueMm){
 function renderSpiralGuideRows(spiral,showPhysicalOffsets){
   const rowsHost=$('guideSpacingCards');
   if(rowsHost){
+    const canExpandRows=spiralGuideRowsExpandable(spiral);
     const guides=Array.isArray(spiral.guides)?spiral.guides:[];
     const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
     const layoutRows=Array.isArray(layout&&layout.rows)?layout.rows:[];
@@ -1333,23 +1339,27 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const isReferenceAngle=angle<=0.05 || angle>=179.95;
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
       const showOdField=showPhysicalOffsets && !isReferenceAngle;
-      const isExpanded=index===spiral.expandedGuideIndex;
+      const isExpanded=canExpandRows && index===spiral.expandedGuideIndex;
       const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
       const positionText=formatGuideListMeasurement(row.cum);
       const spacingText=formatGuideListMeasurement(row.spacing);
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
+      const summaryTag=canExpandRows?'button':'div';
+      const summaryAttributes=canExpandRows
+        ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}. Spacing ${spacingText}. Orientation ${angleText} ${sideText}`)}"`
+        :'';
       const showOffsetResult=showPhysicalOffsets && (!!labels.offsetText || (isExpanded && showOdField));
       return `
         <article class="guide-spacing-row${isStripper?' guide-spacing-row--stripper':''}${isExpanded?' guide-spacing-row--selected':''}" data-guide-index="${index}">
-          <button class="guide-spacing-row__summary" type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}. Spacing ${spacingText}. Orientation ${angleText} ${sideText}`)}">
+          <${summaryTag} class="guide-spacing-row__summary${canExpandRows?'':' guide-spacing-row__summary--static'}" ${summaryAttributes}>
             <span class="guide-spacing-row__guide-name">Guide ${displayGuideNumber}${isStripper?'<em class="guide-spacing-row__tag">Stripper</em>':''}</span>
             <span class="guide-spacing-row__position-value">${positionText}</span>
             <strong class="guide-spacing-row__spacing-value">${spacingText}</strong>
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
-          </button>
+          </${summaryTag}>
           ${showOffsetResult?`<div class="spiral-guide-row__offset"><span>Surface Distance From Top</span><strong>${labels.offsetText||'—'}</strong></div>`:''}
-          <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
+          ${canExpandRows?`<div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             ${showOdField?`<label>
               <span>Blank Diameter</span>
@@ -1370,7 +1380,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
               </div>
             </label>
             </div>
-          </div>
+          </div>`:''}
         </article>
       `;
     }).join('');
