@@ -7872,9 +7872,29 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__offset{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
   margin:-2px 0 0;
-  padding:0 8px 5px;
+  padding:2px 8px 6px;
+  text-align:left;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__offset span{
+  color:rgba(214,210,200,.62);
+  font-size:8px;
+  letter-spacing:.06em;
+  flex:0 1 auto;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__offset strong{
+  color:rgba(214,210,200,.88);
+  font-size:10px;
+  font-weight:650;
+  letter-spacing:0;
   text-align:right;
+  overflow-wrap:anywhere;
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__edit{
@@ -7888,25 +7908,86 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__fields{
-  grid-template-columns:repeat(2,minmax(0,260px));
-  justify-content:end;
+  grid-template-columns:minmax(0,1fr);
+  gap:0;
+  justify-content:stretch;
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__fields--basic{
-  grid-template-columns:minmax(0,260px);
+  grid-template-columns:minmax(0,1fr);
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__fields label{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px;
+  min-height:48px;
+}
+
+#layoutScreen .guide-spacing-row .spiral-guide-row__fields label+label{
+  border-top:1px solid rgba(214,210,200,.1);
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__fields label > span{
-  color:rgba(214,210,200,.62);
-  font-size:8px;
-  font-weight:700;
-  letter-spacing:.12em;
+  color:rgba(214,210,200,.78);
+  font-size:10px;
+  font-weight:650;
+  letter-spacing:.05em;
   text-transform:uppercase;
 }
 
-#layoutScreen .guide-spacing-row .spiral-guide-row__details{
-  justify-self:end;
-  width:min(100%,528px);
+#layoutScreen .guide-spacing-row .spiral-diameter-control{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+
+#layoutScreen .guide-spacing-row .spiral-diameter-control input{
+  box-sizing:border-box;
+  width:88px;
+  min-height:44px;
+  padding:0 7px;
+  font-size:16px;
+  text-align:center;
+}
+
+#layoutScreen .guide-spacing-row .spiral-diameter-control__unit{
+  min-width:22px;
+  color:rgba(214,210,200,.72);
+  font-size:10px;
+  letter-spacing:.04em;
+}
+
+#layoutScreen .guide-spacing-row .spiral-rotation-control{
+  grid-template-columns:44px 64px 44px;
+  gap:4px;
+}
+
+#layoutScreen .guide-spacing-row .spiral-rotation-control .layout-control-card__button{
+  width:44px;
+  height:44px;
+  border-radius:10px;
+  font-size:18px;
+}
+
+#layoutScreen .guide-spacing-row .spiral-rotation-control__value-wrap,
+#layoutScreen .guide-spacing-row .spiral-rotation-control__value{
+  box-sizing:border-box;
+  width:64px;
+}
+
+#layoutScreen .guide-spacing-row .spiral-rotation-control__value{
+  min-height:44px;
+  padding:0 17px 0 4px;
+  border-radius:8px;
+  font-size:16px;
+  letter-spacing:0;
+}
+
+#layoutScreen .guide-spacing-row .spiral-rotation-control__unit{
+  right:5px;
+  font-size:11px;
 }
 
 .rod-marker--selected .rod-marker__halo{

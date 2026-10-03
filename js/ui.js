@@ -1329,8 +1329,6 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const isReferenceAngle=angle<=0.05 || angle>=179.95;
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
       const showOdField=showPhysicalOffsets && !isReferenceAngle;
-      const showOffsetRow=showPhysicalOffsets && !isReferenceAngle && hasValidOd && !!labels.offsetText;
-      const referenceText=angle>=179.95?spiralOppositeSideLabel(spiral.rodStyle):'REEL SIDE';
       const isExpanded=index===spiral.expandedGuideIndex;
       const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
@@ -1345,12 +1343,15 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <strong class="guide-spacing-row__spacing-value">${spacingText}</strong>
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </button>
-          ${showPhysicalOffsets && labels.offsetText?`<p class="spiral-guide-row__offset">${labels.offsetText}</p>`:''}
+          ${showPhysicalOffsets && labels.offsetText?`<div class="spiral-guide-row__offset"><span>Surface Distance From Top</span><strong>${labels.offsetText}</strong></div>`:''}
           <div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             ${showOdField?`<label>
-              <span>Blank OD</span>
-              <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" />
+              <span>Blank Diameter</span>
+              <div class="spiral-diameter-control">
+                <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" />
+                <span class="spiral-diameter-control__unit">${workshopUnitSuffix(spiral.unit)}</span>
+              </div>
             </label>`:''}
             <label>
               <span>Rotation</span>
@@ -1364,10 +1365,6 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
               </div>
             </label>
             </div>
-            ${showOffsetRow || (showPhysicalOffsets && isReferenceAngle)?`<div class="spiral-guide-row__details">
-              ${showOffsetRow?`<div><span>Surface Distance From Top</span><strong>${labels.offsetText}</strong></div>`:''}
-              ${showPhysicalOffsets && isReferenceAngle?`<div><span>Reference</span><strong>${referenceText}</strong></div>`:''}
-            </div>`:''}
           </div>
         </article>
       `;
