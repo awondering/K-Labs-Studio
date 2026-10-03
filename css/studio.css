@@ -8099,12 +8099,44 @@ textarea::-moz-selection,
 }
 
 #workshopToolDiameter .workshop-tool-fields input,
-#workshopToolGrip .workshop-tool-fields input,
+#workshopToolGrip .workshop-tool-fields input{
+  box-sizing:border-box;
+  min-height:42px;
+  padding:6px 10px;
+  font-size:14px;
+  line-height:1.2;
+  border-color:rgba(214,210,200,.2);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.04),inset 0 -1px 2px rgba(0,0,0,.28);
+}
+
 #workshopToolSpiral .workshop-tool-fields input{
   min-height:44px;
   padding:9px 10px;
   border-color:rgba(214,210,200,.2);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.04),inset 0 -1px 2px rgba(0,0,0,.28);
+}
+
+#workshopToolDiameter .workshop-tool-fields,
+#workshopToolGrip .workshop-tool-fields{
+  gap:8px;
+}
+
+#workshopToolDiameter .workshop-tool-fields--two,
+#workshopToolGrip .workshop-tool-fields--two{
+  gap:8px;
+}
+
+#workshopToolDiameter .workshop-tool-fields label,
+#workshopToolGrip .workshop-tool-fields label{
+  gap:4px;
+}
+
+#workshopToolGrip .workshop-tool-fields--two label > span{
+  min-height:24px;
+}
+
+#workshopToolGrip .workshop-tool-unit-row[aria-label="Grip profile"] .ghost-action{
+  min-height:40px;
 }
 
 #workshopToolDiameter .workshop-tool-result,
@@ -8132,7 +8164,10 @@ textarea::-moz-selection,
 }
 
 #workshopToolDiameter .workshop-tool-print-actions .ghost-action,
-#workshopToolGrip .workshop-tool-print-actions .ghost-action,
+#workshopToolGrip .workshop-tool-print-actions .ghost-action{
+  min-height:40px;
+}
+
 #workshopToolSpiral .workshop-tool-print-actions .ghost-action{
   min-height:42px;
 }
@@ -8826,18 +8861,31 @@ textarea::-moz-selection,
     grid-template-columns:1fr;
   }
 
+  #workshopToolGrip .workshop-tool-unit-row[aria-label="Grip profile"]{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+  }
+
+  #workshopToolDiameter .workshop-tool-fields--two,
+  #workshopToolGrip .workshop-tool-fields--two{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
   #workshopToolDiameter,
   #workshopToolGrip,
   #workshopToolSpiral{
     gap:12px;
   }
 
+  #workshopToolDiameter,
+  #workshopToolGrip{
+    gap:10px;
+  }
+
   #workshopToolSpiral{
     gap:8px;
   }
 
-  #workshopToolDiameter .workshop-tool-fields input,
-  #workshopToolGrip .workshop-tool-fields input,
   #workshopToolSpiral .workshop-tool-fields input{
     min-height:46px;
   }
