@@ -9353,15 +9353,21 @@ function isValidCustomerName(name){
   ]);
   return !blockedNames.has(normalized);
 }
-function customerSurnameFromRecord(record){
+function customerExplicitSurnameFromRecord(record){
   const source=record&&typeof record==='object'?record:{};
-  // Only trust an explicit structured surname field; guessing the last word of a display name can misorder
-  // business names, suffixes (Jr/Snr) and multi-part surnames, so unstructured names fall back to full-name sort.
   return specificationValue(source.surname)
     || specificationValue(source.lastName)
     || specificationValue(source.familyName)
     || specificationValue(source.customerLastName)
     || '';
+}
+function customerSurnameFromRecord(record){
+  const source=record&&typeof record==='object'?record:{};
+  const explicitSurname=customerExplicitSurnameFromRecord(source);
+  if(explicitSurname)return explicitSurname;
+  const name=specificationValue(source.customerName);
+  const nameParts=name.split(/\s+/).filter(Boolean);
+  return nameParts[nameParts.length-1]||'';
 }
 function customerSavedGroups(searchValue,options){
   const settings=options&&typeof options==='object'?options:{};
@@ -9373,14 +9379,17 @@ function customerSavedGroups(searchValue,options){
     if(!includeInvalidCustomers && !isValidCustomerName(customerName))return;
     const key=normalizeNameKey(customerName)||'__no_customer__';
     if(!grouped.has(key)){
-      grouped.set(key,{key,name:customerName||'No customer name',records:[],entries:[],sortSurname:''});
+      grouped.set(key,{key,name:customerName||'No customer name',records:[],entries:[],sortSurname:'',fallbackSurname:''});
     }
     const target=grouped.get(key);
     target.records.push(entry);
     if(!isCustomerOnlyEntry(entry))target.entries.push(entry);
     if(customerName && target.name==='No customer name')target.name=customerName;
-    if(!target.sortSurname){
-      target.sortSurname=customerSurnameFromRecord(record);
+    const explicitSurname=customerExplicitSurnameFromRecord(record);
+    if(explicitSurname&&!target.sortSurname){
+      target.sortSurname=explicitSurname;
+    }else if(!explicitSurname&&!target.fallbackSurname){
+      target.fallbackSurname=customerSurnameFromRecord(record);
     }
   });
   const normalizedSearch=normalizeNameKey(searchValue);
@@ -9395,7 +9404,7 @@ function customerSavedGroups(searchValue,options){
       const rightDate=Date.parse(right.record&&right.record.savedAt||'')||0;
       return rightDate-leftDate;
     });
-    const sortSurname=group.sortSurname||customerSurnameFromRecord(entries[0]&&entries[0].record);
+    const sortSurname=group.sortSurname||group.fallbackSurname||customerSurnameFromRecord(entries[0]&&entries[0].record);
     return {
       ...group,
       records,
@@ -9403,7 +9412,6 @@ function customerSavedGroups(searchValue,options){
       quotes:entries.filter((entry)=>entry.source==='quote'),
       builds:entries.filter((entry)=>entry.source==='build'),
       latestSavedAt:records[0]&&records[0].record?records[0].record.savedAt:'',
-      // Reliable structured surname sorts first; otherwise sort by the full display name rather than a guess.
       sortKey:normalizeNameKey(sortSurname||group.name),
     };
   }).filter((group)=>{
