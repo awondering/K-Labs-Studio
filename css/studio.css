@@ -9821,6 +9821,77 @@ body.klabs-auth-resolving::after {
   padding:9px 2px;
 }
 
+/* AVAILABLE SIZES: flatter chips and a clearer range action, confined to the editor. */
+#studioComponentDetails .studio-size-section{
+  margin:6px 0 8px;
+  padding:8px 9px 8px;
+}
+
+#studioComponentDetails .studio-size-section__summary{
+  font-size:10px;
+  letter-spacing:.09em;
+}
+
+#studioComponentDetails .studio-size-section__help{
+  margin:4px 0 5px;
+  font-size:10px;
+  line-height:1.35;
+}
+
+#studioComponentDetails .studio-size-list{
+  gap:4px;
+  margin-bottom:6px;
+}
+
+#studioComponentDetails .studio-size-chip{
+  box-sizing:border-box;
+  grid-template-columns:minmax(0,1fr) 32px;
+  height:34px;
+  min-height:34px;
+  gap:0;
+  padding:0 0 0 6px;
+  border-color:rgba(214,210,200,.12);
+  border-radius:4px;
+  background:rgba(255,255,255,.016);
+}
+
+#studioComponentDetails .studio-size-chip__remove{
+  width:32px;
+  height:32px;
+  border-radius:3px;
+}
+
+#studioComponentDetails .studio-size-entry{
+  gap:6px;
+}
+
+#studioComponentDetails .studio-size-entry__btn{
+  min-height:38px;
+  padding:0 10px;
+  border-radius:6px;
+  font-size:10px;
+}
+
+#studioComponentDetails .studio-size-range{
+  gap:6px;
+  margin-top:6px;
+}
+
+#studioComponentDetails .studio-size-range .quote-component-field{
+  gap:4px;
+}
+
+#studioComponentDetails .studio-size-range__btn{
+  min-height:40px;
+  border:1px solid rgba(214,210,200,.2);
+  border-radius:6px;
+  background:rgba(255,255,255,.035);
+  color:#e6dece;
+  font-size:10px;
+  letter-spacing:.07em;
+  box-shadow:none;
+}
+
 #workshopComponentsSection .quote-component-group__children .quote-component-row__summary-item{
   font-weight:600;
   font-variant-numeric:tabular-nums;
