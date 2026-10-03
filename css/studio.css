@@ -1199,14 +1199,26 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsScreen .settings-pricing-tax-row{
   display:grid;
-  grid-template-columns:minmax(106px,1fr) minmax(0,1fr);
-  align-items:end;
-  gap:12px;
+  grid-template-columns:minmax(126px,1fr) minmax(164px,1.2fr);
+  align-items:center;
+  gap:8px;
 }
 
 #settingsScreen .settings-pricing-field{
   position:relative;
   min-width:0;
+}
+
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-row > .settings-pricing-field:last-child,
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-field{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 104px;
+  align-items:center;
+  gap:8px;
+}
+
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-row > .settings-pricing-field:last-child{
+  grid-template-columns:minmax(0,1fr) 76px;
 }
 
 #settingsScreen .settings-pricing-tax-fields,
@@ -1219,6 +1231,7 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsScreen .settings-pricing-tax-fields #settingsTaxRate,
 #settingsScreen .settings-pricing-tax-fields #settingsDefaultLabourRate{
+  box-sizing:border-box;
   width:100%;
   min-width:0;
   min-height:44px;
@@ -1239,6 +1252,13 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsPricingTaxCard .settings-context-actions:has(> button[hidden]){
   margin-top:0;
+}
+
+@media (max-width:380px){
+  #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-row{
+    grid-template-columns:minmax(0,1fr);
+    gap:8px;
+  }
 }
 
 #settingsScreen #settingsPricingTaxCard .settings-context-actions{
