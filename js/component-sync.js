@@ -337,6 +337,7 @@
       return {
         categories: mergeTaxonomyRows(local.categories, cloud.categories, baseline.categories, "subcategories"),
         suppliers,
+        brands: mergeTaxonomyRows(local.brands, cloud.brands, baseline.brands, ""),
       };
     }
     const categories = [];
@@ -376,7 +377,15 @@
       seenSuppliers.add(key);
       suppliers.push({ id: String(supplier.id || ""), name: String(supplier.name || "").trim() });
     });
-    return { categories, suppliers };
+    const brands = [];
+    const seenBrands = new Set();
+    [...(Array.isArray(cloud.brands) ? cloud.brands : []), ...(Array.isArray(local.brands) ? local.brands : [])].forEach((brand) => {
+      const key = normalizeSyncText(brand && brand.name);
+      if (!key || seenBrands.has(key)) return;
+      seenBrands.add(key);
+      brands.push({ id: String(brand.id || ""), name: String(brand.name || "").trim() });
+    });
+    return { categories, suppliers, brands };
   }
 
   // The taxonomy JSON is only half the picture: harvest names from records that are not known deletions.
@@ -391,6 +400,10 @@
     const suppliers = Array.isArray(base.suppliers) ? base.suppliers.map((supplier) => ({
       id: String(supplier && supplier.id || ""),
       name: String(supplier && supplier.name || "").trim(),
+    })) : [];
+    const brands = Array.isArray(base.brands) ? base.brands.map((brand) => ({
+      id: String(brand && brand.id || ""),
+      name: String(brand && brand.name || "").trim(),
     })) : [];
     const newId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     (Array.isArray(records) ? records : []).forEach((record) => {
@@ -421,7 +434,7 @@
         suppliers.push({ id: newId("sup"), name: supplierName });
       }
     });
-    return { categories, suppliers };
+    return { categories, suppliers, brands };
   }
   // Apply the final taxonomy locally (same cache + persistence step as any cloud pull) and push it back up.
   async function publishTaxonomy(taxonomy) {

@@ -103,7 +103,7 @@ const GUIDE_LIST_FORMAT={decimalsMetric:1,decimalsImperial:2,fractionDenominator
 let holdTimer=null;
 let holdDelayTimer=null;
 let holdContext=null;
-let activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:''};
+let activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:'',brandName:''};
 let activeChoicePickerSizeSelections=new Set();
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
@@ -3497,7 +3497,23 @@ function normalizeStudioComponentTaxonomy(input){
       return {id,name};
     })
     .filter(Boolean);
-  return {categories,suppliers};
+  const seenBrandIds=new Set();
+  const seenBrandNames=new Set();
+  const brands=(Array.isArray(raw.brands)?raw.brands:[])
+    .map((brand)=>{
+      const item=brand&&typeof brand==='object'?brand:{};
+      const name=String(item.name||'').trim();
+      if(!name)return null;
+      const normalized=normalizeNameKey(name);
+      if(seenBrandNames.has(normalized))return null;
+      seenBrandNames.add(normalized);
+      let id=String(item.id||'').trim();
+      if(!id || seenBrandIds.has(id))id=studioTaxonomyId('brand');
+      seenBrandIds.add(id);
+      return {id,name};
+    })
+    .filter(Boolean);
+  return {categories,suppliers,brands};
 }
 function allStudioCategoryNames(taxonomy){
   const values=(taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[]).map((item)=>String(item.name||'').trim()).filter(Boolean);
@@ -3506,6 +3522,18 @@ function allStudioCategoryNames(taxonomy){
 function allStudioSupplierNames(taxonomy){
   const values=(taxonomy&&Array.isArray(taxonomy.suppliers)?taxonomy.suppliers:[]).map((item)=>String(item.name||'').trim()).filter(Boolean);
   return Array.from(new Set(values.map((name)=>name))).sort((left,right)=>left.localeCompare(right,undefined,{sensitivity:'base'}));
+}
+function studioBrandNamesForLibrary(taxonomy,records){
+  const names=(taxonomy&&Array.isArray(taxonomy.brands)?taxonomy.brands:[])
+    .map((item)=>String(item&&item.name||'').trim())
+    .concat((Array.isArray(records)?records:[]).map((record)=>String(record&&record.brand||'').trim()))
+    .filter(Boolean);
+  const unique=new Map();
+  names.forEach((name)=>{
+    const key=normalizeNameKey(name);
+    if(key && !unique.has(key))unique.set(key,name);
+  });
+  return Array.from(unique.values()).sort(compareTaxonomyDisplayNames);
 }
 const BOGUS_TAXONOMY_NAME_KEYS=['category missing','subcategory missing','supplier missing','select category','select subcategory','select supplier','undefined','null','n/a','none','new component'];
 function isBogusTaxonomyName(name){
@@ -3521,7 +3549,7 @@ function looksLikeComponentSpecificationName(name){
 function isInvalidLibraryCategoryName(name){
   return isBogusTaxonomyName(name) || looksLikeComponentSpecificationName(name);
 }
-function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
+function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap,brandMap){
   componentLibraryRecords().forEach((record)=>{
     const categoryName=String(record&&record.category||'').trim();
     const categoryKey=normalizeNameKey(categoryName);
@@ -3542,6 +3570,11 @@ function harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap){
     if(supplierKey && !supplierMap.has(supplierKey)){
       supplierMap.set(supplierKey,{id:studioTaxonomyId('sup'),name:supplierName});
     }
+    const brandName=String(record&&record.brand||'').trim();
+    const brandKey=normalizeNameKey(brandName);
+    if(brandKey && brandMap && !brandMap.has(brandKey)){
+      brandMap.set(brandKey,{id:studioTaxonomyId('brand'),name:brandName});
+    }
   });
   getCustomSupplierNames().forEach((name)=>{
     const key=normalizeNameKey(name);
@@ -3555,8 +3588,9 @@ function ensureStudioComponentTaxonomyLoaded(){
   const taxonomy=normalizeStudioComponentTaxonomy(stored);
   const categoryMap=new Map(taxonomy.categories.map((item)=>[normalizeNameKey(item.name),item]));
   const supplierMap=new Map(taxonomy.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
-  harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap);
-  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
+  const brandMap=new Map(taxonomy.brands.map((item)=>[normalizeNameKey(item.name),item]));
+  harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap,brandMap);
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values()),brands:Array.from(brandMap.values())});
   Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
   return studioComponentTaxonomyState;
 }
@@ -3566,8 +3600,9 @@ function resyncStudioComponentTaxonomyWithRecords(){
   const baseline=studioComponentTaxonomyState||normalizeStudioComponentTaxonomy(Store.get(componentTaxonomyStorageKey(),null));
   const categoryMap=new Map(baseline.categories.map((item)=>[normalizeNameKey(item.name),item]));
   const supplierMap=new Map(baseline.suppliers.map((item)=>[normalizeNameKey(item.name),item]));
-  harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap);
-  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values())});
+  const brandMap=new Map(baseline.brands.map((item)=>[normalizeNameKey(item.name),item]));
+  harvestStudioTaxonomyMapsFromRecords(categoryMap,supplierMap,brandMap);
+  studioComponentTaxonomyState=normalizeStudioComponentTaxonomy({categories:Array.from(categoryMap.values()),suppliers:Array.from(supplierMap.values()),brands:Array.from(brandMap.values())});
   Store.set(componentTaxonomyStorageKey(),studioComponentTaxonomyState);
   return studioComponentTaxonomyState;
 }
@@ -3997,10 +4032,163 @@ function removeStudioComponentSize(value){
   studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft).filter((size)=>size.toLowerCase()!==key);
   refreshStudioComponentSizeList();
 }
-function studioComponentBrandOptionsMarkup(){
-  const brands=Array.from(new Set(componentLibraryRecords().map((record)=>String(record.brand||'').trim()).filter(Boolean)))
-    .sort(compareTaxonomyDisplayNames);
-  return brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"></option>`).join('');
+function studioComponentBrandOptionsMarkup(selectedName){
+  const brands=studioBrandNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  const selected=normalizeNameKey(selectedName);
+  return `<option value="">No Brand</option>${brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"${normalizeNameKey(brand)===selected?' selected':''}>${escapeHtml(brand)}</option>`).join('')}`;
+}
+function syncStudioComponentBrandControl(selectedName){
+  const select=$('studioComponentBrand');
+  if(!select)return;
+  const current=selectedName===undefined?select.value:String(selectedName||'');
+  select.innerHTML=studioComponentBrandOptionsMarkup(current);
+  select.value=current;
+  syncStudioComponentSaveButtonState();
+}
+function studioBrandManagerMessage(text,state){
+  const message=$('studioBrandManagerMessage');
+  if(!message)return;
+  message.textContent=String(text||'');
+  message.dataset.state=state||'';
+}
+function syncStudioBrandManagerActions(){
+  const select=$('studioBrandManagerSelect');
+  const input=$('studioBrandManagerName');
+  const add=$('studioBrandManagerAddBtn');
+  const rename=$('studioBrandManagerRenameBtn');
+  if(!select || !input || !add || !rename)return;
+  const selected=normalizeNameKey(select.value);
+  const next=String(input.value||'').trim();
+  const nextKey=normalizeNameKey(next);
+  const brands=studioBrandNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  add.disabled=!nextKey || brands.some((brand)=>normalizeNameKey(brand)===nextKey);
+  rename.disabled=!selected || !nextKey || nextKey===selected || brands.some((brand)=>normalizeNameKey(brand)===nextKey && normalizeNameKey(brand)!==selected);
+}
+function syncStudioBrandManagerControls(selectedName,resetName){
+  const select=$('studioBrandManagerSelect');
+  const input=$('studioBrandManagerName');
+  if(!select || !input)return;
+  const brands=studioBrandNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  const selected=String(selectedName===undefined?select.value:selectedName||'');
+  select.innerHTML=`<option value="">Select Brand</option>${brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"${normalizeNameKey(brand)===normalizeNameKey(selected)?' selected':''}>${escapeHtml(brand)}</option>`).join('')}`;
+  select.value=selected;
+  if(resetName)input.value=selected;
+  syncStudioBrandManagerActions();
+}
+function ensureStudioBrandManagerSheet(){
+  if($('studioBrandManagerSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='studioBrandManagerSheet';
+  sheet.className='component-sheet';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-studio-brand-action="close"></div>
+    <section class="component-sheet__panel studio-brand-manager" role="dialog" aria-modal="true" aria-label="Manage Brands">
+      <header class="component-sheet__header">
+        <h2>Manage Brands</h2>
+        <button class="component-sheet__close" type="button" data-studio-brand-action="close" aria-label="Close Brand manager">&#215;</button>
+      </header>
+      <div class="component-sheet__body">
+        <div class="studio-brand-manager__fields">
+          <label class="quote-component-field"><span>Select Brand</span><span class="studio-component-details__select-wrap"><select id="studioBrandManagerSelect"><option value="">Select Brand</option></select></span></label>
+          <label class="quote-component-field"><span>Brand Name</span><input id="studioBrandManagerName" type="text" autocomplete="off" placeholder="Brand name" /></label>
+        </div>
+        <div class="studio-brand-manager__actions">
+          <button id="studioBrandManagerAddBtn" class="primary-action" type="button" disabled>Add Brand</button>
+          <button id="studioBrandManagerRenameBtn" class="ghost-action" type="button" disabled>Rename Brand</button>
+        </div>
+        <p id="studioBrandManagerMessage" class="studio-brand-manager__message" aria-live="polite"></p>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  const select=$('studioBrandManagerSelect');
+  const input=$('studioBrandManagerName');
+  select.addEventListener('change',()=>{
+    input.value=select.value;
+    studioBrandManagerMessage('');
+    syncStudioBrandManagerActions();
+  });
+  input.addEventListener('input',()=>{
+    studioBrandManagerMessage('');
+    syncStudioBrandManagerActions();
+  });
+  sheet.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-studio-brand-action="close"]')){
+      sheet.hidden=true;
+      unlockModalLayer({restoreFocus:true});
+      return;
+    }
+    const addButton=event.target.closest('#studioBrandManagerAddBtn');
+    if(addButton){
+      runExplicitSave(addButton,()=>{
+        const name=String(input.value||'').trim();
+        const taxonomy=ensureStudioComponentTaxonomyLoaded();
+        if(!name || studioBrandNamesForLibrary(taxonomy,componentLibraryRecords()).some((brand)=>normalizeNameKey(brand)===normalizeNameKey(name))){
+          studioBrandManagerMessage('Enter a new Brand name.','error');
+          return false;
+        }
+        taxonomy.brands.push({id:studioTaxonomyId('brand'),name});
+        saveStudioComponentTaxonomy();
+        syncStudioComponentBrandControl(name);
+        syncStudioBrandManagerControls(name,true);
+        studioBrandManagerMessage('Brand added.','saved');
+        if($('choicePickerSheet')&&!$('choicePickerSheet').hidden)renderChoicePickerOptions($('choicePickerSearch')?.value||'');
+        return true;
+      }).finally(()=>syncStudioBrandManagerActions());
+      return;
+    }
+    const renameButton=event.target.closest('#studioBrandManagerRenameBtn');
+    if(renameButton){
+      runExplicitSave(renameButton,()=>{
+        const oldName=String(select.value||'').trim();
+        const nextName=String(input.value||'').trim();
+        const oldKey=normalizeNameKey(oldName);
+        const nextKey=normalizeNameKey(nextName);
+        const taxonomy=ensureStudioComponentTaxonomyLoaded();
+        const brands=studioBrandNamesForLibrary(taxonomy,componentLibraryRecords());
+        if(!oldKey || !nextKey || nextKey===oldKey && nextName===oldName || brands.some((brand)=>normalizeNameKey(brand)===nextKey && normalizeNameKey(brand)!==oldKey)){
+          studioBrandManagerMessage('Choose a Brand and enter an unused name.','error');
+          return false;
+        }
+        let brandRecord=taxonomy.brands.find((brand)=>normalizeNameKey(brand.name)===oldKey);
+        if(brandRecord)brandRecord.name=nextName;
+        else taxonomy.brands.push({id:studioTaxonomyId('brand'),name:nextName});
+        const records=componentLibraryRecords();
+        let recordsChanged=false;
+        const updated=records.map((record)=>{
+          if(normalizeNameKey(record.brand)!==oldKey)return record;
+          recordsChanged=true;
+          return {...record,brand:nextName};
+        });
+        if(recordsChanged)saveComponentLibraryRecords(updated);
+        saveStudioComponentTaxonomy();
+        const currentBrand=$('studioComponentBrand')?.value||'';
+        syncStudioComponentBrandControl(normalizeNameKey(currentBrand)===oldKey?nextName:currentBrand);
+        try{
+          const baseline=JSON.parse(studioComponentDetailContext.baseline||'{}');
+          if(normalizeNameKey(baseline.brand)===oldKey){
+            baseline.brand=nextName;
+            studioComponentDetailContext.baseline=studioComponentPayloadSignature(baseline);
+          }
+        }catch{}
+        syncStudioComponentSaveButtonState();
+        syncStudioBrandManagerControls(nextName,true);
+        studioBrandManagerMessage(`Brand renamed to ${nextName}.`,'saved');
+        if($('choicePickerSheet')&&!$('choicePickerSheet').hidden)renderChoicePickerOptions($('choicePickerSearch')?.value||'');
+        return true;
+      }).finally(()=>syncStudioBrandManagerActions());
+    }
+  });
+}
+function openStudioBrandManager(){
+  ensureStudioBrandManagerSheet();
+  const sheet=$('studioBrandManagerSheet');
+  const selected=$('studioComponentBrand')?.value||'';
+  syncStudioBrandManagerControls(selected,true);
+  studioBrandManagerMessage('');
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
 }
 function studioComponentCategoryOptionsMarkup(selectedName){
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
@@ -4049,14 +4237,13 @@ function renderStudioComponentDetails(record,options){
     <div class="studio-component-details__fields quote-component-row__fields">
       ${isAddMode?`<label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>`:''}
       <label class="quote-component-field studio-component-details__field--full"><span>Details</span><textarea id="studioComponentDescription" rows="2" placeholder="Optional component details">${escapeHtml(description)}</textarea></label>
-      <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" list="studioComponentBrandOptions" value="${escapeHtml(brand)}" autocomplete="off" placeholder="Brand" /></label>
+      <label class="quote-component-field"><span>Brand / Manufacturer</span><span class="studio-component-brand-control"><span class="studio-component-details__select-wrap"><select id="studioComponentBrand" aria-label="Brand / Manufacturer">${studioComponentBrandOptionsMarkup(brand)}</select></span><button id="studioComponentManageBrandsBtn" class="ghost-action" type="button" aria-label="Manage Brands">Brands</button></span></label>
       <label class="quote-component-field"><span>Category</span>${studioComponentCategoryOptionsMarkup(category)}</label>
       <label class="quote-component-field"><span>Subcategory</span><span class="studio-component-details__select-wrap"><select id="studioComponentSubcategory">${studioComponentSubcategoryOptionsMarkup(category,subcategory)}</select></span></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>Stock Quantity</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
     </div>
-    <datalist id="studioComponentBrandOptions">${studioComponentBrandOptionsMarkup()}</datalist>
     ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
@@ -4627,7 +4814,7 @@ function studioMoveCategoryContentsAndDelete(sourceCategoryId,destCategoryId){
 
   try{
     saveComponentLibraryRecords(records);
-    studioComponentTaxonomyState={categories:nextCategories,suppliers:taxonomy.suppliers};
+    studioComponentTaxonomyState={categories:nextCategories,suppliers:taxonomy.suppliers,brands:taxonomy.brands};
     saveStudioComponentTaxonomy();
   }catch(error){
     Store.set(componentLibraryStorageKey(),recordsSnapshot);
@@ -5926,6 +6113,11 @@ function bindStudioComponentsPanel(){
           return;
         }
       }
+        if(event.target.closest('#studioComponentManageBrandsBtn')){
+          openStudioBrandManager();
+          return;
+        }
+
 
       const sizeButton=event.target.closest('[data-size-action]');
       if(sizeButton){
@@ -7279,8 +7471,10 @@ function componentPickerSubcategoryStageOptions(categoryName,query){
 function componentPickerComponentStageOptions(categoryName,subcategoryName,query){
   const libraryData=studioComponentLibrarySelectionData();
   const normalized=normalizeNameKey(query);
+  const brandKey=normalizeNameKey(activeChoicePicker.brandName);
   return sortComponentRecordsByName(studioComponentRecordsForSubcategory(libraryData.records,categoryName,subcategoryName))
-    .filter((record)=>!normalized || normalizeNameKey(record.name).includes(normalized))
+    .filter((record)=>(!normalized || normalizeNameKey(record.name).includes(normalized) || normalizeNameKey(record.brand).includes(normalized))
+      && (!brandKey || normalizeNameKey(record.brand)===brandKey))
     .map((record)=>({name:record.name,id:String(record.id||''),isDrill:false,record}));
 }
 function componentPickerStageOptions(query){
@@ -7292,6 +7486,8 @@ function componentPickerStageOptions(query){
 function componentPickerLeafSecondaryText(record){
   if(!record)return '';
   const bits=[];
+  const brand=String(record.brand||'').trim();
+  if(brand)bits.push(brand);
   const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
   const sell=numberOrZero(record.unitPrice);
   if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} · Sell $${sell.toFixed(2)}`);
@@ -7309,10 +7505,12 @@ function advanceComponentPickerStage(name){
   if(activeChoicePicker.stage==='category'){
     activeChoicePicker.categoryName=name;
     activeChoicePicker.subcategoryName='';
+    activeChoicePicker.brandName='';
     const hasSubcategories=componentPickerSubcategoryStageOptions(name,'').length>0;
     activeChoicePicker.stage=hasSubcategories?'subcategory':'component';
   }else if(activeChoicePicker.stage==='subcategory'){
     activeChoicePicker.subcategoryName=name;
+    activeChoicePicker.brandName='';
     activeChoicePicker.stage='component';
   }else{
     return;
@@ -7381,6 +7579,9 @@ function ensureChoicePicker(){
         <input id="choicePickerSearch" class="component-sheet__search" type="text" placeholder="Search components..." autocomplete="off" spellcheck="false" />
         <select id="choicePickerCategoryFilter" class="component-sheet__search component-sheet__filter" hidden>
           <option value="all">All Categories</option>
+        </select>
+        <select id="choicePickerBrandFilter" class="component-sheet__search component-sheet__filter" aria-label="Filter components by Brand" hidden>
+          <option value="">All Brands</option>
         </select>
         <div id="choicePickerList" class="component-sheet__list"></div>
         <button id="choicePickerSizeAdd" class="primary-action component-sheet__size-add" type="button" data-choice-size-add hidden disabled>Add Component</button>
@@ -7501,6 +7702,10 @@ function ensureChoicePicker(){
   $('choicePickerCategoryFilter').addEventListener('change',()=>{
     const filter=$('choicePickerCategoryFilter');
     choicePickerCategoryFilter=normalizeNameKey(filter&&filter.value)||'all';
+    renderChoicePickerOptions($('choicePickerSearch').value);
+  });
+  $('choicePickerBrandFilter').addEventListener('change',()=>{
+    activeChoicePicker.brandName=String($('choicePickerBrandFilter').value||'');
     renderChoicePickerOptions($('choicePickerSearch').value);
   });
   $('choicePickerAdd').addEventListener('click',startChoicePickerAddFlow);
@@ -8024,13 +8229,23 @@ function removeComponentLibraryRecord(name){
 }
 function syncChoicePickerFilterControls(){
   const filter=$('choicePickerCategoryFilter');
-  if(!filter)return;
+  if(filter){
   // Cascade navigation (Category -> Subcategory -> Component) replaced the old flat "All Categories"
   // filter, which built its own parallel category list. The control stays permanently hidden and no
   // longer has a second component-name source behind it.
-  filter.hidden=true;
-  filter.innerHTML='';
-  choicePickerCategoryFilter='all';
+    filter.hidden=true;
+    filter.innerHTML='';
+    choicePickerCategoryFilter='all';
+  }
+  const brandFilter=$('choicePickerBrandFilter');
+  if(!brandFilter)return;
+  const brands=studioBrandNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
+  const showBrandFilter=activeChoicePicker.type==='category' && activeChoicePicker.stage==='component' && brands.length>0;
+  const current=brands.find((brand)=>normalizeNameKey(brand)===normalizeNameKey(activeChoicePicker.brandName))||'';
+  activeChoicePicker.brandName=current;
+  brandFilter.hidden=!showBrandFilter;
+  brandFilter.innerHTML=`<option value="">All Brands</option>${brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"${normalizeNameKey(brand)===normalizeNameKey(current)?' selected':''}>${escapeHtml(brand)}</option>`).join('')}`;
+  brandFilter.value=current;
 }
 function applyComponentLibraryRecordToRow(index,name){
   if(index<0 || !quote.components[index])return;
@@ -8558,6 +8773,7 @@ function renderComponentPickerCascadeOptions(query){
   if(!options.length){
     list.innerHTML=hasQuery
       ?'<div class="component-sheet__empty">No matching results</div>'
+      :activeChoicePicker.brandName?`<div class="component-sheet__empty">No components for ${escapeHtml(activeChoicePicker.brandName)}</div>`
       :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">&#9676;</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
     return;
   }
@@ -8965,6 +9181,7 @@ function openChoicePicker(type,index,openerEl,options){
     stage:type==='category'?'category':'',
     categoryName:'',
     subcategoryName:'',
+    brandName:'',
   };
   activeChoicePickerSizeSelections=new Set();
   choicePickerCategoryFilter='all';
