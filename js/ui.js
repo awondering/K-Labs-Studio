@@ -189,6 +189,7 @@ let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
 let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
 let studioComponentMoveState={category:'',subcategory:'',brand:''};
 let studioComponentDuplicateState=null;
+let studioBrandManagerState={selected:'',query:'',menuId:'',editor:null,busy:false};
 // Working copy of the open component form's AVAILABLE SIZES list; committed only on save.
 let studioComponentSizeDraft=[];
 let studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
@@ -4080,29 +4081,98 @@ function studioBrandManagerMessage(text,state){
   message.textContent=String(text||'');
   message.dataset.state=state||'';
 }
-function syncStudioBrandManagerActions(){
-  const select=$('studioBrandManagerSelect');
-  const input=$('studioBrandManagerName');
-  const add=$('studioBrandManagerAddBtn');
-  const rename=$('studioBrandManagerRenameBtn');
-  if(!select || !input || !add || !rename)return;
-  const selected=normalizeNameKey(select.value);
-  const next=String(input.value||'').trim();
-  const nextKey=normalizeNameKey(next);
-  const brands=studioBrandNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
-  add.disabled=!nextKey || brands.some((brand)=>normalizeNameKey(brand)===nextKey);
-  rename.disabled=!selected || !nextKey || nextKey===selected || brands.some((brand)=>normalizeNameKey(brand)===nextKey && normalizeNameKey(brand)!==selected);
+function renderStudioBrandManager(){
+  const state=studioBrandManagerState;
+  const editor=state.editor;
+  const title=editor?(editor.id?'Rename Brand':'Add Brand'):'Manage Brands';
+  $('studioBrandManagerTitle').textContent=title;
+  $('studioBrandManagerPanel').setAttribute('aria-label',title);
+  $('studioBrandManagerBrowse').hidden=!!editor;
+  $('studioBrandManagerEditor').hidden=!editor;
+  if(editor){$('studioBrandManagerName').value=editor.name;return;}
+  const query=normalizeNameKey(state.query);
+  const brands=sortTaxonomyEntriesForDisplay(ensureStudioComponentTaxonomyLoaded().brands)
+    .filter((brand)=>!query || normalizeNameKey(brand.name).includes(query));
+  const nameMarkup=(name)=>`<strong>${escapeHtml(name||'No Brand')}${normalizeNameKey(name)===normalizeNameKey(state.selected)?'<b class="studio-brand-manager__tick" aria-label="Selected">&#10003;</b>':''}</strong>`;
+  const noBrand=`<button class="studio-components-list__item" type="button" data-studio-brand-select="">${nameMarkup('')}</button>`;
+  $('studioBrandManagerList').innerHTML=(!query || 'no brand'.includes(query)?noBrand:'')+brands.map((brand)=>{
+    const menuOpen=state.menuId===brand.id;
+    const menu=menuOpen?`<div class="studio-components-row-menu" role="menu" aria-label="Brand actions"><button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-brand-rename="${escapeAttributeValue(brand.id)}">Rename</button><button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-brand-delete="${escapeAttributeValue(brand.id)}">Delete</button></div>`:'';
+    return `<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-brand-select="${escapeAttributeValue(brand.name)}">${nameMarkup(brand.name)}</button><button class="studio-components-list__menu-trigger" type="button" aria-label="Actions for ${escapeAttributeValue(brand.name)}" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" data-studio-brand-menu="${escapeAttributeValue(brand.id)}">&hellip;</button>${menu}</article>`;
+  }).join('') || '<p class="studio-components-list__empty">No brands found.</p>';
 }
-function syncStudioBrandManagerControls(selectedName,resetName){
-  const select=$('studioBrandManagerSelect');
-  const input=$('studioBrandManagerName');
-  if(!select || !input)return;
-  const brands=studioBrandNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords());
-  const selected=String(selectedName===undefined?select.value:selectedName||'');
-  select.innerHTML=`<option value="">Select Brand</option>${brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"${normalizeNameKey(brand)===normalizeNameKey(selected)?' selected':''}>${escapeHtml(brand)}</option>`).join('')}`;
-  select.value=selected;
-  if(resetName)input.value=selected;
-  syncStudioBrandManagerActions();
+function persistStudioBrandChange(action,brandId,name){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const brand=taxonomy.brands.find((item)=>item.id===brandId);
+  const nextName=action==='delete'?'':String(name||'').trim();
+  if(action!=='add' && !brand)throw new Error('The selected brand was not found.');
+  if(action!=='delete' && (!nextName || normalizeNameKey(nextName)==='no brand'))throw new Error('Enter a brand name. No Brand is an empty assignment.');
+  const records=componentLibraryRecords();
+  if(action!=='delete' && studioBrandNamesForLibrary(taxonomy,records).some((existing)=>normalizeNameKey(existing)===normalizeNameKey(nextName) && (!brand || normalizeNameKey(existing)!==normalizeNameKey(brand.name))))throw new Error('A brand with that name already exists.');
+  const previousName=brand?brand.name:'';
+  const staged=normalizeStudioComponentTaxonomy(taxonomy);
+  if(action==='add')staged.brands.push({id:studioTaxonomyId('brand'),name:nextName});
+  else if(action==='delete')staged.brands=staged.brands.filter((item)=>item.id!==brandId);
+  else staged.brands.find((item)=>item.id===brandId).name=nextName;
+  const updated=records.map((record)=>action!=='add' && normalizeNameKey(record.brand)===normalizeNameKey(previousName)?{...record,brand:nextName}:record);
+  const recordsChanged=updated.some((record,index)=>record!==records[index]);
+  const snapshots=[
+    [componentLibraryStorageKey(),Store.get(componentLibraryStorageKey(),[])],
+    [componentTaxonomyStorageKey(),Store.get(componentTaxonomyStorageKey(),null)],
+    [CUSTOM_SUPPLIER_STORAGE_KEY,Store.get(CUSTOM_SUPPLIER_STORAGE_KEY,[])],
+  ];
+  const sync=window.KLABS_SYNC;
+  const notifications=['notifyComponentsChanged','notifyTaxonomyChanged'].map((key)=>({key,notify:sync&&sync[key],pending:false}));
+  try{
+    notifications.forEach((item)=>{if(typeof item.notify==='function')sync[item.key]=()=>{item.pending=true;};});
+    if(recordsChanged)saveComponentLibraryRecords(updated);
+    studioComponentTaxonomyState=staged;
+    saveStudioComponentTaxonomy();
+  }catch(error){
+    const recoveryErrors=[];
+    snapshots.forEach(([key,value])=>{try{Store.set(key,value);}catch(recoveryError){recoveryErrors.push(`${key}: ${recoveryError.message}`);}});
+    studioComponentTaxonomyState=recoveryErrors.length?null:taxonomy;
+    throw new Error(recoveryErrors.length?`${error.message} Recovery failed: ${recoveryErrors.join('; ')}. Some changes may remain saved; do not retry until recovery is resolved.`:`${error.message} Original data restored. You can retry.`);
+  }finally{
+    notifications.forEach((item)=>{if(typeof item.notify==='function')sync[item.key]=item.notify;});
+  }
+  const syncErrors=[];
+  notifications.forEach((item)=>{if(item.pending){try{item.notify.call(sync);}catch(error){syncErrors.push(error.message||'Sync notification failed.');}}});
+  return {previousName,name:nextName,syncErrors};
+}
+function saveStudioBrandManagerChange(button,action,brandId,name){
+  if(studioBrandManagerState.busy)return;
+  studioBrandManagerState.busy=true;
+  if(action==='delete')studioBrandManagerMessage('Deleting brand...','saving');
+  return runExplicitSave(button,()=>{
+    let result;
+    try{result=persistStudioBrandChange(action,brandId,name);}
+    catch(error){studioBrandManagerMessage(error.message,'error');throw error;}
+    const oldKey=normalizeNameKey(result.previousName);
+    const current=$('studioComponentBrand')?.value||'';
+    const selected=action==='add' || normalizeNameKey(current)===oldKey?result.name:current;
+    syncStudioComponentBrandControl(selected);
+    if(action!=='add'){
+      try{
+        const baseline=JSON.parse(studioComponentDetailContext.baseline||'{}');
+        if(normalizeNameKey(baseline.brand)===oldKey){baseline.brand=result.name;studioComponentDetailContext.baseline=studioComponentPayloadSignature(baseline);}
+      }catch{}
+    }
+    syncStudioComponentSaveButtonState();
+    studioBrandManagerState.selected=selected;
+    studioBrandManagerState.editor=null;
+    studioBrandManagerState.menuId='';
+    renderStudioBrandManager();
+    studioBrandManagerMessage(result.syncErrors.length?`Saved locally; sync needs retry. ${result.syncErrors.join('; ')}`:action==='delete'?'Brand deleted.':'Brand saved.',result.syncErrors.length?'error':'saved');
+    if($('choicePickerSheet')&&!$('choicePickerSheet').hidden)renderChoicePickerOptions($('choicePickerSearch')?.value||'');
+    return true;
+  }).finally(()=>{studioBrandManagerState.busy=false;});
+}
+function cancelStudioBrandManager(){
+  if(studioBrandManagerState.busy)return;
+  if(studioBrandManagerState.editor){studioBrandManagerState.editor=null;renderStudioBrandManager();studioBrandManagerMessage('');return;}
+  $('studioBrandManagerSheet').hidden=true;
+  unlockModalLayer({restoreFocus:true});
 }
 function ensureStudioBrandManagerSheet(){
   if($('studioBrandManagerSheet'))return;
@@ -4112,109 +4182,87 @@ function ensureStudioBrandManagerSheet(){
   sheet.hidden=true;
   sheet.innerHTML=`
     <div class="component-sheet__scrim" data-studio-brand-action="close"></div>
-    <section class="component-sheet__panel studio-brand-manager" role="dialog" aria-modal="true" aria-label="Manage Brands">
+    <section id="studioBrandManagerPanel" class="component-sheet__panel studio-brand-manager" role="dialog" aria-modal="true" aria-label="Manage Brands">
       <header class="component-sheet__header">
-        <h2>Manage Brands</h2>
+        <h2 id="studioBrandManagerTitle">Manage Brands</h2>
         <button class="component-sheet__close" type="button" data-studio-brand-action="close" aria-label="Close Brand manager">&#215;</button>
       </header>
       <div class="component-sheet__body">
-        <div class="studio-brand-manager__fields">
-          <label class="quote-component-field"><span>Select Brand</span><span class="studio-component-details__select-wrap"><select id="studioBrandManagerSelect"><option value="">Select Brand</option></select></span></label>
-          <label class="quote-component-field"><span>Brand Name</span><input id="studioBrandManagerName" type="text" autocomplete="off" placeholder="Brand name" /></label>
+        <div id="studioBrandManagerBrowse" class="studio-brand-manager__fields">
+          <input id="studioBrandManagerSearch" type="search" aria-label="Search brands" placeholder="Search Brands" />
+          <button id="studioBrandManagerAddBtn" class="ghost-action" type="button" data-studio-brand-add>ADD BRAND</button>
+          <div id="studioBrandManagerList" class="studio-brand-manager__list"></div>
         </div>
-        <div class="studio-brand-manager__actions">
-          <button id="studioBrandManagerAddBtn" class="primary-action" type="button" disabled>Add Brand</button>
-          <button id="studioBrandManagerRenameBtn" class="ghost-action" type="button" disabled>Rename Brand</button>
+        <div id="studioBrandManagerEditor" class="studio-brand-manager__fields" hidden>
+          <label class="quote-component-field"><span>Brand Name</span><input id="studioBrandManagerName" type="text" autocomplete="off" /></label>
+          <div class="studio-brand-manager__actions">
+            <button id="studioBrandManagerSaveBtn" class="primary-action" type="button" data-studio-brand-save>Save</button>
+            <button class="ghost-action" type="button" data-studio-brand-action="close">Cancel</button>
+          </div>
         </div>
         <p id="studioBrandManagerMessage" class="studio-brand-manager__message" aria-live="polite"></p>
       </div>
     </section>
   `;
   document.body.appendChild(sheet);
-  const select=$('studioBrandManagerSelect');
   const input=$('studioBrandManagerName');
-  select.addEventListener('change',()=>{
-    input.value=select.value;
-    studioBrandManagerMessage('');
-    syncStudioBrandManagerActions();
+  $('studioBrandManagerSearch').addEventListener('input',(event)=>{
+    studioBrandManagerState.query=event.target.value;
+    studioBrandManagerState.menuId='';
+    renderStudioBrandManager();
   });
   input.addEventListener('input',()=>{
+    if(studioBrandManagerState.editor)studioBrandManagerState.editor.name=input.value;
     studioBrandManagerMessage('');
-    syncStudioBrandManagerActions();
   });
+  sheet.addEventListener('keydown',(event)=>{if(event.key==='Escape'){event.stopPropagation();cancelStudioBrandManager();}});
   sheet.addEventListener('click',(event)=>{
-    if(event.target.closest('[data-studio-brand-action="close"]')){
-      sheet.hidden=true;
-      unlockModalLayer({restoreFocus:true});
+    if(studioBrandManagerState.busy)return;
+    if(event.target.closest('[data-studio-brand-action="close"]')){cancelStudioBrandManager();return;}
+    const select=event.target.closest('[data-studio-brand-select]');
+    if(select){studioBrandManagerState.selected=select.getAttribute('data-studio-brand-select');syncStudioComponentBrandControl(studioBrandManagerState.selected);renderStudioBrandManager();return;}
+    const menu=event.target.closest('[data-studio-brand-menu]');
+    if(menu){
+      event.stopPropagation();
+      const id=menu.getAttribute('data-studio-brand-menu');
+      studioBrandManagerState.menuId=studioBrandManagerState.menuId===id?'':id;
+      renderStudioBrandManager();
+      const popup=sheet.querySelector('.studio-components-row-menu');
+      if(popup)positionAnchoredActionMenu(popup,popup.closest('.studio-components-list__row').querySelector('[data-studio-brand-menu]'));
       return;
     }
-    const addButton=event.target.closest('#studioBrandManagerAddBtn');
-    if(addButton){
-      runExplicitSave(addButton,()=>{
-        const name=String(input.value||'').trim();
-        const taxonomy=ensureStudioComponentTaxonomyLoaded();
-        if(!name || studioBrandNamesForLibrary(taxonomy,componentLibraryRecords()).some((brand)=>normalizeNameKey(brand)===normalizeNameKey(name))){
-          studioBrandManagerMessage('Enter a new Brand name.','error');
-          return false;
-        }
-        taxonomy.brands.push({id:studioTaxonomyId('brand'),name});
-        saveStudioComponentTaxonomy();
-        syncStudioComponentBrandControl(name);
-        syncStudioBrandManagerControls(name,true);
-        studioBrandManagerMessage('Brand added.','saved');
-        if($('choicePickerSheet')&&!$('choicePickerSheet').hidden)renderChoicePickerOptions($('choicePickerSearch')?.value||'');
-        return true;
-      }).finally(()=>syncStudioBrandManagerActions());
+    const rename=event.target.closest('[data-studio-brand-rename]');
+    if(event.target.closest('[data-studio-brand-add]') || rename){
+      const brand=rename&&ensureStudioComponentTaxonomyLoaded().brands.find((item)=>item.id===rename.getAttribute('data-studio-brand-rename'));
+      if(rename && !brand)return;
+      studioBrandManagerState.editor={id:brand?brand.id:'',name:brand?brand.name:''};
+      studioBrandManagerState.menuId='';
+      studioBrandManagerMessage('');
+      renderStudioBrandManager();
+      input.focus();
       return;
     }
-    const renameButton=event.target.closest('#studioBrandManagerRenameBtn');
-    if(renameButton){
-      runExplicitSave(renameButton,()=>{
-        const oldName=String(select.value||'').trim();
-        const nextName=String(input.value||'').trim();
-        const oldKey=normalizeNameKey(oldName);
-        const nextKey=normalizeNameKey(nextName);
-        const taxonomy=ensureStudioComponentTaxonomyLoaded();
-        const brands=studioBrandNamesForLibrary(taxonomy,componentLibraryRecords());
-        if(!oldKey || !nextKey || nextKey===oldKey && nextName===oldName || brands.some((brand)=>normalizeNameKey(brand)===nextKey && normalizeNameKey(brand)!==oldKey)){
-          studioBrandManagerMessage('Choose a Brand and enter an unused name.','error');
-          return false;
-        }
-        let brandRecord=taxonomy.brands.find((brand)=>normalizeNameKey(brand.name)===oldKey);
-        if(brandRecord)brandRecord.name=nextName;
-        else taxonomy.brands.push({id:studioTaxonomyId('brand'),name:nextName});
-        const records=componentLibraryRecords();
-        let recordsChanged=false;
-        const updated=records.map((record)=>{
-          if(normalizeNameKey(record.brand)!==oldKey)return record;
-          recordsChanged=true;
-          return {...record,brand:nextName};
-        });
-        if(recordsChanged)saveComponentLibraryRecords(updated);
-        saveStudioComponentTaxonomy();
-        const currentBrand=$('studioComponentBrand')?.value||'';
-        syncStudioComponentBrandControl(normalizeNameKey(currentBrand)===oldKey?nextName:currentBrand);
-        try{
-          const baseline=JSON.parse(studioComponentDetailContext.baseline||'{}');
-          if(normalizeNameKey(baseline.brand)===oldKey){
-            baseline.brand=nextName;
-            studioComponentDetailContext.baseline=studioComponentPayloadSignature(baseline);
-          }
-        }catch{}
-        syncStudioComponentSaveButtonState();
-        syncStudioBrandManagerControls(nextName,true);
-        studioBrandManagerMessage(`Brand renamed to ${nextName}.`,'saved');
-        if($('choicePickerSheet')&&!$('choicePickerSheet').hidden)renderChoicePickerOptions($('choicePickerSearch')?.value||'');
-        return true;
-      }).finally(()=>syncStudioBrandManagerActions());
+    const save=event.target.closest('[data-studio-brand-save]');
+    if(save && studioBrandManagerState.editor){const editor=studioBrandManagerState.editor;saveStudioBrandManagerChange(save,editor.id?'rename':'add',editor.id,input.value);return;}
+    const remove=event.target.closest('[data-studio-brand-delete]');
+    if(remove){
+      const brand=ensureStudioComponentTaxonomyLoaded().brands.find((item)=>item.id===remove.getAttribute('data-studio-brand-delete'));
+      if(!brand)return;
+      const count=componentLibraryRecords().filter((record)=>normalizeNameKey(record.brand)===normalizeNameKey(brand.name)).length;
+      studioBrandManagerState.menuId='';
+      renderStudioBrandManager();
+      openConfirmDialog({title:'Delete Brand',message:`${count} library component${count===1?' uses':'s use'} ${brand.name}. Delete this brand and clear only those brand assignments? Components, saved builds and historical quotes are preserved.`,actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete',kind:'danger'}]},(choice)=>{if(choice==='delete')saveStudioBrandManagerChange(null,'delete',brand.id,'');});
+      return;
     }
+    if(studioBrandManagerState.menuId && !event.target.closest('.studio-components-row-menu')){studioBrandManagerState.menuId='';renderStudioBrandManager();}
   });
 }
 function openStudioBrandManager(){
   ensureStudioBrandManagerSheet();
   const sheet=$('studioBrandManagerSheet');
-  const selected=$('studioComponentBrand')?.value||'';
-  syncStudioBrandManagerControls(selected,true);
+  studioBrandManagerState={selected:$('studioComponentBrand')?.value||'',query:'',menuId:'',editor:null,busy:false};
+  $('studioBrandManagerSearch').value='';
+  renderStudioBrandManager();
   studioBrandManagerMessage('');
   sheet.hidden=false;
   lockModalLayer(document.activeElement);

@@ -10192,6 +10192,10 @@ body.klabs-auth-resolving::after {
   border-radius:6px;
 }
 
+.studio-brand-manager{
+  max-width:420px;
+}
+
 .studio-brand-manager__fields{
   display:grid;
   gap:10px;
@@ -10199,8 +10203,7 @@ body.klabs-auth-resolving::after {
   min-width:0;
 }
 
-.studio-brand-manager__fields input,
-.studio-brand-manager__fields select{
+.studio-brand-manager__fields input{
   width:100%;
   min-width:0;
   min-height:44px;
@@ -10211,6 +10214,37 @@ body.klabs-auth-resolving::after {
   color:#f5efe5;
   padding:0 10px;
   font-size:13px;
+}
+
+.studio-brand-manager__list{
+  display:grid;
+  gap:8px;
+}
+
+.studio-brand-manager .studio-components-list__item,
+#studioBrandManagerAddBtn{
+  min-height:44px;
+  border-radius:6px;
+  overflow-wrap:anywhere;
+}
+
+.studio-brand-manager .studio-components-list__menu-trigger{
+  width:44px;
+  height:44px;
+  min-height:44px;
+  border-radius:6px;
+}
+
+.studio-brand-manager .studio-components-list__item strong{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  letter-spacing:0;
+}
+
+.studio-brand-manager__tick{
+  flex:none;
+  color:var(--ds-text-muted,#9aa096);
 }
 
 .studio-brand-manager__actions{
