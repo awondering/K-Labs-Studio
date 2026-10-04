@@ -5300,7 +5300,7 @@ textarea::-moz-selection,
 
 .studio-component-rename-trigger{
   flex:0 0 auto;
-  min-height:28px;
+  min-height:44px;
   margin-bottom:1px;
   padding:0 8px;
   border:1px solid rgba(214,210,200,.16);
@@ -5330,7 +5330,7 @@ textarea::-moz-selection,
 .studio-component-rename-editor input{
   width:100%;
   min-width:0;
-  min-height:36px;
+  min-height:44px;
   padding:7px 9px;
   border:1px solid rgba(214,210,200,.22);
   border-radius:7px;
@@ -5340,39 +5340,35 @@ textarea::-moz-selection,
 }
 
 .studio-component-rename-editor button{
-  min-height:36px;
+  min-height:44px;
   padding:0 10px;
   border-radius:7px;
 }
 
 .studio-components-shell__controls{
   display:grid;
-  grid-template-columns:minmax(0,1fr) auto auto;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
   gap:10px;
 }
 
 .studio-components-shell__search{
   width:100%;
-  min-height:46px;
+  min-width:0;
+  min-height:44px;
+  border:1px solid rgba(214,210,200,.18);
   border-radius:12px;
-  border:1px solid rgba(214,210,200,.22);
   background:rgba(7,8,10,.9);
   color:#f5efe5;
-  padding:10px 12px;
-  font-size:14px;
-}
-
-.studio-components-shell__add{
-  min-height:46px;
-  border-radius:12px;
   padding:0 14px;
-  white-space:nowrap;
+  font-size:14px;
+  box-sizing:border-box;
 }
 
 .studio-components-shell__utility{
   min-height:46px;
   border-radius:12px;
-  padding:0 14px;
+  gap:8px;
   white-space:nowrap;
 }
 
@@ -9383,9 +9379,8 @@ body.klabs-auth-resolving::after {
   }
 }
 
-/* Component Add/Edit form balance after Brand / Variant were retired. Must live at the end of the
-   file: the shared .quote-component-field--cost rules (126px, justify-self:end) and the earlier
-   639px single-column override otherwise win the cascade on this form. */
+/* Component Add/Edit field balance: hierarchy and details use the library width while prices stay compact.
+  Keep at the end because shared cost-field and responsive rules otherwise override this form. */
 .studio-component-details__fields.quote-component-row__fields{
   grid-template-columns:repeat(6,minmax(0,1fr));
   gap:10px;
@@ -10005,3 +10000,77 @@ body.klabs-auth-resolving::after {
 .explicit-save-feedback span{min-width:0;overflow-wrap:anywhere}
 .explicit-save-feedback[data-state="error"]{border-color:rgba(166,70,80,.5);color:#e4aeb4}
 .explicit-save-feedback .ghost-action{min-height:34px;padding:0 10px;font-size:11px;flex:none}
+
+/* Final component-editor control sizing after legacy responsive overrides. */
+#studioComponentsPanel .studio-component-rename-trigger{
+  min-height:44px;
+}
+
+#studioComponentsPanel .studio-component-rename-editor input,
+#studioComponentsPanel .studio-component-rename-editor button{
+  min-height:44px;
+  border-radius:6px;
+}
+
+#studioComponentDetails .studio-component-details__fields input,
+#studioComponentDetails .studio-component-details__fields select,
+#studioComponentDetails .studio-component-details__fields textarea{
+  min-height:44px;
+  border-radius:6px;
+  box-sizing:border-box;
+}
+
+#studioComponentDetails .studio-component-details__fields textarea{
+  min-height:68px;
+}
+
+#studioComponentDetails .studio-component-details__fields .quote-component-field--cost{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:7px;
+}
+
+#studioComponentDetails .studio-component-details__fields .quote-component-field--cost > span{
+  font-size:9.5px;
+  letter-spacing:.04em;
+  white-space:nowrap;
+}
+
+#studioComponentDetails .studio-size-list{
+  grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
+}
+
+#studioComponentDetails .studio-size-chip{
+  grid-template-columns:minmax(0,1fr) 44px;
+  min-height:46px;
+  height:46px;
+}
+
+#studioComponentDetails .studio-size-chip__remove{
+  width:44px;
+  min-width:44px;
+  height:44px;
+  min-height:44px;
+}
+
+#studioComponentDetails .studio-size-entry input,
+#studioComponentDetails .studio-size-entry__btn,
+#studioComponentDetails .studio-size-range input,
+#studioComponentDetails .studio-size-range__btn{
+  height:44px;
+  min-height:44px;
+  border-radius:6px;
+  box-sizing:border-box;
+}
+
+#studioComponentDetails .studio-size-entry__btn{
+  min-width:64px;
+}
+
+@media (max-width:639px){
+  #studioComponentDetails .studio-component-details__fields .quote-component-field--cost{
+    grid-template-columns:1fr;
+    gap:5px;
+  }
+}

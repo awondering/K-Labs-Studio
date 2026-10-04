@@ -3737,6 +3737,7 @@ function studioComponentDetailPayloadFromDom(){
   const stockOnHand=rawStock===''?undefined:numberOrZero(rawStock);
   return {
     name:String((studioComponentNameInput()&&studioComponentNameInput().value)||'').trim(),
+    description:String(($('studioComponentDescription')&&$('studioComponentDescription').value)||'').trim(),
     brand:String(($('studioComponentBrand')&&$('studioComponentBrand').value)||'').trim(),
     category:String(($('studioComponentCategory')&&$('studioComponentCategory').value)||'').trim(),
     subcategory:String(($('studioComponentSubcategory')&&$('studioComponentSubcategory').value)||'').trim(),
@@ -3996,6 +3997,27 @@ function removeStudioComponentSize(value){
   studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft).filter((size)=>size.toLowerCase()!==key);
   refreshStudioComponentSizeList();
 }
+function studioComponentBrandOptionsMarkup(){
+  const brands=Array.from(new Set(componentLibraryRecords().map((record)=>String(record.brand||'').trim()).filter(Boolean)))
+    .sort(compareTaxonomyDisplayNames);
+  return brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"></option>`).join('');
+}
+function studioComponentCategoryOptionsMarkup(selectedName){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const names=studioCategoryNamesForLibrary(taxonomy,componentLibraryRecords()).slice();
+  const selected=String(selectedName||'').trim();
+  if(selected && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(selected)))names.push(selected);
+  names.sort(compareTaxonomyDisplayNames);
+  return `<span class="studio-component-details__select-wrap"><select id="studioComponentCategory"><option value="">No Category</option>${names.map((name)=>`<option value="${escapeAttributeValue(name)}"${normalizeNameKey(name)===normalizeNameKey(selected)?' selected':''}>${escapeHtml(name)}</option>`).join('')}</select></span>`;
+}
+function studioComponentSubcategoryOptionsMarkup(categoryName,selectedName){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const names=studioSubcategoryNamesForLibrary(taxonomy,componentLibraryRecords(),categoryName).slice();
+  const selected=String(selectedName||'').trim();
+  if(selected && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(selected)))names.push(selected);
+  names.sort(compareTaxonomyDisplayNames);
+  return `<option value="">No Subcategory</option>${names.map((name)=>`<option value="${escapeAttributeValue(name)}"${normalizeNameKey(name)===normalizeNameKey(selected)?' selected':''}>${escapeHtml(name)}</option>`).join('')}`;
+}
 function renderStudioComponentDetails(record,options){
   const details=$('studioComponentDetails');
   if(!details)return;
@@ -4012,6 +4034,7 @@ function renderStudioComponentDetails(record,options){
     return;
   }
   const name=String(record.name||'').trim();
+  const description=String(record.description||'').trim();
   const brand=String(record.brand||'').trim();
   const category=String(record.category||'').trim();
   const subcategory=String(record.subcategory||'').trim();
@@ -4023,15 +4046,17 @@ function renderStudioComponentDetails(record,options){
   if(renameInput)renameInput.value=name;
   details.innerHTML=`
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
-    <input id="studioComponentBrand" type="hidden" value="${escapeHtml(brand)}" />
-    <input id="studioComponentCategory" type="hidden" value="${escapeHtml(category)}" />
-    <input id="studioComponentSubcategory" type="hidden" value="${escapeHtml(subcategory)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
       ${isAddMode?`<label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>`:''}
+      <label class="quote-component-field studio-component-details__field--full"><span>Details</span><textarea id="studioComponentDescription" rows="2" placeholder="Optional component details">${escapeHtml(description)}</textarea></label>
+      <label class="quote-component-field"><span>Brand / Manufacturer</span><input id="studioComponentBrand" type="text" list="studioComponentBrandOptions" value="${escapeHtml(brand)}" autocomplete="off" placeholder="Brand" /></label>
+      <label class="quote-component-field"><span>Category</span>${studioComponentCategoryOptionsMarkup(category)}</label>
+      <label class="quote-component-field"><span>Subcategory</span><span class="studio-component-details__select-wrap"><select id="studioComponentSubcategory">${studioComponentSubcategoryOptionsMarkup(category,subcategory)}</select></span></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
-      ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>In Stock</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
+      ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>Stock Quantity</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
     </div>
+    <datalist id="studioComponentBrandOptions">${studioComponentBrandOptionsMarkup()}</datalist>
     ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
@@ -4044,6 +4069,7 @@ function renderStudioComponentDetails(record,options){
     isAddMode,
     baseline:studioComponentPayloadSignature({
       name,
+      description,
       brand,
       category,
       subcategory,
@@ -4208,8 +4234,7 @@ function commitStudioComponentDetails(){
   if(!studioComponentDetailContext.isAddMode && payloadSignature===studioComponentDetailContext.baseline){
     return true;
   }
-  // Supplier / Variant / Specifications / Notes / Unit are no longer part of the editor. Any value an older
-  // record already carries is read back and passed through untouched so saving here never strips it.
+  // Retired Supplier / Variant / Specifications / Notes / Unit values pass through untouched on legacy records.
   const existingRecord=findComponentLibraryRecordByName(originalName)||findComponentLibraryRecordByName(nextName);
   const legacy=existingRecord||{};
   const sourceRecord={
@@ -4224,7 +4249,7 @@ function commitStudioComponentDetails(){
     sizeOptions:normalizeComponentSizeOptions(payload.sizeOptions),
     supplier:String(legacy.supplier||''),
     variant:String(legacy.variant||''),
-    description:String(legacy.description||''),
+    description:payload.description,
     specifications:String(legacy.specifications||''),
     notes:String(legacy.notes||''),
     unit:String(legacy.unit||''),
@@ -5779,7 +5804,14 @@ function bindStudioComponentsPanel(){
     details.addEventListener('input',()=>{
       syncStudioComponentSaveButtonState();
     });
-    details.addEventListener('change',()=>{
+    details.addEventListener('change',(event)=>{
+      if(event.target.id==='studioComponentCategory'){
+        const subcategory=$('studioComponentSubcategory');
+        if(subcategory){
+          subcategory.innerHTML=studioComponentSubcategoryOptionsMarkup(event.target.value,'');
+          subcategory.value='';
+        }
+      }
       syncStudioComponentSaveButtonState();
     });
     details.addEventListener('keydown',(event)=>{
