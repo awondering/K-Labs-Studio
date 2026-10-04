@@ -2909,6 +2909,9 @@ function componentIdentityTitle(value){
     return token.charAt(0).toUpperCase()+token.slice(1).toLowerCase();
   }).join(' ');
 }
+function componentIdentityComparisonKey(value){
+  return normalizeNameKey(value).replace(/[\/\\_.\-]+/g,' ').replace(/\s+/g,' ').trim();
+}
 function singularComponentType(value){
   const text=specificationValue(value);
   const key=normalizeNameKey(text);
@@ -2938,39 +2941,36 @@ function componentColorVariantText(value){
   }
   return text;
 }
-function componentIdentityDedupeParts(values){
+function componentIdentityDedupeParts(values,comparisonKey){
+  const keyForPart=comparisonKey||normalizeNameKey;
   const parts=[];
   values.map(componentIdentityTitle).filter(Boolean).forEach((part)=>{
-    const key=normalizeNameKey(part);
-    const longerIndex=parts.findIndex((existing)=>normalizeNameKey(existing).includes(key));
+    const key=keyForPart(part);
+    const longerIndex=parts.findIndex((existing)=>keyForPart(existing).includes(key));
     if(longerIndex>=0)return;
     for(let i=parts.length-1;i>=0;i-=1){
-      if(key.includes(normalizeNameKey(parts[i])))parts.splice(i,1);
+      if(key.includes(keyForPart(parts[i])))parts.splice(i,1);
     }
     parts.push(part);
   });
   return parts;
 }
 function componentIdentityVariantParts(item,record,what){
-  const values=[
-    record&&record.brand,
-    record&&record.variant,
-    record&&record.name,
-    item&&item.brand,
-    item&&item.description,
-    item&&item.category,
-  ];
+  const isLinked=!!(item&&item.libraryComponentId&&record);
+  const values=isLinked
+    ?[record.brand,record.variant,record.name]
+    :[record&&record.brand,record&&record.variant,record&&record.name,item&&item.brand,item&&item.description,item&&item.category];
   const parts=[];
-  const whatKey=normalizeNameKey(what);
+  const whatKey=componentIdentityComparisonKey(what);
   values.forEach((value)=>{
     const text=componentColorVariantText(value);
-    const key=normalizeNameKey(text);
+    const key=componentIdentityComparisonKey(text);
     if(!key || key===whatKey)return;
     if(whatKey && key.includes(whatKey) && componentNameCarriesType(text))return;
-    if(parts.some((part)=>normalizeNameKey(part)===key))return;
+    if(parts.some((part)=>componentIdentityComparisonKey(part)===key))return;
     parts.push(text);
   });
-  return parts;
+  return componentIdentityDedupeParts(parts,componentIdentityComparisonKey);
 }
 function componentIdentityBlankParts(item,record){
   const variant=[
@@ -3021,6 +3021,17 @@ function appendComponentSizeLabel(label,item){
   return normalizeNameKey(base).includes(normalizeNameKey(size))?base:`${base} - ${size}`;
 }
 function savedComponentDisplayLabel(item){
+  const record=componentLibraryRecordForRow(item);
+  if(record && item&&item.libraryComponentId){
+    const identity=componentDisplayIdentity(item,{record,fallback:record.name});
+    const details=specificationValue(item.description);
+    const identityKey=componentIdentityComparisonKey(identity);
+    const detailsKey=componentIdentityComparisonKey(details);
+    if(details && (!identityKey || !detailsKey || !identityKey.includes(detailsKey))){
+      return appendComponentSizeLabel(`${identity} · ${details}`,item);
+    }
+    return appendComponentSizeLabel(identity,item);
+  }
   const customerLabel=specificationValue(item&&item.customerLabel);
   if(customerLabel)return appendComponentSizeLabel(customerLabel,item);
   const category=specificationValue(item&&item.category);
