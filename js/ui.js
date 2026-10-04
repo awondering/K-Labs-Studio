@@ -3963,7 +3963,7 @@ function studioComponentSizesSectionMarkup(){
       <div class="studio-size-list" id="studioComponentSizeList">${chips}</div>
       <div class="studio-size-entry">
         <label class="quote-component-field"><span>Add Size</span><input id="studioComponentSizeInput" type="text" placeholder="e.g. 12 mm or Large" /></label>
-        <button class="ghost-action studio-size-entry__btn" type="button" data-size-action="add">Add</button>
+        <button class="ghost-action studio-component-details__move studio-size-entry__btn" type="button" data-size-action="add">Add</button>
       </div>
       <div class="studio-size-range">
         <label class="quote-component-field"><span>From</span><input id="studioComponentSizeFrom" type="number" inputmode="decimal" step="any" placeholder="9" /></label>
