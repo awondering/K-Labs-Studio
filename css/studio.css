@@ -9185,6 +9185,19 @@ body.klabs-auth-resolving::after {
   z-index: 10000;
 }
 
+/* Keep desktop navigation inside the viewport; mobile retains its safe-area layout. */
+@media (min-width:1024px){
+  .bottom-nav {
+    left: max(24px, env(safe-area-inset-left, 0px));
+    right: max(24px, env(safe-area-inset-right, 0px));
+    width: auto !important;
+    max-width: 1112px;
+    margin-left: auto;
+    margin-right: auto;
+    transform: none;
+  }
+}
+
 .settings-account-card__actions {
   display: flex;
   justify-content: flex-start;
