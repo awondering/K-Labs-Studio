@@ -166,6 +166,7 @@ let studioComponentTaxonomyState=null;
 let studioComponentTaxonomySelection={category:'',subcategory:'',supplier:''};
 let studioComponentDetailContext={isAddMode:false,baseline:'',savedTimer:0,savedFlash:false};
 let studioComponentMoveState={category:'',subcategory:'',brand:''};
+let studioComponentDuplicateState=null;
 // Working copy of the open component form's AVAILABLE SIZES list; committed only on save.
 let studioComponentSizeDraft=[];
 let studioSupplierEditContext={baseline:'',savedTimer:0,savedFlash:false};
@@ -2385,8 +2386,10 @@ function normalizeUniqueComponents(components,options){
       return;
     }
     const categoryKey=normalizeNameKey(normalized.category);
-    // Same master component added at two different sizes stays as two distinct build lines.
-    const dedupeKey=`${categoryKey}::${normalizeNameKey(normalized.selectedSize)}`;
+    // Distinct library records may intentionally share a component name (e.g. duplicated families).
+    // Stable library ids keep those records separate; legacy unlinked rows retain name-based merging.
+    const componentKey=String(normalized.libraryComponentId||'').trim()||`name:${categoryKey}`;
+    const dedupeKey=`${componentKey}::${normalizeNameKey(normalized.selectedSize)}`;
     if(shouldMergeDuplicateComponentCategory(categoryKey) && dedupeIndexByCategory.has(dedupeKey)){
       const existingIndex=dedupeIndexByCategory.get(dedupeKey);
       next[existingIndex]=mergeComponentRecord(next[existingIndex],normalized);
@@ -4485,37 +4488,265 @@ function commitStudioComponentDetails(){
   },1700);
   return true;
 }
-function duplicateCurrentStudioComponent(){
+function componentDuplicateFamilyRecords(source){
+  const categoryKey=normalizeNameKey(source&&source.category);
+  const subcategoryKey=normalizeNameKey(source&&source.subcategory);
+  if(!categoryKey || !subcategoryKey)return [];
+  return componentLibraryRecords().filter((record)=>normalizeNameKey(record.category)===categoryKey && normalizeNameKey(record.subcategory)===subcategoryKey);
+}
+function componentDuplicateCategoryNames(){
   const source=currentStudioComponentRecord();
-  if(!source)return;
-  const records=componentLibraryRecords();
-  const existingNames=new Set(records.map((record)=>normalizeNameKey(record.name)));
-  const baseName=`${String(source.name||'Component').trim()} Copy`;
-  let copyName=baseName;
+  const names=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords())
+    .filter((name)=>normalizeNameKey(name)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY));
+  const current=String(studioComponentDuplicateState&&studioComponentDuplicateState.category||source&&source.category||'').trim();
+  if(current && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(current)))names.push(current);
+  return names.sort(compareTaxonomyDisplayNames);
+}
+function componentDuplicateSubcategoryNames(categoryName){
+  return studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),categoryName)
+    .filter((name)=>normalizeNameKey(name)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))
+    .sort(compareTaxonomyDisplayNames);
+}
+function componentDuplicateSuggestedName(mode,source,categoryName){
+  const base=mode==='family'
+    ?`${String(source&&source.subcategory||source&&source.name||'Component').trim()} Copy`
+    :`${String(source&&source.name||'Component').trim()} Copy`;
+  const exists=(candidate)=>mode==='family'
+    ?componentDuplicateSubcategoryNames(categoryName).some((name)=>normalizeNameKey(name)===normalizeNameKey(candidate))
+    :componentLibraryRecords().some((record)=>normalizeNameKey(record.name)===normalizeNameKey(candidate));
+  let next=base;
   let suffix=2;
-  while(existingNames.has(normalizeNameKey(copyName))){
-    copyName=`${baseName} ${suffix}`;
+  while(exists(next)){
+    next=`${base} ${suffix}`;
     suffix+=1;
   }
+  return next;
+}
+function componentDuplicateModeMarkup(){
+  const state=studioComponentDuplicateState;
+  const source=currentStudioComponentRecord();
+  const familyAvailable=!!(source&&source.subcategory&&componentDuplicateFamilyRecords(source).length);
+  return `<button class="ghost-action${state.mode==='component'?' active':''}" type="button" data-component-duplicate-mode="component" aria-pressed="${state.mode==='component'?'true':'false'}">Component</button><button class="ghost-action${state.mode==='family'?' active':''}" type="button" data-component-duplicate-mode="family" aria-pressed="${state.mode==='family'?'true':'false'}"${familyAvailable?'':' disabled'}>Family</button>`;
+}
+function renderComponentDuplicateSheet(){
+  const sheet=$('studioComponentDuplicateSheet');
+  const state=studioComponentDuplicateState;
+  const source=currentStudioComponentRecord();
+  if(!sheet || !state || !source)return;
+  const familyMode=state.mode==='family';
+  const categoryNames=componentDuplicateCategoryNames();
+  const categoryOptions=categoryNames.map((name)=>{
+    const value=name;
+    return componentHierarchyOptionMarkup(value,name,normalizeNameKey(value)===normalizeNameKey(state.category),'data-component-duplicate-category');
+  }).join('');
+  const subcategoryNames=componentDuplicateSubcategoryNames(state.category);
+  const subcategoryOptions=[componentHierarchyOptionMarkup('','No Subcategory',!normalizeNameKey(state.subcategory),'data-component-duplicate-subcategory')]
+    .concat(subcategoryNames.map((name)=>componentHierarchyOptionMarkup(name,name,normalizeNameKey(name)===normalizeNameKey(state.subcategory),'data-component-duplicate-subcategory')))
+    .join('');
+  const familyCount=componentDuplicateFamilyRecords(source).length;
+  const nameLabel=$('studioComponentDuplicateNameLabel');
+  const nameInput=$('studioComponentDuplicateName');
+  const categoryHost=$('studioComponentDuplicateCategoryOptions');
+  const subcategoryGroup=$('studioComponentDuplicateSubcategoryGroup');
+  const subcategoryHost=$('studioComponentDuplicateSubcategoryOptions');
+  const note=$('studioComponentDuplicateNote');
+  const confirm=$('studioComponentDuplicateConfirm');
+  const modes=$('studioComponentDuplicateModes');
+  if(modes)modes.innerHTML=componentDuplicateModeMarkup();
+  if(categoryHost)categoryHost.innerHTML=categoryOptions||'<p class="component-hierarchy-picker__empty">No destination categories.</p>';
+  if(subcategoryGroup)subcategoryGroup.hidden=familyMode;
+  if(subcategoryHost)subcategoryHost.innerHTML=subcategoryOptions;
+  if(nameLabel)nameLabel.textContent=familyMode?'New Family Name':'New Component Name';
+  if(nameInput && document.activeElement!==nameInput)nameInput.value=state.name;
+  if(note)note.textContent=familyMode
+    ?`Copies ${familyCount} component${familyCount===1?'':'s'} into a new sibling family. Stock starts at 0.`
+    :'Copies only this component into the selected category and subcategory.';
+  if(confirm)confirm.textContent=familyMode?'Duplicate Family':'Duplicate Component';
+}
+function closeComponentDuplicateSheet(){
+  const sheet=$('studioComponentDuplicateSheet');
+  if(sheet)sheet.hidden=true;
+  studioComponentDuplicateState=null;
+  unlockModalLayer({restoreFocus:true});
+}
+function componentDuplicateSheetError(message){
+  const status=$('studioComponentDuplicateStatus');
+  if(status){status.textContent=String(message||'');status.dataset.state='error';}
+}
+function commitStudioComponentDuplicate(){
+  const state=studioComponentDuplicateState;
+  const source=currentStudioComponentRecord();
+  if(!state || !source)return false;
+  const nextName=String($('studioComponentDuplicateName')&&$('studioComponentDuplicateName').value||'').trim();
+  state.name=nextName;
+  if(!nextName){componentDuplicateSheetError('Enter a name before duplicating.');return false;}
+  const destinationCategory=String(state.category||'').trim();
+  if(state.mode==='family'){
+    const targetCategory=studioCategoryByName(destinationCategory);
+    const familyRecords=componentDuplicateFamilyRecords(source);
+    if(!targetCategory || !familyRecords.length){componentDuplicateSheetError('Choose a destination category and a family with components.');return false;}
+    if(componentDuplicateSubcategoryNames(targetCategory.name).some((name)=>normalizeNameKey(name)===normalizeNameKey(nextName))){
+      componentDuplicateSheetError('A family with that name already exists in this category.');
+      return false;
+    }
+    const records=componentLibraryRecords();
+    const recordsSnapshot=Store.get(componentLibraryStorageKey(),[]);
+    const taxonomySnapshot=Store.get(componentTaxonomyStorageKey(),null);
+    const copies=familyRecords.map((record)=>({
+      ...record,
+      id:'',
+      category:targetCategory.name,
+      categoryId:targetCategory.id,
+      subcategory:nextName,
+      stockOnHand:0,
+      sizeOptions:normalizeComponentSizeOptions(record.sizeOptions),
+    }));
+    const newSubcategory={id:studioTaxonomyId('sub'),name:nextName};
+    try{
+      targetCategory.subcategories.push(newSubcategory);
+      saveComponentLibraryRecords([...copies,...records]);
+      saveStudioComponentTaxonomy();
+    }catch(error){
+      Store.set(componentLibraryStorageKey(),recordsSnapshot);
+      if(taxonomySnapshot)Store.set(componentTaxonomyStorageKey(),taxonomySnapshot);
+      studioComponentTaxonomyState=null;
+      componentDuplicateSheetError('Could not duplicate this family. No changes were kept.');
+      return false;
+    }
+    studioComponentTaxonomySelection.category=targetCategory.id;
+    studioComponentTaxonomySelection.subcategory=newSubcategory.id;
+    studioComponentDraft=null;
+    studioLibraryPath={level:'category',categoryId:targetCategory.name,subcategoryId:''};
+    studioLibraryEditor={type:'subcategory',mode:'edit',targetName:nextName,sourceCategory:targetCategory.name,parentCategory:targetCategory.name};
+    closeComponentDuplicateSheet();
+    renderStudioComponentsLibrary();
+    return true;
+  }
+  if(componentLibraryRecords().some((record)=>normalizeNameKey(record.name)===normalizeNameKey(nextName))){
+    componentDuplicateSheetError('A component with that name already exists.');
+    return false;
+  }
+  const targetCategory=studioCategoryByName(destinationCategory);
+  const targetCategoryName=targetCategory?targetCategory.name:'';
+  const targetCategoryId=targetCategory?targetCategory.id:'';
+  const subcategory=String(state.subcategory||'').trim();
+  if(subcategory && !componentDuplicateSubcategoryNames(targetCategoryName).some((name)=>normalizeNameKey(name)===normalizeNameKey(subcategory))){
+    componentDuplicateSheetError('Choose a subcategory in the selected category.');
+    return false;
+  }
+  const records=componentLibraryRecords();
   const copy={
     ...source,
     id:'',
-    name:copyName,
+    name:nextName,
+    category:targetCategoryName,
+    categoryId:targetCategoryId,
+    subcategory,
     stockOnHand:activeTrackComponentStock()?0:undefined,
     sizeOptions:normalizeComponentSizeOptions(source.sizeOptions),
   };
   saveComponentLibraryRecords([copy,...records]);
   studioComponentDraft=null;
-  studioSelectedComponentKey=normalizeNameKey(copyName);
-  studioLibraryPath={level:'component',categoryId:String(source.category||''),subcategoryId:String(source.subcategory||'')};
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  studioSelectedComponentKey=normalizeNameKey(nextName);
+  studioLibraryPath={level:'component',categoryId:targetCategoryName,subcategoryId:subcategory};
+  closeComponentDuplicateSheet();
   renderStudioComponentsLibrary();
   const renameButton=$('studioComponentRenameBtn');
   const renameInput=$('studioComponentRenameInput');
   if(renameButton && !renameButton.hidden)renameButton.click();
-  if(renameInput){
-    renameInput.focus();
-    renameInput.select();
-  }
+  if(renameInput){renameInput.focus();renameInput.select();}
+  return true;
+}
+function ensureComponentDuplicateSheet(){
+  if($('studioComponentDuplicateSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='studioComponentDuplicateSheet';
+  sheet.className='component-sheet component-hierarchy-picker studio-component-duplicate';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-component-duplicate-action="cancel"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Duplicate Component">
+      <header class="component-sheet__header">
+        <h2>Duplicate Component</h2>
+        <button class="component-sheet__close" type="button" data-component-duplicate-action="cancel" aria-label="Close duplicate picker">&#215;</button>
+      </header>
+      <div class="component-sheet__body">
+        <div id="studioComponentDuplicateModes" class="studio-component-duplicate__modes" role="group" aria-label="Duplicate type"></div>
+        <section class="component-hierarchy-picker__group" aria-labelledby="studioComponentDuplicateCategoryLabel">
+          <h3 id="studioComponentDuplicateCategoryLabel">Destination Category</h3>
+          <div id="studioComponentDuplicateCategoryOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination category"></div>
+        </section>
+        <section id="studioComponentDuplicateSubcategoryGroup" class="component-hierarchy-picker__group" aria-labelledby="studioComponentDuplicateSubcategoryLabel">
+          <h3 id="studioComponentDuplicateSubcategoryLabel">Destination Subcategory</h3>
+          <div id="studioComponentDuplicateSubcategoryOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination subcategory"></div>
+        </section>
+        <label class="component-hierarchy-picker__brand"><span id="studioComponentDuplicateNameLabel">New Component Name</span><input id="studioComponentDuplicateName" type="text" autocomplete="off" /></label>
+        <p id="studioComponentDuplicateNote" class="studio-component-duplicate__note" aria-live="polite"></p>
+        <p id="studioComponentDuplicateStatus" class="studio-component-duplicate__status" aria-live="polite"></p>
+        <div class="studio-component-duplicate__actions">
+          <button class="ghost-action" type="button" data-component-duplicate-action="cancel">Cancel</button>
+          <button id="studioComponentDuplicateConfirm" class="primary-action" type="button">Duplicate Component</button>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    const action=event.target.closest('[data-component-duplicate-action]');
+    if(action){closeComponentDuplicateSheet();return;}
+    const modeButton=event.target.closest('[data-component-duplicate-mode]');
+    if(modeButton){
+      const mode=modeButton.getAttribute('data-component-duplicate-mode')||'component';
+      if(modeButton.disabled)return;
+      studioComponentDuplicateState.mode=mode;
+      const source=currentStudioComponentRecord();
+      studioComponentDuplicateState.name=componentDuplicateSuggestedName(mode,source,studioComponentDuplicateState.category);
+      const status=$('studioComponentDuplicateStatus');
+      if(status){status.textContent='';status.dataset.state='';}
+      renderComponentDuplicateSheet();
+      return;
+    }
+    const categoryButton=event.target.closest('[data-component-duplicate-category]');
+    if(categoryButton){
+      studioComponentDuplicateState.category=String(categoryButton.getAttribute('data-component-duplicate-category')||'');
+      if(studioComponentDuplicateState.mode==='component' && !componentDuplicateSubcategoryNames(studioComponentDuplicateState.category).some((name)=>normalizeNameKey(name)===normalizeNameKey(studioComponentDuplicateState.subcategory))){
+        studioComponentDuplicateState.subcategory='';
+      }
+      renderComponentDuplicateSheet();
+      return;
+    }
+    const subcategoryButton=event.target.closest('[data-component-duplicate-subcategory]');
+    if(subcategoryButton){
+      studioComponentDuplicateState.subcategory=String(subcategoryButton.getAttribute('data-component-duplicate-subcategory')||'');
+      renderComponentDuplicateSheet();
+      return;
+    }
+    if(event.target.closest('#studioComponentDuplicateConfirm')){
+      runExplicitSave($('studioComponentDuplicateConfirm'),commitStudioComponentDuplicate);
+    }
+  });
+  sheet.addEventListener('input',(event)=>{
+    if(event.target.id==='studioComponentDuplicateName')studioComponentDuplicateState.name=String(event.target.value||'');
+  });
+}
+function openComponentDuplicateSheet(){
+  const source=currentStudioComponentRecord();
+  if(!source)return;
+  const familyRecords=componentDuplicateFamilyRecords(source);
+  const mode=source.subcategory&&familyRecords.length&&(familyRecords.length>1 || normalizeNameKey(source.name)===normalizeNameKey(source.subcategory))?'family':'component';
+  const category=String(source.category||'').trim();
+  studioComponentDuplicateState={sourceId:String(source.id||''),mode,category,subcategory:String(source.subcategory||'').trim(),name:''};
+  studioComponentDuplicateState.name=componentDuplicateSuggestedName(mode,source,category);
+  ensureComponentDuplicateSheet();
+  renderComponentDuplicateSheet();
+  const status=$('studioComponentDuplicateStatus');
+  if(status){status.textContent='';status.dataset.state='';}
+  $('studioComponentDuplicateSheet').hidden=false;
+  lockModalLayer(document.activeElement);
+}
+function duplicateCurrentStudioComponent(){
+  openComponentDuplicateSheet();
 }
 function studioTaxonomySectionMode(section){
   const scope=studioTaxonomyUiState&&studioTaxonomyUiState[section]?studioTaxonomyUiState[section]:null;
@@ -7628,7 +7859,7 @@ function ensureChoicePicker(){
       const pickerContext={...activeChoicePicker};
       const selectedSizes=Array.from(activeChoicePickerSizeSelections);
       closeComponentSheet();
-      applyComponentSizeSelections(pickerContext.index,pickerContext.sizeComponent,selectedSizes);
+      applyComponentSizeSelections(pickerContext.index,pickerContext.sizeComponent,selectedSizes,pickerContext.sizeComponentId);
       return;
     }
     const menuTrigger=event.target.closest('button[data-choice-menu-option]');
@@ -8247,9 +8478,10 @@ function syncChoicePickerFilterControls(){
   brandFilter.innerHTML=`<option value="">All Brands</option>${brands.map((brand)=>`<option value="${escapeAttributeValue(brand)}"${normalizeNameKey(brand)===normalizeNameKey(current)?' selected':''}>${escapeHtml(brand)}</option>`).join('')}`;
   brandFilter.value=current;
 }
-function applyComponentLibraryRecordToRow(index,name){
+function applyComponentLibraryRecordToRow(index,name,libraryComponentId){
   if(index<0 || !quote.components[index])return;
-  const record=findComponentLibraryRecordByName(name);
+  const id=String(libraryComponentId||'').trim();
+  const record=(id&&componentLibraryRecords().find((item)=>String(item.id||'').trim()===id))||findComponentLibraryRecordByName(name);
   if(!record)return;
   const row=quote.components[index];
   row.libraryComponentId=String(record.id||'').trim();
@@ -8534,7 +8766,7 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     return;
   }
   if(context.type==='component-size'){
-    applyComponentSizeSelection(context.index,context.sizeComponent,selectedName);
+    applyComponentSizeSelection(context.index,context.sizeComponent,selectedName,context.sizeComponentId);
     return;
   }
   if(context.type==='subcategory'){
@@ -8547,15 +8779,16 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
   if(context.index>=0){
     // A master component with configured sizes must not be added until a size is chosen.
     if(context.type==='category'){
-      const sizeOptions=componentSizePickerOptions(selectedName);
+      const sizeOptions=componentSizePickerOptions(selectedName,selectedId);
       if(sizeOptions.length>1){
-        openComponentSizePicker(context.index,selectedName);
+        openComponentSizePicker(context.index,selectedName,selectedId);
         return;
       }
       if(sizeOptions.length===1){
-        applyComponentSizeSelection(context.index,selectedName,sizeOptions[0]);
+        applyComponentSizeSelection(context.index,selectedName,sizeOptions[0],selectedId);
         return;
       }
+      if(selectedId && quote.components[context.index])quote.components[context.index].libraryComponentId=String(selectedId);
     }
     const merged=setChoiceValue(context.type,context.index,selectedName);
     if(merged){
@@ -8563,14 +8796,16 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
       // row into it, so context.index no longer points at the edited row - re-render from the true
       // post-merge index instead of patching a stale row (was leaving the Subcategory field on an
       // orphaned/blank draft row that never received the selected category).
-      const mergedIndex=quote.components.findIndex((item)=>normalizeNameKey(item.category)===normalizeNameKey(selectedName));
+      const mergedIndex=selectedId
+        ?quote.components.findIndex((item)=>String(item&&item.libraryComponentId||'').trim()===String(selectedId).trim())
+        :quote.components.findIndex((item)=>normalizeNameKey(item.category)===normalizeNameKey(selectedName));
       expandedComponentRowIndex=mergedIndex>=0?mergedIndex:expandedComponentRowIndex;
       renderQuoteComponents();
       updateQuoteSummary();
       return;
     }
     if(context.type==='category'){
-      applyComponentLibraryRecordToRow(context.index,selectedName);
+      applyComponentLibraryRecordToRow(context.index,selectedName,selectedId);
       syncComponentRowEditorInputs(context.index);
     }
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
@@ -8583,18 +8818,21 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
 }
 // Commits a component + chosen size onto the build line. The size is set before setChoiceValue so the
 // de-dupe key already includes it and an existing line with a different size is never merged into.
-function applyComponentSizeSelection(index,componentName,size){
+function applyComponentSizeSelection(index,componentName,size,libraryComponentId){
   const row=quote.components[index];
   const name=String(componentName||'').trim();
   const selectedSize=String(size||'').trim();
   if(!row || !name || !selectedSize)return;
   // Changing the size of an already-bound line must not reset build-level edits back to library defaults.
-  const alreadyBound=normalizeNameKey(row.category)===normalizeNameKey(name);
+  const existingLibraryId=String(row.libraryComponentId||'').trim();
+  const libraryId=String(libraryComponentId||existingLibraryId).trim();
+  const alreadyBound=existingLibraryId&&libraryId?existingLibraryId===libraryId:normalizeNameKey(row.category)===normalizeNameKey(name);
+  if(libraryId)row.libraryComponentId=libraryId;
   row.selectedSize=selectedSize;
   setChoiceValue('category',index,name);
-  const resolvedIndex=quote.components.findIndex((item)=>normalizeNameKey(item&&item.category)===normalizeNameKey(name) && normalizeNameKey(item&&item.selectedSize)===normalizeNameKey(selectedSize));
+  const resolvedIndex=quote.components.findIndex((item)=>(libraryId?String(item&&item.libraryComponentId||'').trim()===libraryId:normalizeNameKey(item&&item.category)===normalizeNameKey(name)) && normalizeNameKey(item&&item.selectedSize)===normalizeNameKey(selectedSize));
   const targetIndex=resolvedIndex>=0?resolvedIndex:index;
-  if(!alreadyBound)applyComponentLibraryRecordToRow(targetIndex,name);
+  if(!alreadyBound)applyComponentLibraryRecordToRow(targetIndex,name,libraryId);
   if(quote.components[targetIndex])quote.components[targetIndex].selectedSize=selectedSize;
   saveQuoteCurrent();
   markQuoteDirty();
@@ -8602,14 +8840,16 @@ function applyComponentSizeSelection(index,componentName,size){
   renderQuoteComponents();
   updateQuoteSummary();
 }
-function componentSizePickerOptions(componentName){
-  return componentRecordSizeOptions(findComponentLibraryRecordByName(componentName));
+function componentSizePickerOptions(componentName,libraryComponentId){
+  const id=String(libraryComponentId||'').trim();
+  const record=(id&&componentLibraryRecords().find((item)=>String(item.id||'').trim()===id))||findComponentLibraryRecordByName(componentName);
+  return componentRecordSizeOptions(record);
 }
 function componentSizePickerUsesMultiSelect(context){
   const picker=context||activeChoicePicker;
   const row=picker&&Number.isInteger(picker.index)?quote.components[picker.index]:null;
   const isNewDraft=!!row && (pendingComponentDraftRows.has(row) || componentRowIsEffectivelyEmpty(row));
-  return picker&&picker.type==='component-size' && isNewDraft && componentSizePickerOptions(picker.sizeComponent).length>1;
+  return picker&&picker.type==='component-size' && isNewDraft && componentSizePickerOptions(picker.sizeComponent,picker.sizeComponentId).length>1;
 }
 function syncComponentSizePickerAddAction(){
   const action=$('choicePickerSizeAdd');
@@ -8638,12 +8878,12 @@ function prependComponentDraftRow(){
   pendingComponentDraftRows.add(quote.components[0]);
   return 0;
 }
-function applyComponentSizeSelections(index,componentName,sizes){
+function applyComponentSizeSelections(index,componentName,sizes,libraryComponentId){
   const selectedSizes=Array.from(new Set((sizes||[]).map((size)=>String(size||'').trim()).filter(Boolean)));
   if(index<0 || !quote.components[index] || !componentName || !selectedSizes.length)return;
   selectedSizes.slice().reverse().forEach((size,selectionIndex)=>{
     const targetIndex=selectionIndex===0?index:prependComponentDraftRow();
-    applyComponentSizeSelection(targetIndex,componentName,size);
+    applyComponentSizeSelection(targetIndex,componentName,size,libraryComponentId);
   });
   quote.components=normalizeUniqueComponents(quote.components,{keepDraftRows:false}).filter((item)=>componentRowHasMeaningfulData(item));
   saveQuoteCurrent();
@@ -8664,7 +8904,8 @@ function recordsForChoiceType(type,query){
   }
   if(type==='component-size'){
     const queryKey=String(query||'').trim().toLowerCase();
-    const record=findComponentLibraryRecordByName(activeChoicePicker.sizeComponent);
+    const id=String(activeChoicePicker.sizeComponentId||'').trim();
+    const record=(id&&componentLibraryRecords().find((item)=>String(item.id||'').trim()===id))||findComponentLibraryRecordByName(activeChoicePicker.sizeComponent);
     return componentRecordSizeOptions(record)
       .filter((size)=>!queryKey || size.toLowerCase().includes(queryKey))
       .map((size)=>({name:size,id:''}));
@@ -9161,8 +9402,8 @@ function openComponentSheet(index){
   openChoicePicker('category',index,document.activeElement);
 }
 // Second step shown only when the chosen master component defines sizeOptions; cancelling adds nothing.
-function openComponentSizePicker(index,componentName){
-  openChoicePicker('component-size',index,document.activeElement,{sizeComponent:componentName});
+function openComponentSizePicker(index,componentName,libraryComponentId){
+  openChoicePicker('component-size',index,document.activeElement,{sizeComponent:componentName,sizeComponentId:libraryComponentId});
 }
 function openSubcategorySheet(index){
   openChoicePicker('subcategory',index,document.activeElement);
@@ -9178,6 +9419,7 @@ function openChoicePicker(type,index,openerEl,options){
   activeChoicePicker={
     type,index,
     sizeComponent:String((options&&options.sizeComponent)||''),
+    sizeComponentId:String((options&&options.sizeComponentId)||''),
     stage:type==='category'?'category':'',
     categoryName:'',
     subcategoryName:'',
@@ -12929,7 +13171,7 @@ function bindWorkshopQuoteBuilder(){
         const i=Number(actionButton.getAttribute('data-component-index'));
         const row=quote.components[i];
         const record=componentLibraryRecordForRow(row);
-        if(record)openComponentSizePicker(i,String(record.name||''));
+        if(record)openComponentSizePicker(i,String(record.name||''),String(record.id||''));
       }
       if(action==='update-library-component'){
         const i=Number(actionButton.getAttribute('data-component-index'));
