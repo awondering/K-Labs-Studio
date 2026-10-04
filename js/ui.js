@@ -1,4 +1,21 @@
 ﻿const $=id=>document.getElementById(id);
+const GUIDE_SPACING_DISPLAY_KEY='klabs-guide-spacing-visible-v1';
+function guideSpacingVisible(){
+  return Store.get(GUIDE_SPACING_DISPLAY_KEY,false)===true;
+}
+function syncGuideSpacingToggle(){
+  const showSpacing=guideSpacingVisible();
+  const toggle=$('guideSpacingToggle');
+  const headerColumn=document.querySelector('[data-guide-spacing-column]');
+  const panel=$('guideSpacingToggle')?.closest('.guide-spacing-panel');
+  if(toggle){
+    toggle.setAttribute('aria-pressed',String(showSpacing));
+    toggle.classList.toggle('active',showSpacing);
+  }
+  if(headerColumn)headerColumn.hidden=!showSpacing;
+  if(panel)panel.setAttribute('data-show-spacing',String(showSpacing));
+  return showSpacing;
+}
 function normalizeLayoutState(input){
   const raw=input&&typeof input==='object'?input:{};
   return {
@@ -20,6 +37,7 @@ const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
 const CUSTOMER_ONLY_RECORD_TYPE='customer';
 const COMPONENT_HIERARCHY_CLEANUP_KEY='klabs-component-hierarchy-cleanup-v1';
+const GOLD_BLACK_PARENT_FIX_KEY='klabs-gold-black-parent-category-v1';
 // Signed-out/never-migrated usage keeps the original bare key (the "anonymous" namespace - preserved
 // forever, never deleted). Each signed-in account gets its own suffixed key so accounts sharing a device
 // can never read, overwrite or upload each other's component library/taxonomy.
@@ -105,6 +123,9 @@ let holdDelayTimer=null;
 let holdContext=null;
 let activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:'',brandName:''};
 let activeChoicePickerSizeSelections=new Set();
+let studioCustomSelectState=null;
+let studioCustomSelectObserver=null;
+let studioCustomSelectSequence=0;
 let activeChoiceEditor={mode:'add',originalName:''};
 let activeChoiceMenu={name:'',id:'',top:0,left:0,open:false};
 const choicePickerSessionFavourites={category:new Set(),supplier:new Set()};
@@ -1320,8 +1341,12 @@ function formatGuideListMeasurement(valueMm){
   if(activeMeasurementUnits()==='imperial')return `${formatImperialFractionInches(mmToInches(valueMm),8)}"`;
   return `${Math.round(numberOrZero(valueMm))} mm`;
 }
+function formatGuidePositionMillimetres(valueMm){
+  return `${Math.round(numberOrZero(valueMm))} mm`;
+}
 // One guide list on Guide Setup: Guide Spacing rows (position/spacing) + Guide Orientation angles share index i.
 function renderSpiralGuideRows(spiral,showPhysicalOffsets){
+  const showSpacing=syncGuideSpacingToggle();
   const rowsHost=$('guideSpacingCards');
   if(rowsHost){
     const canExpandRows=spiralGuideRowsExpandable(spiral);
@@ -1343,12 +1368,12 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const isExpanded=canExpandRows && index===spiral.expandedGuideIndex;
       const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
-      const positionText=formatGuideListMeasurement(row.cum);
+      const positionText=formatGuidePositionMillimetres(row.cum);
       const spacingText=formatGuideListMeasurement(row.spacing);
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
       const summaryTag=canExpandRows?'button':'div';
       const summaryAttributes=canExpandRows
-        ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}. Spacing ${spacingText}. Orientation ${angleText} ${sideText}`)}"`
+        ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}.${showSpacing?` Spacing ${spacingText}.`:''} Orientation ${angleText} ${sideText}`)}"`
         :'';
       const showOffsetResult=showPhysicalOffsets && (!!labels.offsetText || (isExpanded && showOdField));
       return `
@@ -1356,7 +1381,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
           <${summaryTag} class="guide-spacing-row__summary${canExpandRows?'':' guide-spacing-row__summary--static'}" ${summaryAttributes}>
             <span class="guide-spacing-row__guide-name">Guide ${displayGuideNumber}${isStripper?'<em class="guide-spacing-row__tag">Stripper</em>':''}</span>
             <span class="guide-spacing-row__position-value">${positionText}</span>
-            <strong class="guide-spacing-row__spacing-value">${spacingText}</strong>
+            ${showSpacing?`<strong class="guide-spacing-row__spacing-value" data-guide-spacing-cell>${spacingText}</strong>`:''}
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </${summaryTag}>
           ${showOffsetResult?`<div class="spiral-guide-row__offset"><span>Surface Distance From Top</span><strong>${labels.offsetText||'—'}</strong></div>`:''}
@@ -4209,6 +4234,255 @@ function studioComponentSubcategoryOptionsMarkup(categoryName,selectedName){
   names.sort(compareTaxonomyDisplayNames);
   return `<option value="">No Subcategory</option>${names.map((name)=>`<option value="${escapeAttributeValue(name)}"${normalizeNameKey(name)===normalizeNameKey(selected)?' selected':''}>${escapeHtml(name)}</option>`).join('')}`;
 }
+function studioCustomSelectLabel(control){
+  const explicit=String(control.getAttribute('aria-label')||'').trim();
+  if(explicit)return explicit;
+  const label=control.closest('label');
+  const text=label&&label.querySelector('span');
+  return String(text&&text.textContent||control.id||'Choose option').trim();
+}
+function studioCustomSelectOptions(control){
+  if(control.tagName==='SELECT')return Array.from(control.options).map((option,index)=>({option,index,value:option.value,label:String(option.textContent||'').trim(),disabled:option.disabled,selected:index===control.selectedIndex}));
+  const datalist=document.getElementById(control.getAttribute('list')||'');
+  const options=Array.from(datalist&&datalist.options||[]).map((option,index)=>({option,index,value:option.value,label:String(option.label||option.value||'').trim(),disabled:false,selected:false}));
+  const current=String(control.value||'').trim();
+  if(current && !options.some(item=>normalizeNameKey(item.value)===normalizeNameKey(current)))options.unshift({option:null,index:-1,value:current,label:current,disabled:false,selected:true});
+  else options.forEach(item=>{item.selected=normalizeNameKey(item.value)===normalizeNameKey(current);});
+  return options;
+}
+function studioCustomSelectSelectedText(control){
+  if(control.tagName==='SELECT'){
+    const option=control.options[control.selectedIndex];
+    return String(option&&option.textContent||'').trim()||`Select ${studioCustomSelectLabel(control)}`;
+  }
+  return String(control.value||'').trim()||`Select ${studioCustomSelectLabel(control)}`;
+}
+function syncStudioCustomSelectTrigger(control){
+  if(!control)return;
+  const trigger=control._studioCustomSelectTrigger;
+  if(!trigger)return;
+  const value=studioCustomSelectSelectedText(control);
+  const text=trigger.querySelector('.studio-custom-select-trigger__value');
+  if(text && text.textContent!==value)text.textContent=value;
+  trigger.hidden=!!control.hidden;
+  trigger.disabled=!!control.disabled;
+  trigger.setAttribute('aria-label',`${studioCustomSelectLabel(control)}: ${value}`);
+  trigger.setAttribute('aria-expanded',String(!!(studioCustomSelectState&&studioCustomSelectState.control===control)));
+}
+function installStudioCustomSelect(control){
+  if(!control || !(control.tagName==='SELECT'||control.matches('input[list]')) || control.dataset.studioCustomPicker==='true')return;
+  let host=control.parentElement;
+  if(!host.classList.contains('studio-component-details__select-wrap') && !host.classList.contains('studio-custom-select-host')){
+    const wrapper=document.createElement('span');
+    wrapper.className='studio-custom-select-host';
+    host.insertBefore(wrapper,control);
+    wrapper.appendChild(control);
+    host=wrapper;
+  }else{
+    host.classList.add('studio-custom-select-host');
+  }
+  const trigger=document.createElement('button');
+  trigger.type='button';
+  trigger.className='studio-custom-select-trigger';
+  trigger.setAttribute('aria-haspopup','dialog');
+  trigger.setAttribute('aria-expanded','false');
+  trigger.innerHTML='<span class="studio-custom-select-trigger__value"></span><b aria-hidden="true">&#9662;</b>';
+  host.insertBefore(trigger,control);
+  control.dataset.studioCustomPicker='true';
+  control.classList.add(control.tagName==='SELECT'?'studio-native-select-source':'studio-native-datalist-source');
+  control.tabIndex=-1;
+  control.setAttribute('aria-hidden','true');
+  control._studioCustomSelectTrigger=trigger;
+  control.addEventListener('input',()=>syncStudioCustomSelectTrigger(control));
+  control.addEventListener('change',()=>syncStudioCustomSelectTrigger(control));
+  trigger.addEventListener('click',()=>openStudioCustomSelectPicker(control,trigger));
+  syncStudioCustomSelectTrigger(control);
+}
+function collectStudioCustomSelects(root){
+  if(!root)return;
+  if(root.matches&&root.matches('select,input[list]'))installStudioCustomSelect(root);
+  root.querySelectorAll?.('select,input[list]').forEach(installStudioCustomSelect);
+}
+function syncStudioCustomSelectViewport(){
+  const sheet=$('studioCustomSelectPicker');
+  if(!sheet || sheet.hidden)return;
+  const viewport=window.visualViewport||null;
+  const left=Math.max(0,Math.round(viewport?viewport.offsetLeft:0));
+  const top=Math.max(0,Math.round(viewport?viewport.offsetTop:0));
+  const width=Math.max(0,Math.round(viewport?viewport.width:window.innerWidth));
+  const height=Math.max(0,Math.round(viewport?viewport.height:window.innerHeight));
+  sheet.style.setProperty('--component-sheet-vv-left',`${left}px`);
+  sheet.style.setProperty('--component-sheet-vv-top',`${top}px`);
+  sheet.style.setProperty('--component-sheet-vv-width',`${width}px`);
+  sheet.style.setProperty('--component-sheet-vv-height',`${height}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-width',`${Math.min(620,Math.max(240,width-24))}px`);
+  sheet.style.setProperty('--component-sheet-panel-max-height',`${Math.max(180,height-24)}px`);
+  const search=$('studioCustomSelectSearch');
+  const keyboardOpen=!!(search&&document.activeElement===search&&window.innerHeight-height-top>80);
+  sheet.style.setProperty('--component-sheet-align-items',keyboardOpen?'flex-start':'center');
+}
+function closeStudioCustomSelectPicker(options){
+  const state=studioCustomSelectState;
+  const sheet=$('studioCustomSelectPicker');
+  const restoreFocus=!(options&&options.restoreFocus===false);
+  if(sheet)sheet.hidden=true;
+  if(state&&state.trigger)state.trigger.setAttribute('aria-expanded','false');
+  studioCustomSelectState=null;
+  unlockModalLayer({restoreFocus:false});
+  const focusTarget=restoreFocus&&state&&state.trigger&&state.trigger.isConnected?state.trigger:null;
+  if(focusTarget){
+    try{focusTarget.focus({preventScroll:true});}catch{focusTarget.focus();}
+  }
+}
+function renderStudioCustomSelectOptions(){
+  const state=studioCustomSelectState;
+  const list=$('studioCustomSelectList');
+  const search=$('studioCustomSelectSearch');
+  if(!state || !list || !search)return;
+  const query=normalizeNameKey(search.value);
+  const options=studioCustomSelectOptions(state.control)
+    .filter(item=>!query || normalizeNameKey(item.label).includes(query));
+  if(state.control.matches('input[list]')){
+    const typed=String(search.value||'').trim();
+    const exact=studioCustomSelectOptions(state.control).some(item=>normalizeNameKey(item.value)===normalizeNameKey(typed));
+    if(typed && !exact)options.push({option:null,index:-2,value:typed,label:`Use "${typed}"`,disabled:false,selected:false});
+  }
+  state.visibleIndexes=options.map(item=>item.index);
+  if(!options.length){
+    list.innerHTML='<div class="component-sheet__empty">No matching options</div>';
+    state.activeIndex=-1;
+    return;
+  }
+  if(!state.visibleIndexes.includes(state.activeIndex)){
+    const selected=options.find(item=>item.selected);
+    state.activeIndex=selected?selected.index:options[0].index;
+  }
+  list.innerHTML=options.map(({index,label,disabled,selected})=>`<button class="component-sheet__option${selected?' is-selected':''}" type="button" role="option" aria-selected="${selected?'true':'false'}" data-studio-select-option="${index}"${disabled?' disabled':''}><span class="component-sheet__option-title">${escapeHtml(label)}</span>${selected?'<b aria-hidden="true">&#10003;</b>':''}</button>`).join('');
+}
+function selectStudioCustomOption(index){
+  const state=studioCustomSelectState;
+  if(!state)return;
+  if(index===-2 && state.control.matches('input[list]')){
+    const typed=String($('studioCustomSelectSearch')&&$('studioCustomSelectSearch').value||'').trim();
+    if(!typed)return;
+    state.control.value=typed;
+    syncStudioCustomSelectTrigger(state.control);
+    state.control.dispatchEvent(new Event('input',{bubbles:true}));
+    state.control.dispatchEvent(new Event('change',{bubbles:true}));
+    closeStudioCustomSelectPicker({restoreFocus:true});
+    return;
+  }
+  const option=studioCustomSelectOptions(state.control).find(item=>item.index===index);
+  if(!option || option.disabled)return;
+  if(state.control.tagName==='SELECT')state.control.selectedIndex=index;
+  else state.control.value=option.value;
+  syncStudioCustomSelectTrigger(state.control);
+  state.control.dispatchEvent(new Event('input',{bubbles:true}));
+  state.control.dispatchEvent(new Event('change',{bubbles:true}));
+  closeStudioCustomSelectPicker({restoreFocus:true});
+}
+function openStudioCustomSelectPicker(control,trigger){
+  ensureStudioCustomSelectPicker();
+  const sheet=$('studioCustomSelectPicker');
+  const title=$('studioCustomSelectTitle');
+  const search=$('studioCustomSelectSearch');
+  if(!sheet || !search)return;
+  if(studioCustomSelectState)closeStudioCustomSelectPicker({restoreFocus:false});
+  const options=studioCustomSelectOptions(control);
+  const selected=options.find(item=>item.selected);
+  studioCustomSelectState={control,trigger,activeIndex:selected?selected.index:(options[0]?.index??-1),visibleIndexes:[]};
+  if(title)title.textContent=studioCustomSelectLabel(control);
+  search.value='';
+  renderStudioCustomSelectOptions();
+  sheet.hidden=false;
+  trigger.setAttribute('aria-expanded','true');
+  lockModalLayer(trigger);
+  syncStudioCustomSelectViewport();
+  const active=$(`studioCustomSelectList`).querySelector(`[data-studio-select-option="${studioCustomSelectState.activeIndex}"]`);
+  (active||search).focus({preventScroll:true});
+}
+function ensureStudioCustomSelectPicker(){
+  if($('studioCustomSelectPicker'))return;
+  const sheet=document.createElement('div');
+  sheet.id='studioCustomSelectPicker';
+  sheet.className='component-sheet studio-custom-select-picker';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-studio-select-action="cancel"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="studioCustomSelectTitle">
+      <header class="component-sheet__header">
+        <h2 id="studioCustomSelectTitle">Select option</h2>
+        <button class="component-sheet__close" type="button" data-studio-select-action="cancel" aria-label="Cancel selection">&#215;</button>
+      </header>
+      <div class="component-sheet__body">
+        <input id="studioCustomSelectSearch" class="component-sheet__search" type="search" aria-label="Search options" placeholder="Search options..." autocomplete="off" />
+        <div id="studioCustomSelectList" class="component-sheet__list studio-custom-select-picker__list" role="listbox" tabindex="0" aria-labelledby="studioCustomSelectTitle"></div>
+        <div class="studio-custom-select-picker__actions"><button class="ghost-action" type="button" data-studio-select-action="cancel">Cancel</button></div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  const list=$('studioCustomSelectList');
+  const search=$('studioCustomSelectSearch');
+  sheet.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-studio-select-action="cancel"]')){closeStudioCustomSelectPicker({restoreFocus:true});return;}
+    const option=event.target.closest('[data-studio-select-option]');
+    if(option)selectStudioCustomOption(Number(option.getAttribute('data-studio-select-option')));
+  });
+  search.addEventListener('input',()=>{
+    if(studioCustomSelectState){studioCustomSelectState.activeIndex=-1;renderStudioCustomSelectOptions();}
+  });
+  sheet.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){
+      event.preventDefault();
+      event.stopPropagation();
+      closeStudioCustomSelectPicker({restoreFocus:true});
+      return;
+    }
+    const state=studioCustomSelectState;
+    if(!state || !['ArrowDown','ArrowUp','Home','End','Enter',' '].includes(event.key))return;
+    const visible=state.visibleIndexes;
+    if(event.key==='Enter' || event.key===' '){
+      const focused=event.target.closest('[data-studio-select-option]');
+      const index=focused?Number(focused.getAttribute('data-studio-select-option')):state.activeIndex;
+      if(index>=0 || (index===-2 && state.control.matches('input[list]'))){event.preventDefault();selectStudioCustomOption(index);}
+      return;
+    }
+    if(!visible.length)return;
+    event.preventDefault();
+    const current=visible.indexOf(state.activeIndex);
+    const nextPosition=event.key==='Home'?0:event.key==='End'?visible.length-1:Math.max(0,Math.min(visible.length-1,current+(event.key==='ArrowDown'?1:-1)));
+    state.activeIndex=visible[nextPosition];
+    const option=list.querySelector(`[data-studio-select-option="${state.activeIndex}"]`);
+    option?.focus();
+    option?.scrollIntoView({block:'nearest'});
+  });
+  const vv=window.visualViewport||null;
+  if(vv){
+    vv.addEventListener('resize',syncStudioCustomSelectViewport);
+    vv.addEventListener('scroll',syncStudioCustomSelectViewport);
+  }
+  window.addEventListener('resize',syncStudioCustomSelectViewport);
+  window.addEventListener('orientationchange',syncStudioCustomSelectViewport);
+}
+function initializeStudioCustomSelects(){
+  collectStudioCustomSelects(document);
+  if(studioCustomSelectObserver)return;
+  studioCustomSelectObserver=new MutationObserver((mutations)=>{
+    mutations.forEach((mutation)=>{
+      if(mutation.type==='attributes' && mutation.target.matches('select,input[list]')){
+        if(!mutation.target.dataset.studioCustomPicker)installStudioCustomSelect(mutation.target);
+        syncStudioCustomSelectTrigger(mutation.target);
+      }
+      if(mutation.type==='childList'){
+        const select=mutation.target.nodeType===1?mutation.target.closest('select,input[list]'):null;
+        if(select&&select.dataset.studioCustomPicker)syncStudioCustomSelectTrigger(select);
+        mutation.addedNodes.forEach(collectStudioCustomSelects);
+      }
+    });
+  });
+  studioCustomSelectObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','disabled']});
+}
 function renderStudioComponentDetails(record,options){
   const details=$('studioComponentDetails');
   if(!details)return;
@@ -4396,8 +4670,11 @@ function commitComponentMove(){
   const brandInput=$('studioComponentBrand');
   if(!categoryInput || !subcategoryInput || !brandInput)return;
   categoryInput.value=studioComponentMoveState.category;
+  categoryInput.dispatchEvent(new Event('change',{bubbles:true}));
   subcategoryInput.value=studioComponentMoveState.subcategory;
+  subcategoryInput.dispatchEvent(new Event('change',{bubbles:true}));
   brandInput.value=studioComponentMoveState.brand.trim();
+  brandInput.dispatchEvent(new Event('change',{bubbles:true}));
   closeComponentMoveSheet();
   saveStudioComponentDetails();
 }
@@ -4469,10 +4746,8 @@ function commitStudioComponentDetails(){
   studioLibraryEditor={type:'',mode:'',targetName:''};
   if(supplierBrowseName){
     studioLibraryPath={level:sourceRecord.subcategory?'supplier-component':'supplier-category',supplierName:supplierBrowseName,categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
-  }else if(sourceRecord.category && sourceRecord.subcategory){
-    studioLibraryPath={level:'component',categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
   }else if(sourceRecord.category){
-    studioLibraryPath={level:'category',categoryId:sourceRecord.category,subcategoryId:''};
+    studioLibraryPath={level:'component',categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
   }else{
     studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
   }
@@ -4488,32 +4763,9 @@ function commitStudioComponentDetails(){
   },1700);
   return true;
 }
-function componentDuplicateFamilyRecords(source){
-  const categoryKey=normalizeNameKey(source&&source.category);
-  const subcategoryKey=normalizeNameKey(source&&source.subcategory);
-  if(!categoryKey || !subcategoryKey)return [];
-  return componentLibraryRecords().filter((record)=>normalizeNameKey(record.category)===categoryKey && normalizeNameKey(record.subcategory)===subcategoryKey);
-}
-function componentDuplicateCategoryNames(){
-  const source=currentStudioComponentRecord();
-  const names=studioCategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords())
-    .filter((name)=>normalizeNameKey(name)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY));
-  const current=String(studioComponentDuplicateState&&studioComponentDuplicateState.category||source&&source.category||'').trim();
-  if(current && !names.some((name)=>normalizeNameKey(name)===normalizeNameKey(current)))names.push(current);
-  return names.sort(compareTaxonomyDisplayNames);
-}
-function componentDuplicateSubcategoryNames(categoryName){
-  return studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),categoryName)
-    .filter((name)=>normalizeNameKey(name)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY))
-    .sort(compareTaxonomyDisplayNames);
-}
-function componentDuplicateSuggestedName(mode,source,categoryName){
-  const base=mode==='family'
-    ?`${String(source&&source.subcategory||source&&source.name||'Component').trim()} Copy`
-    :`${String(source&&source.name||'Component').trim()} Copy`;
-  const exists=(candidate)=>mode==='family'
-    ?componentDuplicateSubcategoryNames(categoryName).some((name)=>normalizeNameKey(name)===normalizeNameKey(candidate))
-    :componentLibraryRecords().some((record)=>normalizeNameKey(record.name)===normalizeNameKey(candidate));
+function componentDuplicateSuggestedName(source){
+  const base=`${String(source&&source.name||'Component').trim()} Copy`;
+  const exists=(candidate)=>componentLibraryRecords().some((record)=>normalizeNameKey(record.name)===normalizeNameKey(candidate));
   let next=base;
   let suffix=2;
   while(exists(next)){
@@ -4522,46 +4774,22 @@ function componentDuplicateSuggestedName(mode,source,categoryName){
   }
   return next;
 }
-function componentDuplicateModeMarkup(){
-  const state=studioComponentDuplicateState;
-  const source=currentStudioComponentRecord();
-  const familyAvailable=!!(source&&source.subcategory&&componentDuplicateFamilyRecords(source).length);
-  return `<button class="ghost-action${state.mode==='component'?' active':''}" type="button" data-component-duplicate-mode="component" aria-pressed="${state.mode==='component'?'true':'false'}">Component</button><button class="ghost-action${state.mode==='family'?' active':''}" type="button" data-component-duplicate-mode="family" aria-pressed="${state.mode==='family'?'true':'false'}"${familyAvailable?'':' disabled'}>Family</button>`;
-}
 function renderComponentDuplicateSheet(){
   const sheet=$('studioComponentDuplicateSheet');
   const state=studioComponentDuplicateState;
   const source=currentStudioComponentRecord();
   if(!sheet || !state || !source)return;
-  const familyMode=state.mode==='family';
-  const categoryNames=componentDuplicateCategoryNames();
-  const categoryOptions=categoryNames.map((name)=>{
-    const value=name;
-    return componentHierarchyOptionMarkup(value,name,normalizeNameKey(value)===normalizeNameKey(state.category),'data-component-duplicate-category');
-  }).join('');
-  const subcategoryNames=componentDuplicateSubcategoryNames(state.category);
-  const subcategoryOptions=[componentHierarchyOptionMarkup('','No Subcategory',!normalizeNameKey(state.subcategory),'data-component-duplicate-subcategory')]
-    .concat(subcategoryNames.map((name)=>componentHierarchyOptionMarkup(name,name,normalizeNameKey(name)===normalizeNameKey(state.subcategory),'data-component-duplicate-subcategory')))
-    .join('');
-  const familyCount=componentDuplicateFamilyRecords(source).length;
+  const categoryName=String(source.category||'').trim()||'Unassigned';
   const nameLabel=$('studioComponentDuplicateNameLabel');
   const nameInput=$('studioComponentDuplicateName');
-  const categoryHost=$('studioComponentDuplicateCategoryOptions');
-  const subcategoryGroup=$('studioComponentDuplicateSubcategoryGroup');
-  const subcategoryHost=$('studioComponentDuplicateSubcategoryOptions');
+  const categoryDisplay=$('studioComponentDuplicateCategory');
   const note=$('studioComponentDuplicateNote');
   const confirm=$('studioComponentDuplicateConfirm');
-  const modes=$('studioComponentDuplicateModes');
-  if(modes)modes.innerHTML=componentDuplicateModeMarkup();
-  if(categoryHost)categoryHost.innerHTML=categoryOptions||'<p class="component-hierarchy-picker__empty">No destination categories.</p>';
-  if(subcategoryGroup)subcategoryGroup.hidden=familyMode;
-  if(subcategoryHost)subcategoryHost.innerHTML=subcategoryOptions;
-  if(nameLabel)nameLabel.textContent=familyMode?'New Family Name':'New Component Name';
+  if(categoryDisplay)categoryDisplay.textContent=categoryName;
+  if(nameLabel)nameLabel.textContent='New Component Name';
   if(nameInput && document.activeElement!==nameInput)nameInput.value=state.name;
-  if(note)note.textContent=familyMode
-    ?`Copies ${familyCount} component${familyCount===1?'':'s'} into a new sibling family. Stock starts at 0.`
-    :'Copies only this component into the selected category and subcategory.';
-  if(confirm)confirm.textContent=familyMode?'Duplicate Family':'Duplicate Component';
+  if(note)note.textContent='Copied component stays in its parent category with no subcategory. Stock starts at 0.';
+  if(confirm)confirm.textContent='Duplicate Component';
 }
 function closeComponentDuplicateSheet(){
   const sheet=$('studioComponentDuplicateSheet');
@@ -4580,68 +4808,19 @@ function commitStudioComponentDuplicate(){
   const nextName=String($('studioComponentDuplicateName')&&$('studioComponentDuplicateName').value||'').trim();
   state.name=nextName;
   if(!nextName){componentDuplicateSheetError('Enter a name before duplicating.');return false;}
-  const destinationCategory=String(state.category||'').trim();
-  if(state.mode==='family'){
-    const targetCategory=studioCategoryByName(destinationCategory);
-    const familyRecords=componentDuplicateFamilyRecords(source);
-    if(!targetCategory || !familyRecords.length){componentDuplicateSheetError('Choose a destination category and a family with components.');return false;}
-    if(componentDuplicateSubcategoryNames(targetCategory.name).some((name)=>normalizeNameKey(name)===normalizeNameKey(nextName))){
-      componentDuplicateSheetError('A family with that name already exists in this category.');
-      return false;
-    }
-    const records=componentLibraryRecords();
-    const recordsSnapshot=Store.get(componentLibraryStorageKey(),[]);
-    const taxonomySnapshot=Store.get(componentTaxonomyStorageKey(),null);
-    const copies=familyRecords.map((record)=>({
-      ...record,
-      id:'',
-      category:targetCategory.name,
-      categoryId:targetCategory.id,
-      subcategory:nextName,
-      stockOnHand:0,
-      sizeOptions:normalizeComponentSizeOptions(record.sizeOptions),
-    }));
-    const newSubcategory={id:studioTaxonomyId('sub'),name:nextName};
-    try{
-      targetCategory.subcategories.push(newSubcategory);
-      saveComponentLibraryRecords([...copies,...records]);
-      saveStudioComponentTaxonomy();
-    }catch(error){
-      Store.set(componentLibraryStorageKey(),recordsSnapshot);
-      if(taxonomySnapshot)Store.set(componentTaxonomyStorageKey(),taxonomySnapshot);
-      studioComponentTaxonomyState=null;
-      componentDuplicateSheetError('Could not duplicate this family. No changes were kept.');
-      return false;
-    }
-    studioComponentTaxonomySelection.category=targetCategory.id;
-    studioComponentTaxonomySelection.subcategory=newSubcategory.id;
-    studioComponentDraft=null;
-    studioLibraryPath={level:'category',categoryId:targetCategory.name,subcategoryId:''};
-    studioLibraryEditor={type:'subcategory',mode:'edit',targetName:nextName,sourceCategory:targetCategory.name,parentCategory:targetCategory.name};
-    closeComponentDuplicateSheet();
-    renderStudioComponentsLibrary();
-    return true;
-  }
   if(componentLibraryRecords().some((record)=>normalizeNameKey(record.name)===normalizeNameKey(nextName))){
     componentDuplicateSheetError('A component with that name already exists.');
     return false;
   }
-  const targetCategory=studioCategoryByName(destinationCategory);
-  const targetCategoryName=targetCategory?targetCategory.name:'';
-  const targetCategoryId=targetCategory?targetCategory.id:'';
-  const subcategory=String(state.subcategory||'').trim();
-  if(subcategory && !componentDuplicateSubcategoryNames(targetCategoryName).some((name)=>normalizeNameKey(name)===normalizeNameKey(subcategory))){
-    componentDuplicateSheetError('Choose a subcategory in the selected category.');
-    return false;
-  }
   const records=componentLibraryRecords();
+  const categoryName=String(source.category||'').trim();
   const copy={
     ...source,
     id:'',
     name:nextName,
-    category:targetCategoryName,
-    categoryId:targetCategoryId,
-    subcategory,
+    category:categoryName,
+    categoryId:String(source.categoryId||''),
+    subcategory:'',
     stockOnHand:activeTrackComponentStock()?0:undefined,
     sizeOptions:normalizeComponentSizeOptions(source.sizeOptions),
   };
@@ -4649,7 +4828,7 @@ function commitStudioComponentDuplicate(){
   studioComponentDraft=null;
   studioLibraryEditor={type:'',mode:'',targetName:''};
   studioSelectedComponentKey=normalizeNameKey(nextName);
-  studioLibraryPath={level:'component',categoryId:targetCategoryName,subcategoryId:subcategory};
+  studioLibraryPath={level:'component',categoryId:categoryName,subcategoryId:''};
   closeComponentDuplicateSheet();
   renderStudioComponentsLibrary();
   const renameButton=$('studioComponentRenameBtn');
@@ -4672,14 +4851,9 @@ function ensureComponentDuplicateSheet(){
         <button class="component-sheet__close" type="button" data-component-duplicate-action="cancel" aria-label="Close duplicate picker">&#215;</button>
       </header>
       <div class="component-sheet__body">
-        <div id="studioComponentDuplicateModes" class="studio-component-duplicate__modes" role="group" aria-label="Duplicate type"></div>
-        <section class="component-hierarchy-picker__group" aria-labelledby="studioComponentDuplicateCategoryLabel">
-          <h3 id="studioComponentDuplicateCategoryLabel">Destination Category</h3>
-          <div id="studioComponentDuplicateCategoryOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination category"></div>
-        </section>
-        <section id="studioComponentDuplicateSubcategoryGroup" class="component-hierarchy-picker__group" aria-labelledby="studioComponentDuplicateSubcategoryLabel">
-          <h3 id="studioComponentDuplicateSubcategoryLabel">Destination Subcategory</h3>
-          <div id="studioComponentDuplicateSubcategoryOptions" class="component-hierarchy-picker__options" role="listbox" aria-label="Destination subcategory"></div>
+        <section class="studio-component-duplicate__placement" aria-label="Duplicate placement">
+          <div><span>Category</span><strong id="studioComponentDuplicateCategory"></strong></div>
+          <div><span>Subcategory</span><strong>No Subcategory</strong></div>
         </section>
         <label class="component-hierarchy-picker__brand"><span id="studioComponentDuplicateNameLabel">New Component Name</span><input id="studioComponentDuplicateName" type="text" autocomplete="off" /></label>
         <p id="studioComponentDuplicateNote" class="studio-component-duplicate__note" aria-live="polite"></p>
@@ -4695,33 +4869,6 @@ function ensureComponentDuplicateSheet(){
   sheet.addEventListener('click',(event)=>{
     const action=event.target.closest('[data-component-duplicate-action]');
     if(action){closeComponentDuplicateSheet();return;}
-    const modeButton=event.target.closest('[data-component-duplicate-mode]');
-    if(modeButton){
-      const mode=modeButton.getAttribute('data-component-duplicate-mode')||'component';
-      if(modeButton.disabled)return;
-      studioComponentDuplicateState.mode=mode;
-      const source=currentStudioComponentRecord();
-      studioComponentDuplicateState.name=componentDuplicateSuggestedName(mode,source,studioComponentDuplicateState.category);
-      const status=$('studioComponentDuplicateStatus');
-      if(status){status.textContent='';status.dataset.state='';}
-      renderComponentDuplicateSheet();
-      return;
-    }
-    const categoryButton=event.target.closest('[data-component-duplicate-category]');
-    if(categoryButton){
-      studioComponentDuplicateState.category=String(categoryButton.getAttribute('data-component-duplicate-category')||'');
-      if(studioComponentDuplicateState.mode==='component' && !componentDuplicateSubcategoryNames(studioComponentDuplicateState.category).some((name)=>normalizeNameKey(name)===normalizeNameKey(studioComponentDuplicateState.subcategory))){
-        studioComponentDuplicateState.subcategory='';
-      }
-      renderComponentDuplicateSheet();
-      return;
-    }
-    const subcategoryButton=event.target.closest('[data-component-duplicate-subcategory]');
-    if(subcategoryButton){
-      studioComponentDuplicateState.subcategory=String(subcategoryButton.getAttribute('data-component-duplicate-subcategory')||'');
-      renderComponentDuplicateSheet();
-      return;
-    }
     if(event.target.closest('#studioComponentDuplicateConfirm')){
       runExplicitSave($('studioComponentDuplicateConfirm'),commitStudioComponentDuplicate);
     }
@@ -4733,11 +4880,9 @@ function ensureComponentDuplicateSheet(){
 function openComponentDuplicateSheet(){
   const source=currentStudioComponentRecord();
   if(!source)return;
-  const familyRecords=componentDuplicateFamilyRecords(source);
-  const mode=source.subcategory&&familyRecords.length&&(familyRecords.length>1 || normalizeNameKey(source.name)===normalizeNameKey(source.subcategory))?'family':'component';
   const category=String(source.category||'').trim();
-  studioComponentDuplicateState={sourceId:String(source.id||''),mode,category,subcategory:String(source.subcategory||'').trim(),name:''};
-  studioComponentDuplicateState.name=componentDuplicateSuggestedName(mode,source,category);
+  studioComponentDuplicateState={sourceId:String(source.id||''),mode:'component',category,subcategory:'',name:''};
+  studioComponentDuplicateState.name=componentDuplicateSuggestedName(source);
   ensureComponentDuplicateSheet();
   renderComponentDuplicateSheet();
   const status=$('studioComponentDuplicateStatus');
@@ -5269,9 +5414,36 @@ function componentHierarchyCleanupStorageKey(){
   const accountId=String(window.KLABS_ACCOUNT_ID||'').trim()||'local';
   return `${COMPONENT_HIERARCHY_CLEANUP_KEY}:${accountId}`;
 }
+function migrateGoldBlackToParentCategory(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  if(!accountId)return {changed:false,skipped:'signed-out'};
+  const markerKey=`${GOLD_BLACK_PARENT_FIX_KEY}:${accountId}`;
+  if(Store.get(markerKey,false))return {changed:false,skipped:'already-checked'};
+  const targetName='Gold Black from Blue Bkack';
+  const records=componentLibraryRecords();
+  const matchIndices=[];
+  records.forEach((record,index)=>{if(String(record.name||'').trim()===targetName)matchIndices.push(index);});
+  const matches=matchIndices.map((index)=>records[index]);
+  if(matches.length!==1)return {changed:false,skipped:matches.length?'ambiguous-name':'not-found',matches:matches.length};
+  const taxonomy=normalizeStudioComponentTaxonomy(Store.get(componentTaxonomyStorageKey(),null));
+  const category=taxonomy.categories.find((item)=>normalizeNameKey(item.name)==='winding checks');
+  if(!category)return {changed:false,skipped:'parent-category-missing',recordId:matches[0].id};
+  const record=matches[0];
+  const changed=record.category!==category.name || String(record.categoryId||'')!==String(category.id||'') || !!String(record.subcategory||'').trim();
+  if(changed){
+    record.category=category.name;
+    record.categoryId=category.id;
+    record.subcategory='';
+    records[matchIndices[0]]=record;
+    saveComponentLibraryRecords(records);
+  }
+  Store.set(markerKey,true);
+  return {changed,recordId:record.id,category:category.name,subcategory:record.subcategory};
+}
 function migrateComponentHierarchyLabels(){
+  const goldBlackCorrection=migrateGoldBlackToParentCategory();
   const markerKey=componentHierarchyCleanupStorageKey();
-  if(Store.get(markerKey,false))return {changed:false,renamed:[],skipped:[]};
+  if(Store.get(markerKey,false))return {changed:!!goldBlackCorrection.changed,renamed:[],skipped:[],goldBlackCorrection};
   const migrations=[
     {category:'Reel Seats',from:'Fuji Reel seats',to:'Fuji',brand:'Fuji'},
     {category:'Reel Seats',from:'K-Labs Reel seats',to:'K-Labs',brand:'K-Labs'},
@@ -5309,7 +5481,7 @@ function migrateComponentHierarchyLabels(){
   if(recordsChanged)saveComponentLibraryRecords(records);
   if(taxonomyChanged)saveStudioComponentTaxonomy();
   Store.set(markerKey,true);
-  return {changed:recordsChanged||taxonomyChanged,renamed,skipped};
+  return {changed:recordsChanged||taxonomyChanged||!!goldBlackCorrection.changed,renamed,skipped,goldBlackCorrection};
 }
 function studioRelinkSubcategory(oldCategoryName,oldSubcategory,newCategoryName,newSubcategory){
   const oldCategoryKey=normalizeNameKey(oldCategoryName);
@@ -5775,9 +5947,17 @@ function renderStudioComponentsLibrary(){
   if(studioLibraryPath.level==='category' || studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component'){
     scopeSubcategories=studioSubcategoryNamesForLibrary(taxonomy,records,studioLibraryPath.categoryId);
   }
-  if((studioLibraryPath.level==='subcategory' || studioLibraryPath.level==='component') && normalizeNameKey(studioLibraryPath.categoryId)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
+  if(studioLibraryPath.level==='subcategory' && normalizeNameKey(studioLibraryPath.categoryId)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
     const validSubcategory=scopeSubcategories.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.subcategoryId))||'';
-    if(!validSubcategory){
+    if(!validSubcategory)studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
+    else studioLibraryPath.subcategoryId=validSubcategory;
+  }else if(studioLibraryPath.level==='component' && normalizeNameKey(studioLibraryPath.categoryId)!==normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY)){
+    const selected=currentStudioComponentRecord();
+    const currentSubcategory=String(selected&&selected.subcategory||'').trim();
+    const validSubcategory=scopeSubcategories.find((name)=>normalizeNameKey(name)===normalizeNameKey(studioLibraryPath.subcategoryId))||'';
+    if(!String(studioLibraryPath.subcategoryId||'').trim() && !currentSubcategory){
+      studioLibraryPath.subcategoryId='';
+    }else if(!validSubcategory){
       studioLibraryPath={level:'category',categoryId:studioLibraryPath.categoryId,subcategoryId:''};
     }else{
       studioLibraryPath.subcategoryId=validSubcategory;
@@ -5931,15 +6111,24 @@ function renderStudioComponentsLibrary(){
       }
       return;
     }
-    const visibleSubcategories=scopeSubcategories.filter((name)=>!queryKey || name.toLowerCase().includes(queryKey));
-    if(!visibleSubcategories.length){
+    const unassignedKey=normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY);
+    const visibleSubcategories=scopeSubcategories.filter((name)=>normalizeNameKey(name)!==unassignedKey && (!queryKey || name.toLowerCase().includes(queryKey)));
+    const directComponents=sortComponentRecordsByName(studioComponentRecordsForCategory(records,studioLibraryPath.categoryId)
+      .filter((record)=>!normalizeNameKey(record&&record.subcategory) && studioComponentMatchesSearch(record,queryKey)));
+    const directMarkup=directComponents.map((record)=>{
+      const name=String(record&&record.name||'').trim();
+      const brand=String(record&&record.brand||'').trim();
+      return `<button class="studio-components-list__item" type="button" data-studio-library-open-component="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong>${brand?`<span>${escapeHtml(brand)}</span>`:''}</button>`;
+    }).join('');
+    if(!visibleSubcategories.length && !directMarkup){
       list.innerHTML='<p class="studio-components-list__empty">No subcategories found.</p>';
     }else{
-      list.innerHTML=visibleSubcategories.map((name)=>{
+      const subcategoryMarkup=visibleSubcategories.map((name)=>{
         const menuKey=normalizeNameKey(name);
         const menuOpen=isStudioLibraryContextMenuOpen('subcategory',menuKey);
         return `<article class="studio-components-list__row"><button class="studio-components-list__item" type="button" data-studio-library-open-subcategory="${escapeAttributeValue(name)}"><strong>${escapeHtml(name)}</strong></button><button class="studio-components-list__menu-trigger" type="button" aria-label="Subcategory actions" data-studio-library-menu-toggle="subcategory" data-studio-library-menu-key="${escapeAttributeValue(menuKey)}">&hellip;</button>${menuOpen?studioSubcategoryContextMenuMarkup(name):''}</article>`;
       }).join('');
+      list.innerHTML=subcategoryMarkup+directMarkup;
     }
     return;
   }
@@ -8486,7 +8675,7 @@ function applyComponentLibraryRecordToRow(index,name,libraryComponentId){
   const row=quote.components[index];
   row.libraryComponentId=String(record.id||'').trim();
   if(record.stockOnHand!==undefined)row.stockOnHand=numberOrZero(record.stockOnHand);
-  if(specificationValue(record.subcategory))row.subcategory=record.subcategory;
+  row.subcategory=String(record.subcategory||'').trim();
   if(specificationValue(record.brand))row.brand=record.brand;
   if(specificationValue(record.customerLabel))row.customerLabel=record.customerLabel;
   if(Number.isFinite(Number(record.quantity)))row.quantity=Number(record.quantity);
@@ -12120,6 +12309,18 @@ function startHold(field,direction,button){
   },500);
 }
 function bindLayoutControls(){
+  const guideSpacingToggle=$('guideSpacingToggle');
+  if(guideSpacingToggle && guideSpacingToggle.getAttribute('data-guide-spacing-bound')!=='true'){
+    guideSpacingToggle.setAttribute('data-guide-spacing-bound','true');
+    guideSpacingToggle.addEventListener('click',()=>{
+      const showSpacing=!guideSpacingVisible();
+      Store.set(GUIDE_SPACING_DISPLAY_KEY,showSpacing);
+      syncGuideSpacingToggle();
+      const spiral=workshopToolsState&&workshopToolsState.spiral;
+      if(spiral)renderSpiralGuideRows(spiral,!!spiral.showPhysicalOffsets);
+    });
+  }
+  syncGuideSpacingToggle();
   const returnLandingButton=document.querySelector('[data-workshop-return-landing]');
   if(returnLandingButton && returnLandingButton.getAttribute('data-workshop-return-bound')!=='true'){
     returnLandingButton.setAttribute('data-workshop-return-bound','true');
@@ -13310,6 +13511,7 @@ function renderWorkshopQuote(){
     const isNumeric=['blankCost','labourRate','labourHours'].includes(key);
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
+  syncStudioCustomSelectTrigger($('quoteCountry'));
   const mode=normalizeQuoteMode(quote.quoteMode);
   if(mode!=='internal'){
     quote.quoteMode='internal';
@@ -14466,6 +14668,7 @@ function render(options){
 // NOTE: starter-component seeding no longer runs here at parse time (auth has not resolved yet, so it
 // would always hit the bare anonymous key and pollute later sign-in merges). maybeSeedStarterComponents()
 // is invoked from js/supabase-client.js once the auth/sync state is known.
+initializeStudioCustomSelects();
 cleanupPlaceholderComponentRecordsOnce();
 ensureComponentLibraryIdsBackfilled();
 ensureBuildRecordIdsBackfilled();
