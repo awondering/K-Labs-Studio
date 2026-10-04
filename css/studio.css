@@ -9871,14 +9871,29 @@ body.klabs-auth-resolving::after {
 }
 
 #studioComponentDetails .studio-size-entry{
-  gap:6px;
+  gap:8px;
+  align-items:end;
+}
+
+#studioComponentDetails .studio-size-entry input{
+  box-sizing:border-box;
+  height:40px;
+  min-height:40px;
+  border-radius:6px;
 }
 
 #studioComponentDetails .studio-size-entry__btn{
-  min-height:38px;
-  padding:0 10px;
+  box-sizing:border-box;
+  width:auto;
+  min-width:64px;
+  height:40px;
+  min-height:40px;
+  padding:0 12px;
   border-radius:6px;
   font-size:10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
 }
 
 #studioComponentDetails .studio-size-range{
