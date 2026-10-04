@@ -4035,6 +4035,7 @@ function renderStudioComponentDetails(record,options){
     ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
+      ${isAddMode?'':`<button id="studioComponentDuplicateBtn" class="ghost-action studio-component-details__move" type="button">Duplicate</button>`}
       ${isAddMode?'':`<button id="studioComponentMoveBtn" class="ghost-action studio-component-details__move" type="button">Move Component</button>`}
       ${isAddMode?'':`<button id="studioComponentDeleteBtn" class="ghost-action studio-component-details__delete" type="button">Delete</button>`}
     </div>
@@ -4271,6 +4272,38 @@ function commitStudioComponentDetails(){
     syncStudioComponentSaveButtonState();
   },1700);
   return true;
+}
+function duplicateCurrentStudioComponent(){
+  const source=currentStudioComponentRecord();
+  if(!source)return;
+  const records=componentLibraryRecords();
+  const existingNames=new Set(records.map((record)=>normalizeNameKey(record.name)));
+  const baseName=`${String(source.name||'Component').trim()} Copy`;
+  let copyName=baseName;
+  let suffix=2;
+  while(existingNames.has(normalizeNameKey(copyName))){
+    copyName=`${baseName} ${suffix}`;
+    suffix+=1;
+  }
+  const copy={
+    ...source,
+    id:'',
+    name:copyName,
+    stockOnHand:activeTrackComponentStock()?0:undefined,
+    sizeOptions:normalizeComponentSizeOptions(source.sizeOptions),
+  };
+  saveComponentLibraryRecords([copy,...records]);
+  studioComponentDraft=null;
+  studioSelectedComponentKey=normalizeNameKey(copyName);
+  studioLibraryPath={level:'component',categoryId:String(source.category||''),subcategoryId:String(source.subcategory||'')};
+  renderStudioComponentsLibrary();
+  const renameButton=$('studioComponentRenameBtn');
+  const renameInput=$('studioComponentRenameInput');
+  if(renameButton && !renameButton.hidden)renameButton.click();
+  if(renameInput){
+    renameInput.focus();
+    renameInput.select();
+  }
 }
 function studioTaxonomySectionMode(section){
   const scope=studioTaxonomyUiState&&studioTaxonomyUiState[section]?studioTaxonomyUiState[section]:null;
@@ -5875,6 +5908,11 @@ function bindStudioComponentsPanel(){
       const saveButton=event.target.closest('#studioComponentSaveBtn');
       if(saveButton){
         saveStudioComponentDetails();
+        return;
+      }
+
+      if(event.target.closest('#studioComponentDuplicateBtn')){
+        duplicateCurrentStudioComponent();
         return;
       }
 
