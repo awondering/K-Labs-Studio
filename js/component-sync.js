@@ -20,6 +20,7 @@
   const MIGRATION_FLAG_PREFIX = "klabs-component-cloud-linked";
   const KNOWN_IDS_PREFIX = "klabs-component-cloud-known-ids";
   const KNOWN_UPDATED_PREFIX = "klabs-component-cloud-known-updated";
+  const KNOWN_TAXONOMY_PREFIX = "klabs-component-cloud-known-taxonomy";
   const ANONYMOUS_OWNER_KEY = "klabs-component-library-anonymous-owner";
   const RECONCILE_DEBOUNCE_MS = 700;
 
@@ -83,6 +84,16 @@
       if (id) map[id] = String(row.updated_at || "");
     });
     setKnownUpdated(map);
+  }
+  function knownTaxonomyKey() {
+    return `${KNOWN_TAXONOMY_PREFIX}:${currentUserId}`;
+  }
+  function getKnownTaxonomy() {
+    const taxonomy = window.Store.get(knownTaxonomyKey(), null);
+    return taxonomy && typeof taxonomy === "object" ? taxonomy : null;
+  }
+  function setKnownTaxonomy(taxonomy) {
+    window.Store.set(knownTaxonomyKey(), taxonomy && typeof taxonomy === "object" ? taxonomy : null);
   }
   // Seeded starter records are reproducible defaults, never user data; they must stay out of signed-in
   // account libraries. Detection lives in js/ui.js (it owns the seed catalogue).
@@ -195,6 +206,17 @@
   function recordsEqualForSync(a, b) {
     return syncComparableJson(a) === syncComparableJson(b);
   }
+  function withCloudTaxonomyClassification(localRecord, cloudRow, knownIds, knownUpdated) {
+    const id = String(localRecord && localRecord.id || "");
+    if (!cloudRow || !knownIds.has(id)) return localRecord;
+    const knownTimestamp = String(knownUpdated[id] || "");
+    if (knownTimestamp && knownTimestamp === String(cloudRow.updated_at || "")) return localRecord;
+    const cloudRecord = rowToRecord(cloudRow);
+    if (String(localRecord.category || "") === cloudRecord.category
+      && String(localRecord.categoryId || "") === cloudRecord.categoryId
+      && String(localRecord.subcategory || "") === cloudRecord.subcategory) return localRecord;
+    return { ...localRecord, category: cloudRecord.category, categoryId: cloudRecord.categoryId, subcategory: cloudRecord.subcategory };
+  }
 
   // Union of local + cloud records. Identity: stable record id first, then the duplicate key
   // (name/brand/variant/category/subcategory) so the same logical component created on two devices
@@ -230,11 +252,93 @@
     return { merged, droppedCloudIds };
   }
 
-  // Union of local + cloud taxonomy ({categories:[{id,name,subcategories}],suppliers:[{id,name}]});
-  // matched by normalised name, cloud ids win ties, local-only entries are preserved.
-  function mergeTaxonomies(localTaxonomy, cloudTaxonomy) {
+  // Taxonomy merge uses the last synced snapshot to distinguish additions from deletions.
+  function taxonomyEntitySignature(entity, childrenKey) {
+    const children = childrenKey && Array.isArray(entity && entity[childrenKey])
+      ? entity[childrenKey].map((child) => [String(child && child.id || ""), normalizeSyncText(child && child.name)])
+        .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]))
+      : [];
+    return JSON.stringify([normalizeSyncText(entity && entity.name), children]);
+  }
+  // Three-way taxonomy merge: additions from either client survive, but an entity removed from
+  // either side since the last synced snapshot stays removed instead of being restored by stale data.
+  function mergeTaxonomyRows(localRows, cloudRows, baselineRows, childrenKey) {
+    const groups = [];
+    const addSide = (side, rows) => {
+      (Array.isArray(rows) ? rows : []).forEach((entity) => {
+        if (!entity || !normalizeSyncText(entity.name)) return;
+        const id = String(entity.id || "");
+        const nameKey = normalizeSyncText(entity.name);
+        const identity = id ? `id:${id}` : `name:${nameKey}`;
+        let group = groups.find((item) => item.identity === identity);
+        if (!group) {
+          group = { identity };
+          groups.push(group);
+        }
+        if (!group[side]) group[side] = entity;
+      });
+    };
+    addSide("cloud", cloudRows);
+    addSide("local", localRows);
+    addSide("baseline", baselineRows);
+    const merged = [];
+    groups.forEach((group) => {
+      const local = group.local;
+      const cloud = group.cloud;
+      const baseline = group.baseline;
+      let selected;
+      if (baseline) {
+        if (!cloud) return;
+        if (!local) {
+          if (taxonomyEntitySignature(cloud, childrenKey) === taxonomyEntitySignature(baseline, childrenKey)) return;
+          selected = cloud;
+        } else {
+          const localChanged = taxonomyEntitySignature(local, childrenKey) !== taxonomyEntitySignature(baseline, childrenKey);
+          const cloudChanged = taxonomyEntitySignature(cloud, childrenKey) !== taxonomyEntitySignature(baseline, childrenKey);
+          selected = localChanged && !cloudChanged ? local : cloud;
+        }
+      } else {
+        selected = cloud || local;
+      }
+      if (!selected) return;
+      const next = { id: String(selected.id || ""), name: String(selected.name || "").trim() };
+      if (childrenKey) {
+        next[childrenKey] = mergeTaxonomyRows(
+          local && local[childrenKey],
+          cloud && cloud[childrenKey],
+          baseline && baseline[childrenKey],
+          ""
+        );
+      }
+      const existing = merged.find((item) => normalizeSyncText(item.name) === normalizeSyncText(next.name));
+      if (existing) {
+        if (childrenKey) {
+          existing[childrenKey] = mergeTaxonomyRows(existing[childrenKey], next[childrenKey], [], "");
+        }
+      } else {
+        merged.push(next);
+      }
+    });
+    return merged;
+  }
+  function mergeTaxonomies(localTaxonomy, cloudTaxonomy, baselineTaxonomy) {
     const local = localTaxonomy && typeof localTaxonomy === "object" ? localTaxonomy : {};
     const cloud = cloudTaxonomy && typeof cloudTaxonomy === "object" ? cloudTaxonomy : {};
+    const baseline = baselineTaxonomy && typeof baselineTaxonomy === "object" ? baselineTaxonomy : null;
+    if (baseline) {
+      const suppliers = [];
+      const seenSuppliers = new Set();
+      [...(Array.isArray(cloud.suppliers) ? cloud.suppliers : []), ...(Array.isArray(local.suppliers) ? local.suppliers : [])].forEach((supplier) => {
+        const key = normalizeSyncText(supplier && supplier.name);
+        if (!key || seenSuppliers.has(key)) return;
+        seenSuppliers.add(key);
+        suppliers.push({ id: String(supplier.id || ""), name: String(supplier.name || "").trim() });
+      });
+      return {
+        categories: mergeTaxonomyRows(local.categories, cloud.categories, baseline.categories, "subcategories"),
+        suppliers,
+      };
+    }
     const categories = [];
     const categoryByName = new Map();
     const addCategory = (category) => {
@@ -275,12 +379,10 @@
     return { categories, suppliers };
   }
 
-  // The taxonomy JSON is only half the picture: the UI also harvests category/subcategory names from the
-  // component records themselves (records reference taxonomy by NAME). After a merge, re-harvest from the
-  // merged records so cloud-only subcategories (e.g. ones that were only ever present on another device's
-  // records) are restored into the taxonomy instead of silently disappearing. Never removes entries.
-  function enrichTaxonomyFromRecords(taxonomy, records) {
+  // The taxonomy JSON is only half the picture: harvest names from records that are not known deletions.
+  function enrichTaxonomyFromRecords(taxonomy, records, baselineTaxonomy) {
     const base = taxonomy && typeof taxonomy === "object" ? taxonomy : {};
+    const baseline = baselineTaxonomy && typeof baselineTaxonomy === "object" ? baselineTaxonomy : null;
     const categories = Array.isArray(base.categories) ? base.categories.map((category) => ({
       id: String(category && category.id || ""),
       name: String(category && category.name || "").trim(),
@@ -296,14 +398,21 @@
       const categoryKey = normalizeSyncText(categoryName);
       if (categoryKey) {
         let category = categories.find((item) => normalizeSyncText(item.name) === categoryKey);
-        if (!category) {
+        const baselineCategory = baseline && (baseline.categories || []).find((item) =>
+          (record && record.categoryId && String(item.id || "") === String(record.categoryId))
+          || normalizeSyncText(item && item.name) === categoryKey);
+        if (!category && !baselineCategory) {
           category = { id: String(record.categoryId || "") || newId("cat"), name: categoryName, subcategories: [] };
           categories.push(category);
         }
-        const subName = String(record && record.subcategory || "").trim();
-        const subKey = normalizeSyncText(subName);
-        if (subKey && !category.subcategories.some((sub) => normalizeSyncText(sub && sub.name) === subKey)) {
-          category.subcategories.push({ id: newId("sub"), name: subName });
+        if (category) {
+          const subName = String(record && record.subcategory || "").trim();
+          const subKey = normalizeSyncText(subName);
+          const baselineSubcategory = baselineCategory && (baselineCategory.subcategories || []).find((item) => normalizeSyncText(item && item.name) === subKey);
+          const subcategoryWasRemoved = subKey && baselineSubcategory && !category.subcategories.some((item) => normalizeSyncText(item && item.name) === subKey);
+          if (subKey && !subcategoryWasRemoved && !category.subcategories.some((sub) => normalizeSyncText(sub && sub.name) === subKey)) {
+            category.subcategories.push({ id: newId("sub"), name: subName });
+          }
         }
       }
       const supplierName = String(record && record.supplier || "").trim();
@@ -317,20 +426,25 @@
   // Apply the final taxonomy locally (same cache + persistence step as any cloud pull) and push it back up.
   async function publishTaxonomy(taxonomy) {
     window.KLABS_UI?.applyCloudComponentTaxonomy?.(taxonomy);
-    await upsertCloudTaxonomy(taxonomy);
+    const published = window.ensureStudioComponentTaxonomyLoaded?.() || taxonomy;
+    await upsertCloudTaxonomy(published);
+    setKnownTaxonomy(published);
   }
   // Supabase exactly once, persist it locally, and mark the account linked. Only exact absorbed duplicates
   // are ever deleted from cloud. Returns the merged record count.
   async function publishMergedLibrary(cloudRows, cloudTaxonomyRow) {
     const knownIds = getKnownCloudIds();
     const cloudIds = new Set((Array.isArray(cloudRows) ? cloudRows : []).map((row) => String(row.client_id)));
+    const cloudById = new Map((Array.isArray(cloudRows) ? cloudRows : []).map((row) => [String(row.client_id), row]));
+    const knownUpdated = getKnownUpdated();
     const localRecords = window.componentLibraryRecords()
       .filter((record) => record.id && !isSeedRecord(record))
       // Tombstone baseline (the same rule reconcileNow already applies): a local record this context
       // previously confirmed in cloud, now absent from cloud, was deleted on another device - honour that
       // deletion instead of letting the stale local copy win the merge and be re-uploaded. Records never
       // known to cloud (created offline/unlinked; baseline is empty pre-link) are always preserved.
-      .filter((record) => !knownIds.has(record.id) || cloudIds.has(record.id));
+      .filter((record) => !knownIds.has(record.id) || cloudIds.has(record.id))
+      .map((record) => withCloudTaxonomyClassification(record, cloudById.get(String(record.id)), knownIds, knownUpdated));
     const cloudRecords = (Array.isArray(cloudRows) ? cloudRows : []).map(rowToRecord);
     const { merged, droppedCloudIds } = mergeRecordSets(localRecords, cloudRecords);
     const absorbedIds = Array.from(droppedCloudIds).filter((id) => cloudIds.has(id));
@@ -343,10 +457,13 @@
     saveLocalRecordsSilently(merged);
     const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
     const cloudTaxonomy = cloudTaxonomyRow && cloudTaxonomyRow.taxonomy ? cloudTaxonomyRow.taxonomy : null;
-    const mergedTaxonomy = cloudTaxonomy ? mergeTaxonomies(localTaxonomy, cloudTaxonomy) : localTaxonomy;
+    const knownTaxonomy = getKnownTaxonomy();
+    const mergedTaxonomy = cloudTaxonomy
+      ? (isLinked() && !knownTaxonomy ? cloudTaxonomy : mergeTaxonomies(localTaxonomy, cloudTaxonomy, knownTaxonomy))
+      : localTaxonomy;
     // Recover any category/subcategory that lives only on the merged component records (e.g. subcategories
     // whose seed records were filtered out of a stale local cache before the taxonomy could harvest them).
-    const finalTaxonomy = enrichTaxonomyFromRecords(mergedTaxonomy, merged);
+    const finalTaxonomy = enrichTaxonomyFromRecords(mergedTaxonomy, merged, knownTaxonomy);
     await publishTaxonomy(finalTaxonomy);
     window.Store.set(migrationFlagKey(), true);
     setKnownCloudIds(new Set(merged.map((record) => record.id)));
@@ -552,7 +669,8 @@
         } else {
           // Genuine race (cloud changed by another session) or no baseline yet: deterministic merge,
           // whichever side carries more real data wins, so neither session's details are silently lost.
-          const winner = mergeMostComplete(record, cloudRecord);
+          const classifiedRecord = withCloudTaxonomyClassification(record, row, knownIds, knownUpdated);
+          const winner = mergeMostComplete(classifiedRecord, cloudRecord);
           workingById.set(record.id, winner);
           upsertById.set(record.id, winner);
         }
@@ -614,12 +732,25 @@
       reconcileNow();
     }, RECONCILE_DEBOUNCE_MS);
   }
+  async function reconcileTaxonomyNow() {
+    const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
+    const cloudRow = await fetchCloudTaxonomy();
+    const cloudTaxonomy = cloudRow && cloudRow.taxonomy ? cloudRow.taxonomy : null;
+    const baseline = getKnownTaxonomy();
+    const merged = cloudTaxonomy
+      ? (isLinked() && !baseline ? cloudTaxonomy : mergeTaxonomies(localTaxonomy, cloudTaxonomy, baseline))
+      : localTaxonomy;
+    window.KLABS_UI?.applyCloudComponentTaxonomy?.(merged);
+    const published = window.ensureStudioComponentTaxonomyLoaded();
+    await upsertCloudTaxonomy(published);
+    setKnownTaxonomy(published);
+  }
   function scheduleTaxonomyReconcile() {
     if (!currentUserId || !isLinked()) return;
     if (taxonomyTimer) clearTimeout(taxonomyTimer);
     taxonomyTimer = setTimeout(() => {
       taxonomyTimer = null;
-      upsertCloudTaxonomy(window.ensureStudioComponentTaxonomyLoaded()).catch((error) => {
+      reconcileTaxonomyNow().catch((error) => {
         console.error("[K-Labs Studio] Component taxonomy cloud sync failed:", error);
         setState({ status: "error", error: "Could not sync your latest category/supplier changes." });
       });
@@ -721,6 +852,14 @@
     }
 
     if (cloudRows.length === 0 && linked) {
+      try {
+        await reconcileTaxonomyNow();
+      } catch (error) {
+        console.error("[K-Labs Studio] Could not refresh the empty account taxonomy:", error);
+        lastErrorKind = "pull";
+        setState({ status: "error", error: "Could not refresh your component categories. Local data is unchanged." });
+        return;
+      }
       // Previously linked but cloud now reads empty: never treat this as "erase local", and never declare
       // SYNCED without a verified cloud row count. Use the FULL local library here (not seed-filtered) -
       // matches the RECORDS diagnostic exactly, so a library made of edited starter-catalogue rows is never
