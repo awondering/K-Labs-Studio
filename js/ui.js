@@ -4778,18 +4778,26 @@ function renderComponentDuplicateSheet(){
   const sheet=$('studioComponentDuplicateSheet');
   const state=studioComponentDuplicateState;
   const source=currentStudioComponentRecord();
-  if(!sheet || !state || !source)return;
-  const categoryName=String(source.category||'').trim()||'Unassigned';
+  if(!sheet || !state || (state.mode!=='family' && !source))return;
+  const familyMode=state.mode==='family';
+  const categoryName=String(familyMode?state.category:source.category||'').trim()||'Unassigned';
   const nameLabel=$('studioComponentDuplicateNameLabel');
   const nameInput=$('studioComponentDuplicateName');
   const categoryDisplay=$('studioComponentDuplicateCategory');
   const note=$('studioComponentDuplicateNote');
   const confirm=$('studioComponentDuplicateConfirm');
+  const heading=sheet.querySelector('h2');
+  const panel=sheet.querySelector('[role="dialog"]');
+  const subcategoryDisplay=$('studioComponentDuplicateSubcategory');
+  const title=familyMode?'Duplicate Family':'Duplicate Component';
+  if(heading)heading.textContent=title;
+  if(panel)panel.setAttribute('aria-label',title);
+  if(subcategoryDisplay)subcategoryDisplay.textContent=familyMode?'New Sibling Subcategory':'No Subcategory';
   if(categoryDisplay)categoryDisplay.textContent=categoryName;
-  if(nameLabel)nameLabel.textContent='New Component Name';
+  if(nameLabel)nameLabel.textContent=familyMode?'New Family Name':'New Component Name';
   if(nameInput && document.activeElement!==nameInput)nameInput.value=state.name;
-  if(note)note.textContent='Copied component stays in its parent category with no subcategory. Stock starts at 0.';
-  if(confirm)confirm.textContent='Duplicate Component';
+  if(note)note.textContent=familyMode?'Copied components stay in a new sibling subcategory. Stock starts at 0.':'Copied component stays in its parent category with no subcategory. Stock starts at 0.';
+  if(confirm)confirm.textContent=title;
 }
 function closeComponentDuplicateSheet(){
   const sheet=$('studioComponentDuplicateSheet');
@@ -4803,6 +4811,9 @@ function componentDuplicateSheetError(message){
 }
 function commitStudioComponentDuplicate(){
   const state=studioComponentDuplicateState;
+  if(state && state.mode==='family'){
+    return duplicateStudioSubcategory(state.category,state.subcategory,$('studioComponentDuplicateName')&&$('studioComponentDuplicateName').value);
+  }
   const source=currentStudioComponentRecord();
   if(!state || !source)return false;
   const nextName=String($('studioComponentDuplicateName')&&$('studioComponentDuplicateName').value||'').trim();
@@ -4853,7 +4864,7 @@ function ensureComponentDuplicateSheet(){
       <div class="component-sheet__body">
         <section class="studio-component-duplicate__placement" aria-label="Duplicate placement">
           <div><span>Category</span><strong id="studioComponentDuplicateCategory"></strong></div>
-          <div><span>Subcategory</span><strong>No Subcategory</strong></div>
+          <div><span>Subcategory</span><strong id="studioComponentDuplicateSubcategory">No Subcategory</strong></div>
         </section>
         <label class="component-hierarchy-picker__brand"><span id="studioComponentDuplicateNameLabel">New Component Name</span><input id="studioComponentDuplicateName" type="text" autocomplete="off" /></label>
         <p id="studioComponentDuplicateNote" class="studio-component-duplicate__note" aria-live="polite"></p>
@@ -4892,6 +4903,95 @@ function openComponentDuplicateSheet(){
 }
 function duplicateCurrentStudioComponent(){
   openComponentDuplicateSheet();
+}
+function openSubcategoryDuplicateSheet(category,subcategory){
+  studioComponentDuplicateState={mode:'family',category:category.name,subcategory:subcategory.name,name:''};
+  const names=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),category.name);
+  const base=`${subcategory.name} Copy`;
+  let nextName=base;
+  let suffix=2;
+  while(names.some((name)=>normalizeNameKey(name)===normalizeNameKey(nextName))){
+    nextName=`${base} ${suffix}`;
+    suffix+=1;
+  }
+  studioComponentDuplicateState.name=nextName;
+  ensureComponentDuplicateSheet();
+  renderComponentDuplicateSheet();
+  const status=$('studioComponentDuplicateStatus');
+  if(status){status.textContent='';status.dataset.state='';}
+  $('studioComponentDuplicateSheet').hidden=false;
+  lockModalLayer(document.activeElement);
+}
+function duplicateStudioSubcategory(categoryName,subcategoryName,name){
+  const nextName=String(name||'').trim();
+  if(!nextName){componentDuplicateSheetError('Enter a family name before duplicating.');return false;}
+  const category=studioCategoryByName(categoryName);
+  if(!category || !category.subcategories.some((item)=>normalizeNameKey(item.name)===normalizeNameKey(subcategoryName))){
+    componentDuplicateSheetError('The selected family was not found.');
+    return false;
+  }
+  const records=componentLibraryRecords();
+  const names=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),records,category.name);
+  if(names.some((existing)=>normalizeNameKey(existing)===normalizeNameKey(nextName))){
+    componentDuplicateSheetError('A family with that name already exists in this category.');
+    return false;
+  }
+  const copies=records.filter((record)=>normalizeNameKey(record.category)===normalizeNameKey(category.name) && normalizeNameKey(record.subcategory)===normalizeNameKey(subcategoryName))
+    .map((record)=>({...record,id:'',category:category.name,categoryId:category.id,subcategory:nextName,stockOnHand:0,sizeOptions:normalizeComponentSizeOptions(record.sizeOptions)}));
+  const created={id:studioTaxonomyId('sub'),name:nextName};
+  const previousTaxonomy=ensureStudioComponentTaxonomyLoaded();
+  const stagedTaxonomy=normalizeStudioComponentTaxonomy(previousTaxonomy);
+  stagedTaxonomy.categories.find((item)=>item.id===category.id).subcategories.push(created);
+  const snapshots=[
+    {key:componentLibraryStorageKey(),value:Store.get(componentLibraryStorageKey(),[]),label:'component records'},
+    {key:componentTaxonomyStorageKey(),value:Store.get(componentTaxonomyStorageKey(),null),label:'subcategory taxonomy'},
+    {key:CUSTOM_SUPPLIER_STORAGE_KEY,value:Store.get(CUSTOM_SUPPLIER_STORAGE_KEY,[]),label:'supplier names'},
+  ];
+  const sync=window.KLABS_SYNC;
+  const notifyComponents=sync&&sync.notifyComponentsChanged;
+  const notifyTaxonomy=sync&&sync.notifyTaxonomyChanged;
+  let componentsChanged=false;
+  let taxonomyChanged=false;
+  const restoreNotifications=()=>{
+    if(typeof notifyComponents==='function')sync.notifyComponentsChanged=notifyComponents;
+    if(typeof notifyTaxonomy==='function')sync.notifyTaxonomyChanged=notifyTaxonomy;
+  };
+  try{
+    if(typeof notifyComponents==='function')sync.notifyComponentsChanged=()=>{componentsChanged=true;};
+    if(typeof notifyTaxonomy==='function')sync.notifyTaxonomyChanged=()=>{taxonomyChanged=true;};
+    saveComponentLibraryRecords([...copies,...records]);
+    studioComponentTaxonomyState=stagedTaxonomy;
+    saveStudioComponentTaxonomy();
+  }catch(error){
+    const recoveryErrors=[];
+    snapshots.forEach((snapshot)=>{
+      try{Store.set(snapshot.key,snapshot.value);}
+      catch(recoveryError){recoveryErrors.push(`${snapshot.label}: ${recoveryError&&recoveryError.message||'restore failed'}`);}
+    });
+    studioComponentTaxonomyState=recoveryErrors.length?null:previousTaxonomy;
+    const reason=error&&error.message||'Save failed.';
+    componentDuplicateSheetError(recoveryErrors.length
+      ?`Duplication failed: ${reason} Recovery failed for ${recoveryErrors.join('; ')}. Some changes may remain saved or queued for sync. Do not retry until recovery is resolved.`
+      :`Duplication failed: ${reason} Original records and taxonomy restored. You can retry with the same name.`);
+    return false;
+  }finally{
+    restoreNotifications();
+  }
+  const notificationErrors=[];
+  [{changed:componentsChanged,notify:notifyComponents},{changed:taxonomyChanged,notify:notifyTaxonomy}].forEach((notification)=>{
+    if(!notification.changed)return;
+    try{notification.notify.call(sync);}
+    catch(error){notificationErrors.push(error&&error.message||'Sync notification failed.');}
+  });
+  studioComponentTaxonomySelection.category=category.id;
+  studioComponentTaxonomySelection.subcategory=created.id;
+  studioComponentDraft=null;
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  studioLibraryPath={level:'category',categoryId:category.name,subcategoryId:''};
+  closeComponentDuplicateSheet();
+  renderStudioComponentsLibrary();
+  if(notificationErrors.length)openInfoDialog('Saved Locally',`Saved locally; sync needs retry. ${notificationErrors.join('; ')}`);
+  return true;
 }
 function studioTaxonomySectionMode(section){
   const scope=studioTaxonomyUiState&&studioTaxonomyUiState[section]?studioTaxonomyUiState[section]:null;
@@ -5907,6 +6007,7 @@ function studioCategoryContextMenuMarkup(categoryName){
 function studioSubcategoryContextMenuMarkup(subcategoryName){
   return `<div class="studio-components-row-menu" role="menu" aria-label="Subcategory actions">
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-rename" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Rename</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-duplicate" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Duplicate Family</button>
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-parent" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Change Parent Category</button>
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-up" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Move Up</button>
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="subcategory-down" data-studio-library-name="${escapeAttributeValue(subcategoryName)}">Move Down</button>
@@ -6345,6 +6446,7 @@ function bindStudioComponentsPanel(){
         if(action.startsWith('subcategory-')){
           const scoped=studioSubcategorySelectionByName(studioLibraryPath.categoryId,name);
           if(!scoped){openInfoDialog('Subcategory Missing','The selected subcategory was not found.');renderStudioComponentsLibrary();return;}
+          if(action==='subcategory-duplicate'){openSubcategoryDuplicateSheet(scoped.category,scoped.subcategory);return;}
           if(action==='subcategory-rename' || action==='subcategory-parent'){
             studioLibraryEditor={type:'subcategory',mode:'edit',targetName:scoped.subcategory.name,sourceCategory:scoped.category.name};
             renderStudioComponentsLibrary();
