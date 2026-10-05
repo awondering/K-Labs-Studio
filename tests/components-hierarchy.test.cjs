@@ -29,7 +29,7 @@ const functions=[
   'addStudioComponentSizeFromInput','generateStudioComponentSizeRange','removeStudioComponentSize',
 ];
 
-function harness({realSave=false}={}){
+function harness({realSave=false,realFamilyDialog=false}={}){
   const elements=new Map();
   function element(id){
     if(elements.has(id))return elements.get(id);
@@ -53,6 +53,8 @@ function harness({realSave=false}={}){
     'studioComponentDuplicateCategory','studioComponentDuplicateNote',
     'studioComponentSizeList','studioComponentSizeInput','studioComponentSizeFrom',
     'studioComponentSizeTo','studioComponentSizeStep',
+    'studioComponentsDuplicateFamilyBtn','studioComponentDuplicateDestinationLabel',
+    'studioComponentDuplicateNameLabel','studioComponentDuplicateConfirm',
   ].forEach(element);
   let sequence=0;
   const store=new Map();
@@ -134,6 +136,14 @@ function harness({realSave=false}={}){
     'componentLibraryCostValue','componentLibraryUnitCostValue','componentLibraryUnitPriceValue',
     'componentLibraryStockValue','componentLibraryCategoryValue','saveComponentLibraryRecords',
   ]):functions;
+  if(realFamilyDialog){
+    selectedFunctions.push('ensureComponentDuplicateSheet','openSubcategoryDuplicateSheet','closeComponentDuplicateSheet');
+    elements.delete('studioComponentDuplicateSheet');
+    context.document.createElement=()=>element('studioComponentDuplicateSheet');
+    context.document.body={appendChild(){}};
+    context.lockModalLayer=()=>{};
+    context.unlockModalLayer=()=>{};
+  }
   for(const name of selectedFunctions){
     const start=source.indexOf(`function ${name}(`);
     assert.ok(start>=0,`Missing ${name}`);
@@ -184,6 +194,47 @@ test('category rendering uses explicit families and a virtual bucket, without al
   assert.deepEqual(plain(c.records),before);
   assert.deepEqual(plain(c.componentPickerSubcategoryStageOptions('Winding Checks','')).map(row=>row.name),['black','Silver','Unassigned']);
   assert.deepEqual(plain(c.componentPickerComponentStageOptions('Winding Checks','Unassigned','')).map(row=>row.id),['direct-0','direct-1','direct-2']);
+});
+
+test('inside-family duplication confirmation creates an A-Z sibling and returns to parent with originals intact',()=>{
+  const {context:c,element:e,click,store}=harness({realSave:true,realFamilyDialog:true});
+  const category=c.studioCategoryById('winding');
+  category.subcategories.find(row=>row.id==='black').name='Black Blue';
+  c.records.find(row=>row.id==='black-item').subcategory='Black Blue';
+  c.saveStudioComponentTaxonomy();
+  c.studioLibraryPath={level:'subcategory',categoryId:'Winding Checks',subcategoryId:'Black Blue'};
+  c.renderStudioComponentsLibrary();
+  const originalRecords=plain(c.records);
+  const originalTaxonomy=plain(c.studioComponentTaxonomyState);
+  const tracking=c.activeTrackComponentStock();
+  assert.equal(e('studioComponentsDuplicateFamilyBtn').hidden,false);
+  click('studioComponentsDuplicateFamilyBtn');
+  assert.equal(c.studioComponentDuplicateState.categoryId,'winding');
+  assert.equal(c.studioComponentDuplicateState.subcategoryId,'black');
+  assert.equal(e('studioComponentDuplicateDestinationLabel').textContent,'Destination');
+  assert.equal(e('studioComponentDuplicateCategory').textContent,'Winding Checks');
+  assert.equal(e('studioComponentDuplicateNameLabel').textContent,'New Family Name');
+  click('studioComponentDuplicateSheet',{'data-component-duplicate-action':'cancel'});
+  assert.deepEqual(plain(c.records),originalRecords);
+  assert.deepEqual(plain(c.studioComponentTaxonomyState),originalTaxonomy);
+  click('studioComponentsDuplicateFamilyBtn');
+  e('studioComponentDuplicateName').value='Green Black';
+  click('studioComponentDuplicateSheet',{id:'studioComponentDuplicateConfirm'});
+  assert.equal(c.studioLibraryPath.level,'category');
+  assert.equal(c.studioLibraryPath.categoryId,'Winding Checks');
+  assert.deepEqual(labels(e('studioComponentsList').innerHTML),['Black Blue','Green Black','Silver','Unassigned']);
+  const sibling=c.studioCategoryById('winding').subcategories.find(row=>row.name==='Green Black');
+  assert.ok(sibling);
+  assert.notEqual(sibling.id,'black');
+  const source=originalRecords.find(row=>row.id==='black-item');
+  const copies=c.records.filter(row=>row.subcategory==='Green Black');
+  assert.equal(copies.length,1);
+  assert.notEqual(copies[0].id,source.id);
+  assert.deepEqual(plain(copies[0]),{...source,id:copies[0].id,subcategory:'Green Black',stockOnHand:0});
+  assert.deepEqual(plain(c.records.filter(row=>originalRecords.some(original=>original.id===row.id))),originalRecords);
+  assert.equal(c.activeTrackComponentStock(),tracking);
+  assert.deepEqual(store.get('records'),plain(c.records));
+  assert.equal(e('studioComponentDuplicateSheet').hidden,true);
 });
 
 test('supplier browse follows the same hierarchy, Brand display and controls',()=>{

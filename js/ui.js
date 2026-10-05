@@ -4705,7 +4705,7 @@ function renderStudioComponentDetails(record,options){
     ${studioComponentSizesSectionMarkup()}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
-      ${isAddMode?'':`<button id="studioComponentDuplicateBtn" class="ghost-action studio-component-details__move" type="button">Duplicate</button>`}
+      ${isAddMode?'':`<button id="studioComponentDuplicateBtn" class="ghost-action studio-component-details__move" type="button">Duplicate Component</button>`}
       ${isAddMode?'':`<button id="studioComponentMoveBtn" class="ghost-action studio-component-details__move" type="button">Move Component</button>`}
       ${isAddMode?'':`<button id="studioComponentDeleteBtn" class="ghost-action studio-component-details__delete" type="button">Delete</button>`}
     </div>
@@ -4981,6 +4981,8 @@ function renderComponentDuplicateSheet(){
   const nameLabel=$('studioComponentDuplicateNameLabel');
   const nameInput=$('studioComponentDuplicateName');
   const categoryDisplay=$('studioComponentDuplicateCategory');
+  const destinationLabel=$('studioComponentDuplicateDestinationLabel');
+  if(destinationLabel)destinationLabel.textContent=familyMode?'Destination':'Category';
   const note=$('studioComponentDuplicateNote');
   const confirm=$('studioComponentDuplicateConfirm');
   const heading=sheet.querySelector('h2');
@@ -5009,7 +5011,10 @@ function componentDuplicateSheetError(message){
 function commitStudioComponentDuplicate(){
   const state=studioComponentDuplicateState;
   if(state && state.mode==='family'){
-    return duplicateStudioSubcategory(state.category,state.subcategory,$('studioComponentDuplicateName')&&$('studioComponentDuplicateName').value);
+    const category=state.categoryId?studioCategoryById(state.categoryId):studioCategoryByName(state.category);
+    const family=category&&category.subcategories.find((item)=>state.subcategoryId?item.id===state.subcategoryId:normalizeNameKey(item.name)===normalizeNameKey(state.subcategory));
+    if(!category || !family){componentDuplicateSheetError('The selected family was not found.');return false;}
+    return duplicateStudioSubcategory(category.name,family.name,$('studioComponentDuplicateName')&&$('studioComponentDuplicateName').value);
   }
   const source=currentStudioComponentRecord();
   if(!state || !source)return false;
@@ -5061,7 +5066,7 @@ function ensureComponentDuplicateSheet(){
       </header>
       <div class="component-sheet__body">
         <section class="studio-component-duplicate__placement" aria-label="Duplicate placement">
-          <div><span>Category</span><strong id="studioComponentDuplicateCategory"></strong></div>
+          <div><span id="studioComponentDuplicateDestinationLabel">Category</span><strong id="studioComponentDuplicateCategory"></strong></div>
           <div><span>Subcategory</span><strong id="studioComponentDuplicateSubcategory">No Subcategory</strong></div>
         </section>
         <label class="component-hierarchy-picker__brand"><span id="studioComponentDuplicateNameLabel">New Component Name</span><input id="studioComponentDuplicateName" type="text" autocomplete="off" /></label>
@@ -5103,7 +5108,7 @@ function duplicateCurrentStudioComponent(){
   openComponentDuplicateSheet();
 }
 function openSubcategoryDuplicateSheet(category,subcategory){
-  studioComponentDuplicateState={mode:'family',category:category.name,subcategory:subcategory.name,name:''};
+  studioComponentDuplicateState={mode:'family',categoryId:category.id,subcategoryId:subcategory.id,category:category.name,subcategory:subcategory.name,name:''};
   const names=studioSubcategoryNamesForLibrary(ensureStudioComponentTaxonomyLoaded(),componentLibraryRecords(),category.name);
   const base=`${subcategory.name} Copy`;
   let nextName=base;
@@ -6360,6 +6365,15 @@ function renderStudioComponentsLibrary(){
     addBtn.disabled=false;
     addBtn.textContent=studioLibraryPath.level==='categories'?'ADD CATEGORY':studioLibraryPath.level==='category'?'ADD SUBCATEGORY / FAMILY':'ADD COMPONENT';
   }
+  const duplicateFamilyButton=$('studioComponentsDuplicateFamilyBtn');
+  if(duplicateFamilyButton){
+    const category=studioCategoryByName(studioLibraryPath.categoryId);
+    const family=category&&category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(studioLibraryPath.subcategoryId));
+    const familyView=['subcategory','supplier-subcategory'].includes(studioLibraryPath.level) && !showFormScreen;
+    duplicateFamilyButton.hidden=!familyView || !family;
+    duplicateFamilyButton.setAttribute('data-category-id',category&&category.id||'');
+    duplicateFamilyButton.setAttribute('data-family-id',family&&family.id||'');
+  }
   if(searchInput){
     searchInput.hidden=studioLibraryPath.level==='component' || studioLibraryPath.level==='supplier-component';
   }
@@ -6580,6 +6594,15 @@ function bindStudioComponentsPanel(){
   }
 
   const addBtn=$('studioComponentsAddBtn');
+  const duplicateFamilyButton=$('studioComponentsDuplicateFamilyBtn');
+  if(duplicateFamilyButton){
+    duplicateFamilyButton.addEventListener('click',()=>{
+      const category=studioCategoryById(duplicateFamilyButton.getAttribute('data-category-id'));
+      const family=category&&category.subcategories.find((item)=>item.id===duplicateFamilyButton.getAttribute('data-family-id'));
+      if(!category || !family){openInfoDialog('Family Missing','The selected family was not found.');return;}
+      openSubcategoryDuplicateSheet(category,family);
+    });
+  }
   if(addBtn){
     addBtn.addEventListener('click',()=>{
       if(studioLibraryPath.level==='categories'){
