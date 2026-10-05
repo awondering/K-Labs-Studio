@@ -135,6 +135,8 @@ let shouldAnimateComponentRows=false;
 let expandedComponentRowIndex=-1;
 // Presentation-only: which same-family component group is showing its individual items.
 let expandedComponentGroupKey='';
+let guideSetupStage=0;
+let guideSetupCompletedStage=-1;
 let componentRowMenuPointerDown={index:-1,expiresAt:0};
 const pendingComponentDraftRows=new WeakSet();
 let activeConfirmHandler=null;
@@ -1155,6 +1157,7 @@ function renderMeasurementPresentation(){
   restoreSpiralGeometry(spiralGeometry);
 }
 function renderSpiralGuideMapper(){
+  initializeGuideSetupStages();
   const card=$('workshopToolSpiral');
   if(!card)return;
   const spiral=workshopToolsState.spiral;
@@ -1220,6 +1223,90 @@ function renderSpiralGuideMapper(){
 
   renderSpiralMapperVisual(spiral);
   renderSpiralGuideRows(spiral,showPhysicalOffsets);
+  renderGuideSetupStages();
+}
+function initializeGuideSetupStages(){
+  const screen=$('layoutScreen');
+  if(!screen || $('guideSetupStage0'))return;
+  const spacing=screen.querySelector('.layout-control-card--guide-spacing');
+  const orientation=$('workshopToolSpiral');
+  const rod=$('studioRodContainer');
+  const list=screen.querySelector('.guide-spacing-panel');
+  if(!spacing || !orientation || !rod || !list)return;
+  const count=spacing.querySelector('.guide-spacing-input-row:last-child');
+  if(count)spacing.insertBefore(count,spacing.firstChild);
+  const parent=spacing.parentElement;
+  screen.querySelectorAll('.guide-setup-heading').forEach((heading)=>heading.remove());
+  const visual=orientation.querySelector('.spiral-mapper-visual');
+  const offsets=orientation.querySelector('.spiral-secondary-actions');
+  const titles=['GUIDE SPACING','GUIDE ORIENTATION','GUIDE PLACEMENT'];
+  titles.forEach((title,index)=>{
+    const stage=document.createElement('section');
+    stage.id=`guideSetupStage${index}`;
+    stage.className='guide-setup-stage';
+    stage.innerHTML=`<header class="guide-setup-stage__head"><h4>${index+1}. ${title}</h4><button class="ghost-action" type="button" data-guide-stage-edit="${index}" aria-controls="guideSetupBody${index}" aria-expanded="false" hidden>Edit</button></header><p id="guideSetupSummary${index}" class="workshop-tool-note" hidden></p><div id="guideSetupBody${index}" class="guide-setup-stage__body"></div>`;
+    parent.insertBefore(stage,$('layoutGuideNotice'));
+    const body=stage.querySelector('.guide-setup-stage__body');
+    if(index===0)body.appendChild(spacing);
+    if(index===1){
+      body.appendChild(orientation);
+      if(visual)body.appendChild(visual);
+    }
+    if(index===2){
+      body.appendChild(rod);
+      if(offsets)rod.appendChild(offsets);
+      body.appendChild(list);
+    }
+    if(index<2){
+      const next=document.createElement('button');
+      next.className='primary-action';
+      next.type='button';
+      next.setAttribute('data-guide-stage-continue',String(index));
+      next.textContent=index===0?'Continue to Orientation':'Continue to Placement';
+      body.appendChild(next);
+    }
+  });
+  screen.addEventListener('click',(event)=>{
+    const edit=event.target.closest('[data-guide-stage-edit]');
+    const next=event.target.closest('[data-guide-stage-continue]');
+    if(edit)setGuideSetupStage(Number(edit.getAttribute('data-guide-stage-edit')),false);
+    else if(next)setGuideSetupStage(Number(next.getAttribute('data-guide-stage-continue')),true);
+  });
+}
+function setGuideSetupStage(index,complete){
+  if(!Number.isInteger(index) || index<0 || index>2)return;
+  if(complete){
+    if(index!==guideSetupStage || index===2)return;
+    guideSetupCompletedStage=Math.max(guideSetupCompletedStage,index);
+    guideSetupStage=index+1;
+  }else{
+    if(index>guideSetupCompletedStage+1)return;
+    guideSetupStage=index;
+  }
+  renderGuideSetupStages();
+  const body=$(`guideSetupBody${guideSetupStage}`);
+  const focus=body&&body.querySelector('button,input,[contenteditable="true"]');
+  if(focus)focus.focus({preventScroll:true});
+}
+function renderGuideSetupStages(){
+  const spiral=workshopToolsState.spiral;
+  const summaries=[
+    `${state.guideCount} guides · First ${formatGuideListMeasurement(state.firstGuide)} · Stripper ${formatGuideListMeasurement(state.targetStripper)}`,
+    `${spiral.rodStyle||'Choose rod style'} · ${spiral.method} · ${spiral.method==='standard'?'Reel side':spiral.direction+' transition'}`,
+    'Select a guide to adjust its diameter and reel-side rotation.',
+  ];
+  for(let index=0;index<3;index+=1){
+    const stage=$(`guideSetupStage${index}`);
+    if(!stage)continue;
+    stage.hidden=index>Math.max(guideSetupCompletedStage+1,guideSetupStage);
+    const active=index===guideSetupStage;
+    const body=$(`guideSetupBody${index}`);
+    const summary=$(`guideSetupSummary${index}`);
+    const edit=stage.querySelector('[data-guide-stage-edit]');
+    if(body)body.hidden=!active;
+    if(summary){summary.hidden=active;summary.textContent=summaries[index];}
+    if(edit){edit.hidden=active;edit.setAttribute('aria-expanded',String(active));}
+  }
 }
 function renderSpiralMapperVisual(spiral){
   const visualCanvas=$('workshopSpiralVisualCanvas');
@@ -1365,9 +1452,8 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
       const displayGuideNumber=row.g;
       const angle=clampSpiralAngle(guide.angleDeg);
-      const isReferenceAngle=angle<=0.05 || angle>=179.95;
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
-      const showOdField=showPhysicalOffsets && !isReferenceAngle;
+      const showOdField=showPhysicalOffsets;
       const isExpanded=canExpandRows && index===spiral.expandedGuideIndex;
       const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
@@ -1376,7 +1462,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
       const summaryTag=canExpandRows?'button':'div';
       const summaryAttributes=canExpandRows
-        ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}.${showSpacing?` Spacing ${spacingText}.`:''} Orientation ${angleText} ${sideText}`)}"`
+        ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-controls="guideAdjustment${index}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}.${showSpacing?` Spacing ${spacingText}.`:''} Applied rotation from reel side ${angleText} ${sideText}`)}"`
         :'';
       const showOffsetResult=showPhysicalOffsets && (!!labels.offsetText || (isExpanded && showOdField));
       return `
@@ -1387,18 +1473,17 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             ${showSpacing?`<strong class="guide-spacing-row__spacing-value" data-guide-spacing-cell>${spacingText}</strong>`:''}
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </${summaryTag}>
-          ${showOffsetResult?`<div class="spiral-guide-row__offset"><span>Surface Distance From Top</span><strong>${labels.offsetText||'—'}</strong></div>`:''}
-          ${canExpandRows?`<div class="spiral-guide-row__edit${isExpanded?'':' spiral-guide-row__edit--collapsed'}">
+          ${isExpanded?`<div id="guideAdjustment${index}" class="spiral-guide-row__edit">
             <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
             ${showOdField?`<label>
-              <span>Blank Diameter</span>
+              <span>Blank Diameter at Guide ${displayGuideNumber}</span>
               <div class="spiral-diameter-control">
                 <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" />
                 <span class="spiral-diameter-control__unit">${workshopUnitSuffix(spiral.unit)}</span>
               </div>
             </label>`:''}
             <label>
-              <span>Rotation</span>
+              <span>Rotation from reel side (${isStripper?'0–25':'0–180'}&deg;)</span>
               <div class="spiral-rotation-control" role="group" aria-label="Guide ${displayGuideNumber} rotation control">
                 <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">&minus;</button>
                 <div class="spiral-rotation-control__value-wrap">
@@ -1409,6 +1494,8 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
               </div>
             </label>
             </div>
+            <p class="workshop-tool-note">0&deg; = reel side; 180&deg; = opposite. Input is your edit; row shows the applied angle.</p>
+            <div class="spiral-guide-row__offset"><span>Applied rotation from reel side</span><strong>${angleText} ${sideText}</strong>${showOffsetResult?`<span>Surface distance from reel side</span><strong>${labels.offsetText||'Enter this guide’s blank diameter'}</strong>`:''}</div>
           </div>`:''}
         </article>
       `;
@@ -1422,6 +1509,17 @@ function syncRodBlankSelectedMarker(){
   const selectedIndex=workshopToolsState.spiral.expandedGuideIndex;
   document.querySelectorAll('#rodBlankMarkerLayer .rod-marker').forEach((marker)=>{
     marker.classList.toggle('rod-marker--selected',Number(marker.getAttribute('data-guide-index'))===selectedIndex);
+  });
+}
+function revealSelectedGuideAdjustment(){
+  window.requestAnimationFrame(()=>{
+    const row=document.querySelector('#guideSpacingCards .guide-spacing-row--selected');
+    if(!row)return;
+    const top=viewportVisibleTop(12);
+    const bottom=viewportVisibleBottom(12);
+    const rect=row.getBoundingClientRect();
+    const delta=rect.height>bottom-top || rect.top<top?rect.top-top:rect.bottom>bottom?rect.bottom-bottom:0;
+    if(delta)window.scrollBy({top:delta,behavior:'auto'});
   });
 }
 // Rows are rebuilt on every keystroke so the mapper stays live; keep the caret where the user left it.
@@ -2303,6 +2401,7 @@ function bindWorkshopCalculatorControls(){
         if(Number.isFinite(index)){
           workshopToolsState.spiral.expandedGuideIndex=index;
           renderWorkshopCalculator();
+          revealSelectedGuideAdjustment();
         }
         return;
       }
@@ -2312,6 +2411,7 @@ function bindWorkshopCalculatorControls(){
         const spiral=workshopToolsState.spiral;
         spiral.expandedGuideIndex=spiral.expandedGuideIndex===index?-1:index;
         renderWorkshopCalculator();
+        revealSelectedGuideAdjustment();
         return;
       }
       const button=event.target.closest('[data-spiral-angle-action][data-guide-index]');
@@ -2329,7 +2429,7 @@ function bindWorkshopCalculatorControls(){
       const target=event.target;
       if(!(target instanceof HTMLInputElement))return;
       if(!target.closest('[data-spiral-field]'))return;
-      if(target.getAttribute('data-spiral-field')!=='angle')return;
+      if(!['angle','od'].includes(target.getAttribute('data-spiral-field')))return;
       handleSpiralFieldChange(target);
     });
   }

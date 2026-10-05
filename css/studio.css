@@ -8977,6 +8977,72 @@ textarea::-moz-selection,
   display:none;
 }
 
+#layoutScreen .guide-setup-stage{
+  display:grid;
+  gap:8px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-lg);
+  background:var(--ds-surface);
+  padding:var(--ds-space-4);
+}
+
+#layoutScreen .guide-setup-stage__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+#layoutScreen .guide-setup-stage__head h4{
+  margin:0;
+  color:var(--ds-text-strong);
+  font-size:12px;
+  letter-spacing:.06em;
+}
+
+#layoutScreen .guide-setup-stage__body{
+  display:grid;
+  gap:10px;
+}
+
+#layoutScreen .guide-setup-stage[hidden],
+#layoutScreen .guide-setup-stage__body[hidden]{
+  display:none;
+}
+
+#layoutScreen .guide-setup-stage__head button,
+#layoutScreen .guide-setup-stage__body > button{
+  min-height:44px;
+}
+
+#layoutScreen .guide-spacing-row--selected .spiral-guide-row__fields{
+  grid-template-columns:minmax(0,1fr);
+  gap:8px;
+}
+
+#layoutScreen .guide-spacing-row--selected .spiral-guide-row__fields :is(input,button){
+  min-height:44px;
+  font-size:16px;
+}
+
+#layoutScreen .guide-spacing-row--selected .spiral-guide-row__fields button{
+  min-width:44px;
+}
+
+#layoutScreen .guide-spacing-row--selected .spiral-guide-row__offset{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:6px;
+  padding:8px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-md);
+}
+
+#layoutScreen .guide-spacing-row--selected{
+  scroll-margin-bottom:calc(122px + var(--safe-bottom));
+}
+
 .spiral-guide-row--stripper{
   border-color:rgba(var(--kl-red-rgb),.4);
   box-shadow:inset 0 0 0 1px rgba(var(--kl-red-rgb),.22);
