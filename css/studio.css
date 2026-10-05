@@ -8301,6 +8301,28 @@ textarea::-moz-selection,
   min-height:40px;
 }
 
+#workshopToolGrip .workshop-tool-fields .workshop-grip-allowance{
+  grid-template-columns:minmax(0,1fr) 88px;
+  align-items:center;
+  gap:8px;
+}
+
+#workshopToolGrip .workshop-grip-allowance > span{
+  min-width:0;
+  line-height:1.4;
+  overflow-wrap:break-word;
+}
+
+#workshopToolGrip .workshop-grip-allowance input{
+  min-width:0;
+  min-height:44px;
+}
+
+#workshopToolGrip .workshop-tool-result--primary{
+  min-height:50px;
+  padding:8px 10px;
+}
+
 #workshopToolDiameter .workshop-tool-result,
 #workshopToolGrip .workshop-tool-result,
 #workshopToolSpiral .workshop-tool-result{
