@@ -7755,14 +7755,12 @@ textarea::-moz-selection,
 /* Guide Setup: one unified guide list (position, spacing, orientation); column labels once in the header. */
 #layoutScreen .guide-spacing-panel__head{
   display:grid;
-  grid-template-columns:auto minmax(0,1fr) auto;
-  align-items:center;
-  gap:8px 12px;
+  grid-template-columns:minmax(0,1fr);
+  gap:6px;
   padding:0 8px 6px;
 }
 
-#layoutScreen .guide-spacing-panel__head span{
-  flex:0 0 auto;
+#layoutScreen .guide-spacing-panel__head > span{
   color:#e9e2d5;
   font-size:9px;
   font-weight:700;
@@ -7772,7 +7770,9 @@ textarea::-moz-selection,
 
 #layoutScreen .guide-spacing-panel__head small{
   min-width:0;
-  overflow-wrap:anywhere;
+  white-space:normal;
+  word-break:normal;
+  overflow-wrap:normal;
   color:rgba(214,210,200,.62);
   font-size:9px;
   letter-spacing:.04em;
@@ -7809,13 +7809,14 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-spacing-panel__toggles{
-  display:flex;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  min-width:0;
   gap:6px;
 }
 
 #layoutScreen .guide-spacing-panel__toggles .guide-spacing-toggle{
-  flex:1 1 0;
-  width:104px;
+  width:100%;
   min-width:0;
 }
 
@@ -7866,13 +7867,6 @@ textarea::-moz-selection,
 #layoutScreen .guide-offset-controls input:focus-visible{
   outline:2px solid var(--kl-red-active);
   outline-offset:2px;
-}
-
-@media (max-width:640px){
-  #layoutScreen .guide-spacing-panel__toggles{
-    grid-column:1 / -1;
-    grid-row:3;
-  }
 }
 
 #layoutScreen .guide-spacing-columns,
@@ -8190,27 +8184,7 @@ textarea::-moz-selection,
 }
 
 @media (max-width:640px){
-  #layoutScreen .guide-spacing-panel__head{
-    grid-template-columns:minmax(0,1fr) auto;
-    align-items:center;
-    gap:6px 8px;
-  }
-
-  #layoutScreen .guide-spacing-panel__head > span{
-    grid-column:1;
-  }
-
-  #layoutScreen .guide-spacing-panel__head small{
-    grid-column:1 / -1;
-    grid-row:2;
-    overflow:visible;
-    white-space:normal;
-  }
-
   #layoutScreen .guide-spacing-toggle{
-    grid-column:2;
-    grid-row:1;
-    min-width:96px;
     padding:0 8px;
   }
 
