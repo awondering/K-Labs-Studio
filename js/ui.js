@@ -1192,11 +1192,9 @@ function renderSpiralGuideMapper(){
   const showPhysicalOffsets=!!spiral.showPhysicalOffsets;
   if(showOffsetsToggle){
     showOffsetsToggle.hidden=hideBlankOffsets;
-    const offsetsActions=showOffsetsToggle.closest('.spiral-secondary-actions');
-    if(offsetsActions)offsetsActions.hidden=hideBlankOffsets;
     showOffsetsToggle.classList.toggle('active',showPhysicalOffsets);
     showOffsetsToggle.setAttribute('aria-pressed',showPhysicalOffsets?'true':'false');
-    showOffsetsToggle.textContent=showPhysicalOffsets?'Hide Offsets on Blank':'Show Offsets on Blank';
+    showOffsetsToggle.textContent='SHOW OFFSETS';
   }
 
   syncWorkshopToggleButtons(card,'[data-spiral-method]','data-spiral-method',spiral.method);
@@ -1238,7 +1236,6 @@ function initializeGuideSetupStages(){
   const parent=spacing.parentElement;
   screen.querySelectorAll('.guide-setup-heading').forEach((heading)=>heading.remove());
   const visual=orientation.querySelector('.spiral-mapper-visual');
-  const offsets=orientation.querySelector('.spiral-secondary-actions');
   const titles=['GUIDE SPACING','GUIDE ORIENTATION','GUIDE PLACEMENT'];
   titles.forEach((title,index)=>{
     const stage=document.createElement('section');
@@ -1254,7 +1251,6 @@ function initializeGuideSetupStages(){
     }
     if(index===2){
       body.appendChild(rod);
-      if(offsets)rod.appendChild(offsets);
       body.appendChild(list);
     }
     if(index<2){
@@ -1453,7 +1449,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const displayGuideNumber=row.g;
       const angle=clampSpiralAngle(guide.angleDeg);
       const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
-      const showOdField=showPhysicalOffsets;
+      const showOdField=showPhysicalOffsets && angle>0.05 && angle<179.95;
       const isExpanded=canExpandRows && index===spiral.expandedGuideIndex;
       const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
@@ -1464,7 +1460,6 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const summaryAttributes=canExpandRows
         ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-controls="guideAdjustment${index}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}.${showSpacing?` Spacing ${spacingText}.`:''} Applied rotation from reel side ${angleText} ${sideText}`)}"`
         :'';
-      const showOffsetResult=showPhysicalOffsets && (!!labels.offsetText || (isExpanded && showOdField));
       return `
         <article class="guide-spacing-row${isStripper?' guide-spacing-row--stripper':''}${isExpanded?' guide-spacing-row--selected':''}" data-guide-index="${index}">
           <${summaryTag} class="guide-spacing-row__summary${canExpandRows?'':' guide-spacing-row__summary--static'}" ${summaryAttributes}>
@@ -1473,15 +1468,12 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             ${showSpacing?`<strong class="guide-spacing-row__spacing-value" data-guide-spacing-cell>${spacingText}</strong>`:''}
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </${summaryTag}>
+          ${showOdField?`<div class="guide-offset-controls">
+            <label for="guideOffsetDiameter${index}"><span>BLANK DIAMETER (${workshopUnitSuffix(spiral.unit)})</span><input id="guideOffsetDiameter${index}" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" aria-describedby="guideOffsetResult${index}" /></label>
+            <div class="guide-offset-controls__result" id="guideOffsetResult${index}" role="status"><span>Offset from reel side</span><strong>${hasValidOd?labels.offsetText:'Enter blank diameter'}</strong></div>
+          </div>`:''}
           ${isExpanded?`<div id="guideAdjustment${index}" class="spiral-guide-row__edit">
-            <div class="spiral-guide-row__fields${showOdField?'':' spiral-guide-row__fields--basic'}">
-            ${showOdField?`<label>
-              <span>Blank Diameter at Guide ${displayGuideNumber}</span>
-              <div class="spiral-diameter-control">
-                <input type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" />
-                <span class="spiral-diameter-control__unit">${workshopUnitSuffix(spiral.unit)}</span>
-              </div>
-            </label>`:''}
+            <div class="spiral-guide-row__fields spiral-guide-row__fields--basic">
             <label>
               <span>Rotation from reel side (${isStripper?'0–25':'0–180'}&deg;)</span>
               <div class="spiral-rotation-control" role="group" aria-label="Guide ${displayGuideNumber} rotation control">
@@ -1495,7 +1487,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             </label>
             </div>
             <p class="workshop-tool-note">0&deg; = reel side; 180&deg; = opposite. Input is your edit; row shows the applied angle.</p>
-            <div class="spiral-guide-row__offset"><span>Applied rotation from reel side</span><strong>${angleText} ${sideText}</strong>${showOffsetResult?`<span>Surface distance from reel side</span><strong>${labels.offsetText||'Enter this guide’s blank diameter'}</strong>`:''}</div>
+            <div class="spiral-guide-row__offset"><span>Applied rotation from reel side</span><strong>${angleText} ${sideText}</strong></div>
           </div>`:''}
         </article>
       `;
@@ -1509,6 +1501,25 @@ function syncRodBlankSelectedMarker(){
   const selectedIndex=workshopToolsState.spiral.expandedGuideIndex;
   document.querySelectorAll('#rodBlankMarkerLayer .rod-marker').forEach((marker)=>{
     marker.classList.toggle('rod-marker--selected',Number(marker.getAttribute('data-guide-index'))===selectedIndex);
+  });
+}
+function updateSpiralGuideDiameter(index,rawValue){
+  const spiral=workshopToolsState.spiral;
+  const guide=Number.isInteger(index)&&spiral.guides[index];
+  if(!guide)return;
+  const raw=String(rawValue||'').trim();
+  const next=raw?parseWorkshopMeasurementMm(raw,spiral.unit,NaN,false):NaN;
+  guide.odMm=Number.isFinite(next) && next>0?next:null;
+  markGuideDataDirty();
+  renderWorkshopCalculator();
+}
+function bindSpiralOffsetsToggle(){
+  const toggle=$('workshopSpiralOffsetsToggle');
+  if(!toggle || toggle.getAttribute('data-spiral-offset-toggle-bound')==='true')return;
+  toggle.setAttribute('data-spiral-offset-toggle-bound','true');
+  toggle.addEventListener('click',()=>{
+    workshopToolsState.spiral.showPhysicalOffsets=!workshopToolsState.spiral.showPhysicalOffsets;
+    renderWorkshopCalculator();
   });
 }
 function revealSelectedGuideAdjustment(){
@@ -2322,14 +2333,7 @@ function bindWorkshopCalculatorControls(){
     renderWorkshopCalculator();
   });
 
-  const spiralOffsetsToggle=$('workshopSpiralOffsetsToggle');
-  if(spiralOffsetsToggle && spiralOffsetsToggle.getAttribute('data-spiral-offset-toggle-bound')!=='true'){
-    spiralOffsetsToggle.setAttribute('data-spiral-offset-toggle-bound','true');
-    spiralOffsetsToggle.addEventListener('click',()=>{
-      workshopToolsState.spiral.showPhysicalOffsets=!workshopToolsState.spiral.showPhysicalOffsets;
-      renderWorkshopCalculator();
-    });
-  }
+  bindSpiralOffsetsToggle();
 
   const spiralOffsetStartInput=$('workshopSpiralOffsetStart');
   bindWorkshopCalculatorInput(spiralOffsetStartInput,()=>{
@@ -2378,13 +2382,8 @@ function bindWorkshopCalculatorControls(){
         const next=parseWorkshopMeasurementMm(input.value,spiral.unit,guide.positionMm,true);
         if(Number.isFinite(next))guide.positionMm=Math.max(0,next);
       }else if(field==='od'){
-        const raw=String(input.value||'').trim();
-        if(!raw){
-          guide.odMm=null;
-        }else{
-          const next=parseWorkshopMeasurementMm(raw,spiral.unit,NaN,false);
-          guide.odMm=(Number.isFinite(next) && next>0)?next:null;
-        }
+        updateSpiralGuideDiameter(index,input.value);
+        return;
       }else if(field==='angle'){
         const raw=String(input.value||'').trim();
         if(raw==='')return;

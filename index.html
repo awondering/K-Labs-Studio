@@ -282,7 +282,7 @@
         </section>
 
         <section class="guide-spacing-panel" aria-label="Guides" aria-live="polite">
-          <div class="guide-spacing-panel__head"><span>Guides</span><small>Position from tip (mm) &middot; Rotation from reel side (0&deg;)</small><button id="guideSpacingToggle" class="ghost-action guide-spacing-toggle" type="button" aria-label="Show spacing column" aria-pressed="false">Show spacing</button></div>
+          <div class="guide-spacing-panel__head"><span>Guides</span><small>Position from tip (mm) &middot; Rotation from reel side (0&deg;)</small><div class="guide-spacing-panel__toggles"><button id="guideSpacingToggle" class="ghost-action guide-spacing-toggle" type="button" aria-label="Show spacing column" aria-pressed="false">Show spacing</button><button id="workshopSpiralOffsetsToggle" class="ghost-action guide-spacing-toggle" type="button" aria-pressed="false">SHOW OFFSETS</button></div></div>
           <div class="guide-spacing-columns" aria-hidden="true"><span>Guide</span><span>Position</span><span data-guide-spacing-column hidden>Spacing</span><span>Orientation</span></div>
           <div class="guide-spacing-list" id="guideSpacingCards"></div>
         </section>
@@ -328,12 +328,6 @@
                 <button class="ghost-action active" type="button" data-spiral-direction="left" aria-pressed="true">Left</button>
                 <button class="ghost-action" type="button" data-spiral-direction="right" aria-pressed="false">Right</button>
               </div>
-            </div>
-          </div>
-
-          <div class="spiral-secondary-actions">
-            <div class="spiral-advanced-toggle">
-              <button id="workshopSpiralOffsetsToggle" class="ghost-action" type="button" aria-pressed="false">Show Offsets on Blank</button>
             </div>
           </div>
 

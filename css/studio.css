@@ -7808,6 +7808,73 @@ textarea::-moz-selection,
   outline-offset:2px;
 }
 
+#layoutScreen .guide-spacing-panel__toggles{
+  display:flex;
+  gap:6px;
+}
+
+#layoutScreen .guide-spacing-panel__toggles .guide-spacing-toggle{
+  flex:1 1 0;
+  width:104px;
+  min-width:0;
+}
+
+#layoutScreen .guide-offset-controls{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  align-items:end;
+  gap:8px;
+  padding:8px;
+  border-top:var(--ds-stroke);
+  scroll-margin-bottom:calc(122px + var(--safe-bottom));
+}
+
+#layoutScreen .guide-offset-controls label,
+#layoutScreen .guide-offset-controls__result{
+  display:grid;
+  gap:6px;
+  min-width:0;
+}
+
+#layoutScreen .guide-offset-controls span{
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.35;
+}
+
+#layoutScreen .guide-offset-controls input{
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  border:var(--ds-stroke-strong);
+  border-radius:var(--ds-radius-md);
+  background:var(--panel);
+  color:var(--ds-text-strong);
+  font-size:16px;
+  padding:8px;
+}
+
+#layoutScreen .guide-offset-controls__result strong{
+  display:flex;
+  align-items:center;
+  min-height:44px;
+  font-size:14px;
+  color:var(--ds-text-strong);
+  overflow-wrap:anywhere;
+}
+
+#layoutScreen .guide-offset-controls input:focus-visible{
+  outline:2px solid var(--kl-red-active);
+  outline-offset:2px;
+}
+
+@media (max-width:640px){
+  #layoutScreen .guide-spacing-panel__toggles{
+    grid-column:1 / -1;
+    grid-row:3;
+  }
+}
+
 #layoutScreen .guide-spacing-columns,
 #layoutScreen .guide-spacing-row__summary{
   display:grid;
