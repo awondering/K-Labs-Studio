@@ -5693,11 +5693,29 @@ textarea::-moz-selection,
 .studio-components-list__item{
   width:100%;
   text-align:left;
-  border:1px solid rgba(214,210,200,.2);
-  border-radius:12px;
-  background:rgba(9,10,12,.84);
-  color:#efe8dc;
+  min-height:44px;
+  border:var(--ds-stroke-strong);
+  border-radius:var(--ds-radius-md);
+  background:var(--ds-surface);
+  color:var(--ds-text-strong);
   padding:10px 11px;
+}
+
+.studio-components-list__row--family{
+  align-items:center;
+}
+
+.studio-components-list__row--family .studio-components-list__item{
+  height:44px;
+  display:flex;
+  align-items:center;
+  min-width:0;
+}
+
+.studio-components-list__row--family strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
 .studio-components-list__item strong{
@@ -5717,6 +5735,12 @@ textarea::-moz-selection,
 .studio-components-list__item.is-active{
   border-color:rgba(var(--kl-red-rgb),.64);
   box-shadow:0 0 0 1px rgba(var(--kl-red-rgb),.28) inset;
+}
+
+.studio-components-list__item:focus-visible,
+.studio-components-list__menu-trigger:focus-visible{
+  outline:2px solid var(--kl-red-active);
+  outline-offset:2px;
 }
 
 .studio-components-price-row{
@@ -5749,12 +5773,12 @@ textarea::-moz-selection,
 }
 
 .studio-components-list__menu-trigger{
-  min-width:42px;
-  min-height:42px;
-  border-radius:10px;
-  border:1px solid rgba(214,210,200,.18);
-  background:rgba(9,10,12,.74);
-  color:rgba(223,216,205,.88);
+  min-width:44px;
+  min-height:44px;
+  border-radius:var(--ds-radius-md);
+  border:var(--ds-stroke);
+  background:var(--ds-surface);
+  color:var(--titanium);
   font-size:20px;
   line-height:1;
   padding:0;
@@ -5768,9 +5792,9 @@ textarea::-moz-selection,
   min-width:176px;
   max-width:calc(100vw - 32px);
   overflow:hidden;
-  border:1px solid rgba(214,210,200,.2);
-  border-radius:10px;
-  background:rgba(10,12,13,.97);
+  border:var(--ds-stroke-strong);
+  border-radius:var(--ds-radius-md);
+  background:var(--ds-surface);
   padding:6px;
   display:grid;
   gap:4px;
@@ -5793,11 +5817,11 @@ textarea::-moz-selection,
 
 .studio-components-row-menu__item{
   width:100%;
-  min-height:34px;
+  min-height:44px;
   border:1px solid transparent;
   border-radius:8px;
   background:transparent;
-  color:#efe8dc;
+  color:var(--ds-text-strong);
   text-align:left;
   padding:0 10px;
   font-size:11px;
