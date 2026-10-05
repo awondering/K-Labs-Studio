@@ -5933,7 +5933,7 @@ textarea::-moz-selection,
   grid-column:1 / -1;
 }
 
-/* Optional AVAILABLE SIZES editor on the component form: quiet until it has content. */
+/* Saved sizes stay visible above the optional editing controls. */
 .studio-size-section{
   margin:7px 0 10px;
   padding:9px 10px 10px;
@@ -5953,6 +5953,35 @@ textarea::-moz-selection,
 }
 
 .studio-size-section__summary::-webkit-details-marker{display:none}
+
+.studio-size-section__heading{
+  margin:0 0 6px;
+  font-size:10px;
+  letter-spacing:.09em;
+  color:var(--ds-text-strong);
+}
+
+.studio-size-section__editor > summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:44px;
+  gap:8px;
+  color:var(--titanium);
+}
+
+.studio-size-section__editor > summary:focus-visible{
+  outline:2px solid var(--kl-red-active);
+  outline-offset:2px;
+}
+
+.studio-size-section__chevron{
+  font-size:20px;
+}
+
+.studio-size-section__editor[open] .studio-size-section__chevron{
+  transform:rotate(90deg);
+}
 
 .studio-size-section__count{
   display:inline-block;

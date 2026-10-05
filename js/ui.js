@@ -3980,17 +3980,18 @@ function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
   return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">&#215;</button></span>`;
 }
-// AVAILABLE SIZES editor for the component form. Generic to any category; stays collapsed until sizes exist.
+// Saved sizes stay visible; native disclosure keeps editing controls collapsed on entry.
 function studioComponentSizesSectionMarkup(){
   const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
   const chips=sizes.length
     ? sizes.map(studioComponentSizeChipMarkup).join('')
-    : '<p class="studio-size-list__empty">No sizes added. This component will be added to builds without a size step.</p>';
+    : '<p class="studio-size-list__empty">No sizes added.</p>';
   return `
-    <details class="studio-size-section"${sizes.length?' open':''}>
-      <summary class="studio-size-section__summary">AVAILABLE SIZES${sizes.length?` <span class="studio-size-section__count">${sizes.length}</span>`:''}</summary>
-      <p class="studio-size-section__help">Add selectable sizes for this component.</p>
+    <section class="studio-size-section" aria-label="Available sizes">
+      <h3 class="studio-size-section__heading">AVAILABLE SIZES <span class="studio-size-section__count">${sizes.length}</span></h3>
       <div class="studio-size-list" id="studioComponentSizeList">${chips}</div>
+      <details class="studio-size-section__editor">
+      <summary class="studio-size-section__summary">ADD OR EDIT SIZES <span class="studio-size-section__chevron" aria-hidden="true">&#8250;</span></summary>
       <div class="studio-size-entry">
         <label class="quote-component-field"><span>Add Size</span><input id="studioComponentSizeInput" type="text" placeholder="e.g. 12 mm or Large" /></label>
         <button class="ghost-action studio-component-details__move studio-size-entry__btn" type="button" data-size-action="add">Add</button>
@@ -4001,7 +4002,8 @@ function studioComponentSizesSectionMarkup(){
         <label class="quote-component-field"><span>Step</span><input id="studioComponentSizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
         <button class="ghost-action studio-size-range__btn" type="button" data-size-action="generate">Generate Range</button>
       </div>
-    </details>
+      </details>
+    </section>
   `;
 }
 function refreshStudioComponentSizeList(){
@@ -4010,7 +4012,7 @@ function refreshStudioComponentSizeList(){
   const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
   list.innerHTML=sizes.length
     ? sizes.map(studioComponentSizeChipMarkup).join('')
-    : '<p class="studio-size-list__empty">No sizes added. This component will be added to builds without a size step.</p>';
+    : '<p class="studio-size-list__empty">No sizes added.</p>';
   const count=list.closest('.studio-size-section')?.querySelector('.studio-size-section__count');
   if(count)count.textContent=String(sizes.length);
   syncStudioComponentSaveButtonState();
