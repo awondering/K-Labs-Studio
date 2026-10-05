@@ -8242,6 +8242,47 @@ textarea::-moz-selection,
   gap:8px;
 }
 
+.workshop-dc-wraps{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(140px,180px);
+  align-items:center;
+  gap:8px;
+}
+
+.workshop-dc-wraps > label{
+  color:var(--titanium);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.1em;
+}
+
+.workshop-dc-wraps .component-quantity{
+  grid-template-columns:44px minmax(0,1fr) 44px;
+}
+
+.workshop-dc-wraps :is(button,input){
+  min-height:44px;
+  min-width:0;
+}
+
+.workshop-dc-wraps input{
+  width:100%;
+  border:var(--ds-stroke-strong);
+  border-radius:var(--ds-radius-md);
+  background:var(--panel);
+  color:var(--ds-text-strong);
+  font-size:16px;
+}
+
+.workshop-dc-wraps :is(button,input):focus-visible{
+  outline:2px solid var(--kl-red-active);
+  outline-offset:2px;
+}
+
+#workshopToolDiameter .workshop-tool-result{
+  padding:8px 10px;
+}
+
 #workshopToolDiameter .workshop-tool-fields--two,
 #workshopToolGrip .workshop-tool-fields--two{
   gap:8px;
