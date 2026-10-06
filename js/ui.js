@@ -82,7 +82,7 @@ const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
-const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','quoteComponentsList','workshopQuoteSummaryBody','workshopBuildActionsBody'];
+const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopComponentsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
@@ -10205,7 +10205,7 @@ function revealComponentsSectionHeader(){
   const section=$('workshopComponentsSection');
   if(!section)return false;
   if(section.classList.contains('quote-section--collapsed')){
-    expandWorkshopCollapsibleSection('quoteComponentsList');
+    expandWorkshopCollapsibleSection('workshopComponentsBody');
   }
   const head=section.querySelector('.quote-section__components-head');
   if(!head)return false;
@@ -13727,10 +13727,10 @@ function bindWorkshopQuoteBuilder(){
   const addComponentBtn=$('addComponentBtn');
   if(addComponentBtn){
     addComponentBtn.addEventListener('click',(event)=>{
-      // Add Component sits next to the collapsible Components toggle; stop it bubbling into that trigger.
+      // Keep Add Component independent of disclosure activation.
       event.stopPropagation();
       // Expand Components so the new draft row is visible once the picker closes.
-      expandWorkshopCollapsibleSection('quoteComponentsList');
+      expandWorkshopCollapsibleSection('workshopComponentsBody');
       // + Add Component opens the existing Active Build Select Category picker on a fresh draft row.
       // Reuse a pending empty draft if one exists; otherwise append one. The cascade's category,
       // subcategory, component, saved-size, pricing and stock logic is fully preserved.

@@ -1672,28 +1672,6 @@ body.component-sheet-open .workshop-back-to-top{
   color:var(--kl-red-base);
 }
 
-#workshopScreen .quote-section__components-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:14px 15px 12px;
-}
-
-#workshopScreen .quote-section__components-toggle{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  flex:1;
-  min-width:0;
-  border:none;
-  background:transparent;
-  padding:0;
-  text-align:left;
-  cursor:pointer;
-}
-
 #workshopScreen .quote-section__components-heading{
   display:grid;
   gap:3px;
@@ -1714,14 +1692,6 @@ body.component-sheet-open .workshop-back-to-top{
   color:#98a095;
   font-size:10px;
   letter-spacing:.05em;
-}
-
-#workshopComponentsSection{
-  gap:0;
-}
-
-#workshopComponentsSection .quote-components{
-  padding:0 15px 15px;
 }
 
 
@@ -6527,10 +6497,6 @@ textarea::-moz-selection,
   padding:0 9px;
 }
 
-#workshopComponentsSection .quote-components{
-  padding:0 12px 12px;
-}
-
 .quote-components{
   gap:8px;
 }
@@ -6971,6 +6937,54 @@ textarea::-moz-selection,
 
 #workshopScreen .quote-section--collapsed .quote-section__body{
   transition:max-height var(--ds-transition),opacity var(--ds-transition),padding-top var(--ds-transition),padding-bottom var(--ds-transition);
+}
+
+#workshopScreen #workshopComponentsSection{
+  padding:0;
+  gap:0;
+}
+
+#workshopScreen .quote-section__components-head{
+  padding:0;
+}
+
+#workshopScreen .quote-section__components-toggle{
+  min-height:50px;
+}
+
+#workshopScreen #workshopComponentsBody{
+  gap:8px;
+}
+
+#workshopScreen #workshopComponentsBody > .quote-components{
+  padding:0;
+}
+
+#workshopScreen #workshopComponentsBody > .quote-components:empty{
+  display:none;
+}
+
+#workshopScreen #workshopComponentsSection.quote-section--collapsed #workshopComponentsBody{
+  display:none;
+}
+
+#workshopScreen #addComponentBtn{
+  justify-self:start;
+  min-height:44px;
+  padding:0 12px;
+  background:var(--ds-surface);
+  color:var(--titanium);
+}
+
+#workshopScreen .quote-section__components-toggle:focus-visible,
+#workshopScreen #addComponentBtn:focus-visible{
+  outline:2px solid rgba(var(--kl-red-rgb),.65);
+  outline-offset:-2px;
+}
+
+#workshopScreen #addComponentBtn:hover,
+#workshopScreen #addComponentBtn:focus-visible{
+  border-color:rgba(var(--kl-red-rgb),.4);
 }
 
 #workshopScreen #workshopPricingSection{
