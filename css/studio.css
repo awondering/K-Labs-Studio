@@ -1190,18 +1190,10 @@ body.component-sheet-open .workshop-back-to-top{
   min-width:0;
 }
 
-#settingsScreen .settings-pricing-tax-fields{
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields{
   display:grid;
-  gap:14px;
-  margin-top:13px;
-  max-width:360px;
-}
-
-#settingsScreen .settings-pricing-tax-row{
-  display:grid;
-  grid-template-columns:minmax(126px,1fr) minmax(164px,1.2fr);
-  align-items:center;
-  gap:8px;
+  gap:6px;
+  margin-top:8px;
 }
 
 #settingsScreen .settings-pricing-field{
@@ -1209,37 +1201,53 @@ body.component-sheet-open .workshop-back-to-top{
   min-width:0;
 }
 
-#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-row > .settings-pricing-field:last-child,
 #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-field{
   display:grid;
   grid-template-columns:minmax(0,1fr) 104px;
   align-items:center;
   gap:8px;
+  min-height:44px;
 }
 
-#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-row > .settings-pricing-field:last-child{
-  grid-template-columns:minmax(0,1fr) 76px;
+#settingsScreen #settingsPricingTaxCard .settings-pricing-label{
+  color:var(--titanium);
+  font-size:12px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
 }
 
 #settingsScreen .settings-pricing-tax-fields,
-#settingsScreen .settings-pricing-tax-row,
 #settingsScreen .settings-pricing-field{
   padding:0;
   border-bottom:0;
   justify-content:normal;
 }
 
-#settingsScreen .settings-pricing-tax-fields #settingsTaxRate,
-#settingsScreen .settings-pricing-tax-fields #settingsDefaultLabourRate{
+#settingsScreen #settingsPricingTaxCard #settingsTaxRate,
+#settingsScreen #settingsPricingTaxCard #settingsDefaultLabourRate{
   box-sizing:border-box;
   width:100%;
   min-width:0;
   min-height:44px;
+  background:var(--ds-surface);
+  color:var(--ds-text-strong);
+  font-size:16px;
 }
 
-#settingsScreen .settings-pricing-tax-fields .settings-toggle{
+#settingsScreen #settingsPricingTaxCard .settings-toggle{
   min-height:44px;
-  justify-self:start;
+  min-width:44px;
+  justify-self:end;
+}
+
+#settingsScreen #settingsPricingTaxCard input:focus-visible{
+  outline:2px solid rgba(var(--kl-red-rgb),.65);
+  outline-offset:2px;
+}
+
+#settingsScreen #settingsPricingTaxCard .settings-toggle:has(input:focus-visible) .settings-toggle__control{
+  outline:2px solid rgba(var(--kl-red-rgb),.65);
+  outline-offset:3px;
 }
 
 #settingsScreen .settings-pricing-field .settings-inline-saved{
@@ -1252,13 +1260,6 @@ body.component-sheet-open .workshop-back-to-top{
 
 #settingsPricingTaxCard .settings-context-actions:has(> button[hidden]){
   margin-top:0;
-}
-
-@media (max-width:380px){
-  #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-row{
-    grid-template-columns:minmax(0,1fr);
-    gap:8px;
-  }
 }
 
 #settingsScreen #settingsPricingTaxCard .settings-context-actions{

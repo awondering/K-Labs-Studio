@@ -679,11 +679,9 @@
           <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
         </summary>
         <div class="settings-pricing-tax-fields">
-          <div class="settings-pricing-tax-row">
-            <div class="settings-pricing-field"><span class="settings-pricing-label" id="settingsTaxEnabledLabel">Tax Enabled (Default)</span><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" aria-labelledby="settingsTaxEnabledLabel" checked /><span class="settings-toggle__state-off" aria-hidden="true">OFF</span><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span><span class="settings-toggle__state-on" aria-hidden="true">ON</span></label></div>
-            <label class="settings-pricing-field"><span class="settings-pricing-label">Tax Rate (%)</span><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></label>
-          </div>
-          <label class="settings-pricing-field"><span class="settings-pricing-label">Default Labour Rate ($/hr)</span><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></label>
+          <div class="settings-pricing-field"><span class="settings-pricing-label" id="settingsTaxEnabledLabel">Default tax</span><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" aria-labelledby="settingsTaxEnabledLabel" checked /><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span></label></div>
+          <label class="settings-pricing-field"><span class="settings-pricing-label">Tax rate (%)</span><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></label>
+          <label class="settings-pricing-field"><span class="settings-pricing-label">Labour rate ($/hr)</span><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></label>
         </div>
         <div class="settings-context-actions"><button id="settingsPricingTaxSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
       </details>
