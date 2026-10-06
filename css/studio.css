@@ -1012,6 +1012,12 @@ body.component-sheet-open .workshop-back-to-top{
   min-height:44px;
 }
 
+#settingsScreen #settingsTrackStockCard .settings-disclosure__summary{
+  min-height:44px;
+  padding-block:4px;
+  margin-block:-4px;
+}
+
 #settingsScreen .settings-toggle{
   --toggle-border:rgba(214,210,200,.34);
   --toggle-off:#e2d9cb;

@@ -11,6 +11,7 @@ Build 007: Adds visible Unlock/Edit button and freezes wheel scrolling while loc
 
 ## Shared UI Rules
 
+- Track Component Stock shares the Measurement Units and Date Format disclosure spacing and uses the summary "Track quantities as parts are used." Its heading target extends into the existing padding without adding visible space; descriptions wrap naturally and switch behavior is unchanged.
 - Settings Pricing & Tax uses three compact label/control rows: Default tax, Tax rate (%) and Labour rate ($/hr). Numeric controls share a right edge and width; the default-tax switch omits visual OFF/ON text while retaining its accessible label and checked state. Controls retain 44px targets, decimal keypad hints and visible keyboard focus.
 - The build editor's Components heading is a full-width disclosure with count and trailing chevron. Add Component sits above the existing list inside the expanded body, not in the heading or a separate card; collapsing hides it without rebuilding editors or discarding unsaved values. The heading and Add action retain native button keyboard activation, visible focus and at least 44px targets.
 - Build Pricing keeps labour and profit/margin inputs paired (stacking only below 341px), read-only build costs in compact result rows, and Final Customer Price full-width. It reuses shared dark surfaces, titanium labels, restrained red emphasis and 44px controls; pricing handlers, tax/deposit visibility and quote outputs are unchanged.
