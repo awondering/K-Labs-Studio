@@ -105,6 +105,7 @@ let customerFinderBrowseView='list';
 let customerFinderBuildRowMenu='';
 let customerFinderCustomerMenuOpen=false;
 let customerFinderIntent='browse';
+let customerFinderOrigin=null;
 let customerFinderNewBuildStep='actions';
 let customerFinderCreateInFlight=false;
 let activeCustomerRenameContext={key:'',existingName:''};
@@ -10526,6 +10527,7 @@ function customerFinderActionIntroText(){
     return 'Enter customer details.';
   }
   if(customerFinderIntent!=='new-build'){
+    if(customerFinderBrowseView==='detail')return 'View customer details and build history.';
     return 'Search customer name and open their build history.';
   }
   if(customerFinderNewBuildStep==='search'){
@@ -10600,7 +10602,7 @@ function updateCustomerFinderIntentUi(){
   const panel=$('customerFinderSheet')&&$('customerFinderSheet').querySelector('.customer-finder__panel');
   const isAddMode=customerFinderIntent==='customer-only' || (customerFinderIntent==='new-build' && customerFinderNewBuildStep==='add');
   const isFindMode=customerFinderIntent==='browse' || customerFinderNewBuildStep==='search';
-  const modeTitle=isAddMode?'Add Customer':isFindMode?'Find Customer':'Choose Customer';
+  const modeTitle=isAddMode?'Add Customer':customerFinderIntent==='browse'?(customerFinderBrowseView==='detail'?'Customer History':'Customers'):isFindMode?'Find Customer':'Choose Customer';
   if(title)title.textContent=modeTitle;
   if(panel)panel.setAttribute('aria-label',modeTitle);
   const intro=$('customerFinderIntro');
@@ -11193,12 +11195,14 @@ function renderCustomerFinder(){
     detailHost.hidden=true;
     detailHost.innerHTML='';
     if(rootView)rootView.hidden=false;
+    updateCustomerFinderIntentUi();
     return;
   }
   const hasSelected=groups.some((group)=>group.key===customerFinderSelectedKey);
   if(!hasSelected){
     customerFinderSelectedKey=groups[0].key;
   }
+  updateCustomerFinderIntentUi();
   resultHost.innerHTML=groups.map((group)=>{
     const active=group.key===customerFinderSelectedKey;
     const totalJobs=group.quotes.length+group.builds.length;
@@ -11372,9 +11376,21 @@ function unbindCustomerFinderViewportHandlers(){
   customerFinderViewportState.keyboardActive=false;
   clearCustomerFinderViewportStyles();
 }
-function closeCustomerFinderSheet(){
+function focusCustomerFinderView(){
   const sheet=$('customerFinderSheet');
-  if(!sheet)return;
+  if(!sheet || sheet.hidden)return;
+  const body=sheet.querySelector('.customer-finder__body');
+  if(body)body.scrollTop=0;
+  const target=customerFinderBrowseView==='detail'
+    ?sheet.querySelector('[data-customer-finder-action="back-to-list"]')
+    :Array.from(sheet.querySelectorAll('.customer-finder__customer-select')).find((button)=>button.getAttribute('data-customer-key')===customerFinderSelectedKey)
+      ||sheet.querySelector('[data-customer-finder-action="back-to-studio"]');
+  if(target)target.focus({preventScroll:true});
+}
+function closeCustomerFinderSheet(options){
+  const sheet=$('customerFinderSheet');
+  if(!sheet || sheet.hidden)return;
+  const settings={restoreFocus:true,...(options||{})};
   const activeEl=document.activeElement;
   if(activeEl && sheet.contains(activeEl) && typeof activeEl.blur==='function'){
     activeEl.blur();
@@ -11384,12 +11400,34 @@ function closeCustomerFinderSheet(){
   customerFinderBuildRowMenu='';
   customerFinderCustomerMenuOpen=false;
   unbindCustomerFinderViewportHandlers();
-  unlockModalLayer({restoreFocus:true});
+  const origin=customerFinderOrigin;
+  customerFinderOrigin=null;
+  if(origin){
+    if(studioScreenView!==origin.studioView){
+      studioScreenView=origin.studioView;
+      renderStudioScreenMode();
+    }
+    const active=document.querySelector('.screen.active');
+    if(active && active.id!==origin.screenId)goScreen(origin.screenId);
+  }
+  unlockModalLayer({restoreFocus:settings.restoreFocus});
+}
+function returnFromCustomersToStudio(){
+  closeCustomerFinderSheet({restoreFocus:false});
+  preserveWorkshopQuoteOnEntry=false;
+  showStudioLanding();
+  const active=document.querySelector('.screen.active');
+  if(!active || active.id!=='workshopScreen')goScreen('workshopScreen');
+  window.scrollTo(0,0);
+  const target=document.querySelector('[data-studio-action="customers"]');
+  if(target)target.focus({preventScroll:true});
 }
 function openCustomerFinderSheet(intent){
   ensureCustomerFinderSheet();
   const sheet=$('customerFinderSheet');
-  if(!sheet)return;
+  if(!sheet || !sheet.hidden)return;
+  const active=document.querySelector('.screen.active');
+  customerFinderOrigin={screenId:active?active.id:'workshopScreen',studioView:studioScreenView};
   customerFinderIntent=intent==='new-build'?'new-build':'browse';
   customerFinderNewBuildStep=customerFinderIntent==='new-build'?'actions':'search';
   customerFinderBrowseView='list';
@@ -11410,6 +11448,8 @@ function openCustomerFinderSheet(intent){
   lockModalLayer(document.activeElement);
   bindCustomerFinderViewportHandlers();
   scheduleCustomerFinderViewportSync(40);
+  const close=sheet.querySelector('button[data-customer-finder-action="close"]');
+  if(close)close.focus({preventScroll:true});
 }
 function dismissCustomerFinderKeyboardFocus(){
   const sheet=$('customerFinderSheet');
@@ -11434,7 +11474,7 @@ function ensureCustomerFinderSheet(){
     <section class="component-sheet__panel customer-finder__panel" role="dialog" aria-modal="true" aria-label="Find Customer">
       <header class="component-sheet__header">
         <h2 id="customerFinderTitle">Find Customer</h2>
-        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customer search">&#215;</button>
+        <button class="component-sheet__close" type="button" data-customer-finder-action="close" aria-label="Close customers and return to originating screen">&#215;</button>
       </header>
       <div class="component-sheet__body customer-finder__body">
         <p id="customerFinderIntro" class="customer-finder__intro">Search customer name and open their build history.</p>
@@ -11445,6 +11485,10 @@ function ensureCustomerFinderSheet(){
         <div id="customerFinderSearchBlock" hidden>
           <div id="customerFinderRootView" class="customer-finder__root-view">
             <div id="customerFinderBrowseHead" class="customer-finder__browse-head">
+              <button class="workshop-tool-nav-back" type="button" data-customer-finder-action="back-to-studio" aria-label="Return to Studio">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Studio</span>
+              </button>
               <h3>Customers</h3>
               <p>Find and manage customers.</p>
             </div>
@@ -11485,6 +11529,10 @@ function ensureCustomerFinderSheet(){
         closeCustomerFinderSheet();
         return;
       }
+      if(action==='back-to-studio'){
+        returnFromCustomersToStudio();
+        return;
+      }
       if(action==='add-new'){
         handleAddCustomerForNewBuild();
         return;
@@ -11508,6 +11556,7 @@ function ensureCustomerFinderSheet(){
         closeCustomerFinderBuildRowMenu();
         closeCustomerFinderCustomerMenu();
         renderCustomerFinder();
+        focusCustomerFinderView();
         return;
       }
       if(action==='browse-add-customer'){
@@ -11551,6 +11600,7 @@ function ensureCustomerFinderSheet(){
       closeCustomerFinderBuildRowMenu();
       closeCustomerFinderCustomerMenu();
       renderCustomerFinder();
+      focusCustomerFinderView();
       return;
     }
     const rowAction=event.target.closest('[data-customer-row-action]');
@@ -13489,6 +13539,7 @@ function bindWorkshopQuoteBuilder(){
           customerFinderSelectedKey=customerKey;
           customerFinderBrowseView='detail';
           renderCustomerFinder();
+          focusCustomerFinderView();
         }
         return;
       }

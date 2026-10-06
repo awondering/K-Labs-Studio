@@ -2388,6 +2388,15 @@ textarea::placeholder{
   gap:8px;
 }
 
+#customerFinderSheet .workshop-tool-nav-back{
+  min-height:44px;
+}
+
+#customerFinderSheet .workshop-tool-nav-back:focus-visible{
+  outline:2px solid rgba(var(--kl-red-rgb),.8);
+  outline-offset:2px;
+}
+
 .customer-finder__detail-menu-wrap,
 .customer-finder__work-actions{
   position:relative;
