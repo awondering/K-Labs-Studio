@@ -1283,6 +1283,22 @@ function setGuideSetupStage(index,complete){
   const body=$(`guideSetupBody${guideSetupStage}`);
   const focus=body&&body.querySelector('button,input,[contenteditable="true"]');
   if(focus)focus.focus({preventScroll:true});
+  // Continue/Edit are the only two actions that should reposition the viewport; ordinary
+  // input edits and generic re-renders call renderGuideSetupStages() directly and never
+  // reach this line, so they never trigger a scroll.
+  if(typeof window!=='undefined')scrollGuideSetupStageHeadingIntoView(guideSetupStage);
+}
+function scrollGuideSetupStageHeadingIntoView(index){
+  const stage=$(`guideSetupStage${index}`);
+  if(!stage)return;
+  const heading=stage.querySelector('.guide-setup-stage__head');
+  if(!heading)return;
+  // Wait for the previous stage's body to finish collapsing (hidden toggles synchronously,
+  // but the browser needs a couple of frames to settle the resulting layout/reflow -
+  // including the placement wheel) before measuring where the heading now sits.
+  waitForDomRender(()=>{
+    scrollWorkshopSectionIntoView(heading);
+  });
 }
 function renderGuideSetupStages(){
   const spiral=workshopToolsState.spiral;
