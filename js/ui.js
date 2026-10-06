@@ -1241,7 +1241,7 @@ function initializeGuideSetupStages(){
     const stage=document.createElement('section');
     stage.id=`guideSetupStage${index}`;
     stage.className='guide-setup-stage';
-    stage.innerHTML=`<header class="guide-setup-stage__head"><h4>${index+1}. ${title}</h4><button class="ghost-action" type="button" data-guide-stage-edit="${index}" aria-controls="guideSetupBody${index}" aria-expanded="false" hidden>Edit</button></header><p id="guideSetupSummary${index}" class="workshop-tool-note" hidden></p><div id="guideSetupBody${index}" class="guide-setup-stage__body"></div>`;
+    stage.innerHTML=`<header class="guide-setup-stage__head"><h4>${index+1}. ${title}</h4><button class="guide-setup-stage__reopen" type="button" data-guide-stage-edit="${index}" aria-controls="guideSetupBody${index}" aria-expanded="false" hidden><span class="guide-setup-stage__copy"><span class="guide-setup-stage__title">${index+1}. ${title}</span><span id="guideSetupSummary${index}" class="workshop-tool-note" hidden></span></span><span class="guide-setup-stage__chevron" aria-hidden="true"></span></button></header><div id="guideSetupBody${index}" class="guide-setup-stage__body"></div>`;
     parent.insertBefore(stage,$('layoutGuideNotice'));
     const body=stage.querySelector('.guide-setup-stage__body');
     if(index===0)body.appendChild(spacing);
@@ -1315,7 +1315,9 @@ function renderGuideSetupStages(){
     const body=$(`guideSetupBody${index}`);
     const summary=$(`guideSetupSummary${index}`);
     const edit=stage.querySelector('[data-guide-stage-edit]');
+    const title=stage.querySelector('h4');
     if(body)body.hidden=!active;
+    if(title)title.hidden=!active;
     if(summary){summary.hidden=active;summary.textContent=summaries[index];}
     if(edit){edit.hidden=active;edit.setAttribute('aria-expanded',String(active));}
   }

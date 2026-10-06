@@ -9169,11 +9169,57 @@ textarea::-moz-selection,
   gap:8px;
 }
 
-#layoutScreen .guide-setup-stage__head h4{
+#layoutScreen .guide-setup-stage__head h4,
+#layoutScreen .guide-setup-stage__title{
   margin:0;
   color:var(--ds-text-strong);
   font-size:12px;
   letter-spacing:.06em;
+}
+
+#layoutScreen .guide-setup-stage__reopen{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  width:100%;
+  padding:0;
+  border:0;
+  border-radius:4px;
+  background:transparent;
+  color:var(--ds-text-strong);
+  text-align:left;
+  cursor:pointer;
+}
+
+#layoutScreen .guide-setup-stage__copy{
+  display:grid;
+  gap:8px;
+  min-width:0;
+}
+
+#layoutScreen .guide-setup-stage__copy .workshop-tool-note{
+  margin:0;
+  white-space:normal;
+}
+
+#layoutScreen .guide-setup-stage__chevron{
+  width:7px;
+  height:7px;
+  flex-shrink:0;
+  margin-right:3px;
+  border-right:1.5px solid currentColor;
+  border-bottom:1.5px solid currentColor;
+  transform:rotate(45deg);
+}
+
+#layoutScreen .guide-setup-stage__reopen:hover{
+  color:rgba(var(--kl-red-rgb),.92);
+}
+
+#layoutScreen .guide-setup-stage__reopen:focus-visible{
+  outline:2px solid rgba(var(--kl-red-rgb),.8);
+  outline-offset:4px;
 }
 
 #layoutScreen .guide-setup-stage__body{
@@ -9182,7 +9228,8 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-setup-stage[hidden],
-#layoutScreen .guide-setup-stage__body[hidden]{
+#layoutScreen .guide-setup-stage__body[hidden],
+#layoutScreen .guide-setup-stage__head [hidden]{
   display:none;
 }
 

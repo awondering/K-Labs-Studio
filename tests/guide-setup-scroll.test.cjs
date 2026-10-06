@@ -12,8 +12,9 @@ function makeElement(overrides){
     hidden:false,
     textContent:'',
     innerHTML:'',
-    setAttribute(){},
-    getAttribute(){return null;},
+    attributes:{},
+    setAttribute(name,value){this.attributes[name]=value;},
+    getAttribute(name){return this.attributes[name]??null;},
     querySelector(){return null;},
     getBoundingClientRect(){return {top:0,bottom:0,left:0,right:0,height:0,width:0};},
   },overrides);
@@ -29,8 +30,9 @@ function harness(){
   const headingsByStage={0:heading0,1:heading1,2:heading2};
   for(let i=0;i<3;i++){
     const edit=makeElement();
+    const title=makeElement();
     const heading=headingsByStage[i];
-    elements.set(`guideSetupStage${i}`,makeElement({querySelector:(sel)=>sel==='.guide-setup-stage__head'?heading:sel==='[data-guide-stage-edit]'?edit:null}));
+    elements.set(`guideSetupStage${i}`,makeElement({querySelector:(sel)=>sel==='.guide-setup-stage__head'?heading:sel==='[data-guide-stage-edit]'?edit:sel==='h4'?title:null}));
     elements.set(`guideSetupBody${i}`,makeElement());
     elements.set(`guideSetupSummary${i}`,makeElement());
   }
@@ -132,4 +134,46 @@ test('Calling renderGuideSetupStages directly (ordinary input/result re-render) 
   c.renderGuideSetupStages();
   runRaf();
   assert.equal(scrollCalls.length,0);
+});
+
+test('collapsed summaries are single native controls, outside the input body, with one delegated handler',()=>{
+  const start=source.indexOf('function initializeGuideSetupStages(');
+  const initialization=source.slice(start,source.indexOf('\nfunction setGuideSetupStage(',start));
+  const markup=initialization.match(/stage\.innerHTML=`([^`]+)`;/)[1];
+  assert.match(markup,/<button class="guide-setup-stage__reopen" type="button" data-guide-stage-edit=/);
+  assert.match(markup,/aria-controls="guideSetupBody\$\{index\}" aria-expanded="false"/);
+  assert.match(markup,/<span id="guideSetupSummary\$\{index\}"[^>]*>/);
+  assert.match(markup,/guide-setup-stage__chevron" aria-hidden="true"/);
+  assert.match(markup,/<\/button><\/header><div id="guideSetupBody/);
+  assert.equal((markup.match(/<button\b/g)||[]).length,1);
+  assert.equal((initialization.match(/addEventListener\(/g)||[]).length,1);
+  assert.doesNotMatch(initialization,/keydown|keyup|>Edit<\/button>/);
+});
+
+test('reopening every collapsed stage retains values and updates disclosure state without rerender scrolling',()=>{
+  const {c,e,runRaf,scrollCalls}=harness();
+  const before=JSON.stringify({state:c.state,spiral:c.workshopToolsState.spiral});
+  c.setGuideSetupStage(0,true);
+  runRaf();
+  c.setGuideSetupStage(1,true);
+  runRaf();
+  for(const index of [0,1,2]){
+    const stage=e(`guideSetupStage${index}`);
+    const reopen=stage.querySelector('[data-guide-stage-edit]');
+    assert.equal(reopen.hidden,false);
+    assert.equal(reopen.getAttribute('aria-expanded'),'false');
+    const previousCalls=scrollCalls.length;
+    c.setGuideSetupStage(index,false);
+    runRaf();
+    assert.equal(scrollCalls.length,previousCalls+1);
+    assert.equal(reopen.hidden,true);
+    assert.equal(reopen.getAttribute('aria-expanded'),'true');
+    assert.equal(stage.querySelector('h4').hidden,false);
+    assert.equal(e(`guideSetupBody${index}`).hidden,false);
+    c.renderGuideSetupStages();
+    runRaf();
+    assert.equal(scrollCalls.length,previousCalls+1);
+    assert.equal(c.guideSetupStage,index);
+    assert.equal(JSON.stringify({state:c.state,spiral:c.workshopToolsState.spiral}),before);
+  }
 });
