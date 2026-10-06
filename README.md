@@ -11,6 +11,7 @@ Build 007: Adds visible Unlock/Edit button and freezes wheel scrolling while loc
 
 ## Shared UI Rules
 
+- Build Pricing keeps labour and profit/margin inputs paired (stacking only below 341px), read-only build costs in compact result rows, and Final Customer Price full-width. It reuses shared dark surfaces, titanium labels, restrained red emphasis and 44px controls; pricing handlers, tax/deposit visibility and quote outputs are unchanged.
 - Every app dropdown, including selects and datalist suggestions, uses `initializeStudioCustomSelects()` in `js/ui.js`; do not expose native OS menus. Preserve the underlying value and dispatch its normal `input`/`change` events so dependent options and existing handlers continue working.
 - Custom pickers reuse the dark `.component-sheet` surface, accessible labels, arrow/Home/End/Enter navigation, Escape, Cancel/outside dismissal, and focus restoration. Long lists scroll inside the visual viewport-safe sheet above navigation and safe areas; datalist inputs retain free-text entry.
 - Picker triggers, option rows, and actions have at least 44px touch targets. Use compact aligned carbon controls, titanium text/fine borders, restrained red selected/focus states, and shared action styles instead of one-off picker skins.

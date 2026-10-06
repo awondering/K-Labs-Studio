@@ -6973,6 +6973,120 @@ textarea::-moz-selection,
   transition:max-height var(--ds-transition),opacity var(--ds-transition),padding-top var(--ds-transition),padding-bottom var(--ds-transition);
 }
 
+#workshopScreen #workshopPricingSection{
+  padding:0;
+  gap:0;
+}
+
+#workshopScreen .build-pricing{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px 8px;
+}
+
+#workshopScreen #workshopPricingSection:not(.quote-section--collapsed) .build-pricing{
+  padding:8px 10px 10px;
+}
+
+#workshopScreen #workshopPricingSection.quote-section--collapsed .build-pricing{
+  padding-top:0;
+  padding-bottom:0;
+}
+
+#workshopScreen .build-pricing > label{
+  min-width:0;
+  gap:4px;
+}
+
+#workshopScreen .build-pricing > label > span,
+#workshopScreen .build-pricing .quote-pricing-driver__label{
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+  letter-spacing:.03em;
+  text-transform:none;
+}
+
+#workshopScreen .build-pricing input:not([type="checkbox"]){
+  min-height:44px;
+  padding:8px 10px;
+  background:var(--ds-surface);
+  color:var(--ds-text-strong);
+  font-size:16px;
+  scroll-margin-top:calc(66px + var(--safe-top));
+  scroll-margin-bottom:calc(140px + var(--safe-bottom));
+}
+
+#workshopScreen .build-pricing .build-pricing__result{
+  grid-template-columns:minmax(0,1fr) minmax(100px,.8fr);
+  align-items:center;
+  gap:8px;
+  padding-left:10px;
+  border-radius:var(--ds-radius-sm);
+  background:var(--ds-surface-soft);
+}
+
+#workshopScreen .build-pricing .build-pricing__result input{
+  border-color:transparent;
+  background:transparent;
+  color:var(--titanium);
+  text-align:right;
+  cursor:default;
+}
+
+#workshopScreen .build-pricing .build-pricing__total{
+  gap:6px;
+  padding:8px;
+  border:1px solid rgba(var(--kl-red-rgb),.22);
+  border-radius:var(--ds-radius-md);
+  background:var(--ds-surface-soft);
+}
+
+#workshopScreen .build-pricing .build-pricing__total > span{
+  color:var(--ds-text-strong);
+  font-size:12px;
+  font-weight:700;
+}
+
+#workshopScreen .build-pricing .build-pricing__total input{
+  font-size:24px;
+  font-weight:700;
+}
+
+#workshopScreen .build-pricing .quote-gst-toggle{
+  min-height:44px;
+  padding:0 10px;
+  grid-template-columns:minmax(0,1fr) 18px;
+  align-items:center;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-sm);
+  background:var(--ds-surface-soft);
+  cursor:pointer;
+}
+
+#workshopScreen .build-pricing .quote-gst-toggle input{
+  width:18px;
+  height:18px;
+  min-height:18px;
+  margin:0;
+  padding:0;
+  accent-color:var(--kl-red-base);
+  cursor:pointer;
+}
+
+#workshopScreen .build-pricing .quote-pricing-driver__button{
+  min-height:44px;
+}
+
+#workshopScreen .build-pricing .quote-gst-status:empty{
+  display:none;
+}
+
+@media (max-width:340px){
+  #workshopScreen .build-pricing{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
+
 .component-sheet__panel,
 .quote-preview-panel,
 .customer-finder__detail,

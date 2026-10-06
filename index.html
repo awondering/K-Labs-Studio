@@ -582,20 +582,20 @@
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
-          <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--three quote-section__body">
+          <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--two quote-section__body build-pricing">
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-            <label id="quoteLabourCostField"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
-            <label id="quoteCostBeforeMarginField"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
-            <label id="quoteTotalField"><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label id="quoteLabourCostField" class="quote-grid__full build-pricing__result"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
+            <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
+            <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteProfitField"><span>Required Profit</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
             <label id="quoteMarginPercentField"><span>Required Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
             <p id="quotePriceWarning" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <label id="quoteIncludeGstField" class="quote-gst-toggle"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+            <label id="quoteIncludeGstField" class="quote-gst-toggle quote-grid__full"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
             <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
             <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <label id="quoteDepositEnabledField" class="quote-gst-toggle"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
+            <label id="quoteDepositEnabledField" class="quote-gst-toggle quote-grid__full"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
             <div id="quoteDepositTypeField" class="quote-grid__full quote-pricing-driver" role="group" aria-label="Deposit type" hidden>
               <span class="quote-pricing-driver__label">Deposit Type</span>
               <div class="quote-pricing-driver__options">
