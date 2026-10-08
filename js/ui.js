@@ -9316,6 +9316,9 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     return;
   }
   if(context.index>=0){
+    // Re-picking the component a line is already bound to must not reset build-level price edits.
+    const priorRow=quote.components[context.index];
+    const alreadyBound=context.type==='category' && !!priorRow && !!selectedId && String(priorRow.libraryComponentId||'').trim()===String(selectedId).trim() && normalizeNameKey(priorRow.category)===normalizeNameKey(selectedName);
     // A master component with configured sizes must not be added until a size is chosen.
     if(context.type==='category'){
       const sizeOptions=componentSizePickerOptions(selectedName,selectedId);
@@ -9329,8 +9332,13 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
       }
       if(selectedId && quote.components[context.index])quote.components[context.index].libraryComponentId=String(selectedId);
     }
+    // setChoiceValue also reports true when normalising a fresh draft row only changed its shape. Only a
+    // real merge into another line for the same component (and size) may skip applying the library record.
+    const mergesIntoExisting=context.type!=='category' || quote.components.some((item,itemIndex)=>itemIndex!==context.index && !!item
+      && (selectedId?String(item.libraryComponentId||'').trim()===String(selectedId).trim():normalizeNameKey(item.category)===normalizeNameKey(selectedName))
+      && normalizeNameKey(item.selectedSize)===normalizeNameKey(priorRow&&priorRow.selectedSize));
     const merged=setChoiceValue(context.type,context.index,selectedName);
-    if(merged){
+    if(merged && mergesIntoExisting){
       // The picked category already exists on another row; enforceSingleSourceComponents merged this
       // row into it, so context.index no longer points at the edited row - re-render from the true
       // post-merge index instead of patching a stale row (was leaving the Subcategory field on an
@@ -9344,8 +9352,9 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
       return;
     }
     if(context.type==='category'){
-      applyComponentLibraryRecordToRow(context.index,selectedName,selectedId);
+      if(!alreadyBound)applyComponentLibraryRecordToRow(context.index,selectedName,selectedId);
       syncComponentRowEditorInputs(context.index);
+      if(merged)renderQuoteComponents();
     }
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
