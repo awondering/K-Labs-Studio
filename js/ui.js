@@ -141,6 +141,8 @@ let guideSetupCompletedStage=-1;
 let componentRowMenuPointerDown={index:-1,expiresAt:0};
 const pendingComponentDraftRows=new WeakSet();
 let activeConfirmHandler=null;
+let confirmOpenerEl=null;
+let confirmHandlerRunning=false;
 let activeBlankEditorId='';
 let pendingControlPersist=false;
 // Rod Build Layout selected item key (view state only, never saved).
@@ -12045,24 +12047,55 @@ function deleteSavedEntryBySource(source,index){
   if(storageKey==='klabs-workshop-builds' && deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
   return true;
 }
+// Resolves the record by its stable ID at confirm time so a shifted list can never delete a different record.
+function deleteSavedEntryById(source,recordId){
+  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const stored=Store.get(storageKey,[]);
+  const records=Array.isArray(stored)?stored:[];
+  const index=records.findIndex((record)=>record && specificationValue(record.id)===recordId);
+  if(index<0)return -1;
+  records.splice(index,1);
+  Store.set(storageKey,records);
+  if(storageKey==='klabs-workshop-builds')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(recordId);
+  return index;
+}
 function requestDeleteSavedBuildRecord(source,index,options){
-  const selected=getSavedEntryBySource(source,index);
-  if(!selected)return;
+  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const stored=Store.get(storageKey,[]);
+  const rawRecord=Array.isArray(stored)?stored[Number(index)]:null;
+  if(!rawRecord)return;
+  const recordId=specificationValue(rawRecord.id);
   const settings={title:'Delete this build?',message:'This action cannot be undone.',confirmLabel:'Delete',...(options||{})};
   closeSavedBuildRowMenu();
-  openConfirmDialog({
-    title:settings.title,
-    message:settings.message,
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:settings.confirmLabel,kind:'danger'}]
-  },(action)=>{
-    if(action!=='delete')return;
-    if(!deleteSavedEntryBySource(source,index))return;
-    if(activeSavedBuildRef && activeSavedBuildRef.source===source && activeSavedBuildRef.index===Number(index)){
-      clearActiveSavedBuildRef();
-    }
-    renderBuilds();
-    renderCustomerFinder();
-  });
+  const present=(errorMessage)=>{
+    openConfirmDialog({
+      title:settings.title,
+      message:errorMessage||settings.message,
+      error:!!errorMessage,
+      actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:errorMessage?'Retry':settings.confirmLabel,kind:'danger'}]
+    },(action)=>{
+      if(action!=='delete')return;
+      let deletedIndex=-1;
+      try{
+        deletedIndex=recordId?deleteSavedEntryById(source,recordId):(deleteSavedEntryBySource(source,index)?Number(index):-1);
+      }catch(error){
+        console.error('[K-Labs Studio] Could not delete quote:',error);
+        present('Could not delete this quote. Nothing was removed. Please try again.');
+        return;
+      }
+      if(deletedIndex<0){
+        present('This quote could not be found or deleted. Please close and reopen the customer history, then try again.');
+        return;
+      }
+      if(activeSavedBuildRef && activeSavedBuildRef.source===source){
+        if(activeSavedBuildRef.index===deletedIndex)clearActiveSavedBuildRef();
+        else if(activeSavedBuildRef.index>deletedIndex)activeSavedBuildRef.index-=1;
+      }
+      renderBuilds();
+      renderCustomerFinder();
+    });
+  };
+  present('');
 }
 function getSavedEntryBySource(source,index){
   const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
@@ -12141,6 +12174,7 @@ function resetWorkshopEntryTransientState(){
   if(confirmSheetEl && !confirmSheetEl.hidden){
     confirmSheetEl.hidden=true;
     activeConfirmHandler=null;
+    confirmOpenerEl=null;
     unlockModalLayer({restoreFocus:false});
   }
 }
@@ -12286,14 +12320,24 @@ function openConfirmDialog(config,onAction){
   const messageEl=$('confirmSheetMessage');
   const actionsEl=$('confirmSheetActions');
   if(titleEl)titleEl.textContent=config&&config.title?config.title:'Confirm';
-  if(messageEl)messageEl.textContent=config&&config.message?config.message:'Please confirm this action.';
+  if(messageEl){
+    messageEl.textContent=config&&config.message?config.message:'Please confirm this action.';
+    messageEl.setAttribute('role',config&&config.error?'alert':'status');
+    messageEl.style.color=config&&config.error?'#f0b4ba':'#c9c3b8';
+  }
   if(actionsEl){
     const actions=(config&&Array.isArray(config.actions)&&config.actions.length)?config.actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Continue',kind:'primary'}];
     actionsEl.innerHTML=actions.map((action)=>`<button type="button" class="${action.kind==='primary'?'primary-action':'ghost-action'}${action.kind==='danger'?' component-sheet__danger':''}" data-confirm-action="${escapeHtml(action.id)}">${escapeHtml(action.label)}</button>`).join('');
   }
   activeConfirmHandler=typeof onAction==='function'?onAction:null;
-  $('confirmSheet').hidden=false;
+  const confirmSheetEl=$('confirmSheet');
+  // Re-append so the confirmation always stacks above any sheet (e.g. customer history) opened after it was first created.
+  document.body.appendChild(confirmSheetEl);
+  if(confirmSheetEl.hidden && !confirmHandlerRunning)confirmOpenerEl=(document.activeElement&&document.activeElement!==document.body)?document.activeElement:null;
+  confirmSheetEl.hidden=false;
   lockModalLayer(document.activeElement);
+  const firstAction=confirmSheetEl.querySelector('[data-confirm-action="cancel"].ghost-action')||confirmSheetEl.querySelector('#confirmSheetActions button');
+  if(firstAction)try{firstAction.focus({preventScroll:true});}catch{}
 }
 function closeConfirmDialog(action){
   const handler=activeConfirmHandler;
@@ -12301,7 +12345,22 @@ function closeConfirmDialog(action){
   const sheet=$('confirmSheet');
   if(sheet)sheet.hidden=true;
   unlockModalLayer({restoreFocus:true});
-  if(handler)handler(action||'cancel');
+  confirmHandlerRunning=true;
+  try{
+    if(handler)handler(action||'cancel');
+  }finally{
+    confirmHandlerRunning=false;
+  }
+  // A handler may reopen the dialog (retry); otherwise return focus, since nested locks skip restoration.
+  if(sheet && !sheet.hidden)return;
+  const opener=confirmOpenerEl;
+  confirmOpenerEl=null;
+  if(opener && opener.isConnected && typeof opener.focus==='function'){
+    try{opener.focus({preventScroll:true});}catch{}
+    return;
+  }
+  const finder=$('customerFinderSheet');
+  if(finder && !finder.hidden)focusCustomerFinderView();
 }
 // Customer-facing quote presentation: never include internal cost/supplier/markup/profit data, only purchasing-relevant info.
 function customerQuoteBusinessLines(){
