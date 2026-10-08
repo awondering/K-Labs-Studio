@@ -116,6 +116,10 @@ let selectedBlankControlsBound=false;
 let hasUnsavedQuoteChanges=false;
 const controlMeta={guideCount:{key:'guideCount',min:5,max:20,step:1},firstGuide:{key:'firstGuide',min:50,max:300,step:1},targetStripper:{key:'targetStripper',min:500,max:2500,step:1}};
 const CORE_MEASUREMENT_FORMAT={decimalsMetric:3,decimalsImperial:3,forceDecimal:true};
+// Display-only: Material Required is rounded to at most 1 decimal in metric (trailing zeros
+// hidden); imperial keeps CORE_MEASUREMENT_FORMAT's existing precision unchanged.
+// Internal values stay at CORE_MEASUREMENT_FORMAT precision for calculations.
+const GRIP_MATERIAL_REQUIRED_DISPLAY_FORMAT={decimalsMetric:1,decimalsImperial:CORE_MEASUREMENT_FORMAT.decimalsImperial};
 const SPIRAL_GUIDE_ROW_POSITION_FORMAT={decimalsMetric:0,decimalsImperial:1,fractionDenominator:8};
 // Read-only guide position/spacing lists; inputs and copied text keep CORE precision.
 const GUIDE_LIST_FORMAT={decimalsMetric:1,decimalsImperial:2,fractionDenominator:8};
@@ -2136,7 +2140,7 @@ function renderGripCoveringTool(){
   const angleDifferenceRow=$('workshopGripAverageCutAngleRow');
   const printActions=$('workshopGripPrintActions');
 
-  if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
+  if(requiredEl)requiredEl.textContent=formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,GRIP_MATERIAL_REQUIRED_DISPLAY_FORMAT);
   if(revolutionsEl)revolutionsEl.textContent=formatDecimal(revolutions,2);
   if(spiralEl)spiralEl.textContent=formatWorkshopMeasurementValue(spiralWrapLengthMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
   if(startCutEl)startCutEl.textContent=gripCutAngleLabel(startCutAngle);
@@ -2162,7 +2166,7 @@ function renderGripCoveringTool(){
     finishCutAngle,
     coveringWidthText:formatWorkshopMeasurementValue(state.coverWidthMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
     gripLengthText:formatWorkshopMeasurementValue(state.lengthMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
-    requiredLengthText:formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT),
+    requiredLengthText:formatWorkshopMeasurementValue(requiredMm,state.unit,state.imperialDisplay,GRIP_MATERIAL_REQUIRED_DISPLAY_FORMAT),
     allowanceText:`${formatDecimal(state.allowancePercent,1)}%`,
     dateText:formatDateDisplay(new Date(),{includeTime:false}),
   }:null;

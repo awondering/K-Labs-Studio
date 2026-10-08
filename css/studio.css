@@ -4272,6 +4272,12 @@ textarea::placeholder{
   font-weight:600;
 }
 
+.workshop-tool-note--neutral{
+  margin-top:-4px;
+  text-align:right;
+  color:var(--titanium);
+}
+
 .workshop-tool-launch{
   display:grid;
   gap:6px;
@@ -8575,6 +8581,22 @@ textarea::-moz-selection,
   border-radius:9px;
   border:1px solid rgba(214,210,200,.1);
   background:rgba(255,255,255,.018);
+}
+
+/* Grip Wrap Calculator: flatten the secondary results into compact divided rows
+   instead of individually bordered boxes used by the other workshop tools
+   (matches the existing .guide-specification__row divided-row convention). */
+#workshopToolGrip .workshop-tool-details--compact{
+  gap:0;
+}
+
+#workshopToolGrip .workshop-tool-details--compact div{
+  min-height:34px;
+  padding:7px 2px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  border-bottom:1px solid rgba(214,210,200,.12);
 }
 
 #workshopToolDiameter .workshop-tool-print-actions .ghost-action,
