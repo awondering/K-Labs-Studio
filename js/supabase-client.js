@@ -54,27 +54,46 @@ function klabsApplyAuthState(session) {
   document.body.classList.remove("klabs-auth-resolving");
 }
 
+let klabsSignInPending = false;
+
 async function klabsSignIn() {
+  if (klabsSignInPending) return;
+  klabsSignInPending = true;
+
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
   const message = document.getElementById("authMessage");
+  const button = document.getElementById("authSignIn");
 
   message.textContent = "Signing in...";
-
-  const { error } = await window.KLABS_SUPABASE_CLIENT.auth.signInWithPassword({
-    email,
-    password
-  });
-
-  if (error) {
-    message.textContent = error.message;
-    return;
+  if (button) {
+    button.setAttribute("aria-disabled", "true");
+    button.setAttribute("aria-busy", "true");
   }
 
-  message.textContent = "";
-  await klabsCheckLogin();
-}
+  try {
+    const { error } = await window.KLABS_SUPABASE_CLIENT.auth.signInWithPassword({
+      email,
+      password
+    });
 
+    if (error) {
+      message.textContent = error.message;
+      return;
+    }
+
+    message.textContent = "";
+    await klabsCheckLogin();
+  } catch (error) {
+    message.textContent = error?.message || "Sign in failed. Please try again.";
+  } finally {
+    klabsSignInPending = false;
+    if (button) {
+      button.removeAttribute("aria-disabled");
+      button.removeAttribute("aria-busy");
+    }
+  }
+}
 async function klabsForgotPassword() {
   const email = document.getElementById("authEmail").value.trim();
   const message = document.getElementById("authMessage");
@@ -98,8 +117,12 @@ async function klabsForgotPassword() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("authSignIn")
-    ?.addEventListener("click", klabsSignIn);
+  // Enter in either field and the Sign In button both submit this form natively.
+  document.getElementById("authForm")
+    ?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      klabsSignIn();
+    });
 
   document.getElementById("authForgotPassword")
     ?.addEventListener("click", klabsForgotPassword);
@@ -121,7 +144,7 @@ document.getElementById("authTogglePassword")
   });
   async function klabsSignOut() {
   const button = document.getElementById("settingsSignOut");
-  if (button) button.disabled = true;
+  if (button) button.setAttribute("aria-disabled", "true");
 
   try {
     await window.KLABS_SUPABASE_CLIENT.auth.signOut();
@@ -138,5 +161,5 @@ document.getElementById("authTogglePassword")
   klabsApplyAuthState(null);
   window.scrollTo(0, 0);
 
-  if (button) button.disabled = false;
+  if (button) button.removeAttribute("aria-disabled");
 }

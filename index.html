@@ -25,6 +25,7 @@
   <h1>K-Labs Studio</h1>
   <p>Sign in to sync Studio across your devices.</p>
 
+  <form id="authForm" class="auth-form">
   <label>
     Email
     <input id="authEmail" type="email" autocomplete="email">
@@ -38,7 +39,8 @@
     </div>
     <button id="authForgotPassword" type="button">Forgot password?</button>
   </div>
-  <button id="authSignIn" type="button">Sign In</button>
+  <button id="authSignIn" type="submit">Sign In</button>
+  </form>
 
   <p id="authMessage" aria-live="polite"></p>
 </section>

@@ -10886,3 +10886,6 @@ body.klabs-auth-resolving::after {
 .quote-component-row__library-status span{min-width:0;overflow-wrap:anywhere}
 .quote-component-row__actions .quote-component-row__library-retry,
 .quote-component-row__library-retry{min-height:44px;min-width:44px;padding:0 12px;flex:none}
+
+/* Native sign-in form wrapper keeps the existing centred column layout. */
+#authScreen .auth-form{display:contents}
