@@ -183,6 +183,9 @@ let studioComponentsSearch='';
 let studioSelectedComponentKey='';
 let studioSelectedComponentRef=null;
 let studioComponentDraft=null;
+// Set only while the Components editor was opened from the build component picker; holds the picker
+// position to restore. `draft` ties it to that exact editor session so a stale context is never honoured.
+let componentPickerReturnContext=null;
 let studioLibraryPath={level:'categories',categoryId:'',subcategoryId:''};
 let studioLibraryEditor={type:'',mode:'',targetName:''};
 let studioLibraryContextMenu={type:'',key:''};
@@ -4955,8 +4958,15 @@ function commitStudioComponentDetails(){
     targetCategory.subcategories.push({id:studioTaxonomyId('sub'),name:subcategoryName});
   }
   saveStudioComponentTaxonomy();
+  const returnToPicker=studioComponentDetailContext.isAddMode && componentPickerReturnActive();
   studioComponentDraft=null;
   studioLibraryEditor={type:'',mode:'',targetName:''};
+  if(returnToPicker){
+    clearStudioComponentSavedTimer();
+    const saved=findComponentLibraryRecordByName(nextName)||sourceRecord;
+    returnToComponentPicker(saved);
+    return true;
+  }
   if(supplierBrowseName){
     studioLibraryPath={level:sourceRecord.subcategory?'supplier-component':'supplier-category',supplierName:supplierBrowseName,categoryId:sourceRecord.category,subcategoryId:sourceRecord.subcategory};
   }else if(sourceRecord.category){
@@ -6147,6 +6157,89 @@ function studioComponentRecordsForSubcategory(records,categoryName,subcategoryNa
   const unassignedKey=normalizeNameKey(UNASSIGNED_COMPONENT_CATEGORY);
   return scoped.filter((record)=>subcategoryKey===unassignedKey?!normalizeNameKey(record&&record.subcategory):normalizeNameKey(record&&record.subcategory)===subcategoryKey);
 }
+// Resolves the picker's Category/Family to taxonomy identity. Family names repeat across categories, so a
+// family is only ever looked up inside its own parent category (by id when held, else by name within that parent).
+function resolveComponentPickerDestination(source){
+  const taxonomy=ensureStudioComponentTaxonomyLoaded();
+  const categories=taxonomy&&Array.isArray(taxonomy.categories)?taxonomy.categories:[];
+  const categoryId=String(source&&source.categoryId||'').trim();
+  const categoryKey=normalizeNameKey(source&&source.categoryName);
+  const category=(categoryId&&categories.find((item)=>item.id===categoryId))||(categoryKey&&categories.find((item)=>normalizeNameKey(item.name)===categoryKey))||null;
+  const families=category&&Array.isArray(category.subcategories)?category.subcategories:[];
+  const familyId=String(source&&source.subcategoryId||'').trim();
+  const familyKey=normalizeNameKey(source&&source.subcategoryName);
+  const family=(familyId&&families.find((item)=>item.id===familyId))||(familyKey&&families.find((item)=>normalizeNameKey(item.name)===familyKey))||null;
+  return {
+    categoryId:category?category.id:'',
+    subcategoryId:family?family.id:'',
+    categoryName:category?category.name:String(source&&source.categoryName||''),
+    subcategoryName:family?family.name:String(source&&source.subcategoryName||''),
+  };
+}
+function startComponentCreateFromPicker(){
+  const picker=activeChoicePicker;
+  if(picker.type!=='category' || picker.stage!=='component')return;
+  const search=$('choicePickerSearch');
+  const opener=document.activeElement;
+  const destination=resolveComponentPickerDestination(picker);
+  const context={
+    index:picker.index,
+    ...destination,
+    brandName:picker.brandName,
+    query:search?search.value:'',
+    opener,
+    draft:null,
+  };
+  closeComponentSheet();
+  beginStudioComponentAdd(destination.categoryName,destination.subcategoryName);
+  context.draft=studioComponentDraft;
+  componentPickerReturnContext=context;
+  studioComponentsSearch='';
+  studioScreenView='components';
+  renderStudioScreenMode();
+  renderStudioComponentsLibrary();
+  const nameInput=studioComponentNameInput();
+  if(nameInput)nameInput.focus({preventScroll:true});
+}
+// Leaves the Components editor and reopens the originating build picker. The build draft is untouched: no
+// component is added to it here. `savedRecord` (when the create succeeded) moves the picker to the saved record.
+function returnToComponentPicker(savedRecord){
+  const context=componentPickerReturnContext;
+  componentPickerReturnContext=null;
+  if(!context)return false;
+  studioComponentDraft=null;
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  studioScreenView='workflow';
+  renderStudioScreenMode();
+  const index=context.index<quote.components.length?context.index:-1;
+  openChoicePicker('category',index,context.opener&&context.opener.isConnected?context.opener:null);
+  activeChoicePicker.stage='component';
+  // A saved record carries its own categoryId; its family is resolved inside that parent only.
+  const restored=resolveComponentPickerDestination(savedRecord
+    ?{categoryId:savedRecord.categoryId,categoryName:savedRecord.category,subcategoryName:savedRecord.subcategory}
+    :context);
+  activeChoicePicker.categoryName=restored.categoryName;
+  activeChoicePicker.subcategoryName=restored.subcategoryName;
+  activeChoicePicker.categoryId=restored.categoryId;
+  activeChoicePicker.subcategoryId=restored.subcategoryId;
+  activeChoicePicker.brandName=savedRecord?'':context.brandName;
+  const search=$('choicePickerSearch');
+  if(search)search.value=savedRecord?'':context.query;
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(activeChoicePicker.type,activeChoicePicker.index);
+  syncComponentPickerBackButton();
+  renderChoicePickerOptions(search?search.value:'');
+  const focusTarget=savedRecord&&savedRecord.id
+    ?Array.from(document.querySelectorAll('#choicePickerList [data-choice-option]')).find((el)=>el.getAttribute('data-choice-id')===String(savedRecord.id))
+    :document.querySelector('#choicePickerList [data-choice-create-component]');
+  if(focusTarget){
+    focusTarget.scrollIntoView({block:'nearest'});
+    focusTarget.focus({preventScroll:true});
+  }
+  return true;
+}
+function componentPickerReturnActive(){
+  return !!componentPickerReturnContext && !!studioComponentDraft && componentPickerReturnContext.draft===studioComponentDraft;
+}
 function beginStudioComponentAdd(categoryName,subcategoryName){
   const savedFamily=studioSubcategorySelectionByName(categoryName,subcategoryName);
   // Only the virtual bucket clears placement; a saved family keeps its taxonomy name.
@@ -6556,6 +6649,10 @@ function bindStudioComponentsPanel(){
   if(backBtn){
     backBtn.addEventListener('click',()=>{
       clearStudioComponentSavedTimer();
+      if(componentPickerReturnActive()){
+        returnToComponentPicker(null);
+        return;
+      }
       if(studioLibraryEditor.type){
         studioLibraryEditor={type:'',mode:'',targetName:''};
         renderStudioComponentsLibrary();
@@ -8274,11 +8371,16 @@ function advanceComponentPickerStage(name){
   if(activeChoicePicker.stage==='category'){
     activeChoicePicker.categoryName=name;
     activeChoicePicker.subcategoryName='';
+    activeChoicePicker.categoryId='';
+    activeChoicePicker.subcategoryId='';
+    activeChoicePicker.categoryId=resolveComponentPickerDestination(activeChoicePicker).categoryId;
     activeChoicePicker.brandName='';
     const hasSubcategories=componentPickerSubcategoryStageOptions(name,'').length>0;
     activeChoicePicker.stage=hasSubcategories?'subcategory':'component';
   }else if(activeChoicePicker.stage==='subcategory'){
     activeChoicePicker.subcategoryName=name;
+    activeChoicePicker.subcategoryId='';
+    activeChoicePicker.subcategoryId=resolveComponentPickerDestination(activeChoicePicker).subcategoryId;
     activeChoicePicker.brandName='';
     activeChoicePicker.stage='component';
   }else{
@@ -8298,11 +8400,14 @@ function retreatComponentPickerStage(){
     }else{
       activeChoicePicker.stage='category';
       activeChoicePicker.categoryName='';
+      activeChoicePicker.categoryId='';
     }
     activeChoicePicker.subcategoryName='';
+    activeChoicePicker.subcategoryId='';
   }else if(activeChoicePicker.stage==='subcategory'){
     activeChoicePicker.stage='category';
     activeChoicePicker.categoryName='';
+    activeChoicePicker.categoryId='';
   }else{
     return;
   }
@@ -8419,6 +8524,11 @@ function ensureChoicePicker(){
       return;
     }
     const optionRow=event.target.closest('.component-sheet__row[data-choice-row]');
+    if(event.target.closest('[data-choice-create-component]')){
+      event.preventDefault();
+      startComponentCreateFromPicker();
+      return;
+    }
     if(optionRow){
       const selectedName=optionRow.getAttribute('data-choice-row')||'';
       const selectedId=optionRow.getAttribute('data-choice-id')||'';
@@ -9559,15 +9669,21 @@ function renderComponentPickerCascadeOptions(query){
   const options=componentPickerStageOptions(query).slice(0,200);
   hideChoicePickerMenu();
   const hasQuery=!!String(query||'').trim();
+  const stage=activeChoicePicker.stage||'category';
+  const createButton=stage==='component'
+    ?'<button class="component-sheet__add component-sheet__add--create" data-choice-create-component="true" type="button">+ CREATE COMPONENT</button>'
+    :'';
   if(!options.length){
+    const guidance=stage==='component'
+      ?'Nothing here yet. Create a component to add it to this family.'
+      :'No components yet. Add components in Components.';
     list.innerHTML=hasQuery
-      ?'<div class="component-sheet__empty">No matching results</div>'
-      :activeChoicePicker.brandName?`<div class="component-sheet__empty">No components for ${escapeHtml(activeChoicePicker.brandName)}</div>`
-      :'<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">&#9676;</div><p class="component-sheet__empty">No components yet. Add components in Components.</p></div>';
+      ?`<div class="component-sheet__empty">No matching results</div>${createButton}`
+      :activeChoicePicker.brandName?`<div class="component-sheet__empty">No components for ${escapeHtml(activeChoicePicker.brandName)}</div>${createButton}`
+      :`<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">&#9676;</div><p class="component-sheet__empty">${guidance}</p>${createButton}</div>`;
     return;
   }
-  const stage=activeChoicePicker.stage||'category';
-  list.innerHTML=options.map((item)=>{
+  list.innerHTML=createButton+options.map((item)=>{
     const selected=choiceOptionIsSelected(item);
     const secondary=stage==='component'?componentPickerLeafSecondaryText(item.record):'';
     const displayName=stage==='component'
@@ -10042,6 +10158,8 @@ function openChoicePicker(type,index,openerEl,options){
     stage:type==='category'?'category':'',
     categoryName:'',
     subcategoryName:'',
+    categoryId:'',
+    subcategoryId:'',
     brandName:'',
   };
   activeChoicePickerSizeSelections=new Set();

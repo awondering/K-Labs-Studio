@@ -10984,3 +10984,9 @@ body.klabs-auth-resolving::after {
   outline:2px solid rgba(214,210,200,.62);
   outline-offset:2px;
 }
+
+.component-sheet__add.component-sheet__add--create{
+  min-height:44px;
+  margin:0 0 8px;
+  text-align:center;
+}
