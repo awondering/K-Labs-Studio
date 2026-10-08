@@ -7803,7 +7803,7 @@ function selectedBlankEditMarkup(blank){
         <label><span>SKU</span><input data-selected-blank-field="sku" type="text" value="${value('sku')}" /></label>
         <label class="blank-editor-grid__full"><span>Notes</span><textarea data-selected-blank-field="notes" rows="2">${value('notes')}</textarea></label>
         <label><span>First Guide (${measurementUnitSuffix()})</span><input data-selected-blank-field="fg" type="text" inputmode="decimal" value="${numberValue('fg')}" /></label>
-        <label><span>Guide Count</span><input data-selected-blank-field="gc" type="number" min="5" max="20" step="1" value="${numberValue('gc')}" /></label>
+        <label><span>Guide Count</span><input data-selected-blank-field="gc" type="number" inputmode="numeric" min="5" max="20" step="1" value="${numberValue('gc')}" /></label>
         <label class="blank-editor-grid__full"><span>Target Stripper (${measurementUnitSuffix()})</span><input data-selected-blank-field="ts" type="text" inputmode="decimal" value="${numberValue('ts')}" /></label>
       </div>
       <div class="quote-preview-actions selected-blank-card__edit-actions">
@@ -14197,7 +14197,7 @@ function ensureBlankEditorSheet(){
           <label><span>SKU</span><input id="blankEditorSku" type="text" /></label>
           <label class="blank-editor-grid__full"><span>Notes</span><textarea id="blankEditorNotes" rows="2"></textarea></label>
           <label><span id="blankEditorFgLabel">First Guide (mm)</span><input id="blankEditorFg" type="text" inputmode="decimal" /></label>
-          <label><span>Guide Count</span><input id="blankEditorGc" type="number" min="5" max="20" step="1" /></label>
+          <label><span>Guide Count</span><input id="blankEditorGc" type="number" inputmode="numeric" min="5" max="20" step="1" /></label>
           <label class="blank-editor-grid__full"><span id="blankEditorTsLabel">Target Stripper (mm)</span><input id="blankEditorTs" type="text" inputmode="decimal" /></label>
         </div>
         <div class="quote-preview-actions">
