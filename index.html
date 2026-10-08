@@ -672,6 +672,30 @@
 
     <section class="screen" id="settingsScreen">
       <div class="screen-head"><h1>Studio Settings</h1><p class="subtle">Configure pricing, units, and date format.</p></div>
+      <details class="settings-card settings-preference-card settings-disclosure" id="settingsBusinessProfileCard">
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Business Profile</span>
+            <span class="settings-disclosure__hint">Your customer-facing business identity.</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
+        <div class="settings-field-grid">
+          <label><span>Business Name</span><input id="settingsBusinessName" type="text" autocomplete="organization" placeholder="Business name" /></label>
+          <label><span>Contact Name</span><input id="settingsBusinessContactName" type="text" autocomplete="name" placeholder="Contact name" /></label>
+          <label><span>Email</span><input id="settingsBusinessEmail" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+          <label><span>Phone</span><input id="settingsBusinessPhone" type="tel" autocomplete="tel" placeholder="Phone" /></label>
+          <label><span>Website</span><input id="settingsBusinessWebsite" type="text" inputmode="url" placeholder="www.example.com" /></label>
+          <label><span>Address Line 1 (Optional)</span><input id="settingsBusinessAddress1" type="text" autocomplete="address-line1" /></label>
+          <label><span>Address Line 2 (Optional)</span><input id="settingsBusinessAddress2" type="text" autocomplete="address-line2" /></label>
+          <label><span>Town / City (Optional)</span><input id="settingsBusinessCity" type="text" autocomplete="address-level2" /></label>
+          <label><span>Postcode (Optional)</span><input id="settingsBusinessPostcode" type="text" autocomplete="postal-code" /></label>
+          <label><span>Country (Optional)</span><input id="settingsBusinessCountry" type="text" autocomplete="country-name" /></label>
+          <label><span>GST Number (Optional)</span><input id="settingsBusinessGstNumber" type="text" /></label>
+        </div>
+        <div class="settings-context-actions"><button id="settingsBusinessProfileSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
+      </details>
+
       <details class="settings-card settings-preference-card settings-disclosure" id="settingsPricingTaxCard" aria-label="Pricing and Tax">
         <summary class="settings-disclosure__summary">
           <span class="settings-disclosure__copy">
@@ -686,6 +710,37 @@
           <label class="settings-pricing-field"><span class="settings-pricing-label">Labour rate ($/hr)</span><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></label>
         </div>
         <div class="settings-context-actions"><button id="settingsPricingTaxSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
+      </details>
+
+      <details class="settings-card settings-preference-card settings-disclosure" id="settingsPaymentDetailsCard">
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Payment Details</span>
+            <span class="settings-disclosure__hint">Shown on customer quotes when both fields are set.</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
+        <div class="settings-field-grid">
+          <label><span>Account Name</span><input id="settingsPaymentAccountName" type="text" placeholder="Account name" /></label>
+          <label><span>Bank Account Number</span><input id="settingsPaymentAccountNumber" type="text" inputmode="numeric" placeholder="00-0000-0000000-00" /></label>
+        </div>
+        <div class="settings-context-actions"><button id="settingsPaymentDetailsSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
+      </details>
+
+      <details class="settings-card settings-preference-card settings-disclosure" id="settingsQuoteNumberingCard">
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Quote Numbering</span>
+            <span class="settings-disclosure__hint">Applies to future quotes only.</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
+        <div class="settings-field-grid">
+          <label><span>Quote Prefix</span><input id="settingsQuotePrefix" type="text" placeholder="KL-" /></label>
+          <label><span>Next Quote Number</span><input id="settingsQuoteNextNumber" type="number" inputmode="numeric" min="1" step="1" placeholder="1000" /></label>
+        </div>
+        <p class="settings-field-note">Next quote will be <strong id="settingsQuoteNumberPreview">—</strong>. Existing quotes and builds keep the number they were given.</p>
+        <div class="settings-context-actions"><button id="settingsQuoteNumberingSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
       </details>
 
       <details class="settings-card settings-preference-card settings-disclosure" id="settingsTrackStockCard" aria-label="Track Component Stock Preference">
@@ -738,60 +793,6 @@
         <div class="settings-context-actions"><button id="settingsDateFormatSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
       </details>
 
-      <details class="settings-card settings-preference-card settings-disclosure" id="settingsBusinessProfileCard">
-        <summary class="settings-disclosure__summary">
-          <span class="settings-disclosure__copy">
-            <span class="settings-disclosure__title">Business Profile</span>
-            <span class="settings-disclosure__hint">Your customer-facing business identity.</span>
-          </span>
-          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
-        </summary>
-        <div class="settings-field-grid">
-          <label><span>Business Name</span><input id="settingsBusinessName" type="text" autocomplete="organization" placeholder="Business name" /></label>
-          <label><span>Contact Name</span><input id="settingsBusinessContactName" type="text" autocomplete="name" placeholder="Contact name" /></label>
-          <label><span>Email</span><input id="settingsBusinessEmail" type="email" autocomplete="email" placeholder="you@example.com" /></label>
-          <label><span>Phone</span><input id="settingsBusinessPhone" type="tel" autocomplete="tel" placeholder="Phone" /></label>
-          <label><span>Website</span><input id="settingsBusinessWebsite" type="text" inputmode="url" placeholder="www.example.com" /></label>
-          <label><span>Address Line 1 (Optional)</span><input id="settingsBusinessAddress1" type="text" autocomplete="address-line1" /></label>
-          <label><span>Address Line 2 (Optional)</span><input id="settingsBusinessAddress2" type="text" autocomplete="address-line2" /></label>
-          <label><span>Town / City (Optional)</span><input id="settingsBusinessCity" type="text" autocomplete="address-level2" /></label>
-          <label><span>Postcode (Optional)</span><input id="settingsBusinessPostcode" type="text" autocomplete="postal-code" /></label>
-          <label><span>Country (Optional)</span><input id="settingsBusinessCountry" type="text" autocomplete="country-name" /></label>
-          <label><span>GST Number (Optional)</span><input id="settingsBusinessGstNumber" type="text" /></label>
-        </div>
-        <div class="settings-context-actions"><button id="settingsBusinessProfileSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
-      </details>
-
-      <details class="settings-card settings-preference-card settings-disclosure" id="settingsPaymentDetailsCard">
-        <summary class="settings-disclosure__summary">
-          <span class="settings-disclosure__copy">
-            <span class="settings-disclosure__title">Payment Details</span>
-            <span class="settings-disclosure__hint">Shown on customer quotes when both fields are set.</span>
-          </span>
-          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
-        </summary>
-        <div class="settings-field-grid">
-          <label><span>Account Name</span><input id="settingsPaymentAccountName" type="text" placeholder="Account name" /></label>
-          <label><span>Bank Account Number</span><input id="settingsPaymentAccountNumber" type="text" inputmode="numeric" placeholder="00-0000-0000000-00" /></label>
-        </div>
-        <div class="settings-context-actions"><button id="settingsPaymentDetailsSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
-      </details>
-
-      <details class="settings-card settings-preference-card settings-disclosure" id="settingsQuoteNumberingCard">
-        <summary class="settings-disclosure__summary">
-          <span class="settings-disclosure__copy">
-            <span class="settings-disclosure__title">Quote Numbering</span>
-            <span class="settings-disclosure__hint">Applies to future quotes only.</span>
-          </span>
-          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
-        </summary>
-        <div class="settings-field-grid">
-          <label><span>Quote Prefix</span><input id="settingsQuotePrefix" type="text" placeholder="KL-" /></label>
-          <label><span>Next Quote Number</span><input id="settingsQuoteNextNumber" type="number" inputmode="numeric" min="1" step="1" placeholder="1000" /></label>
-        </div>
-        <p class="settings-field-note">Next quote will be <strong id="settingsQuoteNumberPreview">—</strong>. Existing quotes and builds keep the number they were given.</p>
-        <div class="settings-context-actions"><button id="settingsQuoteNumberingSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
-      </details>
       <details class="settings-card settings-preference-card settings-disclosure settings-account-card" id="settingsAccountCard" aria-label="Account">
         <summary class="settings-disclosure__summary">
           <span class="settings-disclosure__copy">
