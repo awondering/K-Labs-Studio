@@ -1746,15 +1746,6 @@ function renderDiameterCircumferenceTool(){
   const validWraps=Number.isFinite(state.wraps) && state.wraps>=0.25;
   if(wrapsInput && document.activeElement!==wrapsInput)wrapsInput.value=validWraps?state.wraps.toFixed(2):'';
 
-  const primaryLabel=$('workshopDcPrimaryLabel');
-  const primaryValue=$('workshopDcPrimaryValue');
-  const showingDiameter=state.lastEdited==='circumference';
-  if(primaryLabel)primaryLabel.textContent=showingDiameter?'Diameter':'Circumference';
-  if(primaryValue){
-    primaryValue.textContent=!validDiameter?'Enter a valid measurement':showingDiameter
-      ? formatWorkshopMeasurementValue(state.diameterMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT)
-      : formatWorkshopMeasurementValue(circumferenceMm,state.unit,state.imperialDisplay,CORE_MEASUREMENT_FORMAT);
-  }
   const wrapLength=$('workshopDcWrapLength');
   const required=validDiameter && validWraps?circumferenceMm*state.wraps:null;
   if(wrapLength)wrapLength.textContent=Number.isFinite(required)

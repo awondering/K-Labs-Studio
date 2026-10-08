@@ -8,8 +8,7 @@ const source=fs.readFileSync(path.join(__dirname,'..','js','ui.js'),'utf8');
 function harness(){
   const elements=new Map();
   for(const id of ['workshopDcDiameter','workshopDcCircumference','workshopDcWraps',
-    'workshopDcWrapsMinus','workshopDcWrapsPlus','workshopDcPrimaryLabel',
-    'workshopDcPrimaryValue','workshopDcWrapLength','workshopToolsPanel']){
+    'workshopDcWrapsMinus','workshopDcWrapsPlus','workshopDcWrapLength','workshopToolsPanel']){
     elements.set(id,{
       value:'',textContent:'',attributes:{},listeners:{},
       getAttribute(name){return this.attributes[name];},
@@ -62,11 +61,9 @@ test('live bidirectional conversion and 10 mm / 2.50 wraps reference result',()=
   assert.equal(e('workshopDcCircumference').value,'31.416');
   input('workshopDcWraps','2.50');
   assert.equal(e('workshopDcWrapLength').textContent,'78.5 mm');
-  assert.equal(e('workshopDcPrimaryValue').textContent,'31.416 mm');
   input('workshopDcCircumference',String(20*Math.PI));
   assert.ok(Math.abs(c.workshopToolsState.diameter.diameterMm-20)<1e-10);
   assert.equal(e('workshopDcDiameter').value,'20');
-  assert.equal(e('workshopDcPrimaryLabel').textContent,'Diameter');
   assert.equal(e('workshopDcWrapLength').textContent,'157.1 mm');
 });
 
@@ -93,7 +90,6 @@ test('empty/invalid measurements and wraps clear results without stale values or
       input('workshopDcDiameter','10');
       input(id,invalid);
       assert.match(e('workshopDcWrapLength').textContent,/Enter valid/);
-      assert.match(e('workshopDcPrimaryValue').textContent,/Enter a valid/);
       assert.equal(e(id==='workshopDcDiameter'?'workshopDcCircumference':'workshopDcDiameter').value,'');
       assert.doesNotMatch(e('workshopDcWrapLength').textContent,/NaN|Infinity|78.5/);
     }
@@ -102,7 +98,6 @@ test('empty/invalid measurements and wraps clear results without stale values or
   for(const invalid of ['','abc','0','0.1','-1','Infinity']){
     input('workshopDcWraps',invalid);
     assert.match(e('workshopDcWrapLength').textContent,/Enter valid/);
-    assert.equal(e('workshopDcPrimaryValue').textContent,'31.416 mm');
   }
   input('workshopDcWraps','2.50');
   assert.equal(e('workshopDcWrapLength').textContent,'78.5 mm');
