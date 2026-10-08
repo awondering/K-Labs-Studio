@@ -10877,3 +10877,12 @@ body.klabs-auth-resolving::after {
 #confirmSheet{z-index:200}
 #confirmSheet .quote-preview-actions button,
 #confirmSheet .component-sheet__close{min-height:44px;min-width:44px}
+
+/* Inline completion status for Update Library Component: subdued success, restrained red error. */
+.quote-component-row__library-status{display:flex;align-items:center;gap:10px;min-width:0}
+.quote-component-row__library-status[data-state]:not([data-state=""]){margin-top:8px;padding:8px 12px;border:1px solid rgba(214,210,200,.24);border-radius:8px;background:#101416;color:#ddd6ca;font-size:12px}
+.quote-component-row__library-status[data-state="success"]{letter-spacing:.07em;color:rgba(214,210,200,.82)}
+.quote-component-row__library-status[data-state="error"]{border-color:rgba(166,70,80,.5);color:#e4aeb4}
+.quote-component-row__library-status span{min-width:0;overflow-wrap:anywhere}
+.quote-component-row__actions .quote-component-row__library-retry,
+.quote-component-row__library-retry{min-height:44px;min-width:44px;padding:0 12px;flex:none}

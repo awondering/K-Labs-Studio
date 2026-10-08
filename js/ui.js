@@ -8726,9 +8726,9 @@ function componentRowLibraryCategoryName(item){
 function upsertComponentLibraryRecord(name,sourceComponent){
   const normalizedName=String(name||'').trim();
   const normalizedKey=normalizeNameKey(normalizedName);
-  if(!normalizedKey)return;
+  if(!normalizedKey)return false;
   // Business/admin charges (Freight, Repair, etc.) are not physical parts and must never enter the Components library.
-  if(NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizedKey))return;
+  if(NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizedKey))return false;
   const item=sourceComponent&&typeof sourceComponent==='object'?sourceComponent:{};
   const rowCategory=String(item.category||'').trim();
   const categoryValue=rowCategory;
@@ -8779,6 +8779,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     records.unshift(nextRecord);
   }
   saveComponentLibraryRecords(records);
+  return true;
 }
 const STARTER_COMPONENTS_SEED_KEY='klabs-studio-starter-components-v1';
 const STARTER_COMPONENTS_SUPPLIER_FIX_KEY='klabs-studio-starter-suppliers-v1';
@@ -9803,7 +9804,7 @@ function componentRowSizeFieldMarkup(item,index){
   return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>&#9662;</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields">${componentRowComponentFieldMarkup(item,index)}${componentRowSubcategoryFieldMarkup(item,index)}${componentRowDetailsFieldMarkup(item,index)}${componentRowAddDetailsMarkup(item,index)}${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button">Update Library Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div></div>`;
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields">${componentRowComponentFieldMarkup(item,index)}${componentRowSubcategoryFieldMarkup(item,index)}${componentRowDetailsFieldMarkup(item,index)}${componentRowAddDetailsMarkup(item,index)}${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button">Delete Component</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button"${libraryUpdatesInFlight.has(item)?' aria-disabled="true" aria-busy="true"':''}>Update Library Component</button><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button></div>${libraryUpdateStatusMarkup(item,index)}</div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -9917,13 +9918,86 @@ function requestDeleteComponentRow(index){
     }
   });
 }
-function requestUpdateLibraryComponentFromRow(index){
-  const row=quote.components[index];
-  if(!row)return;
-  // Library identity comes from the linked record or the component name, never from build-line Details.
+// Per-row status for "Update Library Component"; success is tied to a snapshot of the library-relevant
+// fields so any later edit to them clears it without re-render hooks.
+const libraryUpdateStatus=new WeakMap();
+const libraryUpdatesInFlight=new WeakSet();
+function libraryUpdateSignature(row){
+  return JSON.stringify([row.libraryComponentId,row.category,row.subcategory,row.supplier,row.brand,row.variant,row.cost,row.unitPrice,row.quantity,componentRowSizeLabel(row)]);
+}
+function libraryUpdateStatusView(row){
+  const status=row&&libraryUpdateStatus.get(row);
+  if(!status)return {state:'',text:'',retry:false};
+  if(status.state==='pending')return {state:'pending',text:'Updating library\u2026',retry:false};
+  if(status.signature!==libraryUpdateSignature(row))return {state:'',text:'',retry:false};
+  if(status.state==='success')return {state:'success',text:'\u2713 LIBRARY UPDATED',retry:false};
+  return {state:'error',text:'Library update failed. Your entries are kept \u2014 retry.',retry:true};
+}
+function libraryUpdateStatusMarkup(row,index){
+  const view=libraryUpdateStatusView(row);
+  const retry=view.retry?`<button class="ghost-action quote-component-row__library-retry" type="button" data-component-action="retry-library-update" data-component-index="${index}">Retry</button>`:'';
+  return `<div class="quote-component-row__library-status" data-library-status="${index}" data-state="${view.state}"><span role="status" aria-live="polite" aria-atomic="true">${view.text}</span>${retry}</div>`;
+}
+function syncLibraryUpdateStatus(row){
+  const index=quote.components.indexOf(row);
+  if(index<0)return;
+  const host=document.querySelector(`#quoteComponentsList [data-library-status="${index}"]`);
+  if(host){
+    const holder=document.createElement('div');
+    holder.innerHTML=libraryUpdateStatusMarkup(row,index);
+    const next=holder.firstChild;
+    const span=host.querySelector('span');
+    const nextText=next.querySelector('span').textContent;
+    if(span.textContent!==nextText)span.textContent=nextText;
+    host.dataset.state=next.dataset.state;
+    const retryButton=host.querySelector('button');
+    const nextRetry=next.querySelector('button');
+    if(retryButton&&!nextRetry)retryButton.remove();
+    else if(!retryButton&&nextRetry)host.appendChild(nextRetry);
+  }
+  const button=document.querySelector(`#quoteComponentsList [data-component-action="update-library-component"][data-component-index="${index}"]`);
+  if(button){
+    const busy=libraryUpdatesInFlight.has(row);
+    // aria-disabled (not disabled) so keyboard focus stays on the button while pending.
+    if(busy){button.setAttribute('aria-disabled','true');button.setAttribute('aria-busy','true');}
+    else{button.removeAttribute('aria-disabled');button.removeAttribute('aria-busy');}
+  }
+}
+// Library identity comes from the linked record or the component name, never from build-line Details.
+function libraryUpdateTarget(row){
   const linkedRecord=componentLibraryRecordForRow(row);
   const libraryName=linkedRecord?specificationValue(linkedRecord.name):specificationValue(row.category);
-  if(!libraryName || isBlankCategory(row.category)){
+  if(!libraryName || isBlankCategory(row.category))return null;
+  return {linkedRecord,libraryName};
+}
+async function runLibraryComponentUpdate(row){
+  if(!row || libraryUpdatesInFlight.has(row))return false;
+  libraryUpdatesInFlight.add(row);
+  libraryUpdateStatus.set(row,{state:'pending'});
+  syncLibraryUpdateStatus(row);
+  let succeeded=false;
+  try{
+    await new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const target=libraryUpdateTarget(row);
+    if(!target)throw new Error('No library component selected.');
+    const {linkedRecord,libraryName}=target;
+    const source=linkedRecord
+      ?{...linkedRecord,cost:row.cost,unitCost:row.cost,unitPrice:row.unitPrice}
+      :{...row,description:''};
+    if(upsertComponentLibraryRecord(libraryName,source)===false)throw new Error('Library write was skipped.');
+    succeeded=true;
+  }catch(error){
+    console.error('[K-Labs Studio] Could not update library component:',error);
+  }
+  libraryUpdatesInFlight.delete(row);
+  libraryUpdateStatus.set(row,{state:succeeded?'success':'error',signature:libraryUpdateSignature(row)});
+  syncLibraryUpdateStatus(row);
+  return succeeded;
+}
+function requestUpdateLibraryComponentFromRow(index){
+  const row=quote.components[index];
+  if(!row || libraryUpdatesInFlight.has(row))return;
+  if(!libraryUpdateTarget(row)){
     flashWorkshopStatus('Select a component category first',{pending:true,duration:2000});
     return;
   }
@@ -9933,14 +10007,12 @@ function requestUpdateLibraryComponentFromRow(index){
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'update',label:'Update Library Component',kind:'primary'}]
   },(action)=>{
     if(action!=='update')return;
-    const source=linkedRecord
-      ?{...linkedRecord,cost:row.cost,unitCost:row.cost,unitPrice:row.unitPrice}
-      :{...row,description:''};
-    upsertComponentLibraryRecord(libraryName,source);
-    flashWorkshopStatus('Library component updated');
+    runLibraryComponentUpdate(row);
   });
 }
-function openComponentSheet(index){
+function retryLibraryComponentUpdate(index){
+  runLibraryComponentUpdate(quote.components[index]);
+}function openComponentSheet(index){
   openChoicePicker('category',index,document.activeElement);
 }
 // Second step shown only when the chosen master component defines sizeOptions; cancelling adds nothing.
@@ -13770,6 +13842,7 @@ function bindWorkshopQuoteBuilder(){
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
+      syncLibraryUpdateStatus(quote.components[i]);
     });
     componentsList.addEventListener('change',(event)=>{
       const input=event.target.closest('[data-component-key="quantity"]');
@@ -13837,6 +13910,9 @@ function bindWorkshopQuoteBuilder(){
       if(action==='update-library-component'){
         const i=Number(actionButton.getAttribute('data-component-index'));
         requestUpdateLibraryComponentFromRow(i);
+      }
+      if(action==='retry-library-update'){
+        retryLibraryComponentUpdate(Number(actionButton.getAttribute('data-component-index')));
       }
       if(action==='request-delete-row'){
         const i=Number(actionButton.getAttribute('data-component-index'));
