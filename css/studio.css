@@ -10889,3 +10889,36 @@ body.klabs-auth-resolving::after {
 
 /* Native sign-in form wrapper keeps the existing centred column layout. */
 #authScreen .auth-form{display:contents}
+
+/* Compact Account card: sync status left, actions right on one row; wraps only when space runs out. */
+#settingsScreen .settings-account-card__row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px 12px;
+  margin-top:8px;
+}
+#settingsScreen .settings-account-card__row > .settings-field-note{
+  flex:1 1 11rem;
+  min-width:0;
+  margin:0;
+  overflow-wrap:anywhere;
+}
+#settingsScreen .settings-account-card__row > .settings-field-note[hidden]{display:none}
+#settingsScreen .settings-disclosure > .settings-account-card__row > .settings-account-card__actions{
+  margin:0 0 0 auto;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:8px;
+}
+#settingsScreen .settings-account-card__row .settings-signout-button{
+  min-height:44px;
+  min-width:44px;
+  padding:0 14px;
+}
+#settingsScreen .settings-account-card__row .settings-signout-button:focus-visible{
+  outline:2px solid rgba(214,210,200,.62);
+  outline-offset:2px;
+}

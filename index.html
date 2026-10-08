@@ -801,10 +801,12 @@
           </span>
           <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
         </summary>
-        <p id="componentSyncStatusLine" class="settings-field-note" hidden></p>
+        <div class="settings-account-card__row">
+        <p id="componentSyncStatusLine" class="settings-field-note" role="status" aria-live="polite" hidden></p>
         <div class="settings-account-card__actions">
           <button id="componentSyncRetryBtn" class="ghost-action settings-signout-button" type="button" hidden>RETRY SYNC</button>
           <button id="settingsSignOut" class="ghost-action settings-signout-button" type="button">Log Out</button>
+        </div>
         </div>
       </details>
     </section>
