@@ -6054,10 +6054,9 @@ textarea::-moz-selection,
 
 .studio-size-entry{
   display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-columns:repeat(3,minmax(0,1fr));
   align-items:end;
-  gap:8px;
-  width:min(100%,360px);
+  gap:6px;
 }
 
 .studio-size-range{
@@ -6085,8 +6084,13 @@ textarea::-moz-selection,
 }
 
 .studio-size-entry .quote-component-field{
+  grid-column:1 / span 2;
   width:100%;
   min-width:0;
+}
+
+.studio-size-entry__btn{
+  grid-column:3;
 }
 
 .studio-size-range .quote-component-field{
@@ -10397,7 +10401,7 @@ body.klabs-auth-resolving::after {
 }
 
 #studioComponentDetails .studio-size-entry{
-  gap:8px;
+  gap:6px;
   align-items:end;
 }
 
@@ -10410,8 +10414,6 @@ body.klabs-auth-resolving::after {
 
 #studioComponentDetails .studio-size-entry__btn{
   box-sizing:border-box;
-  width:auto;
-  min-width:64px;
   height:40px;
   min-height:40px;
   padding:0 12px;
@@ -10592,7 +10594,6 @@ body.klabs-auth-resolving::after {
 }
 
 #studioComponentDetails .studio-size-entry__btn{
-  min-width:64px;
   padding:0 8px;
   border-radius:var(--ds-radius-md,10px);
   font-size:10px;
