@@ -1490,8 +1490,8 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
           </${summaryTag}>
           ${showOdField?`<div class="guide-offset-controls">
-            <label for="guideOffsetDiameter${index}"><span>BLANK DIAMETER (${workshopUnitSuffix(spiral.unit)})</span><input id="guideOffsetDiameter${index}" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" aria-describedby="guideOffsetResult${index}" /></label>
-            <div class="guide-offset-controls__result" id="guideOffsetResult${index}" role="status"><span>Offset from reel side</span><strong>${hasValidOd?labels.offsetText:'Enter blank diameter'}</strong></div>
+            <label for="guideOffsetDiameter${index}"><span>Blank diameter (${workshopUnitSuffix(spiral.unit)})</span><input id="guideOffsetDiameter${index}" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" aria-describedby="guideOffsetResult${index}" /></label>
+            <div class="guide-offset-controls__result" id="guideOffsetResult${index}" role="status" data-state="${hasValidOd?'ready':'missing'}"><span>Offset from reel side</span><strong>${hasValidOd?labels.offsetText:'Enter blank diameter'}</strong></div>
           </div>`:''}
           ${isExpanded?`<div id="guideAdjustment${index}" class="spiral-guide-row__edit">
             <div class="spiral-guide-row__fields spiral-guide-row__fields--basic">

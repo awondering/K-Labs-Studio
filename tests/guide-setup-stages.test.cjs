@@ -86,7 +86,7 @@ test('selected guide alone opens adjustments and angle/diameter edits update its
   const markup=e('guideSpacingCards').innerHTML;
   assert.equal((markup.match(/class="spiral-guide-row__edit"/g)||[]).length,1);
   assert.match(markup,/id="guideAdjustment2"/);
-  assert.match(markup,/BLANK DIAMETER \(mm\)/);
+  assert.match(markup,/Blank diameter \(mm\)/);
   assert.match(markup,/Applied rotation from reel side/);
   assert.match(markup,/3.927 mm/);
   spiral.guides[2].odMm=14;

@@ -203,7 +203,7 @@ test('seven-guide Casting Progressive Placement reveals guides 4–6 through the
   assert.equal((e('guideSpacingCards').innerHTML.match(/data-spiral-field="od"/g)||[]).length,3);
   for(const index of [3,4,5]){
     assert.match(row(index),new RegExp(`id="guideOffsetDiameter${index}"`));
-    assert.match(row(index),/BLANK DIAMETER \(mm\)/);
+    assert.match(row(index),/Blank diameter \(mm\)/);
     assert.match(row(index),/Enter blank diameter/);
     assert.doesNotMatch(row(index),/spiral-guide-row__edit|hidden/);
   }
