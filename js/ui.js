@@ -1488,6 +1488,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             <span class="guide-spacing-row__position-value">${positionText}</span>
             ${showSpacing?`<strong class="guide-spacing-row__spacing-value" data-guide-spacing-cell>${spacingText}</strong>`:''}
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
+            ${canExpandRows?`<b class="guide-spacing-row__chevron" aria-hidden="true">\u25be</b>`:''}
           </${summaryTag}>
           ${showOdField?`<div class="guide-offset-controls">
             <label for="guideOffsetDiameter${index}"><span>Blank diameter (${workshopUnitSuffix(spiral.unit)})</span><input id="guideOffsetDiameter${index}" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" aria-describedby="guideOffsetResult${index}" /></label>

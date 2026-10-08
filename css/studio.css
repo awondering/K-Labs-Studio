@@ -8037,7 +8037,7 @@ textarea::-moz-selection,
 #layoutScreen .guide-spacing-columns,
 #layoutScreen .guide-spacing-row__summary{
   display:grid;
-  grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,1.3fr);
+  grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,1.3fr) 14px;
   align-items:center;
   gap:8px;
   padding:0 8px;
@@ -8045,7 +8045,7 @@ textarea::-moz-selection,
 
 #layoutScreen .guide-spacing-panel[data-show-spacing="false"] .guide-spacing-columns,
 #layoutScreen .guide-spacing-panel[data-show-spacing="false"] .guide-spacing-row__summary{
-  grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.3fr);
+  grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.3fr) 14px;
 }
 
 #layoutScreen .guide-spacing-columns{
@@ -8063,7 +8063,7 @@ textarea::-moz-selection,
   text-align:right;
 }
 
-#layoutScreen .guide-spacing-columns span:last-child{
+#layoutScreen .guide-spacing-columns span:nth-last-child(2){
   text-align:left;
 }
 
@@ -8098,8 +8098,28 @@ textarea::-moz-selection,
   cursor:pointer;
 }
 
+#layoutScreen .guide-spacing-row__summary:not(.guide-spacing-row__summary--static){
+  min-height:44px;
+}
+
 #layoutScreen .guide-spacing-row__summary--static{
   cursor:default;
+}
+
+#layoutScreen .guide-spacing-row__chevron{
+  justify-self:end;
+  color:rgba(214,210,200,.58);
+  font-size:11px;
+  font-style:normal;
+  line-height:1;
+  text-align:center;
+  transform:rotate(-90deg);
+  transition:transform var(--micro-motion) ease,color var(--micro-motion) ease;
+}
+
+#layoutScreen .guide-spacing-row--selected .guide-spacing-row__chevron{
+  color:rgba(var(--kl-red-rgb),.92);
+  transform:rotate(0deg);
 }
 
 #layoutScreen .guide-spacing-row__summary > *{
@@ -8355,13 +8375,13 @@ textarea::-moz-selection,
 
   #layoutScreen .guide-spacing-columns,
   #layoutScreen .guide-spacing-row__summary{
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,1.55fr);
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,1.55fr) 14px;
     gap:6px;
   }
 
   #layoutScreen .guide-spacing-panel[data-show-spacing="false"] .guide-spacing-columns,
   #layoutScreen .guide-spacing-panel[data-show-spacing="false"] .guide-spacing-row__summary{
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.55fr);
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.55fr) 14px;
   }
 
   #layoutScreen .guide-spacing-row__orientation{
