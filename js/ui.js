@@ -1484,6 +1484,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const positionText=formatGuidePositionMillimetres(row.cum);
       const spacingText=formatGuideListMeasurement(row.spacing);
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
+      const enteredAngleText=`${formatDecimal(guide.angleDeg,1)}\u00b0`;
       const summaryTag=canExpandRows?'button':'div';
       const summaryAttributes=canExpandRows
         ?`type="button" data-spiral-expand-index="${index}" aria-expanded="${isExpanded?'true':'false'}" aria-controls="guideAdjustment${index}" aria-label="${escapeHtml(`Guide ${displayGuideNumber}${isStripper?' stripper':''}. Position ${positionText}.${showSpacing?` Spacing ${spacingText}.`:''} Applied rotation from reel side ${angleText} ${sideText}`)}"`
@@ -1516,7 +1517,9 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             </label>
             </div>
             <p class="workshop-tool-note">0&deg; = reel side; 180&deg; = opposite. Input is your edit; row shows the applied angle.</p>
-            <div class="spiral-guide-row__offset"><span>Applied rotation from reel side</span><strong>${angleText} ${sideText}</strong></div>
+            ${enteredAngleText===angleText
+              ?`<p class="spiral-guide-row__applied-match">Applied: ${angleText} ${sideText}</p>`
+              :`<div class="spiral-guide-row__offset" data-state="adjusted" role="status"><span>Applied rotation from reel side</span><strong>${angleText} ${sideText}</strong></div>`}
           </div>`:''}
         </article>
       `;
