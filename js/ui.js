@@ -688,8 +688,8 @@ function formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options){
 function formatWorkshopMeasurementValue(valueMm,unit,imperialDisplay,options){
   return `${formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options)} ${workshopUnitSuffix(unit)}`;
 }
-function workshopMeasurementInputText(valueMm,unit,imperialDisplay){
-  return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,CORE_MEASUREMENT_FORMAT);
+function workshopMeasurementInputText(valueMm,unit,imperialDisplay,options){
+  return formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,options||CORE_MEASUREMENT_FORMAT);
 }
 function blankMeasurementInputText(valueMm){
   return formatMeasurementNumber(valueMm,CORE_MEASUREMENT_FORMAT);
@@ -1454,11 +1454,17 @@ function assertSpiralMapperMarkerCount(visualCanvas,expectedCount){
 }
 // Read-only guide list display: whole mm, or nearest 1/8" as a workshop fraction. Stored values keep full precision.
 function formatGuideListMeasurement(valueMm){
-  if(activeMeasurementUnits()==='imperial')return `${formatImperialFractionInches(mmToInches(valueMm),8)}"`;
+  if(activeMeasurementUnits()==='imperial')return `${formatMeasurementNumber(valueMm,{fractionDenominator:8,decimalsImperial:3})}"`;
   return `${Math.round(numberOrZero(valueMm))} mm`;
 }
-function formatGuidePositionMillimetres(valueMm){
-  return `${Math.round(numberOrZero(valueMm))} mm`;
+// Guide Setup entry fields use sixteenths so values such as 7/16 survive a display/parse round trip.
+const GUIDE_EDIT_FORMAT={...CORE_MEASUREMENT_FORMAT,fractionDenominator:16};
+function guideFractionEntryActive(){
+  return activeMeasurementUnits()==='imperial' && activeImperialDisplay()==='fractional';
+}
+function guideLayoutFieldText(field){
+  const value=state[controlMeta[field].key];
+  return field==='guideCount'?String(value):formatMeasurementNumber(value,GUIDE_EDIT_FORMAT);
 }
 // One guide list on Guide Setup: Guide Spacing rows (position/spacing) + Guide Orientation angles share index i.
 function renderSpiralGuideRows(spiral,showPhysicalOffsets){
@@ -1471,6 +1477,8 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
     const layoutRows=Array.isArray(layout&&layout.rows)?layout.rows:[];
     const stripperIndex=Math.max(0,layoutRows.length-1);
     const focusMemo=captureSpiralRowFocus(rowsHost);
+    const fractionalEntry=spiral.unit==='imperial' && spiral.imperialDisplay==='fractional';
+    const odPlaceholder=fractionalEntry?'e.g. 7/16 or 1 1/2':spiral.unit==='imperial'?'e.g. 0.438':'e.g. 11';
     rowsHost.innerHTML=layoutRows.map((row,index)=>{
       const guide=guides[index];
       if(!guide)return '';
@@ -1483,7 +1491,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
       const isExpanded=canExpandRows && index===spiral.expandedGuideIndex;
       const sideText=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
-      const positionText=formatGuidePositionMillimetres(row.cum);
+      const positionText=formatGuideListMeasurement(row.cum);
       const spacingText=formatGuideListMeasurement(row.spacing);
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
       const enteredAngleText=`${formatDecimal(guide.angleDeg,1)}\u00b0`;
@@ -1501,7 +1509,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
             ${canExpandRows?`<b class="guide-spacing-row__chevron" aria-hidden="true">\u25be</b>`:''}
           </${summaryTag}>
           ${showOdField?`<div class="guide-offset-controls">
-            <label for="guideOffsetDiameter${index}"><span>Blank diameter (${workshopUnitSuffix(spiral.unit)})</span><input id="guideOffsetDiameter${index}" type="text" inputmode="decimal" autocomplete="off" data-spiral-field="od" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay):'')}" aria-describedby="guideOffsetResult${index}" /></label>
+            <label for="guideOffsetDiameter${index}"><span>Blank diameter (${workshopUnitSuffix(spiral.unit)})</span><input id="guideOffsetDiameter${index}" type="text" inputmode="${fractionalEntry?'text':'decimal'}" placeholder="${odPlaceholder}" autocomplete="off" data-spiral-field="od" data-unit-mode="${spiral.unit}:${spiral.imperialDisplay}" data-guide-index="${index}" value="${escapeHtml(hasValidOd?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay,{fractionDenominator:16}):'')}" aria-describedby="guideOffsetResult${index}" /></label>
             <div class="guide-offset-controls__result" id="guideOffsetResult${index}" role="status" data-state="${hasValidOd?'ready':'missing'}"><span>Offset from reel side</span><strong>${hasValidOd?labels.offsetText:'Enter blank diameter'}</strong></div>
           </div>`:''}
           ${isExpanded?`<div id="guideAdjustment${index}" class="spiral-guide-row__edit">
@@ -1540,12 +1548,18 @@ function syncRodBlankSelectedMarker(){
 function updateSpiralGuideDiameter(index,rawValue){
   const spiral=workshopToolsState.spiral;
   const guide=Number.isInteger(index)&&spiral.guides[index];
-  if(!guide)return;
+  if(!guide)return false;
   const raw=String(rawValue||'').trim();
-  const next=raw?parseWorkshopMeasurementMm(raw,spiral.unit,NaN,false):NaN;
-  guide.odMm=Number.isFinite(next) && next>0?next:null;
+  if(raw){
+    const next=parseWorkshopMeasurementMm(raw,spiral.unit,NaN,false);
+    if(!Number.isFinite(next))return false;
+    guide.odMm=next;
+  }else{
+    guide.odMm=null;
+  }
   markGuideDataDirty();
   renderWorkshopCalculator();
+  return true;
 }
 function bindSpiralOffsetsToggle(){
   const toggle=$('workshopSpiralOffsetsToggle');
@@ -1581,6 +1595,7 @@ function captureSpiralRowFocus(rowsHost){
     return {
       selector:`[data-spiral-field="${field}"][data-guide-index="${index}"]`,
       value:active.value,
+      unitMode:active.getAttribute('data-unit-mode'),
       start:active.selectionStart,
       end:active.selectionEnd,
     };
@@ -1594,7 +1609,8 @@ function restoreSpiralRowFocus(rowsHost,memo){
   if(!memo)return;
   const next=rowsHost.querySelector(memo.selector);
   if(!next)return;
-  if(typeof memo.value==='string')next.value=memo.value;
+  // Pending text typed under other units is dropped; the stored value is shown instead.
+  if(typeof memo.value==='string' && (memo.unitMode===null || memo.unitMode===undefined || memo.unitMode===next.getAttribute('data-unit-mode')))next.value=memo.value;
   next.focus({preventScroll:true});
   if(Number.isFinite(memo.start) && typeof next.setSelectionRange==='function'){
     try{next.setSelectionRange(memo.start,memo.end);}catch(error){/* unsupported input type */}
@@ -2401,7 +2417,7 @@ function bindWorkshopCalculatorControls(){
   const spiralRowHost=$('layoutScreen')||spiralCard;
   if(spiralRowHost && spiralRowHost.getAttribute('data-spiral-row-bound')!=='true'){
     spiralRowHost.setAttribute('data-spiral-row-bound','true');
-    const handleSpiralFieldChange=(target)=>{
+    const handleSpiralFieldChange=(target,committed)=>{
       const input=target&&target.closest?target.closest('[data-spiral-field]'):null;
       if(!input)return;
       const index=Number(input.getAttribute('data-guide-index'));
@@ -2413,7 +2429,16 @@ function bindWorkshopCalculatorControls(){
         const next=parseWorkshopMeasurementMm(input.value,spiral.unit,guide.positionMm,true);
         if(Number.isFinite(next))guide.positionMm=Math.max(0,next);
       }else if(field==='od'){
-        updateSpiralGuideDiameter(index,input.value);
+        const stampedMode=input.getAttribute('data-unit-mode');
+        if(stampedMode && stampedMode!==`${spiral.unit}:${spiral.imperialDisplay}`){
+          input.value=Number(guide.odMm)>0?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay,{fractionDenominator:16}):'';
+          input.setAttribute('data-unit-mode',`${spiral.unit}:${spiral.imperialDisplay}`);
+          return;
+        }
+        if(!updateSpiralGuideDiameter(index,input.value) && committed){
+          // Invalid entry: keep the last valid diameter and show it again.
+          input.value=Number(guide.odMm)>0?workshopMeasurementInputText(guide.odMm,spiral.unit,spiral.imperialDisplay,{fractionDenominator:16}):'';
+        }
         return;
       }else if(field==='angle'){
         const raw=String(input.value||'').trim();
@@ -2454,13 +2479,16 @@ function bindWorkshopCalculatorControls(){
       setSpiralGuideAngle(index,numberOrZero(guide.angleDeg)+delta);
       renderWorkshopCalculator();
     });
-    spiralRowHost.addEventListener('change',(event)=>handleSpiralFieldChange(event.target));
+    spiralRowHost.addEventListener('change',(event)=>handleSpiralFieldChange(event.target,true));
     spiralRowHost.addEventListener('input',(event)=>{
       const target=event.target;
       if(!(target instanceof HTMLInputElement))return;
       if(!target.closest('[data-spiral-field]'))return;
-      if(!['angle','od'].includes(target.getAttribute('data-spiral-field')))return;
-      handleSpiralFieldChange(target);
+      const spiralField=target.getAttribute('data-spiral-field');
+      if(!['angle','od'].includes(spiralField))return;
+      // Fractions are committed on change so a partial entry such as "7/" is never read as a value.
+      if(spiralField==='od' && target.getAttribute('inputmode')==='text')return;
+      handleSpiralFieldChange(target,false);
     });
   }
 
@@ -13045,9 +13073,10 @@ function bindLayoutControls(){
         el.blur();
         return;
       }
-      const stateValue=state[controlMeta[field].key];
-      const value=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,CORE_MEASUREMENT_FORMAT);
+      const value=guideLayoutFieldText(field);
       if(el.textContent!==value){el.textContent=value;}
+      el.dataset.focusText=value;
+      el.dataset.focusUnits=`${activeMeasurementUnits()}:${activeImperialDisplay()}`;
       const range=document.createRange();
       range.selectNodeContents(el);
       const selection=window.getSelection();
@@ -13055,7 +13084,10 @@ function bindLayoutControls(){
     });
     el.addEventListener('blur',()=>{
       const raw=(el.textContent||'').trim();
-      setControlValue(field,raw,{persist:true});
+      // Text typed under a different unit setting must not be reinterpreted.
+      const sameUnits=el.dataset.focusUnits===`${activeMeasurementUnits()}:${activeImperialDisplay()}`;
+      if(sameUnits && raw!==el.dataset.focusText){setControlValue(field,raw,{persist:true});}
+      el.textContent=guideLayoutFieldText(field);
     });
     el.addEventListener('beforeinput',(event)=>{
       if(event.inputType==='deleteContentBackward' || event.inputType==='deleteContentForward' || event.inputType==='insertFromPaste')return;
@@ -13064,7 +13096,7 @@ function bindLayoutControls(){
         if(/[^0-9]/.test(event.data)){event.preventDefault();}
         return;
       }
-      const disallowed=/[^0-9.-]/;
+      const disallowed=guideFractionEntryActive()?/[^0-9.\/ -]/:/[^0-9.-]/;
       if(disallowed.test(event.data)){event.preventDefault();}
     });
     el.addEventListener('keydown',(event)=>{
@@ -13077,8 +13109,7 @@ function bindLayoutControls(){
       }
       if(event.key==='Escape'){
         event.preventDefault();
-        const stateValue=state[controlMeta[field].key];
-        el.textContent=field==='guideCount'?String(stateValue):formatMeasurementNumber(stateValue,CORE_MEASUREMENT_FORMAT);
+        el.textContent=guideLayoutFieldText(field);
         el.blur();
       }
     });
@@ -15311,9 +15342,11 @@ function render(options){
   if(appEl){appEl.classList.toggle('locked',!!state.locked);}
   document.querySelectorAll('.layout-control-card__value[data-field]').forEach((el)=>{
     const field=el.getAttribute('data-field');
+    if(field && controlMeta[field]){
+      el.setAttribute('inputmode',field==='guideCount'?'numeric':guideFractionEntryActive()?'text':'decimal');
+    }
     if(field && controlMeta[field] && document.activeElement!==el){
-      const value=state[controlMeta[field].key];
-      el.textContent=field==='guideCount'?String(value):formatMeasurementNumber(value,CORE_MEASUREMENT_FORMAT);
+      el.textContent=guideLayoutFieldText(field);
     }
     const editable=!state.locked;
     el.setAttribute('contenteditable',editable?'true':'false');
@@ -15324,6 +15357,7 @@ function render(options){
   if($('layoutTargetStripperTitle'))$('layoutTargetStripperTitle').textContent='Target Stripper Position';
   if($('layoutFirstGuideMeta'))$('layoutFirstGuideMeta').textContent=units;
   if($('layoutTargetStripperMeta'))$('layoutTargetStripperMeta').textContent=units;
+  document.querySelectorAll('[data-guide-position-unit]').forEach((el)=>{el.textContent=units;});
   refreshMeasurementPlaceholders();
   renderWorkshopCalculator();
   renderGuideSpecificationSummary();
