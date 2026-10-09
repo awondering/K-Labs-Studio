@@ -720,10 +720,12 @@ function bindWorkshopCalculatorInput(input,onChange){
   input.addEventListener('input',onChange);
   input.addEventListener('change',onChange);
 }
-function syncWorkshopMeasurementInput(input,valueMm,unit,imperialDisplay,placeholderMm){
+function syncWorkshopMeasurementInput(input,valueMm,unit,imperialDisplay,placeholderMm,valueOptions){
   if(!input)return;
   if(document.activeElement!==input){
-    input.value=workshopMeasurementInputText(valueMm,unit,imperialDisplay);
+    input.value=valueOptions
+      ?formatWorkshopMeasurementNumber(valueMm,unit,imperialDisplay,valueOptions)
+      :workshopMeasurementInputText(valueMm,unit,imperialDisplay);
   }
   if(Number.isFinite(placeholderMm)){
     input.placeholder=workshopMeasurementInputText(placeholderMm,unit,imperialDisplay);
@@ -1742,15 +1744,17 @@ function renderDiameterCircumferenceTool(){
   const validDiameter=Number.isFinite(state.diameterMm) && state.diameterMm>0;
   const circumferenceMm=validDiameter?state.diameterMm*Math.PI:null;
   if(validDiameter){
-    syncWorkshopMeasurementInput(diameterInput,state.diameterMm,state.unit,state.imperialDisplay,28);
-    syncWorkshopMeasurementInput(circumferenceInput,circumferenceMm,state.unit,state.imperialDisplay,28*Math.PI);
+    const pairedOptions={...CORE_MEASUREMENT_FORMAT,decimalsMetric:1};
+    const diameterIsPaired=state.lastEdited==='circumference';
+    syncWorkshopMeasurementInput(diameterInput,state.diameterMm,state.unit,state.imperialDisplay,28,diameterIsPaired?pairedOptions:undefined);
+    syncWorkshopMeasurementInput(circumferenceInput,circumferenceMm,state.unit,state.imperialDisplay,28*Math.PI,diameterIsPaired?undefined:pairedOptions);
   }else{
     if(document.activeElement!==diameterInput)diameterInput.value='';
     if(document.activeElement!==circumferenceInput)circumferenceInput.value='';
   }
   const wrapsInput=$('workshopDcWraps');
   const validWraps=Number.isFinite(state.wraps) && state.wraps>=0.25;
-  if(wrapsInput && document.activeElement!==wrapsInput)wrapsInput.value=validWraps?state.wraps.toFixed(2):'';
+  if(wrapsInput && document.activeElement!==wrapsInput)wrapsInput.value=validWraps?formatDecimal(state.wraps,2):'';
 
   const wrapLength=$('workshopDcWrapLength');
   const required=validDiameter && validWraps?circumferenceMm*state.wraps:null;
@@ -1784,7 +1788,7 @@ function bindDiameterCircumferenceInputs(){
     const next=Math.max(0.25,Math.round((current+direction*0.25)*100)/100);
     if(!Number.isFinite(next))return;
     state.wraps=next;
-    if(wrapsInput)wrapsInput.value=next.toFixed(2);
+    if(wrapsInput)wrapsInput.value=formatDecimal(next,2);
     renderWorkshopCalculator();
   };
   bindWorkshopToggleButtons($('workshopToolsPanel'),'#workshopDcWrapsMinus',()=>stepWraps(-1));
