@@ -12468,6 +12468,25 @@ function renderBuilds(){
   }
   host.innerHTML=records.map(savedBuildRowMarkup).join('');
 }
+// The dialog closes on pointerdown, so the click that follows the same tap would otherwise land on whatever
+// now sits under the finger (e.g. a build card behind the dialog) and open it or reopen another dialog.
+function swallowConfirmFollowUpClick(event){
+  const x=event.clientX;
+  const y=event.clientY;
+  let timer=0;
+  const onClick=(clickEvent)=>{
+    if(Math.abs(clickEvent.clientX-x)>32 || Math.abs(clickEvent.clientY-y)>32)return;
+    clickEvent.preventDefault();
+    clickEvent.stopPropagation();
+    stop();
+  };
+  const stop=()=>{
+    document.removeEventListener('click',onClick,true);
+    window.clearTimeout(timer);
+  };
+  document.addEventListener('click',onClick,true);
+  timer=window.setTimeout(stop,600);
+}
 function ensureConfirmSheet(){
   if($('confirmSheet'))return;
   const sheet=document.createElement('div');
@@ -12494,6 +12513,7 @@ function ensureConfirmSheet(){
     const action=actionButton.getAttribute('data-confirm-action')||'cancel';
     event.preventDefault();
     event.stopPropagation();
+    swallowConfirmFollowUpClick(event);
     closeConfirmDialog(action);
   },true);
   sheet.addEventListener('click',(event)=>{
