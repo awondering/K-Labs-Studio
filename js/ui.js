@@ -1608,6 +1608,10 @@ function renderWorkshopToolVisibility(){
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
+  const intro=document.querySelector('#workshopToolsPanel .workshop-landing-panel__intro');
+  if(intro)intro.hidden=activeTool!=='list';
+  const panel=$('workshopToolsPanel');
+  if(panel&&panel.classList)panel.classList.toggle('workshop-landing-panel--tool-open',activeTool!=='list');
 }
 function isWorkshopLandingScreenActive(){
   const workshopLandingScreen=$('workshopLandingScreen');
