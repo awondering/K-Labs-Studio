@@ -7400,6 +7400,7 @@ textarea::-moz-selection,
   justify-content:flex-end;
   gap:8px;
   min-width:0;
+  margin-left:auto;
 }
 
 #workshopScreen .workshop-build-actions-row > span{

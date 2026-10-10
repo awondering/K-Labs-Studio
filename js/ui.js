@@ -3540,7 +3540,7 @@ function updateQuoteActionPriority(){
       statusEl.classList.toggle('is-pending',workshopStatusFlashPending);
     }else{
       const isSaving=quoteAutosaveInFlight||hasUnsavedQuoteChanges;
-      statusEl.textContent=isSaving?'Saving...':'All changes saved';
+      statusEl.textContent=isSaving?'Saving...':'\u2713 Saved';
       statusEl.classList.toggle('is-pending',isSaving);
     }
   }
