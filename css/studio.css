@@ -8303,8 +8303,8 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-spacing-row .spiral-guide-row__applied-match{
-  margin:0;
-  padding:0 8px 6px;
+  margin:-3px 0 0;
+  padding:0;
   color:rgba(214,210,200,.62);
   font-size:10px;
   line-height:1.2;
