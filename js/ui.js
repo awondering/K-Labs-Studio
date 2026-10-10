@@ -1453,9 +1453,33 @@ function assertSpiralMapperMarkerCount(visualCanvas,expectedCount){
   }
 }
 // Read-only guide list display: whole mm, or nearest 1/8" as a workshop fraction. Stored values keep full precision.
-function formatGuideListMeasurement(valueMm){
-  if(activeMeasurementUnits()==='imperial')return `${formatMeasurementNumber(valueMm,{fractionDenominator:8,decimalsImperial:3})}"`;
-  return `${Math.round(numberOrZero(valueMm))} mm`;
+function formatGuideListMeasurement(valueMm,{withUnit=true}={}){
+  if(activeMeasurementUnits()==='imperial'){
+    const text=formatMeasurementNumber(valueMm,{fractionDenominator:8,decimalsImperial:3});
+    return withUnit?`${text}"`:text;
+  }
+  const text=String(Math.round(numberOrZero(valueMm)));
+  return withUnit?`${text} mm`:text;
+}
+// Table cells omit the unit; the Position/Spacing column headers carry it.
+function syncGuideListColumnUnits(){
+  const unit=activeMeasurementUnits()==='imperial'?'in':'mm';
+  const position=document.querySelector('[data-guide-position-column]');
+  const spacing=document.querySelector('[data-guide-spacing-column]');
+  if(position)position.textContent=`Position (${unit})`;
+  if(spacing)spacing.textContent=`Spacing (${unit})`;
+}
+// Keeps a tapped control at the same viewport position when re-rendering changes the layout around it.
+function runPreservingViewportPosition(control,action){
+  const before=control.getBoundingClientRect().top;
+  action();
+  const realign=()=>{
+    const delta=control.getBoundingClientRect().top-before;
+    if(Math.abs(delta)>.5)window.scrollBy({top:delta,behavior:'instant'});
+  };
+  realign();
+  window.requestAnimationFrame(realign);
+  if(document.activeElement!==control && control.isConnected)control.focus({preventScroll:true});
 }
 // Guide Setup entry fields use sixteenths so values such as 7/16 survive a display/parse round trip.
 const GUIDE_EDIT_FORMAT={...CORE_MEASUREMENT_FORMAT,fractionDenominator:16};
@@ -1469,6 +1493,7 @@ function guideLayoutFieldText(field){
 // One guide list on Guide Setup: Guide Spacing rows (position/spacing) + Guide Orientation angles share index i.
 function renderSpiralGuideRows(spiral,showPhysicalOffsets){
   const showSpacing=syncGuideSpacingToggle();
+  syncGuideListColumnUnits();
   const rowsHost=$('guideSpacingCards');
   if(rowsHost){
     const canExpandRows=spiralGuideRowsExpandable(spiral);
@@ -1493,6 +1518,8 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper,angleDeg:angle})==='right'?'Right':'Left');
       const positionText=formatGuideListMeasurement(row.cum);
       const spacingText=formatGuideListMeasurement(row.spacing);
+      const positionCell=formatGuideListMeasurement(row.cum,{withUnit:false});
+      const spacingCell=formatGuideListMeasurement(row.spacing,{withUnit:false});
       const angleText=`${formatDecimal(angle,1)}\u00b0`;
       const enteredAngleText=`${formatDecimal(guide.angleDeg,1)}\u00b0`;
       const summaryTag=canExpandRows?'button':'div';
@@ -1503,8 +1530,8 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
         <article class="guide-spacing-row${isStripper?' guide-spacing-row--stripper':''}${isExpanded?' guide-spacing-row--selected':''}" data-guide-index="${index}">
           <${summaryTag} class="guide-spacing-row__summary${canExpandRows?'':' guide-spacing-row__summary--static'}" ${summaryAttributes}>
             <span class="guide-spacing-row__guide-name">Guide ${displayGuideNumber}${isStripper?'<em class="guide-spacing-row__tag">Stripper</em>':''}</span>
-            <span class="guide-spacing-row__position-value">${positionText}</span>
-            ${showSpacing?`<strong class="guide-spacing-row__spacing-value" data-guide-spacing-cell>${spacingText}</strong>`:''}
+            <span class="guide-spacing-row__position-value">${positionCell}</span>
+            ${showSpacing?`<strong class="guide-spacing-row__spacing-value" data-guide-spacing-cell>${spacingCell}</strong>`:''}
             <span class="guide-spacing-row__orientation"><strong>${angleText}</strong><small>${sideText}</small></span>
             ${canExpandRows?`<b class="guide-spacing-row__chevron" aria-hidden="true">\u25be</b>`:''}
           </${summaryTag}>
@@ -1566,8 +1593,10 @@ function bindSpiralOffsetsToggle(){
   if(!toggle || toggle.getAttribute('data-spiral-offset-toggle-bound')==='true')return;
   toggle.setAttribute('data-spiral-offset-toggle-bound','true');
   toggle.addEventListener('click',()=>{
-    workshopToolsState.spiral.showPhysicalOffsets=!workshopToolsState.spiral.showPhysicalOffsets;
-    renderWorkshopCalculator();
+    runPreservingViewportPosition(toggle,()=>{
+      workshopToolsState.spiral.showPhysicalOffsets=!workshopToolsState.spiral.showPhysicalOffsets;
+      renderWorkshopCalculator();
+    });
   });
 }
 function revealSelectedGuideAdjustment(){
@@ -13026,11 +13055,13 @@ function bindLayoutControls(){
   if(guideSpacingToggle && guideSpacingToggle.getAttribute('data-guide-spacing-bound')!=='true'){
     guideSpacingToggle.setAttribute('data-guide-spacing-bound','true');
     guideSpacingToggle.addEventListener('click',()=>{
-      const showSpacing=!guideSpacingVisible();
-      Store.set(GUIDE_SPACING_DISPLAY_KEY,showSpacing);
-      syncGuideSpacingToggle();
-      const spiral=workshopToolsState&&workshopToolsState.spiral;
-      if(spiral)renderSpiralGuideRows(spiral,!!spiral.showPhysicalOffsets);
+      runPreservingViewportPosition(guideSpacingToggle,()=>{
+        const showSpacing=!guideSpacingVisible();
+        Store.set(GUIDE_SPACING_DISPLAY_KEY,showSpacing);
+        syncGuideSpacingToggle();
+        const spiral=workshopToolsState&&workshopToolsState.spiral;
+        if(spiral)renderSpiralGuideRows(spiral,!!spiral.showPhysicalOffsets);
+      });
     });
   }
   syncGuideSpacingToggle();

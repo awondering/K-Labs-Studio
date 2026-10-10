@@ -8464,7 +8464,7 @@ textarea::-moz-selection,
 @container guide-table (max-width:560px){
   #layoutScreen .guide-spacing-panel[data-show-spacing] .guide-spacing-columns,
   #layoutScreen .guide-spacing-panel[data-show-spacing] .guide-spacing-row__summary{
-    grid-template-columns:max-content minmax(0,1fr) minmax(0,1fr) minmax(48px,1fr) 12px;
+    grid-template-columns:56px minmax(0,1fr) minmax(0,1fr) minmax(48px,1fr) 12px;
     gap:4px;
     padding-left:6px;
     padding-right:6px;
@@ -8472,12 +8472,26 @@ textarea::-moz-selection,
 
   #layoutScreen .guide-spacing-panel[data-show-spacing="false"] .guide-spacing-columns,
   #layoutScreen .guide-spacing-panel[data-show-spacing="false"] .guide-spacing-row__summary{
-    grid-template-columns:max-content minmax(0,1fr) minmax(48px,1fr) 12px;
+    grid-template-columns:56px minmax(0,1fr) minmax(48px,1fr) 12px;
   }
 
   #layoutScreen .guide-spacing-row__summary .guide-spacing-row__orientation{
-    grid-template-columns:minmax(0,1fr);
-    gap:0;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    column-gap:5px;
+    row-gap:0;
+  }
+
+  #layoutScreen .guide-spacing-row__summary > .guide-spacing-row__position-value,
+  #layoutScreen .guide-spacing-row__summary > .guide-spacing-row__spacing-value{
+    text-align:left;
+    justify-self:start;
+  }
+
+  #layoutScreen .guide-spacing-columns > span{
+    text-align:left;
+    justify-self:start;
   }
 
   #layoutScreen .guide-spacing-row__summary .guide-spacing-row__orientation strong{
@@ -8502,6 +8516,14 @@ textarea::-moz-selection,
     text-overflow:clip;
     white-space:normal;
     overflow-wrap:anywhere;
+  }
+}
+@container guide-table (max-width:260px){
+  #layoutScreen .guide-spacing-panel[data-show-spacing] .guide-spacing-columns,
+  #layoutScreen .guide-spacing-panel[data-show-spacing] .guide-spacing-row__summary{
+    grid-template-columns:54px minmax(0,1fr) minmax(0,1fr) minmax(48px,1fr) 10px;
+    padding-left:3px;
+    padding-right:3px;
   }
 }
 @container guide-table (min-width:380px) and (max-width:560px){
