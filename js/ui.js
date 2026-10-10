@@ -13882,17 +13882,6 @@ function bindWorkshopQuoteBuilder(){
   if(customerFinderReturnBtn && customerFinderReturnBtn.getAttribute('data-customer-finder-return-bound')!=='true'){
     customerFinderReturnBtn.setAttribute('data-customer-finder-return-bound','true');
     customerFinderReturnBtn.addEventListener('click',()=>{
-      if(workflowReturnOrigin==='customer'){
-        const customerKey=workflowCustomerReturnKey||normalizeNameKey(quote&&quote.customerName)||'';
-        openCustomerFinderSheet('browse');
-        if(customerKey){
-          customerFinderSelectedKey=customerKey;
-          customerFinderBrowseView='detail';
-          renderCustomerFinder();
-          focusCustomerFinderView();
-        }
-        return;
-      }
       // Opens the existing Customer Finder sheet on top of the current screen - the in-progress build/
       // customer draft is left completely untouched underneath, nothing is saved or discarded.
       openCustomerFinderSheet('browse');
