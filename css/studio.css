@@ -11236,3 +11236,25 @@ body.klabs-auth-resolving::after {
 .studio-components-list__row--component .studio-components-price-row{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:2px}
 .studio-components-list__row--component .studio-components-price{padding:0;border:0;background:transparent;border-radius:0;margin:0;font-size:11px}
 .studio-components-list__row--component .studio-components-list__menu-trigger{border:0;background:transparent;width:44px;min-width:44px;align-self:stretch}
+
+/* Build Details: Rear / Fore / Lower grip lengths in one equal row (stacked at equal width when narrow) */
+#workshopScreen .build-details__grips{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  align-items:start;
+}
+#workshopScreen .build-details__grips label{min-width:0}
+#workshopScreen .build-details__grips input{
+  min-height:44px;
+  padding:0 8px;
+  box-sizing:border-box;
+}
+#workshopScreen .build-details__grip-note{
+  font-size:10px;
+  line-height:1.3;
+  color:rgba(214,210,200,.62);
+}
+@media (max-width:359px){
+  #workshopScreen .build-details__grips{grid-template-columns:minmax(0,1fr)}
+}
