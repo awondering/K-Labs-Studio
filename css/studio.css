@@ -6979,9 +6979,35 @@ textarea::-moz-selection,
   transition:max-height var(--ds-transition),opacity var(--ds-transition),padding-top var(--ds-transition),padding-bottom var(--ds-transition);
 }
 
-#workshopScreen #workshopComponentsSection{
+#workshopScreen #workshopCustomerSection,
+#workshopScreen #workshopSpecsSection,
+#workshopScreen #workshopComponentsSection,
+#workshopScreen #workshopPricingSection,
+#workshopScreen #workshopActionsSection{
   padding:0;
   gap:0;
+}
+
+#workshopScreen #workshopCustomerSection.quote-section--collapsed .quote-section__body,
+#workshopScreen #workshopSpecsSection.quote-section--collapsed .quote-section__body,
+#workshopScreen #workshopActionsSection.quote-section--collapsed .quote-section__body{
+  display:none;
+}
+
+#workshopScreen #workshopCustomerSection .quote-section__toggle-summary span,
+#workshopScreen #workshopSpecsSection .quote-section__toggle-summary span,
+#workshopScreen #workshopPricingSection .quote-section__toggle-summary span,
+#workshopScreen #workshopActionsSection .quote-section__toggle-summary span{
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  overflow-wrap:anywhere;
+}
+
+#workshopScreen #workshopActionsSection .workshop-build-actions-surface{
+  padding:0;
+  border:0;
+  background:transparent;
 }
 
 #workshopScreen .quote-section__components-head{
