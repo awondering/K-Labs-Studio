@@ -11133,3 +11133,82 @@ body.klabs-auth-resolving::after {
   margin:0 0 8px;
   text-align:center;
 }
+
+/* Compact expanded component editor (build/quote editor only; Studio library editor is untouched). */
+#quoteComponentsList .quote-component-row__editor{
+  gap:6px;
+  padding:0 8px 8px;
+}
+
+#quoteComponentsList .quote-component-row__fields{
+  grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr);
+  gap:6px;
+  align-items:end;
+}
+
+#quoteComponentsList .quote-component-row__fields > .quote-component-field--category,
+#quoteComponentsList .quote-component-row__fields > .quote-component-field--description,
+#quoteComponentsList .quote-component-row__fields > .quote-component-field--supplier,
+#quoteComponentsList .quote-component-row__fields > .quote-component-row__add-details{
+  grid-column:1/-1;
+}
+
+#quoteComponentsList .quote-component-row__fields > .quote-component-field--quantity,
+#quoteComponentsList .quote-component-row__fields > .quote-component-field--cost{
+  grid-column:auto;
+  justify-self:stretch;
+  width:auto;
+  max-width:none;
+}
+
+#quoteComponentsList .quote-component-row__fields > .quote-component-field--cost input{
+  max-width:none;
+  min-height:44px;
+  padding-inline:4px;
+}
+
+#quoteComponentsList .component-quantity{
+  grid-template-columns:44px minmax(0,1fr) 44px;
+  gap:2px;
+}
+
+#quoteComponentsList .quote-component-row .component-quantity__step,
+#quoteComponentsList .quote-component-row .component-quantity__value{
+  min-height:44px;
+}
+
+#quoteComponentsList .quote-component-row .component-quantity__value{
+  padding-inline:2px;
+  min-width:0;
+  font-size:16px;
+}
+
+#quoteComponentsList .quote-component-row__actions{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-auto-rows:1fr;
+  gap:6px;
+}
+
+#quoteComponentsList .quote-component-row__actions .ghost-action{
+  min-height:44px;
+  height:100%;
+  padding:0 6px;
+  font-size:10px;
+  line-height:1.15;
+  overflow-wrap:anywhere;
+}
+
+#quoteComponentsList .quote-component-row__actions .quote-component-row__delete{
+  border-color:rgba(173,37,49,.3)!important;
+  background:rgba(70,17,23,.18)!important;
+  color:#d9b9bd!important;
+}
+
+@media (max-width:380px){
+  #quoteComponentsList .quote-component-row__fields{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  }
+  #quoteComponentsList .quote-component-row__fields > .quote-component-field--quantity{
+    grid-column:1/-1;
+  }
+}
