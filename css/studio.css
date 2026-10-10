@@ -9128,6 +9128,7 @@ textarea::-moz-selection,
 .spiral-mapper-visual__canvas svg{
   width:min(248px,100%);
   height:auto;
+  overflow:visible;
 }
 
 .spiral-map-ring{

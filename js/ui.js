@@ -1422,8 +1422,11 @@ function renderSpiralMapperVisual(spiral){
   const oppositeSideLabel=`${spiralOppositeSideLabel(rodStyle)} 180 deg`;
   const topLabel=flipView?oppositeSideLabel:reelSideLabel;
   const bottomLabel=flipView?reelSideLabel:oppositeSideLabel;
-  const leftLabel=flipView?'90 deg':'LEFT 90 deg';
-  const rightLabel=flipView?'90 deg':'RIGHT 90 deg';
+  const sideLabelSvg=(x,word)=>word
+    ?`<text class="spiral-map-label" x="${x}" text-anchor="middle" aria-label="${word} 90 deg"><tspan x="${x}" y="108">${word}</tspan><tspan x="${x}" y="118">90 deg</tspan></text>`
+        :`<text class="spiral-map-label" x="${x}" y="114" text-anchor="middle">90 deg</text>`;
+  const leftLabelSvg=sideLabelSvg(1.5,flipView?'':'LEFT');
+  const rightLabelSvg=sideLabelSvg(218.5,flipView?'':'RIGHT');
 
   visualCanvas.innerHTML=`
     <svg viewBox="0 0 220 220" role="img" aria-label="Guide orientation reference">
@@ -1431,8 +1434,8 @@ function renderSpiralMapperVisual(spiral){
       <line class="spiral-map-axis" x1="110" y1="26" x2="110" y2="194"></line>
       <line class="spiral-map-axis" x1="26" y1="110" x2="194" y2="110"></line>
       <text class="spiral-map-label${flipView?'':' spiral-map-label--reel'}" x="110" y="8" text-anchor="middle">${topLabel}</text>
-      <text class="spiral-map-label" x="10" y="66" text-anchor="start">${leftLabel}</text>
-      <text class="spiral-map-label" x="210" y="66" text-anchor="end">${rightLabel}</text>
+      ${leftLabelSvg}
+      ${rightLabelSvg}
       <text class="spiral-map-label spiral-map-label--underside${flipView?' spiral-map-label--reel':''}" x="110" y="216" text-anchor="middle">${bottomLabel}</text>
       ${progressionPolyline}
       ${markerSvg}
