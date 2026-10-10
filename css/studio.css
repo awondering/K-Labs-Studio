@@ -7605,13 +7605,37 @@ textarea::-moz-selection,
 
 #layoutScreen .layout-control-card--guide-spacing .layout-control-card__value{
   box-sizing:border-box;
-  flex:0 0 58px;
-  width:58px;
+  flex:1 1 104px;
+  width:auto;
+  min-width:104px;
   min-height:44px;
-  padding:0 3px;
+  padding:0 6px;
   border-radius:8px;
   font-size:20px;
   letter-spacing:0;
+}
+
+#layoutScreen .guide-spacing-input-row--count .layout-control-card__value{
+  flex:0 0 58px;
+  width:58px;
+  min-width:0;
+  padding:0 3px;
+}
+
+@media (max-width:480px){
+  #layoutScreen .guide-spacing-input-row:not(.guide-spacing-input-row--count){
+    grid-template-columns:minmax(0,1fr);
+    gap:4px;
+    padding:6px 0;
+  }
+
+  #layoutScreen .guide-spacing-input-row:not(.guide-spacing-input-row--count) .guide-spacing-input-row__controls{
+    min-width:0;
+  }
+
+  #layoutScreen .guide-spacing-input-row:not(.guide-spacing-input-row--count) .layout-control-card__value{
+    min-width:0;
+  }
 }
 
 #layoutScreen .guide-spacing-input-row__unit{
