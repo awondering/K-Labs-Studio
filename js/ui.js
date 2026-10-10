@@ -12168,8 +12168,6 @@ function updateWorkshopBuildActionsUi(){
   const isQuote=lifecycle==='quote';
   const confirmBtn=$('confirmBuildBtn');
   if(confirmBtn)confirmBtn.hidden=!isQuote;
-  const menuConfirmBtn=$('currentBuildActionsConfirm');
-  if(menuConfirmBtn)menuConfirmBtn.hidden=!isQuote;
   const toggleButton=$('toggleCurrentBuildStatusBtn');
   if(toggleButton){
     toggleButton.hidden=isQuote;
@@ -12287,11 +12285,6 @@ async function confirmCurrentBuildAsActive(){
   });
 }
 function handleCurrentBuildAction(action){
-  if(action==='confirm-build'){
-    closeCurrentBuildActionsMenu();
-    confirmCurrentBuildAsActive();
-    return;
-  }
   if(action==='toggle-status'){
     toggleCurrentBuildLifecycle();
     closeCurrentBuildActionsMenu();
