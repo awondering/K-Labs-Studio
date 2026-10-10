@@ -131,6 +131,7 @@ function harness({realSave=false,realFamilyDialog=false}={}){
     },
     findComponentLibraryRecordByName:name=>context.records.find(record=>record.name===name),
     NON_COMPONENT_LINE_ITEM_NAMES:['freight'],
+    currency:value=>'$'+Number(value||0).toFixed(2),
   });
   const selectedFunctions=realSave?functions.concat([
     'componentLibraryCostValue','componentLibraryUnitCostValue','componentLibraryUnitPriceValue',

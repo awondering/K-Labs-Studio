@@ -34,6 +34,10 @@
     const next = String(value || "").trim().toLowerCase();
     return next === "mm/dd/yyyy" ? "mm/dd/yyyy" : "dd/mm/yyyy";
   }
+  function normalizeCurrency(value) {
+    const next = String(value || "").trim().toUpperCase();
+    return ["NZD", "AUD", "USD", "CAD", "SGD", "GBP", "EUR", "JPY"].includes(next) ? next : "NZD";
+  }
   function normalizeStudioSettings(settings) {
     const source = settings && typeof settings === "object" ? settings : {};
     return {
@@ -45,6 +49,7 @@
       measurementUnits: normalizeMeasurementUnits(source.measurementUnits),
       imperialDisplay: normalizeImperialDisplay(source.imperialDisplay),
       dateFormat: normalizeDateFormat(source.dateFormat),
+      currency: normalizeCurrency(source.currency),
     };
   }
   function normalizeBusinessProfile(profile) {

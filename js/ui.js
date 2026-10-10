@@ -80,6 +80,16 @@ function studioSettingsStorageKey(){
 const MEASUREMENT_UNIT_VALUES=['metric','imperial'];
 const IMPERIAL_DISPLAY_VALUES=['decimal','fractional'];
 const DATE_FORMAT_VALUES=['dd/mm/yyyy','mm/dd/yyyy'];
+const CURRENCY_OPTIONS=[
+  {code:'NZD',name:'New Zealand dollar',symbol:'$'},
+  {code:'AUD',name:'Australian dollar',symbol:'$'},
+  {code:'USD',name:'US dollar',symbol:'$'},
+  {code:'CAD',name:'Canadian dollar',symbol:'$'},
+  {code:'SGD',name:'Singapore dollar',symbol:'$'},
+  {code:'GBP',name:'British pound',symbol:'£'},
+  {code:'EUR',name:'Euro',symbol:'€'},
+  {code:'JPY',name:'Japanese yen',symbol:'¥'},
+];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
 const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopComponentsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
@@ -286,7 +296,14 @@ function save(){
 }
 function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
-function currency(value){return '$'+numberOrZero(value).toFixed(2)}
+function normalizeCurrency(value){
+  const next=String(value||'').trim().toUpperCase();
+  return CURRENCY_OPTIONS.some((option)=>option.code===next)?next:'NZD';
+}
+function activeCurrencyCode(){return normalizeCurrency(typeof studioSettings!=='undefined'&&studioSettings&&studioSettings.currency)}
+function activeCurrencySymbol(){return CURRENCY_OPTIONS.find((option)=>option.code===activeCurrencyCode()).symbol}
+function currency(value){return activeCurrencySymbol()+numberOrZero(value).toFixed(2)}
+function currencyWithCode(value){return `${currency(value)} ${activeCurrencyCode()}`}
 function normalizeMeasurementUnits(value){
   const next=String(value||'').trim().toLowerCase();
   return MEASUREMENT_UNIT_VALUES.includes(next)?next:'metric';
@@ -331,7 +348,8 @@ function normalizeStudioSettings(settings){
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
-  return {...source,taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat};
+  const currencyCode=normalizeCurrency(settings&&settings.currency);
+  return {...source,taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
 }
 function settingsObjectPatch(previous,next){
   const before=previous&&typeof previous==='object'?previous:{};
@@ -419,6 +437,7 @@ function applyStudioSettingsSyncPayload(payload){
   if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
+  if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
   if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
     quote.labourRate=activeDefaultLabourRate();
@@ -426,6 +445,7 @@ function applyStudioSettingsSyncPayload(payload){
   }
   renderMeasurementPresentation();
   updateQuoteSummary();
+  renderQuoteComponents();
   renderBuilds();
   renderCustomerFinder();
   if(studioScreenView==='components'){
@@ -459,6 +479,7 @@ function reloadBusinessProfileForAccount(){
   if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
+  if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
 }
 function readAnonymousStudioSettingsSyncPayload(){
@@ -6647,8 +6668,8 @@ function renderStudioComponentsLibrary(){
         const buyValue=record&&record.unitCost!==undefined?numberOrZero(record.unitCost):(record&&record.cost!==undefined?numberOrZero(record.cost):undefined);
         const sellValue=record&&record.unitPrice!==undefined?numberOrZero(record.unitPrice):undefined;
         const priceBits=[];
-        if(buyValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--buy">BUY $${buyValue.toFixed(2)}</span>`);
-        if(sellValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--sell">SELL $${sellValue.toFixed(2)}</span>`);
+        if(buyValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--buy">BUY ${currency(buyValue)}</span>`);
+        if(sellValue!==undefined)priceBits.push(`<span class="studio-components-price studio-components-price--sell">SELL ${currency(sellValue)}</span>`);
         const secondaryParts=[];
         if(brand)secondaryParts.push(brand);
         if(trackStock){
@@ -8427,7 +8448,7 @@ function componentPickerLeafSecondaryText(record){
   if(brand)bits.push(brand);
   const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
   const sell=numberOrZero(record.unitPrice);
-  if(buy>0 || sell>0)bits.push(`Buy $${buy.toFixed(2)} · Sell $${sell.toFixed(2)}`);
+  if(buy>0 || sell>0)bits.push(`Buy ${currency(buy)} · Sell ${currency(sell)}`);
   const sizeCount=componentRecordSizeOptions(record).length;
   if(sizeCount)bits.push(`${sizeCount} size${sizeCount===1?'':'s'}`);
   return bits.join(' • ');
@@ -9928,7 +9949,7 @@ function updateBuildPricingSummary(){
   const summaryEl=$('workshopBuildPricingSummaryText');
   if(!summaryEl)return;
   const price=numberOrZero(quote&&quote.finalCustomerPrice);
-  summaryEl.textContent=price>0?`Customer Price NZ$${price.toFixed(2)}`:'Set customer price';
+  summaryEl.textContent=price>0?`Customer Price ${currencyWithCode(price)}`:'Set customer price';
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
@@ -12684,8 +12705,8 @@ function customerQuoteSummaryMarkup(){
   const deliveryBlock=customerQuoteDeliveryMarkup();
   const confirmationText=customerQuoteConfirmationText(math.depositEnabled);
   const pricingRows=math.depositEnabled
-    ?`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div><div><span>Deposit Required</span><strong>${currency(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currency(math.remainingBalance)}</strong></div>`
-    :`<div><span>Total Price</span><strong>${currency(math.total)}</strong></div>`;
+    ?`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div><div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
+    :`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
   const quoteNumber=specificationValue(quote.quoteNumber);
   const businessName=specificationValue(businessProfile.businessName);
   const businessLines=customerQuoteBusinessLines();
@@ -12868,9 +12889,9 @@ function emailCurrentQuote(){
     '',
     `Custom Rod Build — ${quoteNumber||'Quote'}`,
     '',
-    `Total: ${currency(math.total)}`,
-    `Deposit required: ${currency(math.depositAmount)}`,
-    `Balance remaining: ${currency(math.remainingBalance)}`,
+    `Total: ${currencyWithCode(math.total)}`,
+    `Deposit required: ${currencyWithCode(math.depositAmount)}`,
+    `Balance remaining: ${currencyWithCode(math.remainingBalance)}`,
     `Estimated completion: ${dueText}`,
   ];
   if(includedParts.length){
@@ -14327,6 +14348,8 @@ function updateQuoteSummary(){
     const el=$(id);
     if(el)el.classList.toggle('quote-field--active-target',pricingDriver===driverName);
   });
+  const totalLabel=document.querySelector('#quoteTotalField > span');
+  if(totalLabel)totalLabel.textContent=`Final Customer Price (${activeCurrencyCode()})`;
   if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
   const taxAvailable=quoteTaxAvailable();
@@ -14365,7 +14388,7 @@ function updateDepositFields(){
   syncWorkshopToggleButtons(document,'[data-deposit-type]','data-deposit-type',math.depositType);
   const valueLabel=$('quoteDepositValueLabel');
   const valueInput=$('quoteDepositValue');
-  if(valueLabel)valueLabel.textContent=math.depositType==='fixed'?'Deposit Amount ($)':'Deposit %';
+  if(valueLabel)valueLabel.textContent=math.depositType==='fixed'?`Deposit Amount (${activeCurrencyCode()})`:'Deposit %';
   if(valueInput && document.activeElement!==valueInput)valueInput.value=numberOrZero(math.depositValue).toFixed(math.depositType==='fixed'?2:1);
   if(balanceField){
     const balanceInput=$('quoteBalanceRemaining');
@@ -14870,6 +14893,7 @@ function onScreenChange(screenId){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
     if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
+    if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
     collapseSettingsSections();
     syncSettingsPreferenceControls();
@@ -15266,6 +15290,22 @@ function bindSettingsControls(){
       event.preventDefault();
       saveDefaultLabourRate();
       defaultLabourRateInput.blur();
+    });
+  }
+  const currencySelect=$('settingsCurrency');
+  if(currencySelect && currencySelect.getAttribute('data-settings-bound')!=='true'){
+    currencySelect.setAttribute('data-settings-bound','true');
+    currencySelect.value=activeCurrencyCode();
+    bindSettingsAccountGuard(currencySelect);
+    currencySelect.addEventListener('change',()=>{
+      if(!settingsControlCanCommit(currencySelect))return;
+      studioSettings.currency=normalizeCurrency(currencySelect.value);
+      const ok=saveStudioSettings();
+      updateQuoteSummary();
+      renderQuoteComponents();
+      renderBuilds();
+      if(studioScreenView==='components')renderStudioComponentsLibrary();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     });
   }
   const pricingTaxSaveBtn=$('settingsPricingTaxSaveBtn');
