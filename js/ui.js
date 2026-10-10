@@ -12488,7 +12488,7 @@ function renderBuilds(){
   const titleEl=$('buildsScreenTitle');
   const subtitleEl=$('buildsScreenSubtitle');
   if(titleEl)titleEl.textContent=isQuoteTab?'Quotes':'Active Builds';
-  if(subtitleEl)subtitleEl.textContent=isQuoteTab?'Quotes waiting to be confirmed as active builds.':'Continue rods currently in progress.';
+  if(subtitleEl)subtitleEl.textContent=isQuoteTab?'Quotes waiting to be confirmed as active builds.':'Continue working on rods currently in progress.';
   const query=String(buildsSearch||'').trim();
   const terms=savedBuildSearchTerms(query);
   const records=savedBuildRecords()
