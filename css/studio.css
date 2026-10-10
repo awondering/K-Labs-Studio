@@ -7571,10 +7571,10 @@ textarea::-moz-selection,
 
 #layoutScreen .guide-spacing-input-row{
   display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-columns:minmax(0,1fr);
   align-items:center;
-  gap:8px;
-  min-height:48px;
+  gap:4px;
+  padding:8px 0;
 }
 
 #layoutScreen .guide-spacing-input-row+.guide-spacing-input-row{
@@ -7590,13 +7590,14 @@ textarea::-moz-selection,
 }
 
 #layoutScreen .guide-spacing-input-row__controls{
-  display:flex;
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) 44px 32px;
   align-items:center;
-  gap:4px;
+  gap:2px;
+  min-width:0;
 }
 
 #layoutScreen .layout-control-card--guide-spacing .layout-control-card__button{
-  flex:0 0 44px;
   width:44px;
   height:44px;
   border-radius:10px;
@@ -7605,43 +7606,18 @@ textarea::-moz-selection,
 
 #layoutScreen .layout-control-card--guide-spacing .layout-control-card__value{
   box-sizing:border-box;
-  flex:1 1 104px;
   width:auto;
-  min-width:104px;
+  min-width:0;
   min-height:44px;
-  padding:0 6px;
+  padding:0 2px;
   border-radius:8px;
   font-size:20px;
   letter-spacing:0;
 }
 
-#layoutScreen .guide-spacing-input-row--count .layout-control-card__value{
-  flex:0 0 58px;
-  width:58px;
-  min-width:0;
-  padding:0 3px;
-}
-
-@media (max-width:480px){
-  #layoutScreen .guide-spacing-input-row:not(.guide-spacing-input-row--count){
-    grid-template-columns:minmax(0,1fr);
-    gap:4px;
-    padding:6px 0;
-  }
-
-  #layoutScreen .guide-spacing-input-row:not(.guide-spacing-input-row--count) .guide-spacing-input-row__controls{
-    min-width:0;
-  }
-
-  #layoutScreen .guide-spacing-input-row:not(.guide-spacing-input-row--count) .layout-control-card__value{
-    min-width:0;
-  }
-}
-
 #layoutScreen .guide-spacing-input-row__unit{
   box-sizing:border-box;
-  flex:0 0 34px;
-  width:34px;
+  min-width:0;
   color:#9ea499;
   font-size:10px;
   letter-spacing:.04em;
