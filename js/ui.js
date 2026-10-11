@@ -4756,6 +4756,7 @@ function openStudioCustomSelectPicker(control,trigger){
   search.value='';
   renderStudioCustomSelectOptions();
   sheet.hidden=false;
+  sheet.dataset.pickerFor=control.id||'';
   trigger.setAttribute('aria-expanded','true');
   lockModalLayer(trigger);
   syncStudioCustomSelectViewport();
@@ -14473,7 +14474,10 @@ function updateQuoteSummary(){
   });
   const totalLabel=document.querySelector('#quoteTotalField > span');
   if(totalLabel)totalLabel.textContent=`Final Customer Price (${activeCurrencyCode()})`;
-  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent='Tax Amount';
+  const taxNameText=activeTaxName();
+  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`${taxNameText} Amount`;
+  if($('quoteIncludeTaxLabel'))$('quoteIncludeTaxLabel').textContent=`Include ${taxNameText}`;
+  if($('quoteTaxRateLabel'))$('quoteTaxRateLabel').textContent=`${taxNameText} Rate (%)`;
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
   const taxAvailable=quoteTaxAvailable();
   const showTaxDetails=taxAvailable && quote.includeGst!==false;

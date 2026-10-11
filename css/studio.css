@@ -11490,3 +11490,104 @@ body.klabs-auth-resolving::after {
     padding-bottom:calc(120px + var(--safe-bottom));
   }
 }
+
+/* Pricing & Tax: compact rhythm, shared dark inputs, matching pickers. */
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px 10px;
+  margin-top:6px;
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-field,
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-divider{
+  grid-column:1 / -1;
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-divider{
+  margin:0;
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-field--half{
+  grid-column:auto;
+  grid-template-columns:minmax(0,1fr);
+  align-items:end;
+  align-content:start;
+  gap:4px;
+  min-height:0;
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-field--half .settings-toggle{
+  justify-self:start;
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-field--half .settings-inline-saved{
+  top:0;
+  bottom:auto;
+}
+#settingsScreen #settingsPricingTaxCard #settingsTaxName,
+#settingsScreen #settingsPricingTaxCard #settingsBusinessGstNumber{
+  padding:8px 11px;
+  border:1px solid rgba(214,210,200,.24);
+  border-radius:10px;
+  background:linear-gradient(180deg,#171c20,#101418);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),inset 0 -1px 0 rgba(0,0,0,.24);
+  color:#e4dcce;
+  font-weight:400;
+  text-align:left;
+}
+#settingsScreen #settingsPricingTaxCard #settingsTaxName:focus,
+#settingsScreen #settingsPricingTaxCard #settingsBusinessGstNumber:focus{
+  border-color:rgba(189,56,68,.52);
+  box-shadow:0 0 0 1px rgba(189,56,68,.22);
+  outline:none;
+}
+#settingsScreen #settingsPricingTaxCard #settingsTaxName::placeholder,
+#settingsScreen #settingsPricingTaxCard #settingsBusinessGstNumber::placeholder{
+  color:rgba(214,210,200,.42);
+}
+#settingsScreen #settingsPricingTaxCard .studio-custom-select-trigger{
+  box-sizing:border-box;
+  height:auto;
+  min-height:44px;
+  padding:8px 11px;
+  font-size:16px;
+  font-weight:600;
+}
+#settingsScreen #settingsPricingTaxCard .studio-custom-select-trigger__value{
+  flex:1 1 auto;
+  overflow:visible;
+  text-overflow:clip;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+#settingsScreen #settingsPricingTaxCard .settings-context-actions{
+  margin:0;
+}
+/* The save-state button reserves no space until it is shown. */
+#settingsScreen #settingsPricingTaxCard .settings-context-actions:has(> button[style*="hidden"]){
+  height:0;
+  overflow:hidden;
+}
+@media (max-width:299px){
+  #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields{
+    grid-template-columns:minmax(0,1fr);
+  }
+  #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > .settings-pricing-field--half{
+    grid-template-columns:minmax(0,1fr) 104px;
+    align-items:center;
+  }
+  #settingsScreen #settingsPricingTaxCard .settings-pricing-field--half .settings-toggle{
+    justify-self:end;
+  }
+}
+
+/* Selected tick sits on the right, level with the option text, for the Pricing & Tax pickers. */
+#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsLabourMode"],[data-picker-for="settingsCurrency"]) .studio-custom-select-picker__list .component-sheet__option{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsLabourMode"],[data-picker-for="settingsCurrency"]) .component-sheet__option-title{
+  flex:1 1 auto;
+  min-width:0;
+}
+#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsLabourMode"],[data-picker-for="settingsCurrency"]) .component-sheet__option b{
+  flex:0 0 auto;
+  line-height:1;
+}

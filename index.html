@@ -605,8 +605,8 @@
             <label id="quoteProfitField"><span>Required Profit</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
             <label id="quoteMarginPercentField"><span>Required Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
             <p id="quotePriceWarning" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <label id="quoteIncludeGstField" class="quote-gst-toggle quote-grid__full"><span>Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
-            <label id="quoteTaxRateField"><span>Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
+            <label id="quoteIncludeGstField" class="quote-gst-toggle quote-grid__full"><span id="quoteIncludeTaxLabel">Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+            <label id="quoteTaxRateField"><span id="quoteTaxRateLabel">Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
             <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
             <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
             <label id="quoteDepositEnabledField" class="quote-gst-toggle quote-grid__full"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
@@ -714,15 +714,15 @@
           <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
         </summary>
         <div class="settings-pricing-tax-fields">
-          <div class="settings-pricing-field"><span class="settings-pricing-label" id="settingsTaxEnabledLabel">Default tax</span><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" aria-labelledby="settingsTaxEnabledLabel" checked /><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span></label></div>
+          <div class="settings-pricing-field settings-pricing-field--half"><span class="settings-pricing-label" id="settingsTaxEnabledLabel">Default tax</span><label class="settings-toggle" for="settingsTaxEnabled"><input id="settingsTaxEnabled" type="checkbox" aria-labelledby="settingsTaxEnabledLabel" checked /><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span></label></div>
+          <label class="settings-pricing-field settings-pricing-field--half"><span class="settings-pricing-label">Tax rate (%)</span><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></label>
           <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label">Tax type</span><select id="settingsTaxType" aria-label="Tax type">
             <option value="gst">GST</option>
             <option value="vat">VAT</option>
             <option value="sales_tax">Sales Tax</option>
-            <option value="other">Other</option>
+            <option value="other">Custom tax…</option>
           </select></label>
-          <label class="settings-pricing-field settings-pricing-field--stacked" id="settingsTaxNameField" hidden><span class="settings-pricing-label">Tax name</span><input id="settingsTaxName" type="text" maxlength="40" placeholder="e.g. Consumption Tax" autocomplete="off" /></label>
-          <label class="settings-pricing-field"><span class="settings-pricing-label">Tax rate (%)</span><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></label>
+          <label class="settings-pricing-field settings-pricing-field--stacked" id="settingsTaxNameField" hidden><span class="settings-pricing-label">Custom tax name</span><input id="settingsTaxName" type="text" maxlength="40" placeholder="e.g. Consumption Tax" autocomplete="off" /></label>
           <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label" id="settingsTaxRegistrationLabel">GST number</span><input id="settingsBusinessGstNumber" type="text" autocomplete="off" placeholder="Optional" /></label>
           <hr class="settings-pricing-divider" />
           <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label">Who does the labour?</span><select id="settingsLabourMode" aria-label="Who does the labour?">
