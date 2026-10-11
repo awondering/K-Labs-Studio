@@ -15038,14 +15038,41 @@ function bindSettingsSectionAccordion(){
   if(!screen || screen.getAttribute('data-settings-accordion-bound')==='true')return;
   screen.setAttribute('data-settings-accordion-bound','true');
   settingsSectionElements().forEach((section)=>{
+    // Closing another section above shifts the page; remember where the heading sat when tapped.
+    section.addEventListener('click',(event)=>{
+      const summary=section.querySelector(':scope > summary');
+      if(!summary || !summary.contains(event.target))return;
+      settingsSectionTapState={section,top:summary.getBoundingClientRect().top};
+    },true);
     section.addEventListener('toggle',()=>{
       if(!section.open)return;
+      const tap=settingsSectionTapState && settingsSectionTapState.section===section?settingsSectionTapState:null;
+      settingsSectionTapState=null;
       settingsSectionElements().forEach((other)=>{
         if(other!==section)other.open=false;
       });
+      if(tap)keepSettingsSectionHeadingVisible(section,tap.top);
     });
   });
   collapseSettingsSections();
+}
+let settingsSectionTapState=null;
+// Restores the heading's on-screen position after sibling sections collapse, then moves only as far as
+// needed to keep it between the top edge and the bottom navigation.
+function keepSettingsSectionHeadingVisible(section,previousTop){
+  const summary=section.querySelector(':scope > summary');
+  if(!summary)return;
+  const rect=summary.getBoundingClientRect();
+  let delta=rect.top-previousTop;
+  const viewport=window.visualViewport;
+  const minTop=(viewport?viewport.offsetTop:0)+12;
+  let maxBottom=viewport?viewport.offsetTop+viewport.height:window.innerHeight;
+  const nav=document.querySelector('.bottom-nav');
+  if(nav && nav.getBoundingClientRect().height>0)maxBottom=Math.min(maxBottom,nav.getBoundingClientRect().top);
+  const nextTop=rect.top-delta;
+  if(nextTop<minTop)delta-=minTop-nextTop;
+  else if(nextTop+rect.height>maxBottom-8)delta+=nextTop+rect.height-(maxBottom-8);
+  if(Math.abs(delta)>=1)window.scrollBy({top:delta,left:0,behavior:'instant'});
 }
 const SETTINGS_SECTION_SAVE_TIMERS={};
 const SETTINGS_PENDING_SYNC_SECTIONS=new Set();
