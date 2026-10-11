@@ -145,6 +145,28 @@ test('Percentage and fixed deposits calculate against Customer Price including d
   assert.equal(math.remainingBalance,162.75);
 });
 
+test('Approved example matches Customer Price, tax, earnings, and deposit arithmetic',()=>{
+  const context=pricingHarness({
+    components:[{cost:95,unitPrice:95,quantity:1}],
+    labourRate:75,
+    labourHours:3,
+    targetProfit:450,
+    pricingDriver:'profit',
+    freight:30,
+    packaging:10,
+    deliveryTotal:40,
+    depositEnabled:true,
+    depositType:'percent',
+    depositValue:50,
+  });
+  const math=context.depositMaths();
+  assert.equal(math.total,931.5);
+  assert.equal(math.gst,121.5);
+  assert.equal(math.exclusiveRevenue-math.materialCost-math.freightCost,675);
+  assert.equal(math.depositAmount,465.75);
+  assert.equal(math.remainingBalance,465.75);
+});
+
 test('Total-only and breakdown entry are exclusive; zero delivery contributes nothing',()=>{
   const context=pricingHarness();
   context.setDeliveryTotal(22);

@@ -14565,6 +14565,14 @@ function updateQuoteSummary(){
         :freightAmount(quote.freight)+freightAmount(quote.packaging);
     deliveryInputs.total.value=entryTotal>0?String(entryTotal):'';
   }
+  const deliveryTaxNote=$('quoteDeliveryTaxNote');
+  if(deliveryTaxNote){
+    const deliveryTaxApplies=quoteTaxAvailable() && quote.includeGst!==false;
+    const enteredDeliveryCost=math.freightCost;
+    deliveryTaxNote.textContent=deliveryTaxApplies
+      ?`Delivery costs (excluding ${activeTaxName()}): ${currency(enteredDeliveryCost)}. Customer Price includes ${currency(math.freightCharge)} for delivery with ${activeTaxName()}.`
+      :`Delivery costs (no ${activeTaxName()} applied): ${currency(enteredDeliveryCost)}. Customer Price includes ${currency(math.freightCharge)} for delivery.`;
+  }
   const legacyDeliveryNote=$('quoteDeliveryLegacyNote');
   const legacyDeliveryText=$('quoteDeliveryLegacyText');
   const hasLegacyFreightRow=componentRowsForTotals().some((item)=>NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizeNameKey(item.description||item.customerLabel||item.category)));
