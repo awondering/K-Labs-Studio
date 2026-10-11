@@ -455,7 +455,7 @@ function applyStudioSettingsSyncPayload(payload){
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
-  if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
+  syncCurrencyControl();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
   if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
     quote.labourRate=activeDefaultLabourRate();
@@ -498,7 +498,7 @@ function reloadBusinessProfileForAccount(){
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
-  if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
+  syncCurrencyControl();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
 }
 function readAnonymousStudioSettingsSyncPayload(){
@@ -572,6 +572,12 @@ function activeTaxName(){
 }
 function activeTaxRegistrationLabel(){
   return taxTypeInfo(activeTaxType()).registrationLabel;
+}
+function syncCurrencyControl(){
+  const select=$('settingsCurrency');
+  if(!select)return;
+  select.value=activeCurrencyCode();
+  syncStudioCustomSelectTrigger(select);
 }
 function syncTaxIdentityControls(){
   const type=activeTaxType();
@@ -14938,7 +14944,7 @@ function onScreenChange(screenId){
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
     syncTaxIdentityControls();
     if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
-    if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
+    syncCurrencyControl();
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
     collapseSettingsSections();
     syncSettingsPreferenceControls();
@@ -15390,7 +15396,7 @@ function bindSettingsControls(){
   const currencySelect=$('settingsCurrency');
   if(currencySelect && currencySelect.getAttribute('data-settings-bound')!=='true'){
     currencySelect.setAttribute('data-settings-bound','true');
-    currencySelect.value=activeCurrencyCode();
+    syncCurrencyControl();
     bindSettingsAccountGuard(currencySelect);
     currencySelect.addEventListener('change',()=>{
       if(!settingsControlCanCommit(currencySelect))return;
