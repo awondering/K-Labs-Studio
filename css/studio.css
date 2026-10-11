@@ -1209,19 +1209,33 @@ body.component-sheet-open .workshop-back-to-top{
   gap:4px;
 }
 
-#settingsScreen #settingsBusinessProfileCard .settings-business-address-note{
-  margin:2px 0 -2px;
+#settingsScreen #settingsBusinessProfileCard .settings-business-label-row{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:8px;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-business-optional{
+  margin-left:auto;
+  font-size:10px;
+  font-weight:400;
+  letter-spacing:.04em;
+  text-transform:none;
+  color:rgba(214,210,200,.55);
 }
 
 #settingsScreen #settingsBusinessProfileCard .settings-business-city-row{
   display:grid;
   grid-template-columns:minmax(0,2fr) minmax(0,1fr);
+  align-items:start;
   gap:8px;
   min-width:0;
 }
 
 #settingsScreen #settingsBusinessProfileCard .settings-business-city-row label{
   min-width:0;
+  align-content:start;
 }
 
 @media (max-width:359px){
