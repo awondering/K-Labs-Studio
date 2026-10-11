@@ -1273,6 +1273,29 @@ body.component-sheet-open .workshop-back-to-top{
   gap:4px;
 }
 
+#settingsScreen #settingsPricingTaxCard #settingsCurrencyField .studio-custom-select-host{
+  display:block;
+  width:100%;
+  min-width:0;
+}
+
+#settingsScreen #settingsPricingTaxCard #settingsCurrencyField .studio-custom-select-trigger{
+  box-sizing:border-box;
+  width:100%;
+  height:auto;
+  min-height:44px;
+  padding:8px 11px;
+  font-size:16px;
+}
+
+#settingsScreen #settingsPricingTaxCard #settingsCurrencyField .studio-custom-select-trigger__value{
+  flex:1 1 auto;
+  overflow:visible;
+  text-overflow:clip;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
 #settingsScreen #settingsPricingTaxCard .settings-pricing-divider{
   margin:6px 0;
   border:0;
