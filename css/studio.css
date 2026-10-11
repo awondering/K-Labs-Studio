@@ -1196,6 +1196,40 @@ body.component-sheet-open .workshop-back-to-top{
   min-width:0;
 }
 
+#settingsScreen #settingsBusinessProfileCard{
+  padding:12px 14px;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-field-grid{
+  gap:8px;
+  margin-top:10px;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-field-grid label{
+  gap:4px;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-business-address-note{
+  margin:2px 0 -2px;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-business-city-row{
+  display:grid;
+  grid-template-columns:minmax(0,2fr) minmax(0,1fr);
+  gap:8px;
+  min-width:0;
+}
+
+#settingsScreen #settingsBusinessProfileCard .settings-business-city-row label{
+  min-width:0;
+}
+
+@media (max-width:359px){
+  #settingsScreen #settingsBusinessProfileCard .settings-business-city-row{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
+
 #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields{
   display:grid;
   gap:6px;
