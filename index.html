@@ -589,8 +589,14 @@
           <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--two quote-section__body build-pricing">
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-            <label id="quoteLabourCostField" class="quote-grid__full build-pricing__result"><span>Labour Cost</span><input id="quoteLabourCost" type="text" readonly /></label>
+            <label id="quoteLabourCostField" class="quote-grid__full build-pricing__result"><span>Labour Allowance</span><input id="quoteLabourCost" type="text" readonly /></label>
             <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
+            <div id="quoteLabourSummary" class="quote-grid__full build-labour-summary" aria-live="polite">
+              <div class="build-labour-summary__row"><span id="quoteLabourSummaryLabourLabel">Your labour allowance</span><strong id="quoteLabourSummaryLabour">$0.00</strong></div>
+              <div class="build-labour-summary__row"><span id="quoteLabourSummaryProfitLabel">Additional build profit</span><strong id="quoteLabourSummaryProfit">$0.00</strong></div>
+              <div id="quoteLabourSummaryTotalRow" class="build-labour-summary__row build-labour-summary__row--total"><span>Your total return</span><strong id="quoteLabourSummaryTotal">$0.00</strong></div>
+              <p class="build-labour-summary__note">Before other overheads and income tax.</p>
+            </div>
             <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteProfitField"><span>Required Profit</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
             <label id="quoteMarginPercentField"><span>Required Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
@@ -716,6 +722,10 @@
           <label class="settings-pricing-field"><span class="settings-pricing-label">Tax rate (%)</span><input id="settingsTaxRate" type="number" inputmode="decimal" min="0" step="0.1" value="15" /><small id="settingsTaxSaved" class="settings-inline-saved" hidden>Saved</small></label>
           <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label" id="settingsTaxRegistrationLabel">GST number</span><input id="settingsBusinessGstNumber" type="text" autocomplete="off" placeholder="Optional" /></label>
           <hr class="settings-pricing-divider" />
+          <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label">Who does the labour?</span><select id="settingsLabourMode" aria-label="Who does the labour?">
+            <option value="owner">Owner / solo builder</option>
+            <option value="employee">Paid employee</option>
+          </select></label>
           <label class="settings-pricing-field"><span class="settings-pricing-label">Labour rate (per hr)</span><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></label>
           <label class="settings-pricing-field"><span class="settings-pricing-label">Currency</span><select id="settingsCurrency" aria-label="Currency">
             <option value="NZD">NZD — New Zealand dollar</option>

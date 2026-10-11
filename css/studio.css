@@ -1280,6 +1280,7 @@ body.component-sheet-open .workshop-back-to-top{
 }
 
 #settingsScreen #settingsPricingTaxCard #settingsTaxType,
+#settingsScreen #settingsPricingTaxCard #settingsLabourMode,
 #settingsScreen #settingsPricingTaxCard #settingsTaxName,
 #settingsScreen #settingsPricingTaxCard #settingsBusinessGstNumber{
   box-sizing:border-box;
@@ -1765,6 +1766,35 @@ body.component-sheet-open .workshop-back-to-top{
 .quote-section__subtle{
   margin:0;
   color:#70746f;
+  font-size:11px;
+  line-height:1.35;
+}
+
+.build-labour-summary{
+  display:grid;
+  gap:6px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid rgba(0,0,0,.08);
+}
+.build-labour-summary__row{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:12px;
+  font-size:13px;
+}
+.build-labour-summary__row span:first-child{min-width:0;overflow-wrap:anywhere}
+.build-labour-summary__row strong{flex:none;text-align:right;white-space:nowrap}
+.build-labour-summary__row[hidden]{display:none}
+.build-labour-summary__row--total{
+  padding-top:6px;
+  border-top:1px solid rgba(0,0,0,.08);
+  font-weight:700;
+}
+.build-labour-summary__note{
+  margin:0;
+  color:#8f938c;
   font-size:11px;
   line-height:1.35;
 }
