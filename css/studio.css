@@ -7313,14 +7313,56 @@ textarea::-moz-selection,
 }
 
 #workshopScreen .build-pricing .build-pricing__note summary{
-  display:inline-flex;
+  display:flex;
   align-items:center;
-  min-height:32px;
+  justify-content:space-between;
+  gap:8px;
+  min-height:36px;
+  padding:0 2px;
+  color:rgba(214,208,196,.66);
   cursor:pointer;
+  list-style:none;
+}
+
+#workshopScreen .build-pricing .build-pricing__note summary::-webkit-details-marker{
+  display:none;
+}
+
+#workshopScreen .build-pricing .build-pricing__note summary::after{
+  content:"";
+  flex:none;
+  width:7px;
+  height:7px;
+  margin:-3px 4px 0 0;
+  border:solid currentColor;
+  border-width:0 1.5px 1.5px 0;
+  transform:rotate(45deg);
+  transition:transform .15s ease;
+}
+
+#workshopScreen .build-pricing .build-pricing__note[open] summary::after{
+  margin-top:3px;
+  transform:rotate(-135deg);
+}
+
+#workshopScreen .build-pricing .build-pricing__note summary:focus-visible{
+  outline:2px solid rgba(var(--kl-red-rgb),.8);
+  outline-offset:1px;
+  border-radius:var(--ds-radius-sm);
 }
 
 #workshopScreen .build-pricing .build-pricing__note p{
-  margin:0 0 4px;
+  margin:0 0 2px;
+  padding:0 2px;
+}
+
+#workshopScreen .build-pricing .build-pricing__help{
+  margin-top:-2px;
+}
+
+/* The build back links scroll with the page instead of sticking over accordion headings. */
+#studioWorkflowPanel > .workshop-tool-nav-back{
+  position:static;
 }
 
 #workshopScreen .build-pricing .build-pricing__result{
