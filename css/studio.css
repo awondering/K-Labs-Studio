@@ -11371,3 +11371,108 @@ body.klabs-auth-resolving::after {
 @media (max-width:359px){
   #workshopScreen .build-details__grips{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Components Library editor: compact heading, tighter rhythm, flatter size chips. */
+#studioComponentsPanel.studio-components-shell{
+  gap:8px;
+}
+#studioComponentsPanel .studio-components-shell__head{
+  gap:2px;
+}
+#studioComponentsPanel .studio-components-shell__intro{
+  min-width:0;
+}
+#studioComponentsPanel .studio-components-shell__identity{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  margin:0;
+}
+#studioComponentsPanel .studio-components-shell__identity h1{
+  flex:1 1 0;
+  min-width:0;
+  margin:0;
+  font-size:24px;
+  line-height:1.1;
+  overflow-wrap:anywhere;
+}
+#studioComponentsPanel .studio-components-shell__identity .studio-component-rename-trigger{
+  position:relative;
+  flex:0 0 auto;
+  align-self:center;
+  box-sizing:border-box;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:34px;
+  min-height:34px;
+  margin:0;
+  padding:0 12px;
+  border:1px solid rgba(214,210,200,.2);
+  border-radius:6px;
+  background:rgba(255,255,255,.035);
+  color:#e6dece;
+  font-size:10px;
+  letter-spacing:.07em;
+  line-height:1;
+}
+/* Keeps a 44px touch area around the 34px visual button. */
+#studioComponentsPanel .studio-components-shell__identity .studio-component-rename-trigger::after{
+  content:'';
+  position:absolute;
+  inset:-5px -4px;
+}
+#studioComponentsPanel .studio-components-shell__content{
+  gap:8px;
+}
+#studioComponentDetails{
+  gap:6px;
+  padding:8px 10px;
+}
+#studioComponentDetails .studio-component-details__fields{
+  gap:6px 8px;
+}
+#studioComponentDetails .studio-component-details__fields label{
+  gap:3px;
+}
+#studioComponentDetails .studio-component-details__fields textarea{
+  min-height:44px;
+  line-height:1.35;
+}
+#studioComponentDetails .studio-component-details__fields textarea:placeholder-shown{
+  height:44px;
+}
+#studioComponentDetails .studio-component-details__fields textarea:not(:placeholder-shown){
+  min-height:96px;
+}
+#studioComponentDetails .studio-size-section{
+  margin:2px 0 4px;
+  padding:6px 8px;
+}
+#studioComponentDetails .studio-size-section__heading{
+  margin:0 0 4px;
+}
+#studioComponentDetails .studio-size-list{
+  grid-template-columns:repeat(auto-fill,minmax(84px,1fr));
+  gap:4px;
+  margin-bottom:2px;
+}
+#studioComponentDetails .studio-size-chip{
+  grid-template-columns:minmax(0,1fr) 40px;
+  height:38px;
+  min-height:38px;
+  padding:0 0 0 7px;
+}
+#studioComponentDetails .studio-size-chip__remove{
+  width:40px;
+  height:38px;
+}
+#studioComponentDetails .studio-size-section__editor > summary{
+  min-height:40px;
+}
+@media (max-width:760px){
+  #studioComponentDetails{
+    padding-bottom:calc(120px + var(--safe-bottom));
+  }
+}
