@@ -361,14 +361,13 @@ function normalizeStudioSettings(settings){
   const taxType=normalizeTaxType(source.taxType);
   // Only an edited (type "other") name is stored; legacy preset types resolve their own name.
   const taxName=taxType==='other'?normalizeTaxName(source.taxName):'';
-  const labourMode=normalizeLabourMode(source.labourMode);
   const defaultLabourRate=Math.max(0,numberOrZero(settings&&settings.defaultLabourRate));
   const trackComponentStock=!!(settings&&settings.trackComponentStock);
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
   const currencyCode=normalizeCurrency(settings&&settings.currency);
-  return {...source,taxRate,taxEnabled,taxType,taxName,labourMode,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
+  return {...source,taxRate,taxEnabled,taxType,taxName,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
 }
 function settingsObjectPatch(previous,next){
   const before=previous&&typeof previous==='object'?previous:{};
@@ -457,7 +456,7 @@ function applyStudioSettingsSyncPayload(payload){
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
-  syncCurrencyControl();syncLabourModeControl();
+  syncCurrencyControl();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
   if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
     quote.labourRate=activeDefaultLabourRate();
@@ -500,7 +499,7 @@ function reloadBusinessProfileForAccount(){
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
   syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
-  syncCurrencyControl();syncLabourModeControl();
+  syncCurrencyControl();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
 }
 function readAnonymousStudioSettingsSyncPayload(){
@@ -583,18 +582,6 @@ function activeTaxRegistrationLabel(){
   if(name==='gst')return 'GST number';
   if(name==='vat')return 'VAT number';
   return 'Tax registration number';
-}
-function normalizeLabourMode(value){
-  return String(value||'').trim().toLowerCase()==='employee'?'employee':'owner';
-}
-function activeLabourMode(){
-  return normalizeLabourMode(studioSettings&&studioSettings.labourMode);
-}
-function syncLabourModeControl(){
-  const select=$('settingsLabourMode');
-  if(!select)return;
-  select.value=activeLabourMode();
-  syncStudioCustomSelectTrigger(select);
 }
 function syncCurrencyControl(){
   const select=$('settingsCurrency');
@@ -2843,16 +2830,49 @@ function quoteTaxAvailable(){
 function componentRowSellValue(item){
   return numberOrZero(item&&item.unitPrice)*componentRowQuantity(item);
 }
-// The natural (unadjusted) customer price: sum of every component's qty x SellPrice (this also covers charge line-items
-// such as Freight/Postage/Repair, which are stored as components) plus the existing labour cost model.
+// The natural (unadjusted) customer price: component sell prices, labour charge and delivery recovered at cost.
 function naturalCustomerPrice(){
   const componentsSellTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowSellValue(item),0);
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
-  return componentsSellTotal+labourCost+freightAmount(quote&&quote.freightCharge);
+  return componentsSellTotal+labourCost+deliveryAmounts(quote).charge;
 }
-// Delivery / Freight is a separate pair of per-build amounts (never a component row); blank/invalid/negative means 0.
+// Delivery is kept separate from components and labour; legacy records retain their original cost/charge pair.
 function freightAmount(value){
   return Math.max(0,numberOrZero(value));
+}
+function deliveryAmounts(source){
+  const current=source&&typeof source==='object'?source:{};
+  const hasUnmarkedLegacyFreight=current.deliveryEntryMode!=='breakdown'
+    && current.deliveryEntryMode!=='total'
+    && current.deliveryEntryMode!=='legacy'
+    && (freightAmount(current.freightCost)>0 || freightAmount(current.freightCharge)>0);
+  if(current.deliveryEntryMode==='legacy' || hasUnmarkedLegacyFreight){
+    return{cost:freightAmount(current.freightCost),charge:freightAmount(current.freightCharge)};
+  }
+  // The entered delivery values are costs; applicable output tax is added to the customer charge.
+  const taxActive=activeTaxEnabled()
+    && current.taxEnabled!==false
+    && current.includeGst!==false;
+  const taxRate=Math.max(0,numberOrZero(current.gstRate));
+  const taxMultiplier=taxActive?(100+taxRate)/100:1;
+  if(current.deliveryEntryMode==='total'){
+    const total=freightAmount(current.deliveryTotal);
+    return{cost:total,charge:roundMoney(total*taxMultiplier)};
+  }
+  const total=freightAmount(current.freight)+freightAmount(current.packaging);
+  return{cost:total,charge:roundMoney(total*taxMultiplier)};
+}
+function setDeliveryBreakdown(freight,packaging){
+  quote.deliveryEntryMode='breakdown';
+  quote.freight=freightAmount(freight);
+  quote.packaging=freightAmount(packaging);
+  quote.deliveryTotal=roundMoney(quote.freight+quote.packaging);
+}
+function setDeliveryTotal(total){
+  quote.deliveryEntryMode='total';
+  quote.freight=0;
+  quote.packaging=0;
+  quote.deliveryTotal=freightAmount(total);
 }
 // Applies a builder-entered Final Customer Price as a deliberate override, storing only the delta from the natural
 // price so future component/labour changes still move the final price by their own natural amount.
@@ -3010,7 +3030,7 @@ function newQuoteTemplate(){
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:activeDefaultLabourRate(),labourHours:0,freightCost:0,freightCharge:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
+    labourRate:activeDefaultLabourRate(),labourHours:0,deliveryEntryMode:'breakdown',freight:0,packaging:0,deliveryTotal:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
     depositEnabled:false,depositType:'percent',depositValue:0
   };
 }
@@ -3582,6 +3602,26 @@ function normalizeQuote(inputQuote){
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
   merged.freightCost=freightAmount(inputQuote&&inputQuote.freightCost);
   merged.freightCharge=freightAmount(inputQuote&&inputQuote.freightCharge);
+  const savedDeliveryMode=inputQuote&&inputQuote.deliveryEntryMode;
+  if(savedDeliveryMode==='breakdown' || savedDeliveryMode==='total' || savedDeliveryMode==='legacy'){
+    merged.deliveryEntryMode=savedDeliveryMode;
+  }else if(inputQuote && (
+    Object.prototype.hasOwnProperty.call(inputQuote,'freightCost')
+    || Object.prototype.hasOwnProperty.call(inputQuote,'freightCharge')
+  ) && (freightAmount(inputQuote.freightCost)>0 || freightAmount(inputQuote.freightCharge)>0)){
+    merged.deliveryEntryMode='legacy';
+  }else{
+    merged.deliveryEntryMode='breakdown';
+  }
+  merged.freight=freightAmount(inputQuote&&inputQuote.freight);
+  merged.packaging=freightAmount(inputQuote&&inputQuote.packaging);
+  merged.deliveryTotal=freightAmount(inputQuote&&inputQuote.deliveryTotal);
+  if(merged.deliveryEntryMode==='total'){
+    merged.freight=0;
+    merged.packaging=0;
+  }else if(merged.deliveryEntryMode==='breakdown'){
+    merged.deliveryTotal=roundMoney(merged.freight+merged.packaging);
+  }
   // A saved build keeps the labour rate it was stored with; only a fresh template carries the global default.
   const incomingLabourRate=(inputQuote&&inputQuote.labourRate);
   merged.labourRate=(incomingLabourRate===0 || Number.isFinite(Number(incomingLabourRate)))
@@ -3607,8 +3647,9 @@ function normalizeQuote(inputQuote){
   merged.buildSpecifications=normalizeBuildSpecifications(inputQuote&&inputQuote.buildSpecifications);
   merged.guideSpecification=normalizeGuideSpecification(inputQuote&&inputQuote.guideSpecification);
   migrateBlankWorkflow(merged);
-  // Natural price = qty x SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
-  const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)  +(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours))+merged.freightCharge);
+  // Legacy freight charge remains part of its stored customer price; new delivery is added at cost.
+  const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)
+    +(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours))+deliveryAmounts(merged).charge);
   merged.naturalCustomerPrice=naturalPrice;
   const hasStoredAdjustment=(inputQuote&&inputQuote.priceAdjustment)!==undefined;
   if(hasStoredAdjustment){
@@ -7425,7 +7466,7 @@ function quoteHasMeaningfulDraft(currentQuote){
   const hasCountryOverride=specificationValue(candidate.country)!==specificationValue(baseline.country);
   const hasBuildSpecs=Object.keys(candidate.buildSpecifications||{}).some((key)=>!!specificationValue(candidate.buildSpecifications&&candidate.buildSpecifications[key]));
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
-  const hasCosts=numberOrZero(candidate.blankCost)>0 || quoteHasCustomLabourRate(candidate) || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0;
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || quoteHasCustomLabourRate(candidate) || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0 || deliveryAmounts(candidate).charge>0 || deliveryAmounts(candidate).cost>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
@@ -7485,7 +7526,8 @@ function workshopHasPricingData(){
     || numberOrZero(quote&&quote.targetProfit)>0
     || numberOrZero(quote&&quote.markupPercent)>0
     || quoteHasCustomLabourRate(quote)
-    || numberOrZero(quote&&quote.labourHours)>0;
+    || numberOrZero(quote&&quote.labourHours)>0
+    || deliveryAmounts(quote).charge>0;
 }
 function nextWorkshopSectionId(){
   if(!workshopHasCustomerData())return 'workshopCustomerBody';
@@ -7770,8 +7812,9 @@ function quoteMaths(){
   const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const materialCost=componentTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
-  const freightCost=freightAmount(quote.freightCost);
-  const freightCharge=freightAmount(quote.freightCharge);
+  const delivery=deliveryAmounts(quote);
+  const freightCost=delivery.cost;
+  const freightCharge=delivery.charge;
   const rodBuildCost=materialCost+labourCost;
   const internalBuildCost=rodBuildCost+freightCost;
   const gstRate=Math.max(0,numberOrZero(quote.gstRate));
@@ -7801,13 +7844,13 @@ function quoteMaths(){
   quote.finalCustomerPrice=finalPrice;
   quote.priceAdjustment=roundMoney(finalPrice-natural);
   const subtotal=finalPrice;
-  // Final Customer Price is treated as GST-inclusive: extract tax first so GST is never counted as profit.
+  // Delivery is tax-grossed when applicable so its post-tax recovery exactly equals its saved cost.
   const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
   const total=subtotal;
   const exclusiveRevenue=total-gst;
   const profit=exclusiveRevenue-internalBuildCost;
   const marginPercent=exclusiveRevenue>0?(profit/exclusiveRevenue)*100:0;
-  // Stored Required Profit/Margin describe the rod only (price excluding Freight Charge, cost excluding Freight Cost).
+  // Required Profit/Margin remain rod-only targets on component buy cost plus the labour charge.
   const rodPrice=subtotal-freightCharge;
   const rodExclusive=rodPrice-(taxActive?(rodPrice*(gstRate/(100+gstRate))):0);
   const rodProfit=rodExclusive-rodBuildCost;
@@ -7815,7 +7858,7 @@ function quoteMaths(){
   quote.targetProfit=roundMoney(rodProfit);
   quote.marginPercent=roundMoney(rodMarginPercent);
   quote.markupPercent=quote.marginPercent;
-  return{rodProfit,rodMarginPercent,materialCost,labourCost,freightCost,freightCharge,internalBuildCost,subtotal,gst,total,profit,marginPercent,markupPercent:quote.markupPercent,taxRate:gstRate,naturalCustomerPrice:natural,priceAdjustment:quote.priceAdjustment};
+  return{rodProfit,rodMarginPercent,materialCost,labourCost,freightCost,freightCharge,deliveryCost:freightCost,deliveryCharge:freightCharge,internalBuildCost,subtotal,gst,total,exclusiveRevenue,profit,marginPercent,markupPercent:quote.markupPercent,taxRate:gstRate,naturalCustomerPrice:natural,priceAdjustment:quote.priceAdjustment};
 }
 // Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
 function depositMaths(){
@@ -10714,6 +10757,7 @@ function isCustomerOnlyRecord(record){
   if(components.some((item)=>componentRowHasMeaningfulData(item)))return false;
   if(numberOrZero(source.blankCost)>0 || numberOrZero(source.labourHours)>0 || numberOrZero(source.targetProfit)>0 || numberOrZero(source.finalCustomerPrice)>0)return false;
   if(numberOrZero(source.marginPercent||source.markupPercent)>0 || numberOrZero(source.priceAdjustment)>0 || numberOrZero(source.naturalCustomerPrice)>0)return false;
+  if(deliveryAmounts(source).cost>0 || deliveryAmounts(source).charge>0)return false;
   return true;
 }
 function isCustomerOnlyEntry(entry){
@@ -12762,12 +12806,12 @@ function customerQuoteBusinessLines(){
 function customerQuoteDeliveryMarkup(){
   const methodText=customerSafeText(quote.deliveryMethod);
   const addressLines=customerAddressLines();
-  const freightCharge=freightAmount(quote.freightCharge);
-  if(!methodText && !addressLines.length && !freightCharge)return '';
+  const deliveryCharge=deliveryAmounts(quote).charge;
+  if(!methodText && !addressLines.length && !deliveryCharge)return '';
   const methodRow=methodText?`<div><span>Method</span><strong>${escapeHtml(methodText)}</strong></div>`:'';
-  const freightRow=freightCharge>0?`<div><span>Freight (included in Total Price)</span><strong>${currencyWithCode(freightCharge)}</strong></div>`:'';
+  const deliveryRow=deliveryCharge>0?`<div><span>Delivery (included in Total Price)</span><strong>${currencyWithCode(deliveryCharge)}</strong></div>`:'';
   const addressBlock=addressLines.length?`<p>${addressLines.map((line)=>escapeHtml(line)).join('<br />')}</p>`:'';
-  return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${freightRow}${addressBlock}</div>`;
+  return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${deliveryRow}${addressBlock}</div>`;
 }
 // Deposit is the quote's existing optional setting (no second toggle): wording only reflects whether one is required.
 function customerQuoteConfirmationText(depositEnabled){
@@ -12979,11 +13023,11 @@ function emailCurrentQuote(){
   if(includedParts.length){
     lines.push('', 'Components Included', ...includedParts.map((part)=>`- ${part}`));
   }
-  const emailFreightCharge=freightAmount(quote.freightCharge);
+  const emailDeliveryCharge=deliveryAmounts(quote).charge;
   const emailAddressLines=customerAddressLines();
-  if(emailFreightCharge>0 || emailAddressLines.length){
+  if(emailDeliveryCharge>0 || emailAddressLines.length){
     lines.push('', 'Delivery');
-    if(emailFreightCharge>0)lines.push(`Freight (included in Total Price): ${currencyWithCode(emailFreightCharge)}`);
+    if(emailDeliveryCharge>0)lines.push(`Delivery (included in Total Price): ${currencyWithCode(emailDeliveryCharge)}`);
     lines.push(...emailAddressLines);
   }
   if(businessProfileHasPaymentDetails()){
@@ -14030,21 +14074,41 @@ function bindWorkshopQuoteBuilder(){
     quoteTotalInput.addEventListener('input',onFinalPriceUpdate);
     quoteTotalInput.addEventListener('change',onFinalPriceUpdate);
   }
-  // Freight never changes the selected pricing mode or its stored rod target; the charge is added on top of the rod price.
-  [['quoteFreightCost','freightCost'],['quoteFreightCharge','freightCharge']].forEach(([id,key])=>{
-    const el=$(id);
+  // Delivery edits never change the selected rod pricing target.
+  const freightInput=$('quoteFreight');
+  const packagingInput=$('quotePackaging');
+  const deliveryTotalInput=$('quoteDeliveryTotal');
+  const onDeliveryBreakdownUpdate=()=>{
+    const freight=freightAmount(freightInput&&freightInput.value);
+    const packaging=freightAmount(packagingInput&&packagingInput.value);
+    if(quote.deliveryEntryMode==='breakdown'
+      && freight===freightAmount(quote.freight)
+      && packaging===freightAmount(quote.packaging))return;
+    setDeliveryBreakdown(freight,packaging);
+    saveQuoteCurrent();
+    markQuoteDirty();
+    updateQuoteSummary();
+  };
+  [freightInput,packagingInput].forEach((el)=>{
     if(!el)return;
-    const onFreightUpdate=()=>{
-      const next=freightAmount(el.value);
-      if(next===freightAmount(quote[key]))return;
-      quote[key]=next;
+    el.addEventListener('input',onDeliveryBreakdownUpdate);
+    el.addEventListener('change',onDeliveryBreakdownUpdate);
+  });
+  if(deliveryTotalInput){
+    const onDeliveryTotalUpdate=()=>{
+      const total=freightAmount(deliveryTotalInput.value);
+      if(quote.deliveryEntryMode==='total'
+        && total===freightAmount(quote.deliveryTotal)
+        && freightAmount(quote.freight)===0
+        && freightAmount(quote.packaging)===0)return;
+      setDeliveryTotal(total);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
     };
-    el.addEventListener('input',onFreightUpdate);
-    el.addEventListener('change',onFreightUpdate);
-  });
+    deliveryTotalInput.addEventListener('input',onDeliveryTotalUpdate);
+    deliveryTotalInput.addEventListener('change',onDeliveryTotalUpdate);
+  }
   const quoteProfitInput=$('quoteProfit');
   if(quoteProfitInput){
     const onProfitUpdate=()=>{
@@ -14374,12 +14438,6 @@ function renderWorkshopQuote(){
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
   syncStudioCustomSelectTrigger($('quoteCountry'));
-  [['quoteFreightCost','freightCost'],['quoteFreightCharge','freightCharge']].forEach(([id,key])=>{
-    const el=$(id);
-    if(!el || document.activeElement===el)return;
-    const amount=freightAmount(quote[key]);
-    el.value=amount>0?String(amount):'';
-  });
   const mode=normalizeQuoteMode(quote.quoteMode);
   if(mode!=='internal'){
     quote.quoteMode='internal';
@@ -14427,7 +14485,7 @@ function updateWorkshopSectionVisibility(){
   const actionsSection=$('workshopActionsSection');
   if(!pricingSection || !actionsSection)return;
   const hasComponents=componentRowsForTotals().length>0;
-  const hasPricingValues=numberOrZero(quote&&quote.finalCustomerPrice)>0 || numberOrZero(quote&&quote.targetProfit)>0 || numberOrZero(quote&&quote.markupPercent)>0 || quoteHasCustomLabourRate(quote) || numberOrZero(quote&&quote.labourHours)>0;
+  const hasPricingValues=numberOrZero(quote&&quote.finalCustomerPrice)>0 || numberOrZero(quote&&quote.targetProfit)>0 || numberOrZero(quote&&quote.markupPercent)>0 || quoteHasCustomLabourRate(quote) || numberOrZero(quote&&quote.labourHours)>0 || deliveryAmounts(quote).charge>0;
   const hasIdentity=!!(specificationValue(quote&&quote.customerName) || specificationValue(quote&&quote.buildName));
   const showPricing=hasComponents || hasPricingValues;
   const showActions=showPricing || hasIdentity;
@@ -14442,27 +14500,14 @@ function updateWorkshopSectionVisibility(){
 }
 // Internal only. Additional build profit is the existing pre-tax profit (pre-tax price - component buy costs - labour allowance),
 // so component sell margin and any additional build charge are already inside it exactly once.
-function updateLabourSummary(math){
-  const owner=activeLabourMode()==='owner';
-  const labour=numberOrZero(math.labourCost);
-  const profit=numberOrZero(math.profit);
-  const setText=(id,text)=>{const el=$(id);if(el&&el.textContent!==text)el.textContent=text;};
-  setText('quoteLabourSummaryLabourLabel',owner?'Your Labour Allowance':'Employee Labour Expense');
-  setText('quoteLabourSummaryProfitLabel',owner?'Additional Build Profit':'Build Profit After Labour');
-  setText('quoteLabourSummaryLabour',currency(labour));
-  setText('quoteLabourSummaryProfit',currency(profit));
-  setText('quoteLabourSummaryTotal',currency(labour+profit));
-  const totalRow=$('quoteLabourSummaryTotalRow');
-  if(totalRow)totalRow.hidden=!owner;
-}
 function updateQuoteSummary(){
   const math=quoteMaths();
   updateBuildSpecSummary();
   updateComponentsSummary();
   updateBuildPricingSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
-  updateLabourSummary(math);
-  if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.internalBuildCost);
+  if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.materialCost);
+  if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=currency(math.exclusiveRevenue-math.materialCost-math.freightCost);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
   // Required Profit/Margin are editable pricing targets (BUILD "pricingtarget103" restore) - never overwrite
@@ -14475,7 +14520,7 @@ function updateQuoteSummary(){
     if(el)el.classList.toggle('quote-field--active-target',pricingDriver===driverName);
   });
   const totalLabel=document.querySelector('#quoteTotalField > span');
-  if(totalLabel)totalLabel.textContent=`Final Customer Price (${activeCurrencyCode()})`;
+  if(totalLabel)totalLabel.textContent=`Customer Price (includes delivery) (${activeCurrencyCode()})`;
   const taxNameText=activeTaxName();
   if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`${taxNameText} Amount`;
   if($('quoteIncludeTaxLabel'))$('quoteIncludeTaxLabel').textContent=`Include ${taxNameText}`;
@@ -14496,6 +14541,46 @@ function updateQuoteSummary(){
     // while targeting Required Profit/Margin, which price off Internal Build Cost (Buy Price) instead.
     const missingCount=pricingDriver==='price'?componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)<=0).length:0;
     priceWarningEl.textContent=missingCount>0?`${missingCount} component${missingCount===1?'':'s'} missing a Sell Price - customer price excludes ${missingCount===1?'it':'them'} until entered.`:'';
+  }
+  const deliveryInputs={
+    freight:$('quoteFreight'),
+    packaging:$('quotePackaging'),
+    total:$('quoteDeliveryTotal'),
+  };
+  if(deliveryInputs.freight && document.activeElement!==deliveryInputs.freight){
+    deliveryInputs.freight.value=quote.deliveryEntryMode==='legacy'
+      ?(math.freightCost>0?String(math.freightCost):'')
+      :(numberOrZero(quote.freight)>0?String(numberOrZero(quote.freight)):'');
+  }
+  if(deliveryInputs.packaging && document.activeElement!==deliveryInputs.packaging){
+    deliveryInputs.packaging.value=quote.deliveryEntryMode==='legacy'
+      ?''
+      :(numberOrZero(quote.packaging)>0?String(numberOrZero(quote.packaging)):'');
+  }
+  if(deliveryInputs.total && document.activeElement!==deliveryInputs.total){
+    const entryTotal=quote.deliveryEntryMode==='legacy'
+      ?math.freightCharge
+      :quote.deliveryEntryMode==='total'
+        ?freightAmount(quote.deliveryTotal)
+        :freightAmount(quote.freight)+freightAmount(quote.packaging);
+    deliveryInputs.total.value=entryTotal>0?String(entryTotal):'';
+  }
+  const legacyDeliveryNote=$('quoteDeliveryLegacyNote');
+  const legacyDeliveryText=$('quoteDeliveryLegacyText');
+  const hasLegacyFreightRow=componentRowsForTotals().some((item)=>NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizeNameKey(item.description||item.customerLabel||item.category)));
+  if(legacyDeliveryNote){
+    const showLegacyNote=quote.deliveryEntryMode==='legacy'||hasLegacyFreightRow;
+    legacyDeliveryNote.hidden=!showLegacyNote;
+    if(legacyDeliveryText){
+      const messages=[];
+      if(quote.deliveryEntryMode==='legacy'){
+        messages.push(`Saved legacy freight remains unchanged (cost ${currency(math.freightCost)}, customer charge ${currency(math.freightCharge)}). Editing Freight, Packaging or Total switches this build to cost-recovery delivery; the legacy values remain stored.`);
+      }
+      if(hasLegacyFreightRow){
+        messages.push('Existing freight, shipping or postage component rows are preserved and still count with components.');
+      }
+      legacyDeliveryText.textContent=messages.join(' ');
+    }
   }
   ['quoteCostBeforeMarginField','quoteMarginPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
   updateDepositFields();
@@ -15023,7 +15108,7 @@ function onScreenChange(screenId){
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
     syncTaxIdentityControls();
     if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
-    syncCurrencyControl();syncLabourModeControl();
+    syncCurrencyControl();
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
     collapseSettingsSections();
     syncSettingsPreferenceControls();
@@ -15489,22 +15574,10 @@ function bindSettingsControls(){
       defaultLabourRateInput.blur();
     });
   }
-  const labourModeSelect=$('settingsLabourMode');
-  if(labourModeSelect && labourModeSelect.getAttribute('data-settings-bound')!=='true'){
-    labourModeSelect.setAttribute('data-settings-bound','true');
-    bindSettingsAccountGuard(labourModeSelect);
-    labourModeSelect.addEventListener('change',()=>{
-      if(!settingsControlCanCommit(labourModeSelect))return;
-      studioSettings.labourMode=normalizeLabourMode(labourModeSelect.value);
-      const ok=saveStudioSettings();
-      updateQuoteSummary();
-      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
-    });
-  }
   const currencySelect=$('settingsCurrency');
   if(currencySelect && currencySelect.getAttribute('data-settings-bound')!=='true'){
     currencySelect.setAttribute('data-settings-bound','true');
-    syncCurrencyControl();syncLabourModeControl();
+    syncCurrencyControl();
     bindSettingsAccountGuard(currencySelect);
     currencySelect.addEventListener('change',()=>{
       if(!settingsControlCanCommit(currencySelect))return;
@@ -15522,7 +15595,6 @@ function bindSettingsControls(){
     pricingTaxSaveBtn.setAttribute('data-settings-bound','true');
     pricingTaxSaveBtn.addEventListener('click',()=>runExplicitSave(pricingTaxSaveBtn,()=>{
       if(taxRateInput)studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
-      if(labourModeSelect)studioSettings.labourMode=normalizeLabourMode(labourModeSelect.value);
       if(taxNameInput)applyTaxNameInput(taxNameInput.value);
       if(taxRegistrationInput)businessProfile.gstNumber=String(taxRegistrationInput.value||'').trim();
       if(defaultLabourRateInput)studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);

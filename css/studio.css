@@ -1310,14 +1310,7 @@ body.component-sheet-open .workshop-back-to-top{
   overflow-wrap:anywhere;
 }
 
-#settingsScreen #settingsPricingTaxCard .settings-pricing-divider{
-  margin:6px 0;
-  border:0;
-  border-top:1px solid rgba(214,210,200,.14);
-}
-
 #settingsScreen #settingsPricingTaxCard #settingsTaxType,
-#settingsScreen #settingsPricingTaxCard #settingsLabourMode,
 #settingsScreen #settingsPricingTaxCard #settingsTaxName,
 #settingsScreen #settingsPricingTaxCard #settingsBusinessGstNumber{
   box-sizing:border-box;
@@ -7204,6 +7197,29 @@ textarea::-moz-selection,
   gap:4px;
 }
 
+#workshopScreen .build-pricing__delivery{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+}
+
+#workshopScreen .build-pricing__delivery label{
+  min-width:0;
+  gap:2px;
+}
+
+#workshopScreen .build-pricing__delivery input{
+  min-width:0;
+  min-height:44px;
+  padding:8px 6px;
+  font-size:14px;
+  font-variant-numeric:tabular-nums;
+}
+
+#workshopScreen .build-pricing__delivery label:last-child input{
+  border-color:rgba(var(--kl-red-rgb),.28);
+}
+
 #workshopScreen .build-pricing > label > span,
 #workshopScreen .build-pricing .quote-pricing-driver__label{
   color:var(--titanium);
@@ -7381,38 +7397,32 @@ textarea::-moz-selection,
   font-weight:600;
 }
 
-#workshopScreen .build-pricing .build-labour-summary{
+#workshopScreen .build-pricing .build-earnings-summary{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:baseline;
+  gap:4px 12px;
   margin-top:2px;
-  padding:6px 10px;
-  gap:4px;
+  padding:7px 10px;
   border:var(--ds-stroke);
   border-radius:var(--ds-radius-sm);
   background:var(--ds-surface-soft);
-}
-
-#workshopScreen .build-pricing .build-labour-summary__row{
   color:var(--titanium);
-  font-size:13px;
+  font-size:12px;
 }
 
-#workshopScreen .build-pricing .build-labour-summary__row strong{
+#workshopScreen .build-pricing .build-earnings-summary strong{
+  text-align:right;
   color:var(--ds-text-strong);
   font-variant-numeric:tabular-nums;
 }
 
-#workshopScreen .build-pricing .build-labour-summary__row--total{
-  padding-top:4px;
-  border-top:1px solid rgba(255,255,255,.1);
-  color:var(--ds-text-strong);
-  font-size:14px;
-}
-
-#workshopScreen .build-pricing .build-labour-summary__row--total strong{
-  font-size:15px;
-}
-
-#workshopScreen .build-pricing .build-labour-summary__note{
+#workshopScreen .build-pricing .build-earnings-summary p{
+  grid-column:1 / -1;
+  margin:0;
   color:var(--titanium);
+  font-size:10px;
+  line-height:1.35;
 }
 
 #workshopScreen .build-pricing .build-pricing__total{
@@ -7425,6 +7435,13 @@ textarea::-moz-selection,
 #workshopScreen .build-pricing .build-pricing__total input{
   border-color:rgba(var(--kl-red-rgb),.4);
   font-size:20px;
+}
+
+#workshopScreen .build-pricing .build-pricing__delivery input{
+  min-width:0;
+  padding:8px 6px;
+  font-size:14px;
+  font-variant-numeric:tabular-nums;
 }
 
 @media (max-width:299px){
@@ -11716,17 +11733,17 @@ body.klabs-auth-resolving::after {
 }
 
 /* Selected tick sits on the right, level with the option text, for the Pricing & Tax pickers. */
-#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsLabourMode"],[data-picker-for="settingsCurrency"]) .studio-custom-select-picker__list .component-sheet__option{
+#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsCurrency"]) .studio-custom-select-picker__list .component-sheet__option{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
 }
-#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsLabourMode"],[data-picker-for="settingsCurrency"]) .component-sheet__option-title{
+#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsCurrency"]) .component-sheet__option-title{
   flex:1 1 auto;
   min-width:0;
 }
-#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsLabourMode"],[data-picker-for="settingsCurrency"]) .component-sheet__option b{
+#studioCustomSelectPicker:is([data-picker-for="settingsTaxType"],[data-picker-for="settingsCurrency"]) .component-sheet__option b{
   flex:0 0 auto;
   line-height:1;
 }
