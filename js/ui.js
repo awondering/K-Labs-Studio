@@ -341,10 +341,10 @@ function saveChoicePickerFavourites(){
 }
 function taxTypeInfo(type){
   switch(type){
-    case 'vat':return {name:'VAT',registrationLabel:'VAT number'};
-    case 'sales_tax':return {name:'Sales Tax',registrationLabel:'Tax registration number'};
-    case 'other':return {name:'Tax',registrationLabel:'Tax registration number'};
-    default:return {name:'GST',registrationLabel:'GST number'};
+    case 'vat':return {name:'VAT'};
+    case 'sales_tax':return {name:'Sales Tax'};
+    case 'other':return {name:'Tax'};
+    default:return {name:'GST'};
   }
 }
 function normalizeTaxType(value){
@@ -359,7 +359,8 @@ function normalizeStudioSettings(settings){
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
   const taxType=normalizeTaxType(source.taxType);
-  const taxName=normalizeTaxName(source.taxName);
+  // Only an edited (type "other") name is stored; legacy preset types resolve their own name.
+  const taxName=taxType==='other'?normalizeTaxName(source.taxName):'';
   const labourMode=normalizeLabourMode(source.labourMode);
   const defaultLabourRate=Math.max(0,numberOrZero(settings&&settings.defaultLabourRate));
   const trackComponentStock=!!(settings&&settings.trackComponentStock);
@@ -571,8 +572,17 @@ function activeTaxName(){
   if(type==='other')return normalizeTaxName(studioSettings&&studioSettings.taxName)||taxTypeInfo('other').name;
   return taxTypeInfo(type).name;
 }
+function applyTaxNameInput(value){
+  const name=normalizeTaxName(value);
+  const isDefault=!name||name.toLowerCase()==='gst';
+  studioSettings.taxType=isDefault?'gst':'other';
+  studioSettings.taxName=isDefault?'':name;
+}
 function activeTaxRegistrationLabel(){
-  return taxTypeInfo(activeTaxType()).registrationLabel;
+  const name=activeTaxName().toLowerCase();
+  if(name==='gst')return 'GST number';
+  if(name==='vat')return 'VAT number';
+  return 'Tax registration number';
 }
 function normalizeLabourMode(value){
   return String(value||'').trim().toLowerCase()==='employee'?'employee':'owner';
@@ -593,16 +603,8 @@ function syncCurrencyControl(){
   syncStudioCustomSelectTrigger(select);
 }
 function syncTaxIdentityControls(){
-  const type=activeTaxType();
-  const typeSelect=$('settingsTaxType');
-  if(typeSelect){
-    typeSelect.value=type;
-    syncStudioCustomSelectTrigger(typeSelect);
-  }
-  const nameField=$('settingsTaxNameField');
-  if(nameField)nameField.hidden=type!=='other';
   const nameInput=$('settingsTaxName');
-  if(nameInput && document.activeElement!==nameInput)nameInput.value=normalizeTaxName(studioSettings&&studioSettings.taxName);
+  if(nameInput && document.activeElement!==nameInput)nameInput.value=activeTaxName();
   const registrationLabel=$('settingsTaxRegistrationLabel');
   if(registrationLabel)registrationLabel.textContent=activeTaxRegistrationLabel();
 }
@@ -15358,32 +15360,22 @@ function bindSettingsControls(){
     taxEnabledInput.addEventListener('input',onTaxEnabledChange);
     taxEnabledInput.addEventListener('change',onTaxEnabledChange);
   }
-  const taxTypeSelect=$('settingsTaxType');
   const taxNameInput=$('settingsTaxName');
   const taxRegistrationInput=$(TAX_REGISTRATION_FIELD.id);
-  if(taxTypeSelect && taxTypeSelect.getAttribute('data-settings-bound')!=='true'){
-    taxTypeSelect.setAttribute('data-settings-bound','true');
-    bindSettingsAccountGuard(taxTypeSelect);
-    taxTypeSelect.addEventListener('change',()=>{
-      if(!settingsControlCanCommit(taxTypeSelect))return;
-      studioSettings.taxType=normalizeTaxType(taxTypeSelect.value);
-      const ok=saveStudioSettings();
-      syncTaxIdentityControls();
-      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
-    });
-  }
   if(taxNameInput && taxNameInput.getAttribute('data-settings-bound')!=='true'){
     taxNameInput.setAttribute('data-settings-bound','true');
     bindSettingsAccountGuard(taxNameInput);
     taxNameInput.addEventListener('input',()=>{
-      const isDirty=normalizeTaxName(taxNameInput.value)!==normalizeTaxName(studioSettings.taxName);
+      const isDirty=(normalizeTaxName(taxNameInput.value)||'GST')!==activeTaxName();
       setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
     });
     const saveTaxName=()=>{
       if(!settingsControlCanCommit(taxNameInput))return;
-      studioSettings.taxName=normalizeTaxName(taxNameInput.value);
-      taxNameInput.value=studioSettings.taxName;
+      applyTaxNameInput(taxNameInput.value);
       const ok=saveStudioSettings();
+      taxNameInput.value=activeTaxName();
+      syncTaxIdentityControls();
+      if(typeof updateQuoteSummary==='function')updateQuoteSummary();
       setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
     };
     taxNameInput.addEventListener('change',saveTaxName);
@@ -15531,8 +15523,7 @@ function bindSettingsControls(){
     pricingTaxSaveBtn.addEventListener('click',()=>runExplicitSave(pricingTaxSaveBtn,()=>{
       if(taxRateInput)studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
       if(labourModeSelect)studioSettings.labourMode=normalizeLabourMode(labourModeSelect.value);
-      if(taxTypeSelect)studioSettings.taxType=normalizeTaxType(taxTypeSelect.value);
-      if(taxNameInput)studioSettings.taxName=normalizeTaxName(taxNameInput.value);
+      if(taxNameInput)applyTaxNameInput(taxNameInput.value);
       if(taxRegistrationInput)businessProfile.gstNumber=String(taxRegistrationInput.value||'').trim();
       if(defaultLabourRateInput)studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
       if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
@@ -15542,7 +15533,7 @@ function bindSettingsControls(){
       const ok=saveStudioSettings()&&saveBusinessProfile();
       if(taxRateInput)taxRateInput.value=String(studioSettings.taxRate);
       syncTaxIdentityControls();
-      if(taxNameInput)taxNameInput.value=studioSettings.taxName;
+      if(taxNameInput)taxNameInput.value=activeTaxName();
       if(taxRegistrationInput)taxRegistrationInput.value=businessProfile.gstNumber;
       if(defaultLabourRateInput)defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
       return ok;
