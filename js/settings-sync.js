@@ -44,6 +44,8 @@
       ...source,
       taxRate: Math.max(0, numberOrDefault(source.taxRate, 15) || 15),
       taxEnabled: typeof source.taxEnabled === "boolean" ? source.taxEnabled : true,
+      taxType: ["gst", "vat", "sales_tax", "other"].includes(String(source.taxType || "").trim().toLowerCase()) ? String(source.taxType).trim().toLowerCase() : "gst",
+      taxName: String(source.taxName || "").replace(/\s+/g, " ").trim().slice(0, 40),
       defaultLabourRate: Math.max(0, numberOrDefault(source.defaultLabourRate, 0) || 0),
       trackComponentStock: !!source.trackComponentStock,
       measurementUnits: normalizeMeasurementUnits(source.measurementUnits),

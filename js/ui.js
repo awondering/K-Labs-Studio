@@ -1,4 +1,4 @@
-﻿const $=id=>document.getElementById(id);
+const $=id=>document.getElementById(id);
 const GUIDE_SPACING_DISPLAY_KEY='klabs-guide-spacing-visible-v1';
 function guideSpacingVisible(){
   return Store.get(GUIDE_SPACING_DISPLAY_KEY,false)===true;
@@ -339,17 +339,34 @@ function saveChoicePickerFavourites(){
     supplier:Array.from(choicePickerSessionFavourites.supplier||new Set()),
   });
 }
+function taxTypeInfo(type){
+  switch(type){
+    case 'vat':return {name:'VAT',registrationLabel:'VAT number'};
+    case 'sales_tax':return {name:'Sales Tax',registrationLabel:'Tax registration number'};
+    case 'other':return {name:'Tax',registrationLabel:'Tax registration number'};
+    default:return {name:'GST',registrationLabel:'GST number'};
+  }
+}
+function normalizeTaxType(value){
+  const next=String(value||'').trim().toLowerCase();
+  return ['gst','vat','sales_tax','other'].includes(next)?next:'gst';
+}
+function normalizeTaxName(value){
+  return String(value||'').replace(/\s+/g,' ').trim().slice(0,40);
+}
 function normalizeStudioSettings(settings){
   const source=settings&&typeof settings==='object'?settings:{};
   const taxRate=Math.max(0,numberOrZero(settings&&settings.taxRate)||15);
   const taxEnabled=(settings&&typeof settings.taxEnabled==='boolean')?settings.taxEnabled:true;
+  const taxType=normalizeTaxType(source.taxType);
+  const taxName=normalizeTaxName(source.taxName);
   const defaultLabourRate=Math.max(0,numberOrZero(settings&&settings.defaultLabourRate));
   const trackComponentStock=!!(settings&&settings.trackComponentStock);
   const measurementUnits=normalizeMeasurementUnits(settings&&settings.measurementUnits);
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
   const currencyCode=normalizeCurrency(settings&&settings.currency);
-  return {...source,taxRate,taxEnabled,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
+  return {...source,taxRate,taxEnabled,taxType,taxName,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
 }
 function settingsObjectPatch(previous,next){
   const before=previous&&typeof previous==='object'?previous:{};
@@ -436,6 +453,7 @@ function applyStudioSettingsSyncPayload(payload){
   syncSettingsPreferenceControls();
   if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
   if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
@@ -478,6 +496,7 @@ function reloadBusinessProfileForAccount(){
   syncBusinessProfileControls(true);
   if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
   if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
   if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
@@ -542,6 +561,31 @@ function activeTaxRate(){
 }
 function activeTaxEnabled(){
   return (studioSettings&&typeof studioSettings.taxEnabled==='boolean')?studioSettings.taxEnabled:true;
+}
+function activeTaxType(){
+  return normalizeTaxType(studioSettings&&studioSettings.taxType);
+}
+function activeTaxName(){
+  const type=activeTaxType();
+  if(type==='other')return normalizeTaxName(studioSettings&&studioSettings.taxName)||taxTypeInfo('other').name;
+  return taxTypeInfo(type).name;
+}
+function activeTaxRegistrationLabel(){
+  return taxTypeInfo(activeTaxType()).registrationLabel;
+}
+function syncTaxIdentityControls(){
+  const type=activeTaxType();
+  const typeSelect=$('settingsTaxType');
+  if(typeSelect){
+    typeSelect.value=type;
+    syncStudioCustomSelectTrigger(typeSelect);
+  }
+  const nameField=$('settingsTaxNameField');
+  if(nameField)nameField.hidden=type!=='other';
+  const nameInput=$('settingsTaxName');
+  if(nameInput && document.activeElement!==nameInput)nameInput.value=normalizeTaxName(studioSettings&&studioSettings.taxName);
+  const registrationLabel=$('settingsTaxRegistrationLabel');
+  if(registrationLabel)registrationLabel.textContent=activeTaxRegistrationLabel();
 }
 function activeDefaultLabourRate(){
   return Math.max(0,numberOrZero(studioSettings&&studioSettings.defaultLabourRate));
@@ -12674,7 +12718,7 @@ function customerQuoteBusinessLines(){
     businessProfile.cityTown,
     businessProfile.postcode,
     businessProfile.country,
-    specificationValue(businessProfile.gstNumber)?`GST Number: ${specificationValue(businessProfile.gstNumber)}`:'',
+    specificationValue(businessProfile.gstNumber)?`${activeTaxRegistrationLabel()}: ${specificationValue(businessProfile.gstNumber)}`:'',
   ].map((value)=>specificationValue(value)).filter(Boolean);
 }
 // Reuses the saved address fields (no separate delivery-data system) and any recorded delivery method;
@@ -14892,6 +14936,7 @@ function onScreenChange(screenId){
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
     if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+    syncTaxIdentityControls();
     if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
     if($('settingsCurrency'))$('settingsCurrency').value=activeCurrencyCode();
     if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
@@ -15027,14 +15072,15 @@ const BUSINESS_PROFILE_BASE_FIELDS=[
   {id:'settingsBusinessCity',key:'cityTown'},
   {id:'settingsBusinessPostcode',key:'postcode'},
   {id:'settingsBusinessCountry',key:'country'},
-  {id:'settingsBusinessGstNumber',key:'gstNumber'},
 ];
+const TAX_REGISTRATION_FIELD={id:'settingsBusinessGstNumber',key:'gstNumber'};
 const PAYMENT_DETAILS_FIELDS=[
   {id:'settingsPaymentAccountName',key:'paymentAccountName'},
   {id:'settingsPaymentAccountNumber',key:'paymentAccountNumber'},
 ];
 const BUSINESS_PROFILE_TEXT_FIELDS=[
   ...BUSINESS_PROFILE_BASE_FIELDS,
+  TAX_REGISTRATION_FIELD,
   ...PAYMENT_DETAILS_FIELDS,
   {id:'settingsQuotePrefix',key:'quotePrefix'},
 ];
@@ -15202,6 +15248,55 @@ function bindSettingsControls(){
     taxEnabledInput.addEventListener('input',onTaxEnabledChange);
     taxEnabledInput.addEventListener('change',onTaxEnabledChange);
   }
+  const taxTypeSelect=$('settingsTaxType');
+  const taxNameInput=$('settingsTaxName');
+  const taxRegistrationInput=$(TAX_REGISTRATION_FIELD.id);
+  if(taxTypeSelect && taxTypeSelect.getAttribute('data-settings-bound')!=='true'){
+    taxTypeSelect.setAttribute('data-settings-bound','true');
+    bindSettingsAccountGuard(taxTypeSelect);
+    taxTypeSelect.addEventListener('change',()=>{
+      if(!settingsControlCanCommit(taxTypeSelect))return;
+      studioSettings.taxType=normalizeTaxType(taxTypeSelect.value);
+      const ok=saveStudioSettings();
+      syncTaxIdentityControls();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
+    });
+  }
+  if(taxNameInput && taxNameInput.getAttribute('data-settings-bound')!=='true'){
+    taxNameInput.setAttribute('data-settings-bound','true');
+    bindSettingsAccountGuard(taxNameInput);
+    taxNameInput.addEventListener('input',()=>{
+      const isDirty=normalizeTaxName(taxNameInput.value)!==normalizeTaxName(studioSettings.taxName);
+      setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
+    });
+    const saveTaxName=()=>{
+      if(!settingsControlCanCommit(taxNameInput))return;
+      studioSettings.taxName=normalizeTaxName(taxNameInput.value);
+      taxNameInput.value=studioSettings.taxName;
+      const ok=saveStudioSettings();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
+    };
+    taxNameInput.addEventListener('change',saveTaxName);
+    taxNameInput.addEventListener('blur',saveTaxName);
+  }
+  if(taxRegistrationInput && taxRegistrationInput.getAttribute('data-business-profile-bound')!=='true'){
+    taxRegistrationInput.setAttribute('data-business-profile-bound','true');
+    bindSettingsAccountGuard(taxRegistrationInput);
+    taxRegistrationInput.addEventListener('input',()=>{
+      const isDirty=String(taxRegistrationInput.value||'').trim()!==(businessProfile.gstNumber||'');
+      setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
+    });
+    const saveTaxRegistration=()=>{
+      if(!settingsControlCanCommit(taxRegistrationInput))return;
+      businessProfile.gstNumber=String(taxRegistrationInput.value||'').trim();
+      taxRegistrationInput.value=businessProfile.gstNumber;
+      const ok=saveBusinessProfile();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
+    };
+    taxRegistrationInput.addEventListener('change',saveTaxRegistration);
+    taxRegistrationInput.addEventListener('blur',saveTaxRegistration);
+  }
+  syncTaxIdentityControls();
   const trackStockInput=$('settingsTrackComponentStock');
   if(trackStockInput){
     trackStockInput.checked=activeTrackComponentStock();
@@ -15313,13 +15408,19 @@ function bindSettingsControls(){
     pricingTaxSaveBtn.setAttribute('data-settings-bound','true');
     pricingTaxSaveBtn.addEventListener('click',()=>runExplicitSave(pricingTaxSaveBtn,()=>{
       if(taxRateInput)studioSettings.taxRate=Math.max(0,numberOrZero(taxRateInput.value)||0);
+      if(taxTypeSelect)studioSettings.taxType=normalizeTaxType(taxTypeSelect.value);
+      if(taxNameInput)studioSettings.taxName=normalizeTaxName(taxNameInput.value);
+      if(taxRegistrationInput)businessProfile.gstNumber=String(taxRegistrationInput.value||'').trim();
       if(defaultLabourRateInput)studioSettings.defaultLabourRate=Math.max(0,numberOrZero(defaultLabourRateInput.value)||0);
       if(!activeSavedBuildRef && !quoteHasMeaningfulDraft(quote)){
         quote.labourRate=activeDefaultLabourRate();
         saveQuoteCurrent();
       }
-      const ok=saveStudioSettings();
+      const ok=saveStudioSettings()&&saveBusinessProfile();
       if(taxRateInput)taxRateInput.value=String(studioSettings.taxRate);
+      syncTaxIdentityControls();
+      if(taxNameInput)taxNameInput.value=studioSettings.taxName;
+      if(taxRegistrationInput)taxRegistrationInput.value=businessProfile.gstNumber;
       if(defaultLabourRateInput)defaultLabourRateInput.value=String(studioSettings.defaultLabourRate);
       return ok;
     },{sectionKey:'PricingTax'}));
