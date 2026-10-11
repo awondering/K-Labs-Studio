@@ -28,8 +28,8 @@ function normalizeLayoutState(input){
 }
 let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0}));
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
-// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "â€”" option).
-const SUBCATEGORY_CLEAR_LABEL='â€”';
+// Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "—" option).
+const SUBCATEGORY_CLEAR_LABEL='—';
 const CUSTOM_SUPPLIER_STORAGE_KEY='klabs-workshop-custom-suppliers';
 const ARCHIVED_CATEGORY_STORAGE_KEY='klabs-workshop-archived-categories';
 const ARCHIVED_SUPPLIER_STORAGE_KEY='klabs-workshop-archived-suppliers';
@@ -86,9 +86,9 @@ const CURRENCY_OPTIONS=[
   {code:'USD',name:'US dollar',symbol:'$'},
   {code:'CAD',name:'Canadian dollar',symbol:'$'},
   {code:'SGD',name:'Singapore dollar',symbol:'$'},
-  {code:'GBP',name:'British pound',symbol:'Â£'},
-  {code:'EUR',name:'Euro',symbol:'â‚¬'},
-  {code:'JPY',name:'Japanese yen',symbol:'Â¥'},
+  {code:'GBP',name:'British pound',  symbol:'£'},
+    {code:'EUR',name:'Euro',symbol:'€'},
+    {code:'JPY',name:'Japanese yen',symbol:'¥'},
 ];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
@@ -895,7 +895,7 @@ function setSpiralGuideAngle(index,nextAngle){
     syncSpiralGuidesLength({resetAngles:true});
   }
 }
-// Copy mirrors buildSpiralPresetAngles(): stripper is the reference guide (0Â° = reel side), transitions end opposite the reel (180Â°).
+// Copy mirrors buildSpiralPresetAngles(): stripper is the reference guide (0° = reel side), transitions end opposite the reel (180°).
 const SPIRAL_METHOD_NOTES={
   standard:'All guides on the reel side \u00b7 0\u00b0 throughout. No spiral transition.',
   acute:'Quick transition: stripper on the reel side, one guide at 90\u00b0, the rest opposite.',
@@ -911,7 +911,7 @@ function spiralGuideRowsExpandable(spiral){
   const source=spiral&&typeof spiral==='object'?spiral:workshopToolsState.spiral;
   return normalizeRodStyle(source.rodStyle)!=='spinning' && normalizeSpiralMethod(source.method)!=='standard';
 }
-// 0Â° is always the reel side; which physical side that is depends on rod style.
+// 0° is always the reel side; which physical side that is depends on rod style.
 function spiralOppositeSideLabel(rodStyle){
   const style=normalizeRodStyle(rodStyle);
   return style==='casting'?'UNDERSIDE':style==='spinning'?'TOP':'OPPOSITE SIDE';
@@ -1083,7 +1083,7 @@ function copySpiralGuideOffsets(){
   const dirLabel=spiral.method==='standard'?'STANDARD':String(spiral.direction||'left').toUpperCase();
   const unitSuffix=workshopUnitSuffix(spiral.unit);
   const lines=[
-    `GUIDE ORIENTATION â€” ${methodLabel} (${dirLabel})${spiral.rodStyle?` Â· ${String(spiral.rodStyle).toUpperCase()}`:''}`,
+    `GUIDE ORIENTATION — ${methodLabel} (${dirLabel})${spiral.rodStyle?` · ${String(spiral.rodStyle).toUpperCase()}`:''}`,
     `Unit: ${spiral.unit.toUpperCase()} | Guides: ${guides.length}`,
     '----------------------------------------',
   ];
@@ -1309,10 +1309,10 @@ function renderSpiralGuideMapper(){
 
   const visualDirection=$('workshopSpiralVisualDirection');
   if(visualDirection){
-    const standardCaption=isSpinning?'STANDARD Â· UNDERNEATH':spiral.rodStyle==='casting'?'STANDARD Â· ON TOP':'STANDARD Â· NO TRANSITION';
+    const standardCaption=isSpinning?'STANDARD · UNDERNEATH':spiral.rodStyle==='casting'?'STANDARD · ON TOP':'STANDARD · NO TRANSITION';
     visualDirection.textContent=spiral.method==='standard'
       ?standardCaption
-      :`STRIPPER G${spiral.guides.length} Â· ${spiral.direction.toUpperCase()} TRANSITION`;
+      :`STRIPPER G${spiral.guides.length} · ${spiral.direction.toUpperCase()} TRANSITION`;
   }
 
   renderSpiralMapperVisual(spiral);
@@ -1399,8 +1399,8 @@ function scrollGuideSetupStageHeadingIntoView(index){
 function renderGuideSetupStages(){
   const spiral=workshopToolsState.spiral;
   const summaries=[
-    `${state.guideCount} guides Â· First ${formatGuideListMeasurement(state.firstGuide)} Â· Stripper ${formatGuideListMeasurement(state.targetStripper)}`,
-    `${spiral.rodStyle||'Choose rod style'} Â· ${spiral.method} Â· ${spiral.method==='standard'?'Reel side':spiral.direction+' transition'}`,
+    `${state.guideCount} guides · First ${formatGuideListMeasurement(state.firstGuide)} · Stripper ${formatGuideListMeasurement(state.targetStripper)}`,
+    `${spiral.rodStyle||'Choose rod style'} · ${spiral.method} · ${spiral.method==='standard'?'Reel side':spiral.direction+' transition'}`,
     'Select a guide to adjust its diameter and reel-side rotation.',
   ];
   for(let index=0;index<3;index+=1){
@@ -1502,7 +1502,7 @@ function renderSpiralMapperVisual(spiral){
   // Standard keeps the tip top in line with the guide train (reel side); spiral patterns finish opposite.
   const tipAtReelSide=spiral.method==='standard';
   const tipY=viewY(tipAtReelSide?17:203);
-  const reelSideLabel=rodStyle==='casting'?'TOP Â· REEL SIDE 0 deg':rodStyle==='spinning'?'UNDERSIDE Â· REEL SIDE 0 deg':'REEL SIDE 0 deg';
+  const reelSideLabel=rodStyle==='casting'?'TOP · REEL SIDE 0 deg':rodStyle==='spinning'?'UNDERSIDE · REEL SIDE 0 deg':'REEL SIDE 0 deg';
   const oppositeSideLabel=`${spiralOppositeSideLabel(rodStyle)} 180 deg`;
   const topLabel=flipView?oppositeSideLabel:reelSideLabel;
   const bottomLabel=flipView?reelSideLabel:oppositeSideLabel;
@@ -1629,7 +1629,7 @@ function renderSpiralGuideRows(spiral,showPhysicalOffsets){
           ${isExpanded?`<div id="guideAdjustment${index}" class="spiral-guide-row__edit">
             <div class="spiral-guide-row__fields spiral-guide-row__fields--basic">
             <label>
-              <span>Rotation from reel side (${isStripper?'0â€“25':'0â€“180'}&deg;)</span>
+              <span>Rotation from reel side (${isStripper?'0–25':'0–180'}&deg;)</span>
               <div class="spiral-rotation-control" role="group" aria-label="Guide ${displayGuideNumber} rotation control">
                 <button class="layout-control-card__button" type="button" data-spiral-angle-action="decrement" data-guide-index="${index}" aria-label="Decrease guide ${displayGuideNumber} rotation by 5 degrees">&minus;</button>
                 <div class="spiral-rotation-control__value-wrap">
@@ -3137,10 +3137,10 @@ function blankSpecificationSummary(){
   const specifications=specificationValue(blankComponent&&blankComponent.specifications)
     || specificationValue(blankComponent&&blankComponent.blankNotes)
     || specificationValue(quote.blankNotes)
-    || (legacySpecs.length?legacySpecs.join(' â€¢ '):'');
+    || (legacySpecs.length?legacySpecs.join(' • '):'');
   const variantText=brand && normalizeNameKey(variant).startsWith(normalizeNameKey(brand))?variant:[brand,variant].filter(Boolean).join(' ');
   const details=[variantText,specifications].filter(Boolean);
-  return details.join(' â€¢ ');
+  return details.join(' • ');
 }
 // Single source of truth for the saved customer address lines: reused by the internal customer preview
 // and the customer-facing quote's Delivery section so both read the exact same stored fields.
@@ -3166,7 +3166,7 @@ function customerAddressLines(){
 }
 function customerPreviewLines(){
   const lines=[];
-  const identity=[quote.customerName,quote.phone,quote.email].map(specificationValue).filter(Boolean).join(' â€¢ ');
+  const identity=[quote.customerName,quote.phone,quote.email]  .map(specificationValue).filter(Boolean).join(' • ');
   if(identity)lines.push(identity);
   return lines.concat(customerAddressLines());
 }
@@ -3175,7 +3175,7 @@ function customerCardSecondarySummary(){
   const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
   const phone=specificationValue(quote.phone);
   const email=specificationValue(quote.email);
-  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' â€¢ ');
+  return [company,locality,phone,email].filter(Boolean).slice(0,3).join(' • ');
 }
 function customerGripConfigurationValue(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
@@ -3196,7 +3196,7 @@ function customerGripConfigurationValue(){
   if(rear)parts.push(`Rear ${rear}`);
   if(lower)parts.push(`Lower ${lower}`);
   if(fore)parts.push(`Fore ${fore}`);
-  return parts.join(' â€¢ ');
+  return parts.join(' • ');
 }
 function customerGripFeatureSummary(){
   const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'
@@ -3329,7 +3329,7 @@ function componentIdentityBlankParts(item,record){
   ].map(specificationValue).filter(Boolean);
   const cleanVariant=componentIdentityDedupeParts(variant);
   const cleanSize=Array.from(new Set(size)).join(' ');
-  return ['Blank',cleanVariant.join(' '),cleanSize].filter(Boolean).join(' Â· ');
+  return ['Blank',cleanVariant.join(' '),cleanSize].filter(Boolean).join(' · ');
 }
 function componentDisplayIdentity(item,options){
   const settings={fallback:'',includeSize:true,...(options||{})};
@@ -3348,7 +3348,7 @@ function componentDisplayIdentity(item,options){
   if(variant)parts.push(variant);
   const size=settings.includeSize?componentRowSizeLabel(item):'';
   if(size && !parts.some((part)=>normalizeNameKey(part).includes(normalizeNameKey(size))))parts.push(size);
-  return parts.filter(Boolean).join(' Â· ');
+  return parts.filter(Boolean).join(' · ');
 }
 // Appends the build line's snapshot size so every downstream surface shows it consistently.
 function appendComponentSizeLabel(label,item){
@@ -3366,7 +3366,7 @@ function savedComponentDisplayLabel(item){
     const identityKey=componentIdentityComparisonKey(identity);
     const detailsKey=componentIdentityComparisonKey(details);
     if(details && (!identityKey || !detailsKey || !identityKey.includes(detailsKey))){
-      return appendComponentSizeLabel(`${identity} Â· ${details}`,item);
+      return appendComponentSizeLabel(`${identity} · ${details}`,item);
     }
     return appendComponentSizeLabel(identity,item);
   }
@@ -3433,7 +3433,7 @@ function customerFinishDetailsSummary(){
     if(details.some((value)=>normalizeNameKey(value)===normalized))return;
     details.push(detail);
   });
-  return details.join(' â€¢ ');
+  return details.join(' • ');
 }
 function customerRodIdentity(){
   const buildName=customerSafeText(quote.buildName);
@@ -3988,10 +3988,10 @@ function refreshComponentLibraryViews(){
 }
 function componentSyncStatusLabel(state){
   switch(state&&state.status){
-    case 'synced':return 'COMPONENT LIBRARY â€¢ SYNCED';
-    case 'syncing':return 'COMPONENT LIBRARY â€¢ SYNCINGâ€¦';
-    case 'error':return 'COMPONENT LIBRARY â€¢ SYNC ERROR';
-    default:return 'COMPONENT LIBRARY â€¢ LOCAL';
+    case 'synced':return 'COMPONENT LIBRARY • SYNCED';
+    case 'syncing':return 'COMPONENT LIBRARY • SYNCING…';
+    case 'error':return 'COMPONENT LIBRARY • SYNC ERROR';
+    default:return 'COMPONENT LIBRARY • LOCAL';
   }
 }
 // Account section status line: only visible while signed in. Retry is offered only for a recoverable error.
@@ -4033,7 +4033,7 @@ function promptComponentLibraryMigration(){
     }
     window.KLABS_SYNC?.copyToAccount?.().then((result)=>{
       if(result&&result.ok){
-        openConfirmDialog({title:'Component library synced',message:`Component library synced â€¢ ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
+        openConfirmDialog({title:'Component library synced',message:`Component library synced • ${result.count} component${result.count===1?'':'s'}`,actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
       }else{
         openConfirmDialog({title:'Sync failed',message:(result&&result.error)?result.error:'Could not copy your component library. Your local data is unchanged.',actions:[{id:'ok',label:'OK',kind:'primary'}]},()=>{});
       }
@@ -4141,7 +4141,7 @@ function showExplicitSaveFeedback(state,retry,error){
   clearTimeout(explicitSaveFeedbackTimer);
   feedback.hidden=false;
   feedback.dataset.state=state;
-  feedback.querySelector('span').textContent=state==='saving'?'Savingâ€¦':state==='saved'?'âœ“ Saved':`Save failed. ${error&&error.message||'Please retry.'}`;
+  feedback.querySelector('span').textContent=state==='saving'?'Saving…':state==='saved'?'✓ Saved':`Save failed. ${error&&error.message||'Please retry.'}`;
   const retryButton=feedback.querySelector('button');
   retryButton.hidden=state!=='error' || !retry;
   retryButton.onclick=retry||null;
@@ -4227,7 +4227,7 @@ function syncStudioComponentSaveButtonState(){
   }
   if(studioComponentDetailContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='âœ“ Saved';
+    button.textContent='✓ Saved';
     button.classList.add('is-saved');
     return;
   }
@@ -4253,7 +4253,7 @@ function syncStudioTaxonomySupplierSaveButtonState(){
   }
   if(studioSupplierEditContext.savedFlash && !dirty){
     button.disabled=true;
-    button.textContent='âœ“ SAVED';
+    button.textContent='✓ SAVED';
     button.className='ghost-action studio-taxonomy-editor__save is-saved';
     return;
   }
@@ -5523,7 +5523,7 @@ function studioTaxonomySectionMarkupSuppliers(taxonomy){
   `:'';
   const showSaved=mode==='edit' && selectedSupplier && studioSupplierEditContext.savedFlash;
   const saveButtonClass=showSaved?'ghost-action studio-taxonomy-editor__save is-saved':'ghost-action studio-taxonomy-editor__save';
-  const saveButtonLabel=showSaved?'âœ“ SAVED':'SAVE';
+  const saveButtonLabel=showSaved?'✓ SAVED':'SAVE';
   const editMarkup=mode==='edit' && selectedSupplier?`
     <div class="studio-taxonomy-modal">
       <div class="studio-taxonomy-modal__scrim" data-taxonomy-ui-action="supplier-cancel"></div>
@@ -6509,7 +6509,7 @@ function studioCategoryContextMenuMarkup(categoryName){
   const categoryId=category&&category.id||'';
   return `<div class="studio-components-row-menu" role="menu" aria-label="Category actions">
     <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-rename" data-studio-library-id="${escapeAttributeValue(categoryId)}">Rename</button>
-    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-merge" data-studio-library-id="${escapeAttributeValue(categoryId)}">Merge Intoâ€¦</button>
+    <button class="studio-components-row-menu__item" type="button" role="menuitem" data-studio-library-menu-action="category-merge" data-studio-library-id="${escapeAttributeValue(categoryId)}">Merge Into…</button>
     <button class="studio-components-row-menu__item studio-components-row-menu__item--danger" type="button" role="menuitem" data-studio-library-menu-action="category-delete" data-studio-library-id="${escapeAttributeValue(categoryId)}">Delete</button>
   </div>`;
 }
@@ -6625,7 +6625,7 @@ function renderStudioComponentsLibrary(){
     const breadcrumbParts=studioLibraryPath.level==='supplier-component'
       ? ['SUPPLIERS',studioLibraryPath.supplierName,studioLibraryPath.categoryId,studioLibraryPath.subcategoryId]
       : ['COMPONENTS',studioLibraryPath.categoryId,studioLibraryPath.subcategoryId];
-    if(backLabel)backLabel.textContent=breadcrumbParts.filter((part)=>String(part||'').trim()).join(' â€º ').toUpperCase();
+    if(backLabel)backLabel.textContent=breadcrumbParts.filter((part)=>String(part||'').trim()).join(' › ').toUpperCase();
     if(title)title.textContent=studioComponentDraft?'NEW COMPONENT':String((selected&&selected.name)||'COMPONENT DETAILS').toUpperCase();
     if(subtitle)subtitle.textContent='';
   }
@@ -6745,7 +6745,7 @@ function renderStudioComponentsLibrary(){
           const stockValue=componentLibraryStockValue(record);
           secondaryParts.push(`In Stock ${stockValue===undefined?0:stockValue}`);
         }
-        const secondary=secondaryParts.join(' â€¢ ');
+        const secondary=secondaryParts.join(' • ');
         const pricingMarkup=priceBits.length?`<span class="studio-components-price-row">${priceBits.join('')}</span>`:'';
         return studioComponentListRowMarkup(record,records,`<strong>${escapeHtml(name)}</strong>${secondary?`<span>${escapeHtml(secondary)}</span>`:''}${pricingMarkup}`);
       }).join('');
@@ -8028,7 +8028,7 @@ function selectedBlankViewModel(){
 function selectedBlankSummaryLines(blank){
   const lines=[];
   const maker=String(blank&&blank.maker||'').trim();
-  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' â€¢ ');
+  const details=[blank&&blank.length,blank&&blank.power,blank&&blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
   const pieces=String(blank&&blank.pieces||'').trim();
   const pieceLabel=pieces?`${pieces} Piece${pieces==='1'?'':'s'}`:'';
   const cost=numberOrZero(blank&&blank.cost);
@@ -8525,10 +8525,10 @@ function componentPickerLeafSecondaryText(record){
   if(brand)bits.push(brand);
   const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
   const sell=numberOrZero(record.unitPrice);
-  if(buy>0 || sell>0)bits.push(`Buy ${currency(buy)} Â· Sell ${currency(sell)}`);
+  if(buy>0 || sell>0)bits.push(`Buy ${currency(buy)} · Sell ${currency(sell)}`);
   const sizeCount=componentRecordSizeOptions(record).length;
   if(sizeCount)bits.push(`${sizeCount} size${sizeCount===1?'':'s'}`);
-  return bits.join(' â€¢ ');
+  return bits.join(' • ');
 }
 function syncComponentPickerBackButton(){
   const backButton=$('choicePickerBack');
@@ -9638,7 +9638,7 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
     if(trigger){
-      trigger.textContent=selectedName||'â€”';
+      trigger.textContent=selectedName||'—';
     }
     updateQuoteSummary();
   }
@@ -9743,11 +9743,11 @@ function choiceOptionSecondaryText(type,item){
   if(type==='blank'){
     const blank=item&&item.blank;
     if(!blank)return '';
-    return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' â€¢ ');
+    return [blank.maker,blank.series,blank.length,blank.power,blank.action].map((value)=>String(value||'').trim()).filter(Boolean).join(' • ');
   }
   if(type==='category'){
     const bits=[String(item&&item.category||'').trim(),String(item&&item.supplier||'').trim()].filter(Boolean);
-    return bits.join(' â€¢ ');
+        return bits.join(' • ');
   }
   return item&&item.isCustom?'Custom':'';
 }
@@ -10009,7 +10009,7 @@ function buildSpecSummaryData(){
   if(blankName)parts.push(blankName);
   if(method)parts.push(method);
   if(guideCount)parts.push(`${guideCount} guide${guideCount===1?'':'s'}`);
-  return parts.length?parts.join(' Â· '):'Add build details';
+  return parts.length?parts.join(' · '):'Add build details';
 }
 function updateBuildSpecSummary(){
   const textEl=$('workshopBuildSpecsSummaryText');
@@ -10049,7 +10049,7 @@ function componentRowSubcategoryNames(categoryName,currentSubcategory){
   }
   return subcategoryNames;
 }
-// Library-linked lines show their Category â€º Subcategory from the record; parts repeating the component name are dropped.
+// Library-linked lines show their Category › Subcategory from the record; parts repeating the component name are dropped.
 function componentRowLibraryPath(item){
   const record=componentLibraryRecordForRow(item);
   if(!record)return '';
@@ -10060,7 +10060,7 @@ function componentRowLibraryPath(item){
     if(!key || key===nameKey || parts.some((existing)=>normalizeNameKey(existing)===key))return;
     parts.push(part);
   });
-  return parts.join(' â€º ');
+  return parts.join(' › ');
 }
 // Only unlinked lines carry their own subcategory; linked lines take it from the library record.
 function componentRowSubcategoryFieldMarkup(item,index){
@@ -11039,7 +11039,7 @@ function setCustomerFinderCreateButtonState(saved){
   const button=$('customerFinderSubmitNewCustomerBtn');
   if(!button)return;
   const isSaved=!!saved;
-  button.textContent=isSaved?'âœ“ SAVED':'CREATE CUSTOMER';
+  button.textContent=isSaved?'✓ SAVED':'CREATE CUSTOMER';
   button.disabled=isSaved;
   button.classList.toggle('is-saved',isSaved);
 }
@@ -12290,7 +12290,7 @@ function updateWorkshopBuildOverview(){
   if(returnBtn)returnBtn.hidden=!(studioScreenView==='workflow' && hasActiveBuildRef && !isCustomerOrigin);
   if(customersReturnBtn)customersReturnBtn.hidden=!(studioScreenView==='workflow' && (isCustomerOrigin || (!hasActiveBuildRef && !!customerName)));
   if(titleEl){
-    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} â€” ${buildName}`:(customerName||buildName)):'Studio';
+    titleEl.textContent=hasIdentity?(customerName&&buildName?`${customerName} — ${buildName}`:(customerName||buildName)):'Studio';
   }
   const renameEditor=$('quoteBuildRenameEditor');
   if(renameEditor && !renameEditor.hidden && (!hasIdentity || buildRenameQuoteRef!==quote))closeBuildRenameEditor();
@@ -12966,7 +12966,7 @@ function emailCurrentQuote(){
     '',
     `Thank you for choosing ${businessName} for your custom rod build.`,
     '',
-    `Custom Rod Build â€” ${quoteNumber||'Quote'}`,
+    `Custom Rod Build — ${quoteNumber||'Quote'}`,
     '',
     `Total: ${currencyWithCode(math.total)}`,
     `Deposit required: ${currencyWithCode(math.depositAmount)}`,
@@ -12993,7 +12993,7 @@ function emailCurrentQuote(){
     );
   }
   lines.push('', 'Once the deposit has been received, your build will be confirmed.');
-  const subject=`${businessName} Custom Rod Build Quote â€” ${quoteNumber||'Quote'}`;
+  const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -13437,7 +13437,7 @@ function renderGuideSpecificationSummary(){
   if(methodEl){
     const rodStyle=normalizeRodStyle(spiral.rodStyle);
     const methodLabel=method==='standard'?'Standard':guideOrientationMethodLabel(method);
-    methodEl.textContent=`${methodLabel}${rodStyle?` Â· ${rodStyle==='spinning'?'Spinning':'Casting'}`:''}`;
+    methodEl.textContent=`${methodLabel}${rodStyle?` · ${rodStyle==='spinning'?'Spinning':'Casting'}`:''}`;
   }
   if(directionRow)directionRow.hidden=!showDirection;
   if(directionEl)directionEl.textContent=normalizeSpiralDirection(spiral.direction)==='right'?'Right':'Left';
@@ -14389,7 +14389,7 @@ function renderWorkshopQuote(){
   if(customerSummaryTextEl){
     const customerName=specificationValue(quote.customerName);
     const locality=specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality);
-    const summary=customerName?(locality?`${customerName} â€¢ ${locality}`:customerName):'Add customer details';
+    const summary=customerName?(locality?`${customerName} • ${locality}`:customerName):'Add customer details';
     customerSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   const buildDetailsSummaryTextEl=$('quoteBuildDetailsSummaryText');
@@ -14397,7 +14397,7 @@ function renderWorkshopQuote(){
     const buildName=specificationValue(quote.buildName);
     const dueRaw=specificationValue(quote.estimatedCompletionDate);
     const dueText=dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'';
-    const summary=buildName?(dueText?`${buildName} â€¢ ${dueText}`:buildName):(dueText||'Add build name and due date');
+    const summary=buildName?(dueText?`${buildName} • ${dueText}`:buildName):(dueText||'Add build name and due date');
     buildDetailsSummaryTextEl.innerHTML=`<span>${escapeHtml(summary)}</span>`;
   }
   updateBuildPricingSummary();
@@ -14744,7 +14744,7 @@ function renderBlanks(){
   host.innerHTML=filtered.map((blank)=>{
     const idx=blanks.findIndex((item)=>item.id===blank.id);
     const isFavourite=blankIsFavourite(blank);
-    return `<article class="blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.length||'Length n/a')} â€¢ ${escapeHtml(blank.pieces||'Piece n/a')} â€¢ ${escapeHtml(blank.power||'Power n/a')} â€¢ ${escapeHtml(blank.action||'Action n/a')}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Unfavourite blank':'Favourite blank'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">&#9733;</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
+    return `<article class="blank-card" data-blank-row data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}"><button class="blank-card__select" data-blank-action="select" data-blank-id="${escapeHtml(blank.id)}" data-blank-index="${idx}" type="button" aria-label="Select blank ${escapeHtml(blankDisplayName(blank))}"><span>${escapeHtml(blank.maker||'Blank')}</span><strong>${escapeHtml(blankDisplayName(blank))}</strong><em>${escapeHtml(blank.length||'Length n/a')} • ${escapeHtml(blank.pieces||'Piece n/a')} • ${escapeHtml(blank.power||'Power n/a')} • ${escapeHtml(blank.action||'Action n/a')}</em></button><div class="blank-card__actions"><button class="component-sheet__favorite" data-blank-favourite-toggle data-blank-id="${escapeHtml(blank.id)}" type="button" aria-label="${isFavourite?'Unfavourite blank':'Favourite blank'}" aria-pressed="${isFavourite?'true':'false'}"><span aria-hidden="true">&#9733;</span></button>${blankRowMenuMarkup(blank)}</div></article>`;
   }).join('');
 }
 function bindBlankLibraryControls(){
@@ -15084,13 +15084,13 @@ function setSettingsSectionSaveState(sectionKey,state,message){
   }else if(state==='saving'){
     btn.hidden=false;
     btn.disabled=true;
-    btn.textContent=message||'Savingâ€¦';
+    btn.textContent=message||'Saving…';
     btn.className='ghost-action settings-context-action settings-save-btn is-saving';
   }else if(state==='saved'){
     SETTINGS_PENDING_SYNC_SECTIONS.add(sectionKey);
     btn.hidden=false;
     btn.disabled=true;
-    btn.textContent=message||'âœ“ Saved';
+    btn.textContent=message||'✓ Saved';
     btn.className='ghost-action settings-context-action settings-save-btn is-saved';
     SETTINGS_SECTION_SAVE_TIMERS[sectionKey]=window.setTimeout(()=>{
       btn.style.visibility='hidden';
@@ -15102,7 +15102,7 @@ function setSettingsSectionSaveState(sectionKey,state,message){
     SETTINGS_PENDING_SYNC_SECTIONS.delete(sectionKey);
     btn.hidden=false;
     btn.disabled=false;
-    btn.textContent=message||'Save failed Â· Retry';
+    btn.textContent=message||'Save failed · Retry';
     btn.className='ghost-action settings-context-action settings-save-btn is-error';
     btn.setAttribute('aria-label',`Save failed for ${sectionKey}, click to retry`);
   }else{
