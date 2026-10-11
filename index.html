@@ -592,13 +592,13 @@
             <span class="quote-section__meta quote-grid__full">Delivery / Freight</span>
             <label id="quoteFreightCostField"><span>Freight Cost</span><input id="quoteFreightCost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteFreightChargeField"><span>Freight Charge</span><input id="quoteFreightCharge" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            <p class="quote-section__subtle quote-grid__full">Delivery / Freight: cost is what you pay, charge is what the customer pays (included in the total). Remove any existing freight component row first.</p>
-            <label id="quoteLabourCostField" class="quote-grid__full build-pricing__result"><span>Labour Allowance</span><input id="quoteLabourCost" type="text" readonly /></label>
-            <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly /></label>
+            <p class="quote-section__subtle quote-grid__full build-pricing__help">Cost is what you pay. Charge is what the customer pays and is included in the total.</p>
+            <details class="quote-grid__full build-pricing__note"><summary>Reusing a build with freight?</summary><p>Remove any existing freight component row first, so freight is not counted twice.</p></details>
+            <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Internal Build Cost</span><input id="quoteCostBeforeMargin" type="text" readonly tabindex="-1" /></label>
             <div id="quoteLabourSummary" class="quote-grid__full build-labour-summary" aria-live="polite">
-              <div class="build-labour-summary__row"><span id="quoteLabourSummaryLabourLabel">Your labour allowance</span><strong id="quoteLabourSummaryLabour">$0.00</strong></div>
-              <div class="build-labour-summary__row"><span id="quoteLabourSummaryProfitLabel">Additional build profit</span><strong id="quoteLabourSummaryProfit">$0.00</strong></div>
-              <div id="quoteLabourSummaryTotalRow" class="build-labour-summary__row build-labour-summary__row--total"><span>Your total return</span><strong id="quoteLabourSummaryTotal">$0.00</strong></div>
+              <div class="build-labour-summary__row"><span id="quoteLabourSummaryLabourLabel">Your Labour Allowance</span><strong id="quoteLabourSummaryLabour">$0.00</strong></div>
+              <div class="build-labour-summary__row"><span id="quoteLabourSummaryProfitLabel">Additional Build Profit</span><strong id="quoteLabourSummaryProfit">$0.00</strong></div>
+              <div id="quoteLabourSummaryTotalRow" class="build-labour-summary__row build-labour-summary__row--total"><span>Your Total Return</span><strong id="quoteLabourSummaryTotal">$0.00</strong></div>
               <p class="build-labour-summary__note">Before other overheads and income tax.</p>
             </div>
             <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Final Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>

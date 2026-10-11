@@ -14447,8 +14447,8 @@ function updateLabourSummary(math){
   const labour=numberOrZero(math.labourCost);
   const profit=numberOrZero(math.profit);
   const setText=(id,text)=>{const el=$(id);if(el&&el.textContent!==text)el.textContent=text;};
-  setText('quoteLabourSummaryLabourLabel',owner?'Your labour allowance':'Employee labour expense');
-  setText('quoteLabourSummaryProfitLabel',owner?'Additional build profit':'Build profit after labour');
+  setText('quoteLabourSummaryLabourLabel',owner?'Your Labour Allowance':'Employee Labour Expense');
+  setText('quoteLabourSummaryProfitLabel',owner?'Additional Build Profit':'Build Profit After Labour');
   setText('quoteLabourSummaryLabour',currency(labour));
   setText('quoteLabourSummaryProfit',currency(profit));
   setText('quoteLabourSummaryTotal',currency(labour+profit));

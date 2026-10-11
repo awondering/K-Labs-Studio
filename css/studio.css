@@ -7288,7 +7288,104 @@ textarea::-moz-selection,
   display:none;
 }
 
-@media (max-width:340px){
+#workshopScreen .build-pricing{
+  gap:4px 8px;
+}
+
+#workshopScreen #workshopPricingSection:not(.quote-section--collapsed) .build-pricing{
+  padding:6px 10px 8px;
+}
+
+#workshopScreen .build-pricing > label{
+  gap:2px;
+}
+
+#workshopScreen .build-pricing .build-pricing__help{
+  margin:0;
+  font-size:11px;
+  line-height:1.35;
+}
+
+#workshopScreen .build-pricing .build-pricing__note{
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.35;
+}
+
+#workshopScreen .build-pricing .build-pricing__note summary{
+  display:inline-flex;
+  align-items:center;
+  min-height:32px;
+  cursor:pointer;
+}
+
+#workshopScreen .build-pricing .build-pricing__note p{
+  margin:0 0 4px;
+}
+
+#workshopScreen .build-pricing .build-pricing__result{
+  min-height:32px;
+  padding:0 10px;
+}
+
+#workshopScreen .build-pricing .build-pricing__result > span{
+  font-size:12px;
+}
+
+#workshopScreen .build-pricing .build-pricing__result input:not([type="checkbox"]){
+  min-height:32px;
+  padding:0;
+  font-size:14px;
+  font-weight:600;
+}
+
+#workshopScreen .build-pricing .build-labour-summary{
+  margin-top:2px;
+  padding:6px 10px;
+  gap:4px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-sm);
+  background:var(--ds-surface-soft);
+}
+
+#workshopScreen .build-pricing .build-labour-summary__row{
+  color:var(--titanium);
+  font-size:13px;
+}
+
+#workshopScreen .build-pricing .build-labour-summary__row strong{
+  color:var(--ds-text-strong);
+  font-variant-numeric:tabular-nums;
+}
+
+#workshopScreen .build-pricing .build-labour-summary__row--total{
+  padding-top:4px;
+  border-top:1px solid rgba(255,255,255,.1);
+  color:var(--ds-text-strong);
+  font-size:14px;
+}
+
+#workshopScreen .build-pricing .build-labour-summary__row--total strong{
+  font-size:15px;
+}
+
+#workshopScreen .build-pricing .build-labour-summary__note{
+  color:var(--titanium);
+}
+
+#workshopScreen .build-pricing .build-pricing__total{
+  gap:3px;
+  padding:0;
+  border:0;
+  background:transparent;
+}
+
+#workshopScreen .build-pricing .build-pricing__total input{
+  border-color:rgba(var(--kl-red-rgb),.4);
+  font-size:20px;
+}
+
+@media (max-width:299px){
   #workshopScreen .build-pricing{
     grid-template-columns:minmax(0,1fr);
   }
