@@ -2846,7 +2846,11 @@ function componentRowSellValue(item){
 function naturalCustomerPrice(){
   const componentsSellTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowSellValue(item),0);
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
-  return componentsSellTotal+labourCost;
+  return componentsSellTotal+labourCost+freightAmount(quote&&quote.freightCharge);
+}
+// Delivery / Freight is a separate pair of per-build amounts (never a component row); blank/invalid/negative means 0.
+function freightAmount(value){
+  return Math.max(0,numberOrZero(value));
 }
 // Applies a builder-entered Final Customer Price as a deliberate override, storing only the delta from the natural
 // price so future component/labour changes still move the final price by their own natural amount.
@@ -3004,7 +3008,7 @@ function newQuoteTemplate(){
     buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
-    labourRate:activeDefaultLabourRate(),labourHours:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
+    labourRate:activeDefaultLabourRate(),labourHours:0,freightCost:0,freightCharge:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
     depositEnabled:false,depositType:'percent',depositValue:0
   };
 }
@@ -3574,6 +3578,8 @@ function normalizeQuote(inputQuote){
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
   merged.markupPercent=numberOrZero((inputQuote&&inputQuote.markupPercent)!==undefined?(inputQuote&&inputQuote.markupPercent):(inputQuote&&inputQuote.marginPercent));
   merged.targetProfit=numberOrZero(inputQuote&&inputQuote.targetProfit);
+  merged.freightCost=freightAmount(inputQuote&&inputQuote.freightCost);
+  merged.freightCharge=freightAmount(inputQuote&&inputQuote.freightCharge);
   // A saved build keeps the labour rate it was stored with; only a fresh template carries the global default.
   const incomingLabourRate=(inputQuote&&inputQuote.labourRate);
   merged.labourRate=(incomingLabourRate===0 || Number.isFinite(Number(incomingLabourRate)))
@@ -3600,7 +3606,7 @@ function normalizeQuote(inputQuote){
   merged.guideSpecification=normalizeGuideSpecification(inputQuote&&inputQuote.guideSpecification);
   migrateBlankWorkflow(merged);
   // Natural price = qty x SellPrice across components (incl. Freight/Postage/Repair line items) + labour cost.
-  const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)+(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours)));
+  const naturalPrice=roundMoney(merged.components.reduce((sum,item)=>sum+componentRowSellValue(item),0)  +(numberOrZero(merged.labourRate)*numberOrZero(merged.labourHours))+merged.freightCharge);
   merged.naturalCustomerPrice=naturalPrice;
   const hasStoredAdjustment=(inputQuote&&inputQuote.priceAdjustment)!==undefined;
   if(hasStoredAdjustment){
@@ -7761,7 +7767,10 @@ function quoteMaths(){
   const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const materialCost=componentTotal;
   const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
-  const internalBuildCost=materialCost+labourCost;
+  const freightCost=freightAmount(quote.freightCost);
+  const freightCharge=freightAmount(quote.freightCharge);
+  const rodBuildCost=materialCost+labourCost;
+  const internalBuildCost=rodBuildCost+freightCost;
   const gstRate=Math.max(0,numberOrZero(quote.gstRate));
   const taxActive=quoteTaxAvailable() && (quote.includeGst!==false);
   const inclusiveFromExclusive=(exclusive)=>taxActive?exclusive*(100+gstRate)/100:exclusive;
@@ -7773,14 +7782,14 @@ function quoteMaths(){
   let finalPrice;
   if(driver==='profit'){
     // Required Profit is the net (post-tax) profit target above Internal Build Cost.
-    const exclusiveRevenue=internalBuildCost+numberOrZero(quote.targetProfit);
-    finalPrice=inclusiveFromExclusive(exclusiveRevenue);
+    const exclusiveRevenue=rodBuildCost+numberOrZero(quote.targetProfit);
+    finalPrice=inclusiveFromExclusive(exclusiveRevenue)+freightCharge;
   }else if(driver==='margin'){
     // True margin (Profit \u00f7 Selling Price), never markup (Profit \u00f7 Cost) - clamp below 100% so the
     // divide-by-zero/negative-cost blowup at or above 100% margin can never happen.
     const marginInput=Math.min(99.99,numberOrZero(quote.marginPercent));
-    const exclusiveRevenue=marginInput<100?internalBuildCost/(1-marginInput/100):internalBuildCost;
-    finalPrice=inclusiveFromExclusive(exclusiveRevenue);
+    const exclusiveRevenue=marginInput<100?rodBuildCost/(1-marginInput/100):rodBuildCost;
+    finalPrice=inclusiveFromExclusive(exclusiveRevenue)+freightCharge;
   }else{
     // 'price' driver: unchanged established path - natural sell-price total plus the builder's stored adjustment.
     finalPrice=natural+numberOrZero(quote.priceAdjustment);
@@ -7795,10 +7804,15 @@ function quoteMaths(){
   const exclusiveRevenue=total-gst;
   const profit=exclusiveRevenue-internalBuildCost;
   const marginPercent=exclusiveRevenue>0?(profit/exclusiveRevenue)*100:0;
-  quote.targetProfit=roundMoney(profit);
-  quote.marginPercent=roundMoney(marginPercent);
+  // Stored Required Profit/Margin describe the rod only (price excluding Freight Charge, cost excluding Freight Cost).
+  const rodPrice=subtotal-freightCharge;
+  const rodExclusive=rodPrice-(taxActive?(rodPrice*(gstRate/(100+gstRate))):0);
+  const rodProfit=rodExclusive-rodBuildCost;
+  const rodMarginPercent=rodExclusive>0?(rodProfit/rodExclusive)*100:0;
+  quote.targetProfit=roundMoney(rodProfit);
+  quote.marginPercent=roundMoney(rodMarginPercent);
   quote.markupPercent=quote.marginPercent;
-  return{materialCost,labourCost,internalBuildCost,subtotal,gst,total,profit,marginPercent,markupPercent:quote.markupPercent,taxRate:gstRate,naturalCustomerPrice:natural,priceAdjustment:quote.priceAdjustment};
+  return{rodProfit,rodMarginPercent,materialCost,labourCost,freightCost,freightCharge,internalBuildCost,subtotal,gst,total,profit,marginPercent,markupPercent:quote.markupPercent,taxRate:gstRate,naturalCustomerPrice:natural,priceAdjustment:quote.priceAdjustment};
 }
 // Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
 function depositMaths(){
@@ -12745,10 +12759,12 @@ function customerQuoteBusinessLines(){
 function customerQuoteDeliveryMarkup(){
   const methodText=customerSafeText(quote.deliveryMethod);
   const addressLines=customerAddressLines();
-  if(!methodText && !addressLines.length)return '';
+  const freightCharge=freightAmount(quote.freightCharge);
+  if(!methodText && !addressLines.length && !freightCharge)return '';
   const methodRow=methodText?`<div><span>Method</span><strong>${escapeHtml(methodText)}</strong></div>`:'';
+  const freightRow=freightCharge>0?`<div><span>Freight (included in Total Price)</span><strong>${currencyWithCode(freightCharge)}</strong></div>`:'';
   const addressBlock=addressLines.length?`<p>${addressLines.map((line)=>escapeHtml(line)).join('<br />')}</p>`:'';
-  return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${addressBlock}</div>`;
+  return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${freightRow}${addressBlock}</div>`;
 }
 // Deposit is the quote's existing optional setting (no second toggle): wording only reflects whether one is required.
 function customerQuoteConfirmationText(depositEnabled){
@@ -12959,6 +12975,13 @@ function emailCurrentQuote(){
   ];
   if(includedParts.length){
     lines.push('', 'Components Included', ...includedParts.map((part)=>`- ${part}`));
+  }
+  const emailFreightCharge=freightAmount(quote.freightCharge);
+  const emailAddressLines=customerAddressLines();
+  if(emailFreightCharge>0 || emailAddressLines.length){
+    lines.push('', 'Delivery');
+    if(emailFreightCharge>0)lines.push(`Freight (included in Total Price): ${currencyWithCode(emailFreightCharge)}`);
+    lines.push(...emailAddressLines);
   }
   if(businessProfileHasPaymentDetails()){
     lines.push(
@@ -14004,6 +14027,21 @@ function bindWorkshopQuoteBuilder(){
     quoteTotalInput.addEventListener('input',onFinalPriceUpdate);
     quoteTotalInput.addEventListener('change',onFinalPriceUpdate);
   }
+  // Freight never changes the selected pricing mode or its stored rod target; the charge is added on top of the rod price.
+  [['quoteFreightCost','freightCost'],['quoteFreightCharge','freightCharge']].forEach(([id,key])=>{
+    const el=$(id);
+    if(!el)return;
+    const onFreightUpdate=()=>{
+      const next=freightAmount(el.value);
+      if(next===freightAmount(quote[key]))return;
+      quote[key]=next;
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    el.addEventListener('input',onFreightUpdate);
+    el.addEventListener('change',onFreightUpdate);
+  });
   const quoteProfitInput=$('quoteProfit');
   if(quoteProfitInput){
     const onProfitUpdate=()=>{
@@ -14333,6 +14371,12 @@ function renderWorkshopQuote(){
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
   syncStudioCustomSelectTrigger($('quoteCountry'));
+  [['quoteFreightCost','freightCost'],['quoteFreightCharge','freightCharge']].forEach(([id,key])=>{
+    const el=$(id);
+    if(!el || document.activeElement===el)return;
+    const amount=freightAmount(quote[key]);
+    el.value=amount>0?String(amount):'';
+  });
   const mode=normalizeQuoteMode(quote.quoteMode);
   if(mode!=='internal'){
     quote.quoteMode='internal';
@@ -14420,8 +14464,8 @@ function updateQuoteSummary(){
   if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
   // Required Profit/Margin are editable pricing targets (BUILD "pricingtarget103" restore) - never overwrite
   // the field the builder is actively typing into, same guard as Final Customer Price/Tax Rate above.
-  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.profit).toFixed(2);
-  if($('quoteMarginPercent') && document.activeElement!==$('quoteMarginPercent'))$('quoteMarginPercent').value=numberOrZero(math.marginPercent).toFixed(1);
+  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.rodProfit).toFixed(2);
+  if($('quoteMarginPercent') && document.activeElement!==$('quoteMarginPercent'))$('quoteMarginPercent').value=numberOrZero(math.rodMarginPercent).toFixed(1);
   const pricingDriver=normalizePricingDriver(quote.pricingDriver);
   [['quoteTotalField','price'],['quoteProfitField','profit'],['quoteMarginPercentField','margin']].forEach(([id,driverName])=>{
     const el=$(id);
