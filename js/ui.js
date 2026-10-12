@@ -3229,7 +3229,7 @@ function customerGripConfigurationValue(){
   const parts=[];
   const rear=specificationValue(specs.rearGripLength);
   const lower=specificationValue(specs.gripBelowReelSeatLength);
-  const fore=specificationValue(specs.foreGripLength);
+  const fore=buildSpecMeasurementMm(specs.foreGripLength,{zeroIsEmpty:true}).state==='empty'?'':specificationValue(specs.foreGripLength);
   if(rear)parts.push(`Rear ${rear}`);
   if(lower)parts.push(`Lower ${lower}`);
   if(fore)parts.push(`Fore ${fore}`);
@@ -3249,7 +3249,7 @@ function customerGripFeatureSummary(){
   if(direct)return `Custom grip layout: ${direct}`;
   const rear=customerSafeText(specs.rearGripLength);
   const lower=customerSafeText(specs.gripBelowReelSeatLength);
-  const fore=customerSafeText(specs.foreGripLength);
+  const fore=buildSpecMeasurementMm(specs.foreGripLength,{zeroIsEmpty:true}).state==='empty'?'':customerSafeText(specs.foreGripLength);
   if(rear && fore && !lower)return `Split-grip layout with a rear grip of ${rear} and a fore grip of ${fore}.`;
   if(rear && lower && fore)return `Full handle layout with rear grip ${rear}, lower grip ${lower}, and fore grip ${fore}.`;
   if(rear)return `Rear grip layout set at ${rear}.`;
@@ -13594,6 +13594,7 @@ function buildSpecMeasurementMm(value,options){
   }else if(/^[\d\s./]+$/.test(text)){
     mm=parseMeasurementInputValue(text);
   }
+  if(options&&options.zeroIsEmpty && mm===0)return {state:'empty',mm:null};
   return Number.isFinite(mm) && mm>0?{state:'ok',mm}:{state:'unreadable',mm:null};
 }
 function setBuildLayoutValue(path,value){
@@ -13637,7 +13638,8 @@ function rodLayoutModel(){
   const rodLength=layout.rodLengthMm;
   const rear=buildSpecMeasurementMm(specs.rearGripLength);
   const lower=buildSpecMeasurementMm(specs.gripBelowReelSeatLength);
-  const fore=buildSpecMeasurementMm(specs.foreGripLength);
+  // Fore grip is optional: blank or an explicit zero both mean no fore grip.
+  const fore=buildSpecMeasurementMm(specs.foreGripLength,{zeroIsEmpty:true});
   const seatPosition=buildSpecMeasurementMm(specs.reelSeatPosition,{allowFromButt:true});
   const seatLength=layout.reelSeat.lengthMm;
   const seatRef=layout.reelSeatPositionRef;
