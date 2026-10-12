@@ -31,7 +31,7 @@ function harness(){
     initializeGuideSetupStages(){},renderGuideSetupStages(){},
     renderSpiralMapperVisual(){},syncWorkshopToggleButtons(){},
     activeMeasurementUnits:()=> 'metric',activeImperialDisplay:()=> 'decimal',
-    syncGuideSpacingToggle:()=>false,captureSpiralRowFocus:()=>null,restoreSpiralRowFocus(){},
+    syncGuideSpacingToggle:()=>false,    syncGuideListColumnUnits(){},runPreservingViewportPosition:(control,action)=>action(),captureSpiralRowFocus:()=>null,restoreSpiralRowFocus(){},
     calcGuideLayout:()=>({rows:c.workshopToolsState.spiral.guides.map((guide,index)=>({g:index+1,cum:guide.positionMm,spacing:200}))}),
     formatGuidePositionMillimetres:value=>`${value} mm`,formatGuideListMeasurement:value=>`${value} mm`,
     workshopMeasurementInputText:String,workshopUnitSuffix:()=> 'mm',
@@ -44,7 +44,7 @@ function harness(){
     'normalizeSpiralMethod','normalizeSpiralDirection','clampSpiralAngle',
     'spiralGuideRowsExpandable','oppositeSpiralDirection','spiralGuideDirectionForPresentation',
     'spiralOppositeSideLabel','spiralOffsetLabel','renderSpiralGuideRows','syncRodBlankSelectedMarker',
-    'renderSpiralGuideMapper','bindSpiralOffsetsToggle','updateSpiralGuideDiameter',
+    'renderSpiralGuideMapper','bindSpiralOffsetsToggle','updateSpiralGuideDiameter','updateSpiralGuideOffsetResult',
     'normalizeWorkshopUnit','parseWorkshopMeasurementMm',
   ]){
     const start=source.indexOf(`function ${name}(`);
@@ -102,6 +102,28 @@ test('missing/invalid diameter shows prompt; live updates affect only its guide 
   toggle();
   assert.match(e('guideSpacingCards').innerHTML,/id="guideOffsetDiameter0"[^>]*value="14"/);
   assert.deepEqual(plain(spiral.guides),retained);
+});
+
+test('diameter edits update the offset readout in place without rebuilding the guide rows',()=>{
+  const {c,e,elements,node,toggle}=harness();
+  toggle();
+  const strong={textContent:'Enter blank diameter'};
+  const result=node();
+  result.querySelector=selector=>selector==='strong'?strong:null;
+  elements.set('guideOffsetResult0',result);
+  let renders=0;
+  const render=c.renderWorkshopCalculator;
+  c.renderWorkshopCalculator=()=>{renders+=1;render();};
+  const markup=e('guideSpacingCards').innerHTML;
+  assert.equal(c.updateSpiralGuideDiameter(0,'14.5'),true);
+  assert.equal(c.workshopToolsState.spiral.guides[0].odMm,14.5);
+  assert.match(strong.textContent,/^5\.694 mm LEFT OF REEL LINE$/);
+  assert.equal(result.attributes['data-state'],'ready');
+  assert.equal(c.updateSpiralGuideDiameter(0,''),true);
+  assert.equal(strong.textContent,'Enter blank diameter');
+  assert.equal(result.attributes['data-state'],'missing');
+  assert.equal(renders,0);
+  assert.equal(e('guideSpacingCards').innerHTML,markup);
 });
 
 test('seven-guide Casting Progressive Placement reveals guides 4–6 through the real stage/render/input path',()=>{

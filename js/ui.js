@@ -1661,7 +1661,22 @@ function updateSpiralGuideDiameter(index,rawValue){
     guide.odMm=null;
   }
   markGuideDataDirty();
-  renderWorkshopCalculator();
+  // Diameter edits only change this row's offset readout. Rebuilding the rows would replace the input
+  // the user is tapping (blur/change fires before the tap lands), so update the readout in place.
+  if(!updateSpiralGuideOffsetResult(index))renderWorkshopCalculator();
+  return true;
+}
+function updateSpiralGuideOffsetResult(index){
+  const spiral=workshopToolsState.spiral;
+  const guide=spiral.guides[index];
+  const result=$(`guideOffsetResult${index}`);
+  const text=result&&result.querySelector?result.querySelector('strong'):null;
+  if(!guide || !text)return false;
+  const isStripper=index===spiral.guides.length-1;
+  const labels=spiralOffsetLabel(guide,spiral.direction,spiral.unit,spiral.imperialDisplay,{method:spiral.method,isStripper});
+  const hasValidOd=Number.isFinite(Number(guide.odMm)) && Number(guide.odMm)>0;
+  text.textContent=hasValidOd?labels.offsetText:'Enter blank diameter';
+  result.setAttribute('data-state',hasValidOd?'ready':'missing');
   return true;
 }
 function bindSpiralOffsetsToggle(){
