@@ -7220,13 +7220,6 @@ textarea::-moz-selection,
   border-color:rgba(214,210,200,.24);
 }
 
-#workshopScreen .build-pricing__delivery-note{
-  margin:-2px 0 0;
-  color:rgba(214,208,196,.66);
-  font-size:10px;
-  line-height:1.35;
-}
-
 #workshopScreen .build-pricing > label > span,
 #workshopScreen .build-pricing .quote-pricing-driver__label{
   color:var(--titanium);
