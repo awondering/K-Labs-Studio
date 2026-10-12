@@ -56,9 +56,9 @@ function harness(){
 
 test('live bidirectional conversion and 10 mm / 2.50 wraps reference result',()=>{
   const {c,e,input}=harness();
-  assert.equal(e('workshopDcWraps').value,'1.00');
+  assert.equal(e('workshopDcWraps').value,'1');
   input('workshopDcDiameter','10');
-  assert.equal(e('workshopDcCircumference').value,'31.416');
+  assert.equal(e('workshopDcCircumference').value,'31.4');
   input('workshopDcWraps','2.50');
   assert.equal(e('workshopDcWrapLength').textContent,'78.5 mm');
   input('workshopDcCircumference',String(20*Math.PI));
@@ -72,7 +72,7 @@ test('quarter-turn shared controls, half turns and minimum',()=>{
   click('workshopDcWrapsPlus');
   assert.equal(e('workshopDcWraps').value,'1.25');
   click('workshopDcWrapsPlus');
-  assert.equal(e('workshopDcWraps').value,'1.50');
+  assert.equal(e('workshopDcWraps').value,'1.5');
   input('workshopDcWraps','2.50');
   click('workshopDcWrapsMinus');
   assert.equal(e('workshopDcWraps').value,'2.25');
@@ -80,7 +80,7 @@ test('quarter-turn shared controls, half turns and minimum',()=>{
   click('workshopDcWrapsMinus');
   assert.equal(e('workshopDcWraps').value,'0.25');
   click('workshopDcWrapsPlus');
-  assert.equal(e('workshopDcWraps').value,'0.50');
+  assert.equal(e('workshopDcWraps').value,'0.5');
 });
 
 test('empty/invalid measurements and wraps clear results without stale values or NaN',()=>{

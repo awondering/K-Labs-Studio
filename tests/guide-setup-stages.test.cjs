@@ -26,6 +26,7 @@ function harness(){
     $:id=>elements.get(id),
     document:{querySelectorAll:()=>[]},
     syncGuideSpacingToggle:()=>false,
+    syncGuideListColumnUnits:()=>{},
     captureSpiralRowFocus:()=>null,restoreSpiralRowFocus(){},
     activeMeasurementUnits:()=> 'metric',
     calcGuideLayout:()=>({rows:c.workshopToolsState.spiral.guides.map((guide,index)=>({g:index+1,cum:guide.positionMm,spacing:200}))}),

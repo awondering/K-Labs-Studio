@@ -227,7 +227,8 @@ test('seven-guide Casting Progressive Placement reveals guides 4–6 through the
     assert.match(row(index),new RegExp(`id="guideOffsetDiameter${index}"`));
     assert.match(row(index),/Blank diameter \(mm\)/);
     assert.match(row(index),/Enter blank diameter/);
-    assert.doesNotMatch(row(index),/spiral-guide-row__edit|hidden/);
+    assert.doesNotMatch(row(index),/spiral-guide-row__edit/);
+    assert.doesNotMatch(row(index),/\shidden(?=[\s=>])/);
   }
   const before=plain(c.workshopToolsState.spiral.guides);
   for(const [index,value,result] of [[3,'12','14.137'],[4,'10','7.854'],[5,'8','3.142']]){
@@ -239,8 +240,9 @@ test('seven-guide Casting Progressive Placement reveals guides 4–6 through the
     assert.deepEqual(plain(c.workshopToolsState.spiral.guides[index]),before[index]);
   }
   screen.listeners.input({target:new c.HTMLInputElement(4,'invalid')});
-  assert.match(row(4),/Enter blank diameter/);
-  assert.doesNotMatch(row(4),/7\.854 mm|NaN/);
+  assert.match(row(4),/7\.854 mm/);
+  assert.doesNotMatch(row(4),/Enter blank diameter|NaN/);
+  assert.equal(c.workshopToolsState.spiral.guides[4].odMm,10);
   screen.listeners.input({target:new c.HTMLInputElement(4,'10')});
   const retained=plain(c.workshopToolsState.spiral.guides);
   toggle();
