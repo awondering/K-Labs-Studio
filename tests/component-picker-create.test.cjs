@@ -44,7 +44,7 @@ function harness({failSave=false,records=[],picker}={}){
     choiceOptionIsSelected:()=>false,
     clearStudioComponentSavedTimer(){},
     openInfoDialog(){},
-    NON_COMPONENT_LINE_ITEM_NAMES:[],
+    NON_COMPONENT_LINE_ITEM_NAMES:[],studioComponentPriceCheckExempt:false,
     findComponentLibraryRecordByName:(n)=>c.records.find((r)=>r.name.toLowerCase()===String(n).toLowerCase())||null,
     componentLibraryRecords:()=>c.records,
     currentStudioComponentRecord:()=>c.studioComponentDraft,
@@ -77,7 +77,7 @@ function harness({failSave=false,records=[],picker}={}){
   };
   c.studioComponentTaxonomyState=c.taxonomy;
   vm.createContext(c);
-  const names=['resolveComponentPickerDestination','startComponentCreateFromPicker','returnToComponentPicker','componentPickerReturnActive','beginStudioComponentAdd','renderComponentPickerCascadeOptions','commitStudioComponentDetails'];
+  const names=['resolveComponentPickerDestination','startComponentCreateFromPicker','returnToComponentPicker','componentPickerReturnActive','beginStudioComponentAdd','renderComponentPickerCascadeOptions','commitStudioComponentDetails','componentPriceProblem','componentRecordBuyPrice','studioComponentPriceValidation'];
   // Top-level `let` bindings are not exposed as context properties, so access them via runInContext.
   vm.runInContext(`var __state={};${names.map(functionSource).join('\n')}`,c);
   return c;

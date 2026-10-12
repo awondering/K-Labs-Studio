@@ -34,7 +34,7 @@ function harness({fail=false}={}){
   c.quote=c.quote;
   vm.createContext(c);
   const names=['libraryUpdateSignature','libraryUpdateStatusView','libraryUpdateStatusMarkup','syncLibraryUpdateStatus','libraryUpdateTarget','requestUpdateLibraryComponentFromRow','retryLibraryComponentUpdate'];
-  vm.runInContext('const libraryUpdateStatus=new WeakMap();const libraryUpdatesInFlight=new WeakSet();\n'+names.slice(0,5).map((n)=>functionSource(n)).join('\n')+'\n'+functionSource('runLibraryComponentUpdate',true)+'\n'+names.slice(5).map((n)=>functionSource(n)).join('\n'),c);
+  vm.runInContext('const libraryUpdateStatus=new WeakMap();const libraryUpdatesInFlight=new WeakSet();\n'+names.slice(0,5).map((n)=>functionSource(n)).join('\n')+'\n'+['componentPriceProblem','componentRecordBuyPrice','componentRecordsPriceProblem'].map((n)=>functionSource(n)).join('\n')+'\n'+functionSource('runLibraryComponentUpdate',true)+'\n'+names.slice(5).map((n)=>functionSource(n)).join('\n'),c);
   return c;
 }
 const text=(c)=>vm.runInContext('libraryUpdateStatusView(quote.components[0])',c);

@@ -4338,6 +4338,46 @@ function studioComponentMatchesSearch(record,queryKey){
   ].map((value)=>String(value||'').toLowerCase()).join(' ');
   return haystack.includes(queryKey);
 }
+// Returns '' for a usable price (0 is valid), otherwise a message. Missing is never treated as zero.
+function componentPriceProblem(value,label){
+  const text=typeof value==='string'?value.trim():value;
+  if(text===undefined || text===null || text==='')return `${label} is required. Enter 0.00 if there is no cost.`;
+  const number=Number(text);
+  if(typeof text==='boolean' || !Number.isFinite(number))return `${label} must be a valid amount.`;
+  if(number<0)return `${label} cannot be negative.`;
+  return '';
+}
+function componentRecordBuyPrice(record){
+  if(!record)return undefined;
+  return record.cost!==undefined?record.cost:record.unitCost;
+}
+// First problem among the stored Buy/Sell prices of the given records, naming the component.
+function componentRecordsPriceProblem(records){
+  for(const record of records){
+    const name=String(record&&record.name||'Component');
+    const buy=componentPriceProblem(componentRecordBuyPrice(record),'Buy Price');
+    if(buy)return `"${name}": ${buy}`;
+    const sell=componentPriceProblem(record&&record.unitPrice,'Sell Price');
+    if(sell)return `"${name}": ${sell}`;
+  }
+  return '';
+}
+// Detail editor check. When exempt (category move), a price left exactly as stored is not re-validated.
+function studioComponentPriceValidation(existing,exempt){
+  for(const [id,label,stored] of [
+    ['studioComponentCost','Buy Price',componentRecordBuyPrice(existing)],
+    ['studioComponentUnitPrice','Sell Price',existing&&existing.unitPrice],
+  ]){
+    const input=$(id);
+    if(!input)continue;
+    const raw=String(input.value||'').trim();
+    if(exempt && existing && (raw===''?stored===undefined:Number(raw)===stored))continue;
+    const message=componentPriceProblem(raw,label);
+    if(message)return {id,label,message};
+  }
+  return null;
+}
+let studioComponentPriceCheckExempt=false;
 function studioComponentCurrencyFieldValue(id){
   const input=$(id);
   const raw=String(input&&input.value||'').trim();
@@ -5096,7 +5136,8 @@ function commitComponentMove(){
   brandInput.value=studioComponentMoveState.brand.trim();
   brandInput.dispatchEvent(new Event('change',{bubbles:true}));
   closeComponentMoveSheet();
-  saveStudioComponentDetails();
+  studioComponentPriceCheckExempt=true;
+  Promise.resolve(saveStudioComponentDetails()).finally(()=>{studioComponentPriceCheckExempt=false;});
 }
 function saveStudioComponentDetails(){
   return runExplicitSave($('studioComponentSaveBtn'),commitStudioComponentDetails);
@@ -5127,6 +5168,13 @@ function commitStudioComponentDetails(){
     ?findComponentLibraryRecordByName(originalName)||findComponentLibraryRecordByName(nextName)
     :currentStudioComponentRecord();
   if(!studioComponentDetailContext.isAddMode && !existingRecord){openInfoDialog('Component Missing','The selected component was not found.');return false;}
+  const priceIssue=studioComponentPriceValidation(existingRecord,studioComponentPriceCheckExempt && !studioComponentDetailContext.isAddMode);
+  if(priceIssue){
+    openInfoDialog(`Check ${priceIssue.label}`,priceIssue.message);
+    const priceInput=$(priceIssue.id);
+    if(priceInput)priceInput.focus();
+    return false;
+  }
   const legacy=existingRecord||{};
   const sourceRecord={
     id:String(legacy.id||''),
@@ -5271,6 +5319,11 @@ function commitStudioComponentDuplicate(){
     componentDuplicateSheetError('A component with that name already exists.');
     return false;
   }
+  const priceProblem=componentRecordsPriceProblem([source]);
+  if(priceProblem){
+    componentDuplicateSheetError(`Cannot duplicate. ${priceProblem} Open the component, enter both prices and save it first.`);
+    return false;
+  }
   const records=componentLibraryRecords();
   const categoryName=String(source.category||'').trim();
   const subcategoryName=String(source.subcategory||'').trim();
@@ -5387,6 +5440,11 @@ function duplicateStudioSubcategory(categoryName,subcategoryName,name){
   }
   const copies=records.filter((record)=>normalizeNameKey(record.category)===normalizeNameKey(category.name) && normalizeNameKey(record.subcategory)===normalizeNameKey(subcategoryName))
     .map((record)=>({...record,id:'',category:category.name,categoryId:category.id,subcategory:nextName,stockOnHand:0,sizeOptions:normalizeComponentSizeOptions(record.sizeOptions)}));
+  const familyPriceProblem=componentRecordsPriceProblem(copies);
+  if(familyPriceProblem){
+    componentDuplicateSheetError(`Cannot duplicate family. ${familyPriceProblem} Fix it in the component details first.`);
+    return false;
+  }
   const created={id:studioTaxonomyId('sub'),name:nextName};
   const previousTaxonomy=ensureStudioComponentTaxonomyLoaded();
   const stagedTaxonomy=normalizeStudioComponentTaxonomy(previousTaxonomy);
@@ -10332,6 +10390,12 @@ async function runLibraryComponentUpdate(row){
     const target=libraryUpdateTarget(row);
     if(!target)throw new Error('No library component selected.');
     const {linkedRecord,libraryName}=target;
+    // Only the explicit "Update Library Component" action reaches here, so only it validates master pricing.
+    const priceProblem=componentRecordsPriceProblem([{name:libraryName,cost:row.cost,unitPrice:row.unitPrice}]);
+    if(priceProblem){
+      flashWorkshopStatus(`Library not updated. ${priceProblem}`,{pending:true,duration:3500});
+      throw new Error(priceProblem);
+    }
     const source=linkedRecord
       ?{...linkedRecord,cost:row.cost,unitCost:row.cost,unitPrice:row.unitPrice}
       :{...row,description:''};
