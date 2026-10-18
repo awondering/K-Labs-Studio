@@ -11774,3 +11774,19 @@ body.klabs-auth-resolving::after {
 .quote-payment__error:empty{display:none}
 .quote-payment__form input{min-width:0;box-sizing:border-box;font-size:16px}
 @media (max-width:420px){.quote-payment__form{grid-template-columns:1fr}}
+
+/* Components Library: component rows put brand/stock and Buy/Sell on one line, grouped left, wrapping left-aligned. */
+.studio-components-list__row--component .studio-components-list__item{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  column-gap:10px;
+}
+.studio-components-list__row--component .studio-components-list__item strong{flex:0 0 100%}
+.studio-components-list__row--component .studio-components-list__item > span:not(.studio-components-price-row){
+  flex:0 1 auto;
+  min-width:0;
+}
+.studio-components-list__row--component .studio-components-list__item .studio-components-price-row{
+  flex:0 0 auto;
+}
