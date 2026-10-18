@@ -3046,7 +3046,7 @@ function newQuoteTemplate(){
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
     labourRate:activeDefaultLabourRate(),labourHours:0,deliveryEntryMode:'breakdown',freight:0,packaging:0,deliveryTotal:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
-    depositEnabled:false,depositType:'percent',depositValue:0
+    depositEnabled:false,depositType:'percent',depositValue:0,payments:[]
   };
 }
 function normalizeAddressText(value){
@@ -3591,6 +3591,21 @@ function normalizeQuoteStatus(value){
 function normalizeDepositType(value){
   return String(value||'').trim().toLowerCase()==='fixed'?'fixed':'percent';
 }
+// Payments actually received against a build: {id,type:'deposit'|'balance',amount,date:'YYYY-MM-DD'}. Independent of status and price.
+function normalizePayments(value){
+  if(!Array.isArray(value))return[];
+  return value.map((item)=>{
+    if(!item || typeof item!=='object')return null;
+    const amount=roundMoney(Math.max(0,numberOrZero(item.amount)));
+    const date=String(item.date||'').trim();
+    if(!(amount>0) || !/^\d{4}-\d{2}-\d{2}$/.test(date))return null;
+    return{id:String(item.id||generateId('pay')),type:item.type==='balance'?'balance':'deposit',amount,date};
+  }).filter(Boolean);
+}
+function localDateInputValue(){
+  const now=new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+}
 // 'price' (default) preserves today's natural-sell-price+adjustment behaviour for builds that
 // never touch Required Profit/Margin; 'profit'/'margin' are the restored cost-plus target drivers.
 function normalizePricingDriver(value){
@@ -3610,6 +3625,7 @@ function normalizeQuote(inputQuote){
   merged.depositEnabled=!!(inputQuote&&inputQuote.depositEnabled);
   merged.depositType=normalizeDepositType(inputQuote&&inputQuote.depositType);
   merged.depositValue=Math.max(0,numberOrZero(inputQuote&&inputQuote.depositValue));
+  merged.payments=normalizePayments(inputQuote&&inputQuote.payments);
   merged.estimatedCompletionDate=String(inputQuote&&inputQuote.estimatedCompletionDate||'').trim();
   const incomingGstRate=(inputQuote&&inputQuote.gstRate);
   merged.gstRate=(incomingGstRate===0 || Number.isFinite(Number(incomingGstRate)))?Math.max(0,numberOrZero(incomingGstRate)):activeTaxRate();
@@ -7942,7 +7958,15 @@ function depositMaths(){
   const rawValue=Math.max(0,numberOrZero(quote.depositValue));
   const depositAmount=enabled?Math.min(total,type==='fixed'?rawValue:(total*rawValue/100)):0;
   const remainingBalance=Math.max(0,total-depositAmount);
-  return{...math,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance};
+  // Actual money received (not the configured deposit) drives Balance Owing.
+  const payments=Array.isArray(quote.payments)?quote.payments:[];
+  const depositPayment=payments.find((item)=>item&&item.type==='deposit')||null;
+  const amountReceived=Math.round(payments.reduce((sum,item)=>sum+Math.max(0,numberOrZero(item&&item.amount)),0)*100)/100;
+  const balanceOwing=Math.max(0,Math.round((total-amountReceived)*100)/100);
+  const depositReceivedAmount=depositPayment?Math.max(0,numberOrZero(depositPayment.amount)):0;
+  const depositOutstanding=enabled&&!(depositReceivedAmount>0&&depositReceivedAmount+0.005>=depositAmount);
+  const depositStillRequired=depositOutstanding?Math.max(0,Math.round((depositAmount-depositReceivedAmount)*100)/100):0;
+  return{...math,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance,depositPayment,depositReceivedAmount,depositReceivedDate:depositPayment?String(depositPayment.date||''):'',amountReceived,balanceOwing,depositOutstanding,depositStillRequired};
 }
 // Switching deposit type converts the stored value so the resulting deposit amount stays financially equivalent.
 // Percentages keep extra decimals (beyond the 1dp display) so repeated toggling does not drift.
@@ -12908,10 +12932,14 @@ function customerQuoteSummaryMarkup(){
   const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'To be confirmed';
   const notesText=customerRequestText(quote.notes);
   const deliveryBlock=customerQuoteDeliveryMarkup();
-  const confirmationText=customerQuoteConfirmationText(math.depositEnabled);
-  const pricingRows=math.depositEnabled
-    ?`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div><div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
-    :`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
+  const confirmationText=customerQuoteConfirmationText(math.depositOutstanding);
+  const totalRow=`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
+  const shortfall=math.depositEnabled&&math.amountReceived>0&&math.depositOutstanding;
+  const pricingRows=math.amountReceived>0
+    ?`${totalRow}${shortfall?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${shortfall?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>Balance Owing</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
+    :math.depositEnabled
+    ?`${totalRow}<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
+    :totalRow;
   const quoteNumber=specificationValue(quote.quoteNumber);
   const businessName=specificationValue(businessProfile.businessName);
   const businessLines=customerQuoteBusinessLines();
@@ -13095,8 +13123,17 @@ function emailCurrentQuote(){
     `Custom Rod Build — ${quoteNumber||'Quote'}`,
     '',
     `Total: ${currencyWithCode(math.total)}`,
-    `Deposit required: ${currencyWithCode(math.depositAmount)}`,
-    `Balance remaining: ${currencyWithCode(math.remainingBalance)}`,
+    ...(math.amountReceived>0
+      ?[
+        ...(math.depositEnabled&&math.depositOutstanding?[`Deposit required: ${currencyWithCode(math.depositAmount)}`]:[]),
+        `Deposit received: ${currencyWithCode(math.amountReceived)}`,
+        ...(math.depositEnabled&&math.depositOutstanding?[`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`]:[]),
+        `Balance owing: ${currencyWithCode(math.balanceOwing)}`,
+      ]
+      :[
+        `Deposit required: ${currencyWithCode(math.depositAmount)}`,
+        `Balance remaining: ${currencyWithCode(math.remainingBalance)}`,
+      ]),
     `Estimated completion: ${dueText}`,
   ];
   if(includedParts.length){
@@ -13118,7 +13155,7 @@ function emailCurrentQuote(){
       `Reference: ${quoteNumber||'Quote'}`
     );
   }
-  lines.push('', 'Once the deposit has been received, your build will be confirmed.');
+  if(math.amountReceived<=0 || math.depositOutstanding)lines.push('', 'Once the deposit has been received, your build will be confirmed.');
   const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
@@ -14281,6 +14318,12 @@ function bindWorkshopQuoteBuilder(){
     depositValueInput.addEventListener('input',onDepositValueUpdate);
     depositValueInput.addEventListener('change',onDepositValueUpdate);
   }
+  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteDepositReceivedRemove',removeDepositReceived]].forEach(([id,handler])=>{
+    const el=$(id);
+    if(!el || el.getAttribute('data-payment-bound')==='true')return;
+    el.setAttribute('data-payment-bound','true');
+    el.addEventListener('click',handler);
+  });
   bindBuildSpecificationInputs();
   const componentsList=$('quoteComponentsList');
   if(componentsList){
@@ -14667,8 +14710,81 @@ function updateQuoteSummary(){
   updateDepositFields();
   updateWorkshopSectionVisibility();
 }
+// Deposit Received is a recorded payment (not the configured deposit) and never touches status, price or costs.
+let paymentFormBuildKey='';
+function closeDepositReceivedForm(){
+  const form=$('quoteDepositReceivedForm');
+  if(form)form.hidden=true;
+  const trigger=$('quoteRecordDepositBtn');
+  if(trigger)trigger.setAttribute('aria-expanded','false');
+  const error=$('quoteDepositReceivedError');
+  if(error)error.textContent='';
+}
+function updatePaymentBlock(){
+  const status=$('quoteDepositReceivedStatus');
+  const trigger=$('quoteRecordDepositBtn');
+  if(!status || !trigger)return;
+  const buildKey=String(quote.buildNumber||'');
+  if(buildKey!==paymentFormBuildKey){
+    paymentFormBuildKey=buildKey;
+    closeDepositReceivedForm();
+  }
+  const math=depositMaths();
+  if(math.depositPayment){
+    const partial=math.depositEnabled&&math.depositOutstanding;
+    status.textContent=`Deposit received: ${currencyWithCode(math.depositReceivedAmount)} on ${formatDateDisplay(`${math.depositReceivedDate}T00:00:00`)}`
+      +(partial?`. Deposit still required: ${currencyWithCode(math.depositStillRequired)} of ${currencyWithCode(math.depositAmount)}.`:'');
+    trigger.textContent='Edit Deposit Received';
+  }else{
+    status.textContent=math.depositEnabled?'Deposit not yet received.':'';
+    trigger.textContent='Record Deposit Received';
+  }
+}
+function openDepositReceivedForm(){
+  const math=depositMaths();
+  const existing=math.depositPayment;
+  const suggested=existing?math.depositReceivedAmount:math.depositAmount;
+  $('quoteDepositReceivedAmount').value=suggested>0?roundMoney(suggested).toFixed(2):'';
+  $('quoteDepositReceivedDate').value=existing?math.depositReceivedDate:localDateInputValue();
+  $('quoteDepositReceivedError').textContent='';
+  $('quoteDepositReceivedRemove').hidden=!existing;
+  $('quoteDepositReceivedForm').hidden=false;
+  $('quoteRecordDepositBtn').setAttribute('aria-expanded','true');
+}
+function saveDepositReceived(){
+  const error=$('quoteDepositReceivedError');
+  const amount=roundMoney(numberOrZero($('quoteDepositReceivedAmount').value));
+  const date=String($('quoteDepositReceivedDate').value||'').trim();
+  const total=Math.max(0,numberOrZero(quoteMaths().total));
+  const others=(quote.payments||[]).filter((item)=>item.type!=='deposit').reduce((sum,item)=>sum+numberOrZero(item.amount),0);
+  if(!(amount>0)){error.textContent='Enter the amount received.';return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00`).getTime())){error.textContent='Enter the date received.';return;}
+  if(total>0 && amount+others>total+0.005){error.textContent='Amount received cannot exceed the total price.';return;}
+  const existing=(quote.payments||[]).find((item)=>item.type==='deposit');
+  const entry={id:existing?existing.id:generateId('pay'),type:'deposit',amount,date};
+  quote.payments=existing?quote.payments.map((item)=>item===existing?entry:item):[...(quote.payments||[]),entry];
+  closeDepositReceivedForm();
+  saveQuoteCurrent();
+  markQuoteDirty();
+  updateQuoteSummary();
+}
+function removeDepositReceived(){
+  openConfirmDialog({
+    title:'Remove Deposit Received',
+    message:'Remove the recorded deposit payment from this build? The total price and build status are not changed.',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove',kind:'danger'}]
+  },(action)=>{
+    if(action!=='remove')return;
+    quote.payments=(quote.payments||[]).filter((item)=>item.type!=='deposit');
+    closeDepositReceivedForm();
+    saveQuoteCurrent();
+    markQuoteDirty();
+    updateQuoteSummary();
+  });
+}
 // Deposit fields are optional and independent of build status; kept in sync with the live pricing math.
 function updateDepositFields(){
+  updatePaymentBlock();
   const enabledInput=$('quoteDepositEnabled');
   if(enabledInput && document.activeElement!==enabledInput)enabledInput.checked=!!quote.depositEnabled;
   const enabled=!!quote.depositEnabled;

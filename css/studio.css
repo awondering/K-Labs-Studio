@@ -11760,3 +11760,17 @@ body.klabs-auth-resolving::after {
   flex:0 0 auto;
   line-height:1;
 }
+
+/* Deposit Received: compact status + inline form inside Build Pricing. */
+.quote-payment{display:grid;gap:8px;min-width:0}
+.quote-payment__status{margin:0;font-size:13px;color:#ddd6ca;overflow-wrap:anywhere}
+.quote-payment__status:empty{display:none}
+.quote-payment__actions{display:flex;flex-wrap:wrap;gap:8px}
+.quote-payment__actions button{min-height:44px;flex:1 1 auto}
+.quote-payment__form{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0}
+.quote-payment__form[hidden]{display:none}
+.quote-payment__form .quote-payment__actions,.quote-payment__form .quote-payment__error{grid-column:1/-1}
+.quote-payment__error{margin:0;min-height:0;font-size:12px;color:#e4aeb4}
+.quote-payment__error:empty{display:none}
+.quote-payment__form input{min-width:0;box-sizing:border-box;font-size:16px}
+@media (max-width:420px){.quote-payment__form{grid-template-columns:1fr}}

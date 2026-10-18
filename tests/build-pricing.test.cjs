@@ -216,7 +216,8 @@ test('Tax disabled retains delivery recovery and legacy freight stays separately
 
 test('Saved legacy freight and modern delivery entry modes survive normalization',()=>{
   const context=pricingHarness();
-  ['newQuoteTemplate','normalizeQuote'].forEach(name=>vm.runInContext(extractFunction(name),context));
+  context.generateId=prefix=>prefix+'-test';
+  ['newQuoteTemplate','normalizePayments','normalizeQuote'].forEach(name=>vm.runInContext(extractFunction(name),context));
   assert.deepEqual({...context.deliveryAmounts({freightCost:5,freightCharge:8})},{cost:5,charge:8});
   const legacy=context.normalizeQuote({
     freightCost:5,
@@ -246,4 +247,97 @@ test('Saved legacy freight and modern delivery entry modes survive normalization
     deliveryTotal:100,
   });
   assert.equal(breakdown.deliveryTotal,13);
+});
+
+function paymentHarness(overrides){
+  const context=pricingHarness({pricingDriver:'profit',depositEnabled:true,depositType:'fixed',depositValue:50,...overrides});
+  context.generateId=prefix=>`${prefix}-test`;
+  ['normalizePayments','customerQuoteConfirmationText'].forEach(name=>vm.runInContext(extractFunction(name),context));
+  return context;
+}
+
+test('No payment recorded: deposit is only required, nothing is received',()=>{
+  const context=paymentHarness({});
+  const math=context.depositMaths();
+  assert.equal(math.depositAmount,50);
+  assert.equal(math.amountReceived,0);
+  assert.equal(math.depositPayment,null);
+  assert.equal(math.depositOutstanding,true);
+  assert.equal(math.balanceOwing,212.75);
+  assert.equal(math.remainingBalance,162.75);
+  assert.match(context.customerQuoteConfirmationText(math.depositOutstanding),/required deposit has been received/);
+});
+
+test('Full deposit received: balance owing uses actual payments and wording drops the requirement',()=>{
+  const context=paymentHarness({payments:[{id:'p1',type:'deposit',amount:50,date:'2026-10-18'}]});
+  const math=context.depositMaths();
+  assert.equal(math.amountReceived,50);
+  assert.equal(math.depositReceivedDate,'2026-10-18');
+  assert.equal(math.depositOutstanding,false);
+  assert.equal(math.depositStillRequired,0);
+  assert.equal(math.balanceOwing,162.75);
+  assert.equal(math.total,212.75);
+  assert.doesNotMatch(context.customerQuoteConfirmationText(math.depositOutstanding),/required deposit/);
+});
+
+test('Partial deposit keeps the requirement outstanding and balance reflects only money received',()=>{
+  const context=paymentHarness({payments:[{id:'p1',type:'deposit',amount:20,date:'2026-10-18'}]});
+  const math=context.depositMaths();
+  assert.equal(math.depositOutstanding,true);
+  assert.equal(math.depositStillRequired,30);
+  assert.equal(math.balanceOwing,192.75);
+});
+
+test('Deposit received differing from the configured deposit drives the balance, and a correction replaces it',()=>{
+  const context=paymentHarness({payments:[{id:'p1',type:'deposit',amount:80,date:'2026-10-18'}]});
+  assert.equal(context.depositMaths().balanceOwing,132.75);
+  context.quote.payments=[{id:'p1',type:'deposit',amount:60,date:'2026-10-17'}];
+  const math=context.depositMaths();
+  assert.equal(math.balanceOwing,152.75);
+  assert.equal(math.depositReceivedDate,'2026-10-17');
+});
+
+test('Recording a payment leaves price, status, and calculated deposit unchanged',()=>{
+  const context=paymentHarness({quoteStatus:'quote'});
+  const before=context.depositMaths();
+  context.quote.payments=[{id:'p1',type:'deposit',amount:50,date:'2026-10-18'}];
+  const after=context.depositMaths();
+  assert.equal(after.total,before.total);
+  assert.equal(after.depositAmount,before.depositAmount);
+  assert.equal(after.rodProfit,before.rodProfit);
+  assert.equal(context.quote.quoteStatus,'quote');
+});
+
+test('Percentage deposit calculation is unaffected by payments',()=>{
+  const context=paymentHarness({depositType:'percent',depositValue:20,payments:[{id:'p1',type:'deposit',amount:42.55,date:'2026-10-18'}]});
+  const math=context.depositMaths();
+  assert.equal(math.depositAmount,42.55);
+  assert.equal(math.depositOutstanding,false);
+  assert.equal(math.balanceOwing,170.2);
+});
+
+test('normalizePayments keeps valid payments and drops malformed ones; legacy records get none',()=>{
+  const context=paymentHarness({});
+  const clean=context.normalizePayments([
+    {id:'a',type:'deposit',amount:'25.5',date:'2026-10-18'},
+    {type:'balance',amount:10,date:'2026-11-01'},
+    {type:'deposit',amount:0,date:'2026-10-18'},
+    {type:'deposit',amount:10,date:'18/10/2026'},
+    null,
+  ]);
+  assert.equal(clean.length,2);
+  assert.equal(clean[0].amount,25.5);
+  assert.equal(clean[1].type,'balance');
+  assert.equal(clean[1].id,'pay-test');
+  assert.equal(context.normalizePayments(undefined).length,0);
+});
+
+test('Customer document and email render received-payment wording and markup wiring exists',()=>{
+  assert.match(source,/<span>Deposit Received<\/span>/);
+  assert.match(source,/<span>Balance Owing<\/span>/);
+  assert.match(source,/<span>Deposit Still Required<\/span>/);
+  assert.match(source,/Deposit received: \$\{currencyWithCode\(math\.amountReceived\)\}/);
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  ['quoteRecordDepositBtn','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositReceivedSave'].forEach(id=>assert.match(html,new RegExp(`id="${id}"`)));
+  assert.match(html,/Record Deposit Received/);
 });

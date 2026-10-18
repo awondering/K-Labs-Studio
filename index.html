@@ -640,6 +640,22 @@
             </div>
             <label id="quoteDepositValueField" hidden><span id="quoteDepositValueLabel">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0" /></label>
             <label id="quoteBalanceRemainingField" hidden><span>Balance Remaining</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
+            <div id="quotePaymentBlock" class="quote-grid__full quote-payment">
+              <p id="quoteDepositReceivedStatus" class="quote-payment__status" aria-live="polite"></p>
+              <div class="quote-payment__actions">
+                <button id="quoteRecordDepositBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteDepositReceivedForm">Record Deposit Received</button>
+              </div>
+              <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
+                <label><span>Amount Received</span><input id="quoteDepositReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                <label><span>Date Received</span><input id="quoteDepositReceivedDate" type="date" /></label>
+                <p id="quoteDepositReceivedError" class="quote-payment__error" role="alert"></p>
+                <div class="quote-payment__actions">
+                  <button id="quoteDepositReceivedSave" class="primary-action" type="button">Save</button>
+                  <button id="quoteDepositReceivedCancel" class="ghost-action" type="button">Cancel</button>
+                  <button id="quoteDepositReceivedRemove" class="ghost-action" type="button" hidden>Remove</button>
+                </div>
+              </div>
+            </div>
           </div>
         </article>
 
