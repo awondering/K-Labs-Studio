@@ -116,7 +116,85 @@ async function klabsForgotPassword() {
   message.textContent = "Password reset email sent.";
 }
 
+let klabsSignUpPending = false;
+
+function klabsShowAuthMode(mode) {
+  const signUp = mode === "signup";
+  document.getElementById("authForm").hidden = signUp;
+  document.getElementById("authShowSignUp").hidden = signUp;
+  document.getElementById("authSignUpForm").hidden = !signUp;
+  document.getElementById("authMessage").textContent = "";
+}
+
+async function klabsSignUp() {
+  if (klabsSignUpPending) return;
+
+  const email = document.getElementById("signUpEmail").value.trim();
+  const password = document.getElementById("signUpPassword").value;
+  const confirm = document.getElementById("signUpConfirm").value;
+  const message = document.getElementById("authMessage");
+  const button = document.getElementById("authSignUp");
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    message.textContent = "Enter a valid email address.";
+    return;
+  }
+  if (password.length < 6) {
+    message.textContent = "Password must be at least 6 characters.";
+    return;
+  }
+  if (password !== confirm) {
+    message.textContent = "Passwords do not match.";
+    return;
+  }
+
+  klabsSignUpPending = true;
+  message.textContent = "Creating account...";
+  button.setAttribute("aria-disabled", "true");
+  button.setAttribute("aria-busy", "true");
+
+  try {
+    const options = /^https?:$/.test(window.location.protocol)
+      ? { emailRedirectTo: window.location.origin + window.location.pathname.replace(/index\.html$/, "") }
+      : undefined;
+    const { data, error } = await window.KLABS_SUPABASE_CLIENT.auth.signUp({ email, password, options });
+
+    if (error) {
+      message.textContent = error.message;
+      return;
+    }
+
+    document.getElementById("signUpPassword").value = "";
+    document.getElementById("signUpConfirm").value = "";
+
+    if (data?.session) {
+      message.textContent = "";
+      await klabsCheckLogin();
+    } else {
+      // Also covers Supabase's obfuscated duplicate (user with empty identities): never reveal whether the email exists.
+      message.textContent = "Check your email (" + email + ") for a verification link. " +
+        "Your account is not verified until you open it. If you already have an account, sign in or use Forgot password.";
+    }
+  } catch (error) {
+    message.textContent = error?.message || "Could not create account. Check your connection and try again.";
+  } finally {
+    klabsSignUpPending = false;
+    button.removeAttribute("aria-disabled");
+    button.removeAttribute("aria-busy");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("authShowSignUp")
+    ?.addEventListener("click", () => klabsShowAuthMode("signup"));
+  document.getElementById("authShowSignIn")
+    ?.addEventListener("click", () => klabsShowAuthMode("signin"));
+  document.getElementById("authSignUpForm")
+    ?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      klabsSignUp();
+    });
+
   // Enter in either field and the Sign In button both submit this form natively.
   document.getElementById("authForm")
     ?.addEventListener("submit", (event) => {
@@ -157,6 +235,7 @@ document.getElementById("authTogglePassword")
 
   const message = document.getElementById("authMessage");
   if (message) message.textContent = "";
+  if (document.getElementById("authSignUpForm")) klabsShowAuthMode("signin");
 
   klabsApplyAuthState(null);
   window.scrollTo(0, 0);

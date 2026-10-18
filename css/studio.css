@@ -11378,6 +11378,19 @@ body.klabs-auth-resolving::after {
 
 /* Native sign-in form wrapper keeps the existing centred column layout. */
 #authScreen .auth-form{display:contents}
+#authScreen .auth-form[hidden],#authScreen .auth-link-button[hidden]{display:none}
+#authScreen #authSignUp{
+  width:min(100%,420px);margin-top:4px;padding:16px 18px;border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;background:linear-gradient(180deg,#c23349 0%,#8d182d 100%);color:#fff;font:inherit;
+  font-weight:700;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;
+}
+#authScreen [aria-disabled="true"]{opacity:.6;pointer-events:none}
+#authScreen .auth-link-button{
+  min-height:44px;margin-top:10px;padding:0 12px;border:0;background:transparent;
+  color:rgba(241,238,231,.72);font:inherit;font-size:13px;cursor:pointer;
+}
+#authScreen .auth-link-button:hover,#authScreen .auth-link-button:focus-visible{color:#f1eee7;outline:none}
+#authScreen input{font-size:16px}
 
 /* Compact Account card: sync status left, actions right on one row; wraps only when space runs out. */
 #settingsScreen .settings-account-card__row{

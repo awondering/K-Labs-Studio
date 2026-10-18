@@ -42,6 +42,25 @@
   <button id="authSignIn" type="submit">Sign In</button>
   </form>
 
+  <button id="authShowSignUp" class="auth-link-button" type="button">New here? Create account</button>
+
+  <form id="authSignUpForm" class="auth-form" hidden novalidate>
+    <label>
+      Email
+      <input id="signUpEmail" type="email" autocomplete="email" autocapitalize="none">
+    </label>
+    <label>
+      Password
+      <input id="signUpPassword" type="password" autocomplete="new-password">
+    </label>
+    <label>
+      Confirm password
+      <input id="signUpConfirm" type="password" autocomplete="new-password">
+    </label>
+    <button id="authSignUp" type="submit">Create Account</button>
+    <button id="authShowSignIn" class="auth-link-button" type="button">Back to Sign In</button>
+  </form>
+
   <p id="authMessage" aria-live="polite"></p>
 </section>
   <div class="carbon-field"></div>
