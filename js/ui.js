@@ -14803,7 +14803,11 @@ function updateDepositFields(){
   if(valueInput && document.activeElement!==valueInput)valueInput.value=numberOrZero(math.depositValue).toFixed(math.depositType==='fixed'?2:1);
   if(balanceField){
     const balanceInput=$('quoteBalanceRemaining');
-    if(balanceInput)balanceInput.value=currency(math.remainingBalance);
+    // Balance Owing reflects money actually received; before any payment the figure is only the balance after the required deposit.
+    const balanceLabel=$('quoteBalanceRemainingLabel');
+    const paid=math.amountReceived>0;
+    if(balanceLabel)balanceLabel.textContent=paid?'Balance Owing':'Balance After Deposit';
+    if(balanceInput)balanceInput.value=currency(paid?math.balanceOwing:math.remainingBalance);
   }
 }
 function ensureBlankEditorSheet(){

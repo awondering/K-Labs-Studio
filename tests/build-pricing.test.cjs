@@ -340,4 +340,7 @@ test('Customer document and email render received-payment wording and markup wir
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   ['quoteRecordDepositBtn','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositReceivedSave'].forEach(id=>assert.match(html,new RegExp(`id="${id}"`)));
   assert.match(html,/Record Deposit Received/);
+  assert.match(html,/id="quoteBalanceRemainingLabel">Balance After Deposit</);
+  assert.match(source,/paid\?'Balance Owing':'Balance After Deposit'/);
+  assert.match(source,/currency\(paid\?math\.balanceOwing:math\.remainingBalance\)/);
 });
