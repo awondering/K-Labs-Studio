@@ -11635,33 +11635,58 @@ body.klabs-auth-resolving::after {
 #studioComponentDetails .studio-size-section__heading{
   margin:0 0 4px;
 }
-/* Auto-width pills; 36px visual rows on a 44px pitch so each 44px remove target stays clear of its neighbours. */
+/* Read-only sizes: uniform three-column grid of centred cards. */
 #studioComponentDetails .studio-size-list{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  margin-bottom:6px;
+}
+#studioComponentDetails .studio-size-list .studio-size-chip{
   display:flex;
-  flex-wrap:wrap;
-  gap:8px 4px;
-  margin-bottom:4px;
-}
-#studioComponentDetails .studio-size-chip{
-  display:inline-flex;
   align-items:center;
-  width:auto;
-  max-width:100%;
-  height:36px;
-  min-height:36px;
-  padding:0 0 0 5px;
+  justify-content:center;
+  box-sizing:border-box;
+  width:100%;
+  height:auto;
+  min-height:34px;
+  padding:4px 6px;
   font-size:12px;
+  text-align:center;
 }
-#studioComponentDetails .studio-size-chip__label{
+#studioComponentDetails .studio-size-list .studio-size-chip__label{
+  overflow:visible;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-overflow:clip;
   line-height:1.2;
 }
-#studioComponentDetails .studio-size-chip__remove{
-  flex:0 0 auto;
+/* Removal lives in the Add or Edit Sizes editor, with 44px targets. */
+#studioComponentDetails .studio-size-edit-list{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin:6px 0 8px;
+}
+#studioComponentDetails .studio-size-edit-list:empty{
+  display:none;
+}
+#studioComponentDetails .studio-size-edit-list .studio-size-chip{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 44px;
+  align-items:center;
+  box-sizing:border-box;
+  width:100%;
+  height:44px;
+  min-height:44px;
+  padding:0 0 0 8px;
+  font-size:12px;
+}
+#studioComponentDetails .studio-size-edit-list .studio-size-chip__remove{
   width:44px;
   min-width:44px;
   height:44px;
   min-height:44px;
-  margin:-4px 0;
   font-size:16px;
 }
 /* Category and Subcategory stack full width on phones only. */

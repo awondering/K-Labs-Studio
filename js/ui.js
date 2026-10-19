@@ -4400,6 +4400,9 @@ function studioComponentCurrencyFieldValue(id){
   if(raw==='')return undefined;
   return numberOrZero(raw);
 }
+function studioComponentSizeValueMarkup(size){
+  return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span></span>`;
+}
 function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
   return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">&#215;</button></span>`;
@@ -4408,7 +4411,7 @@ function studioComponentSizeChipMarkup(size){
 function studioComponentSizesSectionMarkup(){
   const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
   const chips=sizes.length
-    ? sizes.map(studioComponentSizeChipMarkup).join('')
+    ? sizes.map(studioComponentSizeValueMarkup).join('')
     : '<p class="studio-size-list__empty">No sizes added.</p>';
   return `
     <section class="studio-size-section" aria-label="Available sizes">
@@ -4416,6 +4419,7 @@ function studioComponentSizesSectionMarkup(){
       <div class="studio-size-list" id="studioComponentSizeList">${chips}</div>
       <details class="studio-size-section__editor">
       <summary class="studio-size-section__summary">ADD OR EDIT SIZES <span class="studio-size-section__chevron" aria-hidden="true">&#8250;</span></summary>
+      <div class="studio-size-edit-list" id="studioComponentSizeEditList" aria-label="Remove individual sizes">${sizes.map(studioComponentSizeChipMarkup).join('')}</div>
       <div class="studio-size-entry">
         <label class="quote-component-field"><span>Add Size</span><input id="studioComponentSizeInput" type="text" placeholder="e.g. 12 mm or Large" /></label>
         <button class="ghost-action studio-component-details__move studio-size-entry__btn" type="button" data-size-action="add">Add</button>
@@ -4434,8 +4438,10 @@ function refreshStudioComponentSizeList(){
   const list=$('studioComponentSizeList');
   if(!list)return;
   const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
+  const editList=$('studioComponentSizeEditList');
+  if(editList)editList.innerHTML=sizes.map(studioComponentSizeChipMarkup).join('');
   list.innerHTML=sizes.length
-    ? sizes.map(studioComponentSizeChipMarkup).join('')
+    ? sizes.map(studioComponentSizeValueMarkup).join('')
     : '<p class="studio-size-list__empty">No sizes added.</p>';
   const count=list.closest('.studio-size-section')?.querySelector('.studio-size-section__count');
   if(count)count.textContent=String(sizes.length);

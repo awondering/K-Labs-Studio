@@ -25,7 +25,7 @@ const functions=[
   'studioComponentPayloadSignature','componentPriceProblem','componentRecordBuyPrice','componentRecordsPriceProblem','studioComponentPriceValidation',
   'renderComponentDuplicateSheet',
   'compareComponentSizeLabels','componentSizeOptionsForDisplay','componentRecordSizeOptions',
-  'studioComponentSizeChipMarkup','studioComponentSizesSectionMarkup','refreshStudioComponentSizeList',
+  'studioComponentSizeChipMarkup','studioComponentSizeValueMarkup','studioComponentSizesSectionMarkup','refreshStudioComponentSizeList',
   'addStudioComponentSizeFromInput','generateStudioComponentSizeRange','removeStudioComponentSize',
 ];
 
