@@ -12435,6 +12435,8 @@ function updateWorkshopBuildActionsUi(){
     statusEl.classList.toggle('workshop-build-actions-status-value--quote',lifecycle==='quote');
   }
   const isQuote=lifecycle==='quote';
+  const viewDocBtn=$('viewQuoteBtn');
+  if(viewDocBtn)viewDocBtn.textContent=customerDocumentLabels(lifecycle).viewLabel;
   const confirmBtn=$('confirmBuildBtn');
   if(confirmBtn)confirmBtn.hidden=!isQuote;
   const toggleButton=$('toggleCurrentBuildStatusBtn');
@@ -12938,6 +12940,19 @@ function customerQuoteDeliveryMarkup(){
   return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${deliveryRow}${addressBlock}</div>`;
 }
 // Deposit is the quote's existing optional setting (no second toggle): wording only reflects whether one is required.
+// Customer-facing wording follows the build status only; the stored record, quote number and figures are untouched.
+function customerDocumentLabels(status){
+  const key=status||currentBuildLifecycleStatus();
+  if(key==='complete')return{key,title:'Build Summary',viewLabel:'View Build Summary',numberLabel:'Quote Reference',emailName:'Build Summary',ariaLabel:'Build summary',closeLabel:'Close build summary'};
+  if(key==='active')return{key,title:'Build Confirmation',viewLabel:'View Build Confirmation',numberLabel:'Quote Reference',emailName:'Build Confirmation',ariaLabel:'Build confirmation',closeLabel:'Close build confirmation'};
+  return{key:'quote',title:'Customer Quote',viewLabel:'View Quote',numberLabel:'Quote Number',emailName:'Quote',ariaLabel:'Customer quote',closeLabel:'Close customer quote'};
+}
+function customerDocumentConfirmationText(depositEnabled,status){
+  const key=status||currentBuildLifecycleStatus();
+  if(key==='active')return 'Thank you for confirming your build. Your custom rod build is now proceeding. Please check the build specification, contact details and delivery details, and let us know promptly if anything needs to change.';
+  if(key==='complete')return 'Your custom rod build is complete. This summary shows the final build specification and payment status.';
+  return customerQuoteConfirmationText(depositEnabled);
+}
 function customerQuoteConfirmationText(depositEnabled){
   return depositEnabled
     ?'Please check the build specification, contact details and delivery details before confirming. Your build will be confirmed and scheduled for production once the required deposit has been received.'
@@ -12953,7 +12968,7 @@ function customerQuoteSummaryMarkup(){
   const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'To be confirmed';
   const notesText=customerRequestText(quote.notes);
   const deliveryBlock=customerQuoteDeliveryMarkup();
-  const confirmationText=customerQuoteConfirmationText(math.depositOutstanding);
+  const confirmationText=customerDocumentConfirmationText(math.depositOutstanding);
   const totalRow=`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
   const shortfall=math.depositEnabled&&math.amountReceived>0&&math.depositOutstanding;
   const pricingRows=math.amountReceived>0
@@ -12973,7 +12988,7 @@ function customerQuoteSummaryMarkup(){
   return `
     <div class="view-quote">
       ${businessBlock}
-      ${quoteNumber?`<div class="view-quote__row"><span>Quote Number</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}
+      ${quoteNumber?`<div class="view-quote__row"><span>${customerDocumentLabels().numberLabel}</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}
       <div class="view-quote__row"><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
       <div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>
       ${specRows.length?`<div class="view-quote__specs">${specificationRowsMarkup(specRows)}</div>`:''}
@@ -13098,6 +13113,13 @@ function openViewQuote(){
   if(body)body.innerHTML=customerQuoteSummaryMarkup();
   const sheet=$('viewQuoteSheet');
   if(!sheet)return;
+  const labels=customerDocumentLabels();
+  const sheetTitle=sheet.querySelector('.component-sheet__header h2');
+  if(sheetTitle)sheetTitle.textContent=labels.title;
+  const sheetPanel=sheet.querySelector('.component-sheet__panel');
+  if(sheetPanel)sheetPanel.setAttribute('aria-label',labels.ariaLabel);
+  const sheetClose=sheet.querySelector('.component-sheet__close');
+  if(sheetClose)sheetClose.setAttribute('aria-label',labels.closeLabel);
   sheet.hidden=false;
   // Reset scroll so a previous close-mid-scroll can't leave the reopened sheet stuck part-way down.
   const sheetBody=sheet.querySelector('.component-sheet__body');
@@ -13133,15 +13155,20 @@ function emailCurrentQuote(){
   const includedParts=customerIncludedParts();
   const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
   const quoteNumber=specificationValue(quote.quoteNumber);
+  const docLabels=customerDocumentLabels();
   const businessProfileLines=[specificationValue(businessProfile.businessName),...customerQuoteBusinessLines()].filter(Boolean);
   const lines=[
     ...businessProfileLines,
     ...(businessProfileLines.length?['']:[]),
     `Hi ${customerFirstName},`,
     '',
-    `Thank you for choosing ${businessName} for your custom rod build.`,
+    docLabels.key==='active'
+      ?`Thank you for confirming your custom rod build with ${businessName}. Your build is now proceeding.`
+      :docLabels.key==='complete'
+      ?`Your custom rod build with ${businessName} is complete. Here is your build summary.`
+      :`Thank you for choosing ${businessName} for your custom rod build.`,
     '',
-    `Custom Rod Build — ${quoteNumber||'Quote'}`,
+    `Custom Rod Build — ${quoteNumber||docLabels.emailName}`,
     '',
     `Total: ${currencyWithCode(math.total)}`,
     ...(math.amountReceived>0
@@ -13173,11 +13200,11 @@ function emailCurrentQuote(){
       'Payment Details',
       `Account name: ${businessProfile.paymentAccountName}`,
       `Bank account: ${businessProfile.paymentAccountNumber}`,
-      `Reference: ${quoteNumber||'Quote'}`
+      `Reference: ${quoteNumber||docLabels.emailName}`
     );
   }
-  if(math.amountReceived<=0 || math.depositOutstanding)lines.push('', 'Once the deposit has been received, your build will be confirmed.');
-  const subject=`${businessName} Custom Rod Build Quote — ${quoteNumber||'Quote'}`;
+  if(docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', 'Once the deposit has been received, your build will be confirmed.');
+  const subject=`${businessName} ${docLabels.key==='quote'?'Custom Rod Build Quote':docLabels.emailName} — ${quoteNumber||docLabels.emailName}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
