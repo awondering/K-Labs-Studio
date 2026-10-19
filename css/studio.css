@@ -11621,13 +11621,12 @@ body.klabs-auth-resolving::after {
 }
 #studioComponentDetails .studio-component-details__fields textarea{
   min-height:44px;
+  max-height:160px;
   line-height:1.35;
+  resize:none;
 }
 #studioComponentDetails .studio-component-details__fields textarea:placeholder-shown{
   height:44px;
-}
-#studioComponentDetails .studio-component-details__fields textarea:not(:placeholder-shown){
-  min-height:96px;
 }
 #studioComponentDetails .studio-size-section{
   margin:2px 0 4px;
@@ -11636,27 +11635,73 @@ body.klabs-auth-resolving::after {
 #studioComponentDetails .studio-size-section__heading{
   margin:0 0 4px;
 }
+/* Auto-width pills; 36px visual rows on a 44px pitch so each 44px remove target stays clear of its neighbours. */
 #studioComponentDetails .studio-size-list{
-  grid-template-columns:repeat(auto-fill,minmax(84px,1fr));
-  gap:4px;
-  margin-bottom:2px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 4px;
+  margin-bottom:4px;
 }
 #studioComponentDetails .studio-size-chip{
-  grid-template-columns:minmax(0,1fr) 40px;
-  height:38px;
-  min-height:38px;
-  padding:0 0 0 7px;
+  display:inline-flex;
+  align-items:center;
+  width:auto;
+  max-width:100%;
+  height:36px;
+  min-height:36px;
+  padding:0 0 0 5px;
+  font-size:12px;
+}
+#studioComponentDetails .studio-size-chip__label{
+  line-height:1.2;
 }
 #studioComponentDetails .studio-size-chip__remove{
-  width:40px;
-  height:38px;
+  flex:0 0 auto;
+  width:44px;
+  min-width:44px;
+  height:44px;
+  min-height:44px;
+  margin:-4px 0;
+  font-size:16px;
+}
+/* Category and Subcategory stack full width on phones only. */
+@media (max-width:520px){
+  #studioComponentDetails .studio-component-details__field--phone-full{
+    grid-column:1 / -1;
+  }
+}
+/* Empty state shares the heading row. */
+#studioComponentDetails .studio-size-section:has(.studio-size-list__empty){
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  column-gap:10px;
+}
+#studioComponentDetails .studio-size-section:has(.studio-size-list__empty) .studio-size-section__heading{
+  flex:0 0 auto;
+  margin:0;
+}
+#studioComponentDetails .studio-size-section:has(.studio-size-list__empty) .studio-size-list{
+  flex:1 1 0;
+  min-width:0;
+  margin:0;
+}
+#studioComponentDetails .studio-size-section:has(.studio-size-list__empty) .studio-size-section__editor{
+  flex:1 0 100%;
+}
+#studioComponentDetails .studio-size-list__empty{
+  font-size:12px;
 }
 #studioComponentDetails .studio-size-section__editor > summary{
-  min-height:40px;
+  min-height:44px;
 }
+/* The app shell already reserves clearance for the floating nav; the card ends below its buttons. */
 @media (max-width:760px){
   #studioComponentDetails{
-    padding-bottom:calc(120px + var(--safe-bottom));
+    padding-bottom:10px;
+  }
+  #studioComponentDetails .studio-size-section{
+    margin-bottom:4px;
   }
 }
 

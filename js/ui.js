@@ -4989,10 +4989,10 @@ function renderStudioComponentDetails(record,options){
     <input id="studioComponentOriginalName" type="hidden" value="${escapeHtml(name)}" />
     <div class="studio-component-details__fields quote-component-row__fields">
       ${isAddMode?`<label class="quote-component-field"><span>Component Name</span><input id="studioComponentName" type="text" value="${escapeHtml(name)}" placeholder="Component name" /></label>`:''}
-      <label class="quote-component-field studio-component-details__field--full"><span>Details</span><textarea id="studioComponentDescription" rows="2" placeholder="Optional component details">${escapeHtml(description)}</textarea></label>
+      <label class="quote-component-field studio-component-details__field--full"><span>Details</span><textarea id="studioComponentDescription" rows="1" placeholder="Optional component details">${escapeHtml(description)}</textarea></label>
       <label class="quote-component-field"><span>Brand / Manufacturer</span><span class="studio-component-brand-control"><span class="studio-component-details__select-wrap"><select id="studioComponentBrand" aria-label="Brand / Manufacturer">${studioComponentBrandOptionsMarkup(brand)}</select></span><button id="studioComponentManageBrandsBtn" class="ghost-action" type="button" aria-label="Manage Brands">Brands</button></span></label>
-      <label class="quote-component-field"><span>Category</span>${studioComponentCategoryOptionsMarkup(category)}</label>
-      <label class="quote-component-field"><span>Subcategory</span><span class="studio-component-details__select-wrap"><select id="studioComponentSubcategory">${studioComponentSubcategoryOptionsMarkup(category,subcategory)}</select></span></label>
+      <label class="quote-component-field studio-component-details__field--phone-full"><span>Category</span>${studioComponentCategoryOptionsMarkup(category)}</label>
+      <label class="quote-component-field studio-component-details__field--phone-full"><span>Subcategory</span><span class="studio-component-details__select-wrap"><select id="studioComponentSubcategory">${studioComponentSubcategoryOptionsMarkup(category,subcategory)}</select></span></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>Stock Quantity</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
@@ -5021,8 +5021,23 @@ function renderStudioComponentDetails(record,options){
     savedTimer:0,
     savedFlash:false,
   };
+  const descriptionField=$('studioComponentDescription');
+  if(descriptionField&&descriptionField.style&&typeof descriptionField.addEventListener==='function'){
+    fitStudioComponentDescription(descriptionField);
+    descriptionField.addEventListener('input',()=>fitStudioComponentDescription(descriptionField));
+  }
   syncStudioComponentSaveButtonState();
 }
+// Sizes Details to its content (one line when empty); text is never truncated, only scrolls past the cap.
+function fitStudioComponentDescription(field){
+  field.style.height='auto';
+  const border=field.offsetHeight-field.clientHeight;
+  field.style.height=`${Math.min(field.scrollHeight+border,160)}px`;
+}
+window.addEventListener('resize',()=>{
+  const field=$('studioComponentDescription');
+  if(field&&field.style)fitStudioComponentDescription(field);
+});
 function componentMoveCategoryNames(){
   const taxonomy=ensureStudioComponentTaxonomyLoaded();
   const names=studioCategoryNamesForLibrary(taxonomy,componentLibraryRecords());
