@@ -1161,6 +1161,22 @@ body.component-sheet-open .workshop-back-to-top{
   }
 }
 
+#settingsScreen #settingsMeasurementUnitsCard .settings-choice-button{
+  min-height:44px;
+}
+
+@media (max-width:560px){
+  #settingsScreen #settingsMeasurementUnitsCard .settings-choice-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:8px;
+  }
+
+  #settingsScreen #settingsMeasurementUnitsCard .settings-segmented .settings-choice-button + .settings-choice-button{
+    border-left:1px solid rgba(216,210,197,.15);
+  }
+}
+
 #settingsScreen #settingsTaxRate,
 #settingsScreen #settingsDefaultLabourRate,
 #settingsScreen #settingsBusinessProfileCard input{
