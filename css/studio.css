@@ -10469,47 +10469,31 @@ body.klabs-auth-resolving::after {
   color:rgba(214,210,200,.7);
 }
 
-#workshopScreen .rod-layout__prompt > .rod-layout__fallback,
 #workshopScreen .rod-layout__prompt > .rod-layout__choice,
 #workshopScreen .rod-layout__prompt > .guide-specification__edit{
   margin-top:4px;
   justify-self:start;
 }
 
-#workshopScreen .rod-layout__fallback{
+#workshopScreen .rod-layout__length{
   display:flex;
+  flex-wrap:wrap;
   align-items:center;
-  gap:6px;
+  justify-content:space-between;
+  gap:4px 10px;
+  margin-top:6px;
+  font-size:11px;
+  color:rgba(214,210,200,.7);
 }
 
-#workshopScreen .rod-layout__fallback input{
-  width:96px;
-  min-height:34px;
-  padding:0 8px;
-  text-align:right;
+#workshopScreen .rod-layout__length strong{
+  margin-left:4px;
+  color:#f2ede4;
   font-variant-numeric:tabular-nums;
 }
 
-#workshopScreen .rod-layout__fallback em{
-  font-size:10px;
-  font-style:normal;
-  letter-spacing:.04em;
-  color:rgba(214,210,200,.6);
-}
-
-#workshopScreen .rod-layout__set{
-  min-height:34px;
-  margin-left:4px;
-  padding:0 12px;
-  border:1px solid rgba(var(--kl-red-rgb),.6);
-  border-radius:8px;
-  background:rgba(var(--kl-red-rgb),.12);
-  color:#fff4ec;
-  font-size:9px;
-  font-weight:700;
-  letter-spacing:.12em;
-  text-transform:uppercase;
-  cursor:pointer;
+#workshopScreen .rod-layout__length .guide-specification__edit{
+  min-height:44px;
 }
 
 #workshopScreen .rod-layout__choice{
@@ -11571,6 +11555,48 @@ body.klabs-auth-resolving::after {
 }
 @media (max-width:359px){
   #workshopScreen .build-details__grips{grid-template-columns:minmax(0,1fr)}
+}
+
+#workshopScreen .build-details__finished-length{
+  display:grid;
+  gap:4px;
+}
+#workshopScreen .build-details__finished-length input{
+  min-height:44px;
+  box-sizing:border-box;
+}
+#workshopScreen .build-details__finished-length input[aria-invalid="true"]{
+  border-color:rgba(var(--kl-red-rgb),.85);
+}
+#workshopScreen .build-details__unit{
+  font-style:normal;
+  color:rgba(214,210,200,.62);
+  text-transform:none;
+  letter-spacing:.04em;
+}
+#workshopScreen .build-details__length-note{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:4px 10px;
+  font-size:11px;
+  line-height:1.4;
+  text-transform:none;
+  letter-spacing:normal;
+  color:rgba(214,210,200,.68);
+}
+#workshopScreen .build-details__length-note.is-error{color:#ff9d8a}
+#workshopScreen .build-details__length-note.is-warning{color:#f0c674}
+#workshopScreen .build-details__length-confirm{
+  min-height:44px;
+  padding:0 14px;
+  border:1px solid rgba(var(--kl-red-rgb),.6);
+  border-radius:8px;
+  background:rgba(var(--kl-red-rgb),.12);
+  color:#fff4ec;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
 }
 
 /* Components Library editor: compact heading, tighter rhythm, flatter size chips. */

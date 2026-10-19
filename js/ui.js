@@ -13512,8 +13512,125 @@ function refreshMeasurementPlaceholders(){
   if(rearGripInput)rearGripInput.placeholder=`e.g. ${rearGrip}`;
   if(lowerGripInput)lowerGripInput.placeholder=`e.g. ${lowerGrip}`;
   if(foreGripInput)foreGripInput.placeholder=`e.g. ${foreGrip}`;
+  renderFinishedRodLengthInput();
+}
+// Finished rod length lives only in buildSpecifications.layout.rodLengthMm (millimetres); Build Details is its single entry point.
+const FINISHED_ROD_LENGTH_INPUT_ID='quoteSpecFinishedRodLength';
+const FINISHED_ROD_LENGTH_WARN_BELOW_MM=300;
+let finishedRodLengthPending=null;
+function parseFinishedRodLengthInput(rawValue){
+  const text=String(rawValue||'').trim().toLowerCase().replace(/\s+/g,' ');
+  if(!text)return {state:'empty',mm:null};
+  let mm=NaN;
+  let match;
+  if((match=text.match(/^(\d+(?:\.\d+)?)\s*(mm|cm|m)$/))){
+    mm=Number(match[1])*({mm:1,cm:10,m:1000}[match[2]]);
+  }else if((match=text.match(/^(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')\s*(.*)$/))){
+    const extra=match[2]?parseImperialInchesInput(match[2].replace(/"$/,'')):0;
+    mm=Number.isFinite(extra) && extra>=0?inchesToMm((Number(match[1])*12)+extra):NaN;
+  }else if((match=text.match(/^(.+?)\s*(?:"|in|inch|inches)$/))){
+    const inches=parseImperialInchesInput(match[1]);
+    mm=Number.isFinite(inches)?inchesToMm(inches):NaN;
+  }else if(activeMeasurementUnits()==='imperial'){
+    mm=parseMeasurementInputValue(text);
+  }else if(/^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(text)){
+    mm=Number(text);
+  }
+  if(!Number.isFinite(mm))return {state:'invalid',mm:null};
+  if(mm<=0)return {state:'nonpositive',mm:null};
+  mm=Math.round(mm*1000)/1000;
+  return {state:mm<FINISHED_ROD_LENGTH_WARN_BELOW_MM?'small':'ok',mm};
+}
+function finishedRodLengthEquivalentText(mm){
+  return `${formatDecimal(mm,3)} mm \u00b7 ${formatDecimal(mmToInches(mm),3)} in`;
+}
+function finishedRodLengthUnitKey(){
+  return `${activeMeasurementUnits()}:${activeImperialDisplay()}`;
+}
+function renderFinishedRodLengthInput(){
+  const input=$(FINISHED_ROD_LENGTH_INPUT_ID);
+  if(!input)return;
+  if(finishedRodLengthPending && (finishedRodLengthPending.quote!==quote || finishedRodLengthPending.unitKey!==finishedRodLengthUnitKey()))finishedRodLengthPending=null;
+  const unitEl=$('quoteSpecFinishedRodLengthUnit');
+  if(unitEl)unitEl.textContent=measurementUnitSuffix();
+  input.placeholder=`e.g. ${blankMeasurementInputText(3962.4)}`;
+  const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
+  const stored=layout.rodLengthMm;
+  const noteEl=$('quoteSpecFinishedRodLengthNote');
+  if(!finishedRodLengthPending){
+    if(document.activeElement!==input)input.value=stored===null?'':blankMeasurementInputText(stored);
+    input.removeAttribute('aria-invalid');
+    if(noteEl){
+      noteEl.classList.remove('is-error','is-warning');
+      noteEl.textContent=stored===null?'Enter once here. Rod Build Layout uses this length. Add a unit to override, e.g. 13 ft or 3962 mm.':`Stored as ${finishedRodLengthEquivalentText(stored)}`;
+    }
+    return;
+  }
+  input.setAttribute('aria-invalid','true');
+  if(!noteEl)return;
+  const pending=finishedRodLengthPending;
+  const kept=stored===null?'No finished length is saved yet.':`Saved length kept: ${finishedRodLengthEquivalentText(stored)}.`;
+  noteEl.classList.toggle('is-error',pending.state!=='small');
+  noteEl.classList.toggle('is-warning',pending.state==='small');
+  noteEl.textContent='';
+  const message=document.createElement('span');
+  if(pending.state==='small'){
+    message.textContent=`${finishedRodLengthEquivalentText(pending.mm)} is very short for a rod. If you meant feet or inches, include the unit (e.g. 13 ft). ${kept}`;
+    const confirm=document.createElement('button');
+    confirm.type='button';
+    confirm.className='build-details__length-confirm';
+    confirm.setAttribute('data-finished-length-confirm','true');
+    confirm.textContent=`Use ${formatDecimal(pending.mm,3)} mm`;
+    noteEl.append(message,confirm);
+  }else{
+    message.textContent=pending.state==='nonpositive'
+      ?`Finished rod length must be greater than zero. ${kept}`
+      :`\u201c${pending.text}\u201d isn\u2019t a length Studio can read. Enter a number in ${measurementUnitSuffix()}, or add a unit such as 13 ft, 156 in or 3962 mm. ${kept}`;
+    noteEl.append(message);
+  }
+}
+function commitFinishedRodLength(mm){
+  finishedRodLengthPending=null;
+  setBuildLayoutValue('rodLengthMm',mm);
+  const input=$(FINISHED_ROD_LENGTH_INPUT_ID);
+  if(input && document.activeElement===input)input.blur();
+  renderFinishedRodLengthInput();
+}
+function onFinishedRodLengthChange(){
+  const input=$(FINISHED_ROD_LENGTH_INPUT_ID);
+  if(!input)return;
+  const parsed=parseFinishedRodLengthInput(input.value);
+  if(parsed.state==='empty' || parsed.state==='ok'){
+    input.value='';
+    commitFinishedRodLength(parsed.mm);
+    return;
+  }
+  finishedRodLengthPending={state:parsed.state,mm:parsed.mm,text:String(input.value).trim(),quote,unitKey:finishedRodLengthUnitKey()};
+  renderFinishedRodLengthInput();
+}
+function bindFinishedRodLengthInput(){
+  const input=$(FINISHED_ROD_LENGTH_INPUT_ID);
+  if(!input || input.getAttribute('data-finished-length-bound')==='true')return;
+  input.setAttribute('data-finished-length-bound','true');
+  input.addEventListener('change',onFinishedRodLengthChange);
+  input.addEventListener('input',()=>{
+    if(!finishedRodLengthPending)return;
+    finishedRodLengthPending=null;
+    renderFinishedRodLengthInput();
+  });
+  input.addEventListener('keydown',(event)=>{
+    if(event.key==='Enter'){
+      event.preventDefault();
+      input.blur();
+    }
+  });
+  const note=$('quoteSpecFinishedRodLengthNote');
+  if(note)note.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-finished-length-confirm]') && finishedRodLengthPending)commitFinishedRodLength(finishedRodLengthPending.mm);
+  });
 }
 function bindBuildSpecificationInputs(){
+  bindFinishedRodLengthInput();
   const editGuideLayoutBtn=$('editGuideLayoutBtn');
   if(editGuideLayoutBtn && editGuideLayoutBtn.getAttribute('data-guide-layout-bound')!=='true'){
     editGuideLayoutBtn.setAttribute('data-guide-layout-bound','true');
@@ -13555,13 +13672,6 @@ function bindBuildSpecificationInputs(){
         setBuildLayoutValue('reelSeatPositionRef',ref.getAttribute('data-layout-seat-ref'));
         return true;
       }
-      const commit=target.closest('[data-layout-commit]');
-      if(commit){
-        const input=commit.parentElement&&commit.parentElement.querySelector('[data-layout-field]');
-        if(input && String(input.value||'').trim())applyBuildLayoutInput(input);
-        else if(input)input.focus();
-        return true;
-      }
       const item=target.closest('[data-layout-item]');
       if(!item)return false;
       const key=item.getAttribute('data-layout-item');
@@ -13571,25 +13681,15 @@ function bindBuildSpecificationInputs(){
     };
     rodLayout.addEventListener('click',(event)=>{activate(event.target);});
     rodLayout.addEventListener('keydown',(event)=>{
-      const fallback=event.target.closest('[data-layout-field]');
-      if(fallback && event.key==='Enter'){
-        event.preventDefault();
-        fallback.blur();
-        return;
-      }
       if(event.key!=='Enter' && event.key!==' ')return;
       if(!event.target.closest('[data-layout-item]'))return;
       event.preventDefault();
       activate(event.target);
     });
-    // Fallback values commit on change only, so re-rendering the panel never steals the caret mid-entry.
-    rodLayout.addEventListener('change',(event)=>{
-      const input=event.target.closest('[data-layout-field]');
-      if(input)applyBuildLayoutInput(input);
-    });
   }
 }
 function renderBuildSpecificationInputs(){
+  renderFinishedRodLengthInput();
   BUILD_SPEC_FIELDS.forEach((field)=>{
     const el=$(field.id);
     if(!el)return;
@@ -13671,17 +13771,7 @@ function setBuildLayoutValue(path,value){
   markQuoteDirty();
   renderRodBuildLayout();
 }
-// Fallback values only (finished rod length, reel seat length) - never a copy of Build Details data.
-function applyBuildLayoutInput(el){
-  const path=el.getAttribute('data-layout-field')||'';
-  const raw=String(el.value||'').trim();
-  const next=raw?parseMeasurementInputValue(raw):null;
-  if(raw && !Number.isFinite(next)){
-    renderRodBuildLayout();
-    return;
-  }
-  setBuildLayoutValue(path,next);
-}
+// Reel seat position choice is still saved in the layout object; the finished length is edited only in Build Details.
 function reelSeatComponentLabel(){
   const row=(Array.isArray(quote.components)?quote.components:[]).find((item)=>{
     if(!componentRowHasMeaningfulData(item))return false;
@@ -13830,10 +13920,6 @@ function rodLayoutSvg(model,options){
   const sizing=detail?`width="${width}" height="${height}"`:'preserveAspectRatio="none"';
   return `<svg viewBox="0 0 ${width} ${height}" ${sizing} role="group" aria-label="${detail?'Rod build layout detail':'Rod build layout overview'}">${parts.join('')}</svg>`;
 }
-function rodLayoutFallbackInput(path,valueMm,label){
-  const value=valueMm===null || valueMm===undefined?'':blankMeasurementInputText(valueMm);
-  return `<div class="rod-layout__fallback"><input data-layout-field="${escapeHtml(path)}" type="text" inputmode="decimal" autocomplete="off" placeholder="Length" value="${escapeHtml(value)}" aria-label="${escapeHtml(label)}" /><em>${measurementUnitSuffix()}</em><button class="rod-layout__set" type="button" data-layout-commit>${value?'Update':'Set length'}</button></div>`;
-}
 function rodLayoutSeatRefLabels(){
   return {rear:'Rear of seat',centre:'Centre of seat',front:'Front of seat'};
 }
@@ -13852,7 +13938,7 @@ function rodLayoutReadout(model){
   if(rodLayoutSelection==='tipTop'){
     title='Tip Top';
     main=`${f(model.rodLength)} from butt \u00b7 finished rod length`;
-    extra=rodLayoutFallbackInput('rodLengthMm',model.rodLength,'Finished rod length');
+    edit='finishedLength';
   }else if(rodLayoutSelection.startsWith('guide:')){
     const guide=model.guides.find((entry)=>entry.key===rodLayoutSelection);
     if(!guide)return '';
@@ -13900,7 +13986,7 @@ function rodLayoutPromptsMarkup(prompts){
   if(!prompts.length)return '';
   return `<div class="rod-layout__prompts">${prompts.map((prompt)=>{
     const control=prompt.input
-      ?rodLayoutFallbackInput(prompt.input,null,prompt.label)
+      ?`<button class="guide-specification__edit" type="button" data-layout-edit="finishedLength">Enter in Build Details <span aria-hidden="true">&#x203a;</span></button>`
       :prompt.choice
         ?rodLayoutSeatRefChoice(null)
         :`<button class="guide-specification__edit" type="button" data-layout-edit="spec:${escapeHtml(prompt.spec)}">Edit in Build Details <span aria-hidden="true">&#x203a;</span></button>`;
@@ -13915,7 +14001,7 @@ function editRodLayoutItem(target){
   }
   const specKey=String(target||'').startsWith('spec:')?target.slice(5):'';
   const field=specKey?BUILD_SPEC_FIELDS.find((entry)=>entry.key===specKey):null;
-  const input=field?$(field.id):document.querySelector(`#rodBuildLayout [data-layout-field="${CSS.escape(target)}"]`);
+  const input=target==='finishedLength'?$(FINISHED_ROD_LENGTH_INPUT_ID):field?$(field.id):null;
   if(!input)return;
   input.scrollIntoView({block:'center',behavior:'smooth'});
   input.focus({preventScroll:true});
@@ -13938,8 +14024,6 @@ function syncRodLayoutRange(host){
 function renderRodBuildLayout(options){
   const host=$('rodBuildLayout');
   if(!host)return;
-  // Unrelated re-renders must not wipe a fallback value the user is still typing; it commits on change.
-  if(document.activeElement && host.contains(document.activeElement) && document.activeElement.matches('[data-layout-field]'))return;
   const model=rodLayoutModel();
   const validKeys=new Set(model.items.concat(model.guides).map((item)=>item.key));
   if(model.rodLength!==null)validKeys.add('tipTop');
@@ -13965,6 +14049,7 @@ function renderRodBuildLayout(options){
   host.innerHTML=`<p class="rod-layout__intro">Generated from your Build Details, Components and Guide Setup.</p>
     <div class="rod-layout__overview">${rodLayoutSvg(model,{detail:false})}<span class="rod-layout__range" aria-hidden="true"></span></div>
     <div class="rod-layout__scale"><span>Butt end</span><strong>${escapeHtml(f(model.rodLength))}</strong><span>Tip</span></div>
+    <div class="rod-layout__length"><span>Finished rod length <strong>${escapeHtml(f(model.rodLength))}</strong></span><button class="guide-specification__edit" type="button" data-layout-edit="finishedLength">Edit in Build Details <span aria-hidden="true">&#x203a;</span></button></div>
     <div class="rod-layout__detail">${rodLayoutSvg(model,{detail:true,width:detailWidth})}</div>
     <p class="rod-layout__quiet">Close-up \u00b7 scroll sideways, tap any part for details</p>
     ${model.exceeds?'<p class="rod-layout__notice">Some parts fall outside the finished rod length. Check the lengths in Build Details.</p>':''}
