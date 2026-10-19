@@ -11689,6 +11689,15 @@ body.klabs-auth-resolving::after {
   min-height:44px;
   font-size:16px;
 }
+/* Add mode renders a lone save button; keep it a 44px target and full width on phones. */
+#studioComponentDetails .studio-component-details__actions:not(:has(#studioComponentDeleteBtn)) > #studioComponentSaveBtn{
+  min-height:44px;
+}
+@media (max-width:520px){
+  #studioComponentDetails .studio-component-details__actions:not(:has(#studioComponentDeleteBtn)) > #studioComponentSaveBtn{
+    flex:1 1 100%;
+  }
+}
 /* Category and Subcategory stack full width on phones only. */
 @media (max-width:520px){
   #studioComponentDetails .studio-component-details__field--phone-full{
