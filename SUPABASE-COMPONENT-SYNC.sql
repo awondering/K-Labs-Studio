@@ -108,6 +108,7 @@ create policy components_delete_own on public.components
 -- RLS policies alone are not sufficient if the `authenticated` role has no grant on the table. Only the
 -- `authenticated` role is granted - `anon`/`public` receive nothing, so unauthenticated requests are refused
 -- at the privilege layer regardless of RLS.
+revoke all on public.components from public, anon;
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.components to authenticated;
 
@@ -136,4 +137,5 @@ drop policy if exists component_taxonomy_delete_own on public.component_taxonomy
 create policy component_taxonomy_delete_own on public.component_taxonomy
   for delete using (auth.uid() = user_id);
 
+revoke all on public.component_taxonomy from public, anon;
 grant select, insert, update, delete on public.component_taxonomy to authenticated;

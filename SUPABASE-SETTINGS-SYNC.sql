@@ -25,5 +25,6 @@ create policy studio_settings_update_own on public.studio_settings
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Table-level privilege grants: PostgREST checks these BEFORE RLS, so RLS alone is not sufficient.
+revoke all on public.studio_settings from public, anon;
 grant usage on schema public to authenticated;
 grant select, insert, update on public.studio_settings to authenticated;

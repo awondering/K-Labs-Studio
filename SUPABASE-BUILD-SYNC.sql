@@ -61,5 +61,7 @@ create policy builds_delete_own on public.builds
   for delete using (auth.uid() = user_id);
 
 -- Table-level privilege grants: PostgREST checks these BEFORE RLS, so RLS alone is not sufficient.
+-- Explicit least-privilege: never rely on default grants (new public tables stop receiving them on 2026-10-30).
+revoke all on public.builds from public, anon;
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.builds to authenticated;
