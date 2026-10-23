@@ -20,7 +20,7 @@ function ctx(over={},status='quote'){
   const quote={customerName:'Bren Pine',quoteNumber:'Q-1',jobType:'build',payments:[],components:[],country:'New Zealand',freightCharge:0,...over};
   const dialogs=[];
   const c={
-    quote,businessProfile:profile,dialogs,
+    quote,businessProfile:profile,studioSettings:{},dialogs,
     currentBuildLifecycleStatus:()=>status,
     depositMaths:()=>({total:500,depositEnabled:false,depositAmount:0,remainingBalance:500,amountReceived:0,balanceOwing:500,depositOutstanding:false,depositStillRequired:0}),
     customerIncludedParts:()=>['3 × Two Part Clear Coat'],
@@ -45,7 +45,7 @@ function ctx(over={},status='quote'){
     document:{querySelectorAll:()=>[]},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','customerEmailSignatureLines','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
   return c;
 }
 const full={addressLine1:'5 River Rd',cityTown:'Taupo',postcode:'3330'};

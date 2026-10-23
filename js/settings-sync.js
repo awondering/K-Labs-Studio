@@ -40,7 +40,7 @@
   }
   function normalizeStudioSettings(settings) {
     const source = settings && typeof settings === "object" ? settings : {};
-    return {
+    const normalized = {
       ...source,
       taxRate: Math.max(0, numberOrDefault(source.taxRate, 15) || 15),
       taxEnabled: typeof source.taxEnabled === "boolean" ? source.taxEnabled : true,
@@ -53,6 +53,8 @@
       dateFormat: normalizeDateFormat(source.dateFormat),
       currency: normalizeCurrency(source.currency),
     };
+    if (typeof source.emailIncludeSignature !== "boolean") delete normalized.emailIncludeSignature;
+    return normalized;
   }
   function normalizeBusinessProfile(profile) {
     const source = profile && typeof profile === "object" ? profile : {};

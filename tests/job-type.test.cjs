@@ -19,7 +19,7 @@ const profile={businessName:'K-Labs',contactName:'Kevin',phone:'027 000 0000',em
 function ctx(status,jobType){
   const quote={customerName:'Bren Pine',quoteNumber:'Q-1001',jobType,estimatedCompletionDate:'2026-12-01',payments:[],components:[{category:'Guide',quantity:2,cost:9}]};
   const c={
-    quote,businessProfile:profile,
+    quote,businessProfile:profile,studioSettings:{},
     currentBuildLifecycleStatus:()=>status,
     depositMaths:()=>({total:500,depositEnabled:true,depositAmount:100,remainingBalance:400,amountReceived:0,balanceOwing:500,depositOutstanding:true,depositStillRequired:100}),
     customerIncludedParts:()=>['2 × Guide wrap'],
@@ -39,7 +39,7 @@ function ctx(status,jobType){
     document:{querySelectorAll:()=>[]},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','customerEmailSignatureLines','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
   return c;
 }
 

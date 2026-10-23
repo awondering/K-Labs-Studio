@@ -367,7 +367,13 @@ function normalizeStudioSettings(settings){
   const imperialDisplay=normalizeImperialDisplay(settings&&settings.imperialDisplay);
   const dateFormat=normalizeDateFormat(settings&&settings.dateFormat);
   const currencyCode=normalizeCurrency(settings&&settings.currency);
-  return {...source,taxRate,taxEnabled,taxType,taxName,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
+  const normalized={...source,taxRate,taxEnabled,taxType,taxName,defaultLabourRate,trackComponentStock,measurementUnits,imperialDisplay,dateFormat,currency:currencyCode};
+  // Left unset until the user chooses, so existing users keep their current signature.
+  if(typeof source.emailIncludeSignature!=='boolean')delete normalized.emailIncludeSignature;
+  return normalized;
+}
+function activeEmailIncludeSignature(){
+  return !(studioSettings&&studioSettings.emailIncludeSignature===false);
 }
 function settingsObjectPatch(previous,next){
   const before=previous&&typeof previous==='object'?previous:{};
@@ -13301,7 +13307,7 @@ function customerEmailLines(){
     );
   }
   if(docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':'build'} will be confirmed.`);
-  const signature=customerEmailSignatureLines();
+  const signature=activeEmailIncludeSignature()?customerEmailSignatureLines():[];
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
 }
@@ -14945,7 +14951,7 @@ function updateQuoteSummary(){
     if(el)el.classList.toggle('quote-field--active-target',pricingDriver===driverName);
   });
   const totalLabel=document.querySelector('#quoteTotalField > span');
-  if(totalLabel)totalLabel.textContent=`Customer Price (includes delivery) (${activeCurrencyCode()})`;
+  if(totalLabel)totalLabel.textContent=`Customer Price (${activeCurrencyCode()})`;
   const taxNameText=activeTaxName();
   if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`${taxNameText} Amount`;
   if($('quoteIncludeTaxLabel'))$('quoteIncludeTaxLabel').textContent=`Include ${taxNameText}`;
@@ -15734,6 +15740,8 @@ function setSettingsSectionSaveState(sectionKey,state,message){
 }
 
 function syncSettingsPreferenceControls(){
+  const emailSignatureInput=$('settingsEmailIncludeSignature');
+  if(emailSignatureInput)emailSignatureInput.checked=activeEmailIncludeSignature();
   document.querySelectorAll('[data-settings-measurement-display]').forEach((button)=>{
     const selected=button.getAttribute('data-settings-measurement-display')===measurementDisplayMode();
     button.classList.toggle('active',selected);
@@ -15999,6 +16007,16 @@ function bindSettingsControls(){
     };
     trackStockInput.addEventListener('input',onTrackStockChange);
     trackStockInput.addEventListener('change',onTrackStockChange);
+  }
+  const emailSignatureInput=$('settingsEmailIncludeSignature');
+  if(emailSignatureInput && emailSignatureInput.getAttribute('data-settings-bound')!=='true'){
+    emailSignatureInput.setAttribute('data-settings-bound','true');
+    emailSignatureInput.checked=activeEmailIncludeSignature();
+    emailSignatureInput.addEventListener('change',()=>{
+      studioSettings.emailIncludeSignature=emailSignatureInput.checked;
+      const ok=saveStudioSettings();
+      setSettingsSectionSaveState('EmailSignature',ok?'saved':'error');
+    });
   }
   const taxRateInput=$('settingsTaxRate');
   const taxSavedLabel=$('settingsTaxSaved');
