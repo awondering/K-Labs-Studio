@@ -217,7 +217,7 @@ test('Tax disabled retains delivery recovery and legacy freight stays separately
 test('Saved legacy freight and modern delivery entry modes survive normalization',()=>{
   const context=pricingHarness();
   context.generateId=prefix=>prefix+'-test';
-  ['newQuoteTemplate','normalizePayments','normalizeQuote'].forEach(name=>vm.runInContext(extractFunction(name),context));
+  ['newQuoteTemplate','normalizeJobType','normalizePayments','normalizeQuote'].forEach(name=>vm.runInContext(extractFunction(name),context));
   assert.deepEqual({...context.deliveryAmounts({freightCost:5,freightCharge:8})},{cost:5,charge:8});
   const legacy=context.normalizeQuote({
     freightCost:5,

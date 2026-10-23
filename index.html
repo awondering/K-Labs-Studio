@@ -474,6 +474,7 @@
           <p id="quoteBuilderOverview" class="quote-builder__overview" hidden>
             <span id="quoteBuilderOverviewStatus" class="saved-build-card__status quote-builder__overview-status">Active</span>
             <span id="quoteBuilderOverviewDue" class="quote-builder__overview-due"></span>
+            <span id="quoteBuilderOverviewJobType" class="quote-builder__overview-due"></span>
           </p>
         </header>
 
@@ -505,6 +506,14 @@
             <label class="quote-grid__full"><span>Country</span><input id="quoteCountry" type="text" list="quoteCountryList" placeholder="Country" /></label>
           </div>
         </article>
+
+        <div id="quoteJobTypeGroup" class="quote-job-type" role="group" aria-label="Job Type">
+          <span class="quote-job-type__label">Job Type</span>
+          <div class="quote-job-type__options">
+            <button type="button" class="quote-job-type__option" data-job-type="build" aria-pressed="true">New Build</button>
+            <button type="button" class="quote-job-type__option" data-job-type="repair" aria-pressed="false">Repair / Refurbishment</button>
+          </div>
+        </div>
 
         <datalist id="quoteCountryList">
           <option value="New Zealand"></option>

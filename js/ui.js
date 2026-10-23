@@ -3046,8 +3046,14 @@ function newQuoteTemplate(){
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
     labourRate:activeDefaultLabourRate(),labourHours:0,deliveryEntryMode:'breakdown',freight:0,packaging:0,deliveryTotal:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
-    depositEnabled:false,depositType:'percent',depositValue:0,payments:[]
+    depositEnabled:false,depositType:'percent',depositValue:0,payments:[],jobType:'build'
   };
+}
+function normalizeJobType(value){
+  return String(value||'').trim().toLowerCase()==='repair'?'repair':'build';
+}
+function jobTypeLabel(value){
+  return normalizeJobType(value)==='repair'?'Repair / Refurbishment':'New Build';
 }
 function normalizeAddressText(value){
   return String(value||'').trim();
@@ -3532,7 +3538,7 @@ function customerIncludedPartsMarkup(parts){
   const listItems=safeParts.length
     ? safeParts.map((value)=>`<li>${escapeHtml(value)}</li>`).join('')
     : '<li>Your final component list will be confirmed before build start.</li>';
-  return `<div class="quote-preview-parts"><span>What your rod includes</span><ul>${listItems}</ul></div>`;
+  return `<div class="quote-preview-parts"><span>${escapeHtml(customerDocumentLabels().previewPartsHeading)}</span><ul>${listItems}</ul></div>`;
 }
 function workshopSpecificationRows(){
   const rows=customerSpecificationRows();
@@ -3620,6 +3626,7 @@ function normalizeQuote(inputQuote){
   merged.taxEnabled=hasStoredTaxEnabled?inputQuote.taxEnabled:((inputQuote&&typeof inputQuote==='object')?true:activeTaxEnabled());
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
+  merged.jobType=normalizeJobType(inputQuote&&inputQuote.jobType);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
   merged.quoteNumber=specificationValue(inputQuote&&inputQuote.quoteNumber);
   merged.depositEnabled=!!(inputQuote&&inputQuote.depositEnabled);
@@ -12361,7 +12368,7 @@ function savedBuildRowMarkup(entry){
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
   const menuOpen=isSavedBuildRowMenuOpen(entry.source,index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>Edited ${escapeHtml(updatedAtText)}</small>${estimatedCompletionText?`<small>Est. ${escapeHtml(estimatedCompletionText)}</small>`:''}</div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>${escapeHtml(jobTypeLabel(record.jobType))}</small><small>Edited ${escapeHtml(updatedAtText)}</small>${estimatedCompletionText?`<small>Est. ${escapeHtml(estimatedCompletionText)}</small>`:''}</div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
 }
 function isBuildEntryInStatusFilter(entry){
   return buildLifecycleStatusKey(entry&&entry.record)===buildsStatusFilter;
@@ -12483,6 +12490,8 @@ function updateWorkshopBuildOverview(){
     statusEl.classList.toggle('saved-build-card__status--active',lifecycle==='active');
     statusEl.classList.toggle('saved-build-card__status--quote',lifecycle==='quote');
   }
+  const jobTypeEl=$('quoteBuilderOverviewJobType');
+  if(jobTypeEl)jobTypeEl.textContent=`· ${jobTypeLabel(quote&&quote.jobType)}`;
   const dueEl=$('quoteBuilderOverviewDue');
   if(dueEl){
     const dueRaw=specificationValue(quote&&quote.estimatedCompletionDate);
@@ -12941,16 +12950,34 @@ function customerQuoteDeliveryMarkup(){
 }
 // Deposit is the quote's existing optional setting (no second toggle): wording only reflects whether one is required.
 // Customer-facing wording follows the build status only; the stored record, quote number and figures are untouched.
-function customerDocumentLabels(status){
+function customerDocumentLabels(status,jobType){
   const key=status||currentBuildLifecycleStatus();
-  if(key==='complete')return{key,title:'Build Summary',viewLabel:'View Build Summary',numberLabel:'Quote Reference',emailName:'Build Summary',ariaLabel:'Build summary',closeLabel:'Close build summary'};
-  if(key==='active')return{key,title:'Build Confirmation',viewLabel:'View Build Confirmation',numberLabel:'Quote Reference',emailName:'Build Confirmation',ariaLabel:'Build confirmation',closeLabel:'Close build confirmation'};
-  return{key:'quote',title:'Customer Quote',viewLabel:'View Quote',numberLabel:'Quote Number',emailName:'Quote',ariaLabel:'Customer quote',closeLabel:'Close customer quote'};
+  const repair=normalizeJobType(jobType||(typeof quote!=='undefined'&&quote?quote.jobType:''))==='repair';
+  const base=key==='complete'
+    ?{key,title:'Build Summary',viewLabel:'View Build Summary',numberLabel:'Quote Reference',emailName:'Build Summary',subjectName:'Build Summary',ariaLabel:'Build summary',closeLabel:'Close build summary'}
+    :key==='active'
+    ?{key,title:'Build Confirmation',viewLabel:'View Build Confirmation',numberLabel:'Quote Reference',emailName:'Build Confirmation',subjectName:'Build Confirmation',ariaLabel:'Build confirmation',closeLabel:'Close build confirmation'}
+    :{key:'quote',title:'Customer Quote',viewLabel:'View Quote',numberLabel:'Quote Number',emailName:'Quote',subjectName:'Custom Rod Build Quote',ariaLabel:'Customer quote',closeLabel:'Close customer quote'};
+  const common={jobType:repair?'repair':'build',jobNoun:'Custom Rod Build',partsHeading:'Components Included',previewPartsHeading:'What your rod includes',defaultRodName:'Custom Rod Build'};
+  if(!repair)return{...base,...common};
+  const repairNames=base.key==='complete'
+    ?{title:'Completed Repair Summary',viewLabel:'View Repair Summary',emailName:'Repair Summary',subjectName:'Completed Repair Summary',ariaLabel:'Completed repair summary',closeLabel:'Close repair summary'}
+    :base.key==='active'
+    ?{title:'Repair Confirmation',viewLabel:'View Repair Confirmation',emailName:'Repair Confirmation',subjectName:'Repair Confirmation',ariaLabel:'Repair confirmation',closeLabel:'Close repair confirmation'}
+    :{title:'Repair Quote',viewLabel:'View Repair Quote',emailName:'Repair Quote',subjectName:'Rod Repair Quote',ariaLabel:'Repair quote',closeLabel:'Close repair quote'};
+  return{...base,...common,...repairNames,jobNoun:'Rod Repair',partsHeading:'Work Included',previewPartsHeading:'Work Included',defaultRodName:'Rod Repair'};
 }
 function customerDocumentConfirmationText(depositEnabled,status){
-  const key=status||currentBuildLifecycleStatus();
-  if(key==='active')return 'Thank you for confirming your build. Your custom rod build is now proceeding. Please check the build specification, contact details and delivery details, and let us know promptly if anything needs to change.';
-  if(key==='complete')return 'Your custom rod build is complete. This summary shows the final build specification and payment status.';
+  const labels=customerDocumentLabels(status);
+  if(labels.jobType==='repair'){
+    if(labels.key==='active')return 'Thank you for confirming your repair. Your rod repair is now proceeding. Please check the agreed work, contact details and delivery details, and let us know promptly if anything needs to change.';
+    if(labels.key==='complete')return 'Your rod repair is complete. This summary shows the work carried out and payment status.';
+    return depositEnabled
+      ?'Please check the proposed work, contact details and delivery details before confirming. Your repair will be confirmed and scheduled once the required deposit has been received.'
+      :'Please check the proposed work, contact details and delivery details before confirming. Once confirmed, your repair will be scheduled.';
+  }
+  if(labels.key==='active')return 'Thank you for confirming your build. Your custom rod build is now proceeding. Please check the build specification, contact details and delivery details, and let us know promptly if anything needs to change.';
+  if(labels.key==='complete')return 'Your custom rod build is complete. This summary shows the final build specification and payment status.';
   return customerQuoteConfirmationText(depositEnabled);
 }
 function customerQuoteConfirmationText(depositEnabled){
@@ -12961,7 +12988,7 @@ function customerQuoteConfirmationText(depositEnabled){
 function customerQuoteSummaryMarkup(){
   const math=depositMaths();
   const customerName=specificationValue(quote.customerName)||'Customer';
-  const rodDescription=customerSafeText(specificationValue(quote.buildName))||'Custom Rod Build';
+  const rodDescription=customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName;
   const specRows=customerSpecificationRows();
   const parts=customerIncludedParts();
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
@@ -13165,6 +13192,7 @@ function customerEmailLines(){
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
   const isComplete=docLabels.key==='complete';
+  const isRepair=docLabels.jobType==='repair';
   const reference=quoteNumber||docLabels.emailName;
   const completedRaw=specificationValue(quote.completedAt);
   const completedDate=new Date(completedRaw);
@@ -13174,12 +13202,18 @@ function customerEmailLines(){
     `Hi ${customerFirstName},`,
     '',
     docLabels.key==='active'
-      ?`Your custom rod build with ${businessName} has been confirmed. Thank you for your order. Below are the agreed build details.`
+      ?(isRepair
+        ?`Your rod repair with ${businessName} has been confirmed. Below is a summary of the agreed work.`
+        :`Your custom rod build with ${businessName} has been confirmed. Thank you for your order. Below are the agreed build details.`)
       :isComplete
-      ?`Your custom ${businessName} fishing rod is complete. Below is a summary of your finished build.`
-      :`Thank you for your interest in a custom rod build with ${businessName}. Below is your proposed custom rod build and quotation.`,
+      ?(isRepair
+        ?`Your rod repair with ${businessName} is complete. Below is a summary of the work carried out.`
+        :`Your custom ${businessName} fishing rod is complete. Below is a summary of your finished build.`)
+      :(isRepair
+        ?'Thank you for your enquiry. Below is the proposed work and quotation for your rod repair.'
+        :`Thank you for your interest in a custom rod build with ${businessName}. Below is your proposed custom rod build and quotation.`),
     '',
-    `Custom Rod Build — ${reference}`,
+    `${docLabels.jobNoun} — ${reference}`,
     '',
     `Total: ${currencyWithCode(math.total)}`,
   ];
@@ -13200,7 +13234,7 @@ function customerEmailLines(){
     lines.push(`Estimated completion: ${dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed'}`);
   }
   if(includedParts.length){
-    lines.push('', 'Components Included', ...includedParts.map((part)=>`- ${part}`));
+    lines.push('', docLabels.partsHeading, ...includedParts.map((part)=>`- ${part}`));
   }
   const emailDeliveryCharge=deliveryAmounts(quote).charge;
   const emailAddressLines=customerAddressLines();
@@ -13218,7 +13252,7 @@ function customerEmailLines(){
       `Reference: ${reference}`
     );
   }
-  if(docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', 'Once the deposit has been received, your build will be confirmed.');
+  if(docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':'build'} will be confirmed.`);
   const signature=customerEmailSignatureLines();
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
@@ -13229,7 +13263,7 @@ function emailCurrentQuote(){
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
   const lines=customerEmailLines();
-  const subject=`${businessName} ${docLabels.key==='quote'?'Custom Rod Build Quote':docLabels.emailName} — ${quoteNumber||docLabels.emailName}`;
+  const subject=`${businessName} ${docLabels.subjectName} — ${quoteNumber||docLabels.emailName}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -13538,6 +13572,21 @@ function bindLayoutControls(){
       changeControlValue(field,direction,{persist:true});
     });
   });
+}
+function syncJobTypeSelector(){
+  const jobType=normalizeJobType(quote&&quote.jobType);
+  document.querySelectorAll('#quoteJobTypeGroup [data-job-type]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String(button.getAttribute('data-job-type')===jobType));
+  });
+}
+function setQuoteJobType(value){
+  const next=normalizeJobType(value);
+  if(normalizeJobType(quote.jobType)===next && quote.jobType===next){syncJobTypeSelector();return;}
+  quote.jobType=next;
+  syncJobTypeSelector();
+  updateWorkshopBuildOverview();
+  saveQuoteCurrent();
+  markQuoteDirty();
 }
 function workshopInputMap(){
   return[
@@ -14324,6 +14373,14 @@ function bindWorkshopQuoteBuilder(){
       openCustomerFinderSheet('browse');
     });
   }
+  const jobTypeGroup=$('quoteJobTypeGroup');
+  if(jobTypeGroup && jobTypeGroup.getAttribute('data-job-type-bound')!=='true'){
+    jobTypeGroup.setAttribute('data-job-type-bound','true');
+    jobTypeGroup.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-job-type]');
+      if(button)setQuoteJobType(button.getAttribute('data-job-type'));
+    });
+  }
   workshopInputMap().forEach(([id,key])=>{
     const el=$(id);
     if(!el)return;
@@ -14720,6 +14777,7 @@ function renderWorkshopQuote(){
     el.value=isNumeric?(quote[key]??0):(quote[key]??'');
   });
   syncStudioCustomSelectTrigger($('quoteCountry'));
+  syncJobTypeSelector();
   const mode=normalizeQuoteMode(quote.quoteMode);
   if(mode!=='internal'){
     quote.quoteMode='internal';

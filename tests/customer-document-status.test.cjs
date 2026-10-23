@@ -15,7 +15,7 @@ function fn(name){
 function ctx(status){
   const c={currentBuildLifecycleStatus:()=>status};
   vm.createContext(c);
-  vm.runInContext(`${fn('customerDocumentLabels')}\n${fn('customerQuoteConfirmationText')}\n${fn('customerDocumentConfirmationText')}`,c);
+  vm.runInContext(`${fn('normalizeJobType')}\n${fn('customerDocumentLabels')}\n${fn('customerQuoteConfirmationText')}\n${fn('customerDocumentConfirmationText')}`,c);
   return c;
 }
 
@@ -47,9 +47,9 @@ test('quote wording keeps acceptance text; active/complete drop it',()=>{
 test('email draft wording is status-aware and keeps the quote reference',()=>{
   const email=source.slice(source.indexOf('function customerEmailLines('),source.indexOf('function requestDeleteBlank('));
   assert.match(email,/const docLabels=customerDocumentLabels\(\)/);
-  assert.match(email,/Custom Rod Build — \$\{reference\}/);
+  assert.match(email,/\$\{docLabels\.jobNoun\} — \$\{reference\}/);
   assert.match(email,/const reference=quoteNumber\|\|docLabels\.emailName/);
-  assert.match(email,/docLabels\.key==='quote'\?'Custom Rod Build Quote':docLabels\.emailName/);
+  assert.match(email,/docLabels\.subjectName/);
   assert.match(email,/docLabels\.key==='quote' && \(math\.amountReceived<=0/);
   assert.match(email,/Reference: \$\{reference\}/);
 });

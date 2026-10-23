@@ -1,4 +1,4 @@
-﻿/* css/studio.css — styles for Build 008 rod and LED marker layer.
+/* css/studio.css — styles for Build 008 rod and LED marker layer.
    Stage 3: static placement and visual base. Animations and marker logic will be
    implemented in later stages.
 */
@@ -11913,3 +11913,10 @@ body.klabs-auth-resolving::after {
 .studio-components-list__row--component .studio-components-list__item .studio-components-price-row{
   flex:0 0 auto;
 }
+
+/* Job Type selector: compact two-option control under Customer Details. */
+#workshopScreen .quote-job-type{display:grid;gap:6px}
+#workshopScreen .quote-job-type__label{color:#c8c2b6;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+#workshopScreen .quote-job-type__options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+#workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}

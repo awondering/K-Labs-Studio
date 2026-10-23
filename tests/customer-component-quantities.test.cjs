@@ -28,7 +28,7 @@ function ctx(components,status='quote'){
     clampComponentQuantity:(v)=>Math.min(Math.max(1,Math.round(Number(v))),999),
   };
   vm.createContext(c);
-  vm.runInContext(['customerIncludedPartLabel','customerComponentExcludedFromCopy','componentRowQuantity','customerIncludedParts','customerIncludedPartsMarkup'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','customerDocumentLabels','customerIncludedPartLabel','customerComponentExcludedFromCopy','componentRowQuantity','customerIncludedParts','customerIncludedPartsMarkup'].map(fn).join('\n'),c);
   return c;
 }
 
