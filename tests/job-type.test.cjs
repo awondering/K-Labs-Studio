@@ -39,7 +39,7 @@ function ctx(status,jobType){
     document:{querySelectorAll:()=>[]},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','customerEmailSignatureLines','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','customerEmailSignatureLines','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
   return c;
 }
 

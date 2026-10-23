@@ -621,6 +621,14 @@
           <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--two quote-section__body build-pricing">
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
+            <div id="quoteFulfilmentGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Fulfilment Method">
+              <span class="quote-job-type__label">Fulfilment Method</span>
+              <div class="quote-job-type__options">
+                <button type="button" class="quote-job-type__option" data-fulfilment-method="collection" aria-pressed="false">Customer Collection</button>
+                <button type="button" class="quote-job-type__option" data-fulfilment-method="shipping" aria-pressed="false">Courier / Shipping</button>
+              </div>
+              <p id="quoteFulfilmentNote" class="build-pricing__note" hidden></p>
+            </div>
             <div id="quoteDeliveryFields" class="quote-grid__full build-pricing__delivery" role="group" aria-label="Delivery costs">
               <label id="quoteFreightField"><span>Freight</span><input id="quoteFreight" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
               <label id="quotePackagingField"><span>Packaging</span><input id="quotePackaging" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>

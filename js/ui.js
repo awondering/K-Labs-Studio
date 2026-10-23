@@ -3046,8 +3046,13 @@ function newQuoteTemplate(){
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
     labourRate:activeDefaultLabourRate(),labourHours:0,deliveryEntryMode:'breakdown',freight:0,packaging:0,deliveryTotal:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
-    depositEnabled:false,depositType:'percent',depositValue:0,payments:[],jobType:'build'
+    depositEnabled:false,depositType:'percent',depositValue:0,payments:[],jobType:'build',fulfilmentMethod:'',fulfilmentChoiceRequired:true
   };
+}
+// '' means no method chosen yet: legacy jobs keep their existing behaviour; new jobs must choose before a customer document is produced.
+function normalizeFulfilmentMethod(value){
+  const key=String(value||'').trim().toLowerCase();
+  return key==='collection'||key==='shipping'?key:'';
 }
 function normalizeJobType(value){
   return String(value||'').trim().toLowerCase()==='repair'?'repair':'build';
@@ -3206,6 +3211,43 @@ function customerAddressLines(){
   if(country)lines.push(country);
 
   return lines;
+}
+// A country alone (the default "New Zealand") is not a delivery address.
+function customerDeliveryAddressLines(){
+  const lines=customerAddressLines();
+  const country=specificationValue(quote.country);
+  if(!lines.length || (lines.length===1 && country && lines[0]===country))return [];
+  return lines;
+}
+function deliveryAddressIncomplete(){
+  return !(specificationValue(quote.addressLine1) && (specificationValue(quote.cityTown)||specificationValue(quote.suburbLocality)));
+}
+// One source for the collection/delivery block so the preview and email cannot disagree.
+function customerFulfilmentSection(){
+  if(normalizeFulfilmentMethod(quote.fulfilmentMethod)==='collection'){
+    const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
+    return{heading:'Collection',lines:[`Customer to collect from ${businessName}.`],charge:0,collection:true};
+  }
+  const charge=deliveryAmounts(quote).charge;
+  const lines=customerDeliveryAddressLines();
+  if(!(charge>0) && !lines.length)return null;
+  return{heading:'Delivery',lines,charge,collection:false};
+}
+// Returns a blocking message, a warning, or nothing, before a customer-facing document or email is produced.
+function customerFulfilmentCheck(){
+  const method=normalizeFulfilmentMethod(quote.fulfilmentMethod);
+  if(!method && quote.fulfilmentChoiceRequired)return{block:'Choose a Fulfilment Method (Customer Collection or Courier / Shipping) before creating a customer document or email.'};
+  if(method==='shipping' && deliveryAddressIncomplete())return{warn:'The delivery address is incomplete. The document will show only the details entered. Continue anyway?'};
+  return {};
+}
+function runWithFulfilmentCheck(proceed){
+  const check=customerFulfilmentCheck();
+  if(check.block){openInfoDialog('Fulfilment Method Needed',check.block);return;}
+  if(check.warn){
+    openConfirmDialog({title:'Delivery Details Needed',message:check.warn,actions:[{id:'cancel',label:'Go Back',kind:'ghost'},{id:'continue',label:'Continue',kind:'primary'}]},(action)=>{if(action==='continue')proceed();});
+    return;
+  }
+  proceed();
 }
 function customerPreviewLines(){
   const lines=[];
@@ -3627,6 +3669,8 @@ function normalizeQuote(inputQuote){
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.jobType=normalizeJobType(inputQuote&&inputQuote.jobType);
+  merged.fulfilmentMethod=normalizeFulfilmentMethod(inputQuote&&inputQuote.fulfilmentMethod);
+  merged.fulfilmentChoiceRequired=!!(inputQuote&&inputQuote.fulfilmentChoiceRequired===true);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
   merged.quoteNumber=specificationValue(inputQuote&&inputQuote.quoteNumber);
   merged.depositEnabled=!!(inputQuote&&inputQuote.depositEnabled);
@@ -12939,12 +12983,14 @@ function customerQuoteBusinessLines(){
 // Reuses the saved address fields (no separate delivery-data system) and any recorded delivery method;
 // omits cleanly when neither is present so the customer quote never shows blank labels or placeholders.
 function customerQuoteDeliveryMarkup(){
+  const section=customerFulfilmentSection();
   const methodText=customerSafeText(quote.deliveryMethod);
-  const addressLines=customerAddressLines();
-  const deliveryCharge=deliveryAmounts(quote).charge;
-  if(!methodText && !addressLines.length && !deliveryCharge)return '';
+  if(!section && !methodText)return '';
+  if(section&&section.collection)return `<div class="view-quote__delivery"><span>${section.heading}</span><p>${escapeHtml(section.lines[0])}</p></div>`;
   const methodRow=methodText?`<div><span>Method</span><strong>${escapeHtml(methodText)}</strong></div>`:'';
-  const deliveryRow=deliveryCharge>0?`<div><span>Delivery (included in Total Price)</span><strong>${currencyWithCode(deliveryCharge)}</strong></div>`:'';
+  const charge=section?section.charge:0;
+  const deliveryRow=charge>0?`<div><span>Delivery (included in Total Price)</span><strong>${currencyWithCode(charge)}</strong></div>`:'';
+  const addressLines=section?section.lines:[];
   const addressBlock=addressLines.length?`<p>${addressLines.map((line)=>escapeHtml(line)).join('<br />')}</p>`:'';
   return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${deliveryRow}${addressBlock}</div>`;
 }
@@ -13056,7 +13102,7 @@ function ensureViewQuoteSheet(){
     const action=event.target.closest('[data-view-quote-action]');
     if(action){closeViewQuote();return;}
     if(event.target.closest('#viewQuoteCloseBtn')){closeViewQuote();return;}
-    if(event.target.closest('#viewQuoteEmailBtn')){emailCurrentQuote();}
+    if(event.target.closest('#viewQuoteEmailBtn')){emailCurrentQuote({fromPreview:true});}
   });
 }
 // Same visualViewport-driven sizing pattern as choicePickerSheet/customerFinderSheet, so the sheet's
@@ -13135,6 +13181,9 @@ function unbindViewQuoteViewportHandlers(){
   clearViewQuoteViewportStyles();
 }
 function openViewQuote(){
+  runWithFulfilmentCheck(showViewQuote);
+}
+function showViewQuote(){
   ensureViewQuoteSheet();
   const body=$('viewQuoteBody');
   if(body)body.innerHTML=customerQuoteSummaryMarkup();
@@ -13236,12 +13285,11 @@ function customerEmailLines(){
   if(includedParts.length){
     lines.push('', docLabels.partsHeading, ...includedParts.map((part)=>`- ${part}`));
   }
-  const emailDeliveryCharge=deliveryAmounts(quote).charge;
-  const emailAddressLines=customerAddressLines();
-  if(emailDeliveryCharge>0 || emailAddressLines.length){
-    lines.push('', 'Delivery');
-    if(emailDeliveryCharge>0)lines.push(`Delivery (included in Total Price): ${currencyWithCode(emailDeliveryCharge)}`);
-    lines.push(...emailAddressLines);
+  const fulfilment=customerFulfilmentSection();
+  if(fulfilment){
+    lines.push('', fulfilment.heading);
+    if(fulfilment.charge>0)lines.push(`Delivery (included in Total Price): ${currencyWithCode(fulfilment.charge)}`);
+    lines.push(...fulfilment.lines);
   }
   if(balanceDue && businessProfileHasPaymentDetails()){
     lines.push(
@@ -13257,7 +13305,8 @@ function customerEmailLines(){
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
 }
-function emailCurrentQuote(){
+function emailCurrentQuote(options){
+  if(!(options&&options.fromPreview)){runWithFulfilmentCheck(()=>emailCurrentQuote({fromPreview:true}));return;}
   const email=specificationValue(quote.email);
   const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
   const quoteNumber=specificationValue(quote.quoteNumber);
@@ -13572,6 +13621,33 @@ function bindLayoutControls(){
       changeControlValue(field,direction,{persist:true});
     });
   });
+}
+function fulfilmentStudioNote(){
+  const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
+  if(method==='collection' && deliveryAmounts(quote).charge>0)return 'Freight charges are still included in the price. Collection is selected; review Freight if it is no longer needed.';
+  if(method==='shipping' && deliveryAddressIncomplete())return 'Delivery details needed: add the full delivery address in Customer Details.';
+  if(!method)return quote&&quote.fulfilmentChoiceRequired?'Choose how this job will be fulfilled.':'';
+  return '';
+}
+function syncFulfilmentSelector(){
+  const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
+  document.querySelectorAll('#quoteFulfilmentGroup [data-fulfilment-method]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String(button.getAttribute('data-fulfilment-method')===method));
+  });
+  const note=$('quoteFulfilmentNote');
+  if(note){
+    const text=fulfilmentStudioNote();
+    note.textContent=text;
+    note.hidden=!text;
+  }
+}
+function setQuoteFulfilmentMethod(value){
+  const next=normalizeFulfilmentMethod(value);
+  if(!next || quote.fulfilmentMethod===next){syncFulfilmentSelector();return;}
+  quote.fulfilmentMethod=next;
+  syncFulfilmentSelector();
+  saveQuoteCurrent();
+  markQuoteDirty();
 }
 function syncJobTypeSelector(){
   const jobType=normalizeJobType(quote&&quote.jobType);
@@ -14373,6 +14449,14 @@ function bindWorkshopQuoteBuilder(){
       openCustomerFinderSheet('browse');
     });
   }
+  const fulfilmentGroup=$('quoteFulfilmentGroup');
+  if(fulfilmentGroup && fulfilmentGroup.getAttribute('data-fulfilment-bound')!=='true'){
+    fulfilmentGroup.setAttribute('data-fulfilment-bound','true');
+    fulfilmentGroup.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-fulfilment-method]');
+      if(button)setQuoteFulfilmentMethod(button.getAttribute('data-fulfilment-method'));
+    });
+  }
   const jobTypeGroup=$('quoteJobTypeGroup');
   if(jobTypeGroup && jobTypeGroup.getAttribute('data-job-type-bound')!=='true'){
     jobTypeGroup.setAttribute('data-job-type-bound','true');
@@ -14778,6 +14862,7 @@ function renderWorkshopQuote(){
   });
   syncStudioCustomSelectTrigger($('quoteCountry'));
   syncJobTypeSelector();
+  syncFulfilmentSelector();
   const mode=normalizeQuoteMode(quote.quoteMode);
   if(mode!=='internal'){
     quote.quoteMode='internal';
