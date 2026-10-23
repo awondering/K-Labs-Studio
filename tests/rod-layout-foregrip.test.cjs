@@ -20,6 +20,7 @@ function model(specs){
     workshopToolsState:{spiral:{guides:[]}},
     normalizeBuildLayout:()=>({rodLengthMm:2000,reelSeat:{lengthMm:130},reelSeatPositionRef:'rear'}),
     calcGuideLayout:()=>({rows:[]}),
+    buildGuideView:()=>null,
     formatGuideListMeasurement:(mm)=>`${mm} mm`,
     parseMeasurementInputValue:(text)=>Number(text),
     parseImperialInchesInput:Number,

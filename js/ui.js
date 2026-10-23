@@ -27,6 +27,8 @@ function normalizeLayoutState(input){
   };
 }
 let state=normalizeLayoutState(Store.get('klabs-studio-state',{firstGuide:105,guideCount:9,targetStripper:1260,locked:false,workshopIndex:0}));
+// Standalone Workshop guide state, held aside while a build's guide layout is being edited from Studio.
+let workshopGuideSnapshot=null;
 const DEFAULT_SUPPLIER_NAMES=['Fuji','CTS','Alps','Batson','American Tackle','PacBay','K-Labs','AliExpress','Other'];
 // Sentinel row in the Subcategory picker that clears the value (mirrors the old select's "—" option).
 const SUBCATEGORY_CLEAR_LABEL='—';
@@ -279,6 +281,7 @@ let workflowCustomerReturnKey='';
 function clearLayoutEntryOrigin(){
   layoutEntryOrigin='';
   layoutEntryBuildRef=null;
+  endBuildGuideEdit();
 }
 function clearWorkflowCustomerOrigin(){
   workflowReturnOrigin='';
@@ -286,6 +289,7 @@ function clearWorkflowCustomerOrigin(){
 }
 
 function save(){
+  if(workshopGuideSnapshot)return;
   Store.set('klabs-studio-state',{
     firstGuide:numberOrZero(state.firstGuide),
     guideCount:numberOrZero(state.guideCount),
@@ -1224,6 +1228,60 @@ function applyGuideSpecificationSnapshot(spec){
     spiral.guides.forEach((guide,index)=>{guide.angleDeg=clampSpiralAngle(angles[index]);});
   }
 }
+function applyGuideLayoutDefaults(){
+  state.firstGuide=105;state.guideCount=9;state.targetStripper=1260;state.workshopIndex=0;
+  const spiral=workshopToolsState.spiral;
+  spiral.method=SPIRAL_MAPPER_DEFAULT_STATE.method;
+  spiral.direction=SPIRAL_MAPPER_DEFAULT_STATE.direction;
+  spiral.offsetStartAngle=SPIRAL_MAPPER_DEFAULT_STATE.offsetStartAngle;
+  spiral.rodStyle='';
+  spiral.expandedGuideIndex=-1;
+  spiral.guides=[];
+  syncSpiralWithGuideLayout();
+}
+function captureLiveGuideState(){
+  const spiral=workshopToolsState.spiral;
+  return {
+    state:{...state},
+    spiral:{
+      method:spiral.method,direction:spiral.direction,offsetStartAngle:spiral.offsetStartAngle,rodStyle:spiral.rodStyle,
+      guideCount:spiral.guideCount,expandedGuideIndex:spiral.expandedGuideIndex,
+      guides:(Array.isArray(spiral.guides)?spiral.guides:[]).map((guide)=>({...guide})),
+    },
+  };
+}
+// Loads a build's own layout (or neutral defaults) into the live Guide Setup tools, keeping Workshop's last-used state aside.
+function beginBuildGuideEdit(spec){
+  if(!workshopGuideSnapshot)workshopGuideSnapshot=captureLiveGuideState();
+  workshopToolsState.spiral.guides=[];
+  if(spec&&Number.isFinite(spec.guideCount))applyGuideSpecificationSnapshot(spec);
+  else applyGuideLayoutDefaults();
+  render();
+}
+function endBuildGuideEdit(){
+  const snapshot=workshopGuideSnapshot;
+  if(!snapshot)return;
+  workshopGuideSnapshot=null;
+  Object.assign(state,snapshot.state);
+  Object.assign(workshopToolsState.spiral,snapshot.spiral,{guides:snapshot.spiral.guides.map((guide)=>({...guide}))});
+  render();
+}
+// Read-only view of the open build's own saved layout for Studio displays; null until one has been deliberately saved.
+function buildGuideView(){
+  const spec=quote&&quote.guideSpecification;
+  if(!spec || !Number.isFinite(spec.guideCount))return null;
+  const view={
+    firstGuide:Number.isFinite(spec.firstGuideMm)?spec.firstGuideMm:105,
+    guideCount:spec.guideCount,
+    targetStripper:Number.isFinite(spec.targetStripperMm)?spec.targetStripperMm:1260,
+    method:normalizeSpiralMethod(spec.spiralMethod),
+    direction:normalizeSpiralDirection(spec.spiralDirection),
+    rodStyle:normalizeRodStyle(spec.rodStyle),
+    angles:Array.isArray(spec.spiralAngles)?spec.spiralAngles:[],
+  };
+  view.rows=calcGuideLayout(+view.firstGuide,+view.guideCount,+view.targetStripper).rows||[];
+  return view;
+}
 function captureSpiralGeometry(){
   const spiral=workshopToolsState.spiral;
   return {
@@ -1771,8 +1829,8 @@ function syncLayoutReturnControl(){
   if(!button)return;
   const label=button.querySelector('span:last-child');
   const fromBuild=layoutEntryOrigin==='build';
-  if(label)label.textContent=fromBuild?'RETURN TO BUILD':'Workshop';
-  button.setAttribute('aria-label',fromBuild?'Save and return to the build being edited':'Return to Workshop landing screen');
+  if(label)label.textContent=fromBuild?'SAVE TO BUILD & RETURN':'Workshop';
+  button.setAttribute('aria-label',fromBuild?'Save the guide layout to the build and return':'Return to Workshop landing screen');
 }
 // Mirrors syncLayoutReturnControl for the currently visible Workshop tool card (Diameter/Grip).
 function syncWorkshopToolBackControl(){
@@ -1795,33 +1853,28 @@ function findSavedBuildTargetByRef(ref){
   const found=records.findIndex((record)=>normalizeNameKey(record&&record.buildNumber)===buildNumber);
   return found>=0?{index:found,record:records[found]}:null;
 }
-// Saves live Guide Spacing/Guide Orientation edits to the originating build (existing save mechanism), then reopens it with Build Details expanded.
+// Explicit SAVE TO BUILD & RETURN: the only place Guide Setup edits are captured onto the originating build.
 async function returnToOriginatingBuildFromGuideLayout(){
-  const originRef=layoutEntryBuildRef;
-  clearQuoteAutosaveTimer();
-  if(quoteHasMeaningfulDraft(quote)){
-    try{
-      await persistCurrentQuoteRecord();
-      markQuoteSaved();
-    }catch(error){
-      console.error('[K-Labs Studio] Could not save guide layout:',error);
-      flashWorkshopStatus('Connect to allocate a quote number and save',{pending:true,duration:3200});
-      return;
-    }
-  }
-  clearLayoutEntryOrigin();
-  const originBuildNumber=normalizeNameKey(originRef&&originRef.buildNumber);
+  const originBuildNumber=normalizeNameKey(layoutEntryBuildRef&&layoutEntryBuildRef.buildNumber);
   if(originBuildNumber && originBuildNumber!==normalizeNameKey(quote&&quote.buildNumber)){
-    const target=findSavedBuildTargetByRef(originRef);
-    if(target){
-      openSavedBuildRecord(originRef.source||'build',target.index,{focusSection:'workshopBuildSpecsBody'});
-      return;
-    }
-    // Originating build genuinely no longer exists: never guess/open an unrelated build - fall back to Active Builds.
-    openActiveBuildsList();
-    openInfoDialog('Build Not Found','That build is no longer available, so you have been returned to Active Builds. Your guide layout changes were saved to the build you were viewing.');
+    openInfoDialog('Guide Layout Not Saved','The build you came from is no longer open, so nothing was saved. Your entries are still here.');
     return;
   }
+  clearQuoteAutosaveTimer();
+  const previousSpec=quote.guideSpecification;
+  quote.guideSpecification=normalizeGuideSpecification(captureGuideSpecificationSnapshot());
+  try{
+    const savedRef=await persistCurrentQuoteRecord();
+    if(!savedRef)throw new Error('The build record was not saved.');
+    markQuoteSaved();
+  }catch(error){
+    quote.guideSpecification=previousSpec;
+    saveQuoteCurrent();
+    console.error('[K-Labs Studio] Could not save guide layout:',error);
+    openInfoDialog('Guide Layout Not Saved','The guide layout could not be saved to this build. Check your connection and try again. Your entries are still here.');
+    return;
+  }
+  clearLayoutEntryOrigin();
   showStudioWorkflow();
   renderWorkshopQuote();
   goScreen('workshopScreen');
@@ -3835,7 +3888,7 @@ function markQuoteSaved(){
 }
 // Only dirty the active build from Workshop-tool edits when there's a real in-progress build/customer context (avoids phantom autosaved builds from standalone tool use).
 function markGuideDataDirty(){
-  if(quoteHasMeaningfulDraft(quote))markQuoteDirty();
+  // Live Guide Setup edits reach a build only through the explicit save-and-return action.
 }
 function flashWorkshopStatus(message,options){
   const settings={pending:false,duration:1700,...(options||{})};
@@ -7723,7 +7776,6 @@ function beginFreshQuote(options){
   clearLayoutEntryOrigin();
   clearWorkflowCustomerOrigin();
   quote=normalizeQuote(newQuoteTemplate());
-  workshopToolsState.spiral.rodStyle='';
   saveQuoteCurrent();
   markQuoteSaved();
   showStudioWorkflow();
@@ -7769,7 +7821,6 @@ async function startFreshQuoteForCustomer(record,options){
     clearWorkflowCustomerOrigin();
   }
   quote=normalizeQuote(next);
-  workshopToolsState.spiral.rodStyle='';
   try{
     // A customer-linked build is a genuine quote. Signed-in allocation must complete atomically before
     // the draft can be persisted; anonymous mode uses the local allocator above.
@@ -10220,12 +10271,9 @@ function buildSpecSummaryData(){
     ||specificationValue(quote.blankName)
     ||specificationValue(blankComponent&&blankComponent.blankSeries)
     ||specificationValue(blankComponent&&blankComponent.variant);
-  const method=guideOrientationMethodLabel(workshopToolsState&&workshopToolsState.spiral&&workshopToolsState.spiral.method);
-  const guideCount=(()=>{
-    const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
-    const rows=layout&&Array.isArray(layout.rows)?layout.rows:[];
-    return rows.length||+state.guideCount||0;
-  })();
+  const guideView=buildGuideView();
+  const method=guideView?guideOrientationMethodLabel(guideView.method):'';
+  const guideCount=guideView?(guideView.rows.length||+guideView.guideCount||0):0;
   const parts=[];
   if(blankName)parts.push(blankName);
   if(method)parts.push(method);
@@ -10907,7 +10955,7 @@ function quoteForPersistence(currentQuote){
   const persistedComponents=normalizeUniqueComponents(rawComponents,{keepDraftRows:false})
     .filter((component)=>componentRowHasMeaningfulData(component) && !pendingComponentDraftRows.has(component))
     .map(normalizeComponent);
-  const persistedQuote=normalizeQuote({...source,components:persistedComponents,guideSpecification:captureGuideSpecificationSnapshot()});
+  const persistedQuote=normalizeQuote({...source,components:persistedComponents});
   persistedQuote.components=persistedComponents;
   return persistedQuote;
 }
@@ -12783,7 +12831,6 @@ function openSavedBuildRecord(source,index,options){
   }
   setActiveSavedBuildRef(source,index,selected);
   quote=normalizeQuote(selected);
-  applyGuideSpecificationSnapshot(quote.guideSpecification);
   save();
   saveQuoteCurrent();
   render();
@@ -13820,6 +13867,7 @@ function bindBuildSpecificationInputs(){
     editGuideLayoutBtn.addEventListener('click',()=>{
       layoutEntryOrigin='build';
       layoutEntryBuildRef=activeSavedBuildRef?{...activeSavedBuildRef}:null;
+      beginBuildGuideEdit(quote.guideSpecification);
       goScreen('layoutScreen');
     });
   }
@@ -13894,25 +13942,33 @@ function renderGuideSpecificationSummary(){
   const stripperEl=$('guideSpecStripperPosition');
   const rowsHost=$('guideSpecRows');
   if(!countEl && !methodEl && !rowsHost)return;
-  const layout=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper);
-  const rows=Array.isArray(layout&&layout.rows)?layout.rows:[];
-  const spiral=workshopToolsState.spiral;
-  const guides=Array.isArray(spiral.guides)?spiral.guides:[];
-  const method=normalizeSpiralMethod(spiral.method);
-  const showDirection=method!=='standard';
+  const view=buildGuideView();
+  const editBtn=$('editGuideLayoutBtn');
+  if(editBtn)editBtn.innerHTML=`${view?'Edit Guide Layout':'Configure Guide Layout'} <span aria-hidden="true">&#x203a;</span>`;
+  const detailsEl=rowsHost&&rowsHost.closest?rowsHost.closest('details'):null;
+  if(detailsEl)detailsEl.hidden=!view;
+  if(!view){
+    if(countEl)countEl.textContent='\u2014';
+    if(methodEl)methodEl.textContent='\u2014';
+    if(directionRow)directionRow.hidden=true;
+    if(stripperEl)stripperEl.textContent='\u2014';
+    if(rowsHost)rowsHost.innerHTML='';
+    renderRodBuildLayout();
+    return;
+  }
+  const rows=view.rows;
+  const showDirection=view.method!=='standard';
   if(countEl)countEl.textContent=`${rows.length}`;
   if(methodEl){
-    const rodStyle=normalizeRodStyle(spiral.rodStyle);
-    const methodLabel=method==='standard'?'Standard':guideOrientationMethodLabel(method);
-    methodEl.textContent=`${methodLabel}${rodStyle?` · ${rodStyle==='spinning'?'Spinning':'Casting'}`:''}`;
+    const methodLabel=view.method==='standard'?'Standard':guideOrientationMethodLabel(view.method);
+    methodEl.textContent=`${methodLabel}${view.rodStyle?` · ${view.rodStyle==='spinning'?'Spinning':'Casting'}`:''}`;
   }
   if(directionRow)directionRow.hidden=!showDirection;
-  if(directionEl)directionEl.textContent=normalizeSpiralDirection(spiral.direction)==='right'?'Right':'Left';
-  if(stripperEl)stripperEl.textContent=formatGuideListMeasurement(+state.targetStripper);
+  if(directionEl)directionEl.textContent=view.direction==='right'?'Right':'Left';
+  if(stripperEl)stripperEl.textContent=formatGuideListMeasurement(+view.targetStripper);
   if(rowsHost){
     rowsHost.innerHTML=rows.map((row,index)=>{
-      const guide=guides[index];
-      const angle=guide?clampSpiralAngle(guide.angleDeg):NaN;
+      const angle=view.angles.length===rows.length?clampSpiralAngle(view.angles[index]):NaN;
       const angleText=Number.isFinite(angle)?`${formatDecimal(angle,1)}\u00b0`:'\u2014';
       return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${escapeHtml(formatGuideListMeasurement(row.cum))}</strong><em>${angleText}</em></div>`;
     }).join('');
@@ -14015,12 +14071,13 @@ function rodLayoutModel(){
     unreadable('Fore grip length','foreGripLength');
   }
   const guides=[];
-  if(rodLength!==null){
+  const guideView=buildGuideView();
+  if(rodLength!==null && guideView){
     // Guide Setup positions are tip-referenced; butt position is derived for display only.
-    const rows=calcGuideLayout(+state.firstGuide,+state.guideCount,+state.targetStripper).rows||[];
-    const spiralGuides=Array.isArray(workshopToolsState.spiral.guides)?workshopToolsState.spiral.guides:[];
+    const rows=guideView.rows;
+    const angles=guideView.angles.length===rows.length?guideView.angles:[];
     rows.forEach((row,index)=>{
-      guides.push({key:`guide:${index}`,label:`Guide ${row.g}`,number:row.g,type:'guide',atMm:rodLength-row.cum,fromTipMm:row.cum,isStripper:index===rows.length-1,guide:spiralGuides[index]||null});
+      guides.push({key:`guide:${index}`,label:`Guide ${row.g}`,number:row.g,type:'guide',atMm:rodLength-row.cum,fromTipMm:row.cum,isStripper:index===rows.length-1,guide:index<angles.length?{angleDeg:angles[index]}:null});
     });
   }
   const rearItem=items.find((item)=>item.key==='rearGrip');
@@ -14031,7 +14088,7 @@ function rodLayoutModel(){
   const itemEnds=items.map((item)=>item.endMm);
   const scaleMm=Math.max(rodLength||0,...itemEnds,1);
   const exceeds=rodLength!==null && (itemEnds.some((mm)=>mm>rodLength) || items.some((item)=>item.startMm<0) || guides.some((guide)=>guide.atMm<0));
-  return {rodLength,seatLength,seatRef,items,guides,prompts,waiting,scaleMm,exceeds,overlaps,approximateOverlap};
+  return {rodLength,seatLength,seatRef,items,guides,prompts,waiting,scaleMm,exceeds,overlaps,approximateOverlap,guideView};
 }
 function rodLayoutSvg(model,options){
   const detail=!!(options&&options.detail);
@@ -14129,8 +14186,8 @@ function rodLayoutReadout(model){
     edit='guides';
     editLabel='Edit Guide Setup';
     main=guide.atMm>=0?`${f(guide.atMm)} from butt \u00b7 ${f(guide.fromTipMm)} from tip`:`${f(guide.fromTipMm)} from tip \u00b7 beyond the butt end`;
-    if(guide.guide){
-      const spiral=workshopToolsState.spiral;
+    if(guide.guide && model.guideView){
+      const spiral=model.guideView;
       const angle=clampSpiralAngle(guide.guide.angleDeg);
       const side=angle<=0.05?'Reel Side':angle>=179.95?'Opposite'
         :(spiralGuideDirectionForPresentation(spiral.direction,{method:spiral.method,isStripper:guide.isStripper,angleDeg:angle})==='right'?'Right':'Left');
@@ -15248,9 +15305,9 @@ function duplicateBlank(blankId){
 function loadBlank(i){
   const b=blanks[i];
   if(!b)return;
+  clearLayoutEntryOrigin();
   state.firstGuide=b.fg;state.guideCount=b.gc;state.targetStripper=b.ts;state.locked=false;state.workshopIndex=0;
   applyBlankToQuote(b);
-  clearLayoutEntryOrigin();
   save();saveQuoteCurrent();syncSpiralWithGuideLayout();render();goScreen('layoutScreen');
 }
 function ensureDemoBlank(){
@@ -15559,6 +15616,7 @@ function onScreenChange(screenId){
     closeCurrentBuildActionsMenu();
   }
   clearLayoutFieldFocusSelection();
+  if(screenId!=='layoutScreen' && layoutEntryOrigin==='build')clearLayoutEntryOrigin();
   if(screenId==='homeScreen'){
     homeRodRefreshFromState(true);
   }else{
