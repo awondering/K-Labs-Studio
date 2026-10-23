@@ -3523,7 +3523,7 @@ function customerIncludedParts(){
     if(customerComponentExcludedFromCopy(item))return;
     const label=customerIncludedPartLabel(item);
     if(!normalizeNameKey(label))return;
-    parts.push(label);
+    parts.push(`${componentRowQuantity(item)} × ${label}`);
   });
   return parts;
 }
