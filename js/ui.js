@@ -100,7 +100,7 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
   {id:'quoteSpecGripBelowReelSeatLength',key:'gripBelowReelSeatLength',label:'Grip Below Reel Seat Length',visibility:'customer'},
   {id:'quoteSpecForeGripLength',key:'foreGripLength',label:'Fore Grip Length',visibility:'customer'},
-  {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'customer'},
+  {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'stored'},
   {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Workshop Notes',visibility:'workshop'}
 ];
 let studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));

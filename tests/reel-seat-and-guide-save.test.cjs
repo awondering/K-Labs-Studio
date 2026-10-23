@@ -34,8 +34,9 @@ function model(layout){
 test('Reel Seat Position is followed by the reference selector, labelled from the butt',()=>{
   const seat=html.indexOf('id="quoteSpecReelSeatPosition"');
   const ref=html.indexOf('id="quoteSpecReelSeatRef"');
-  const hook=html.indexOf('id="quoteSpecHookKeeperPosition"');
-  assert.ok(seat>0 && seat<ref && ref<hook);
+  const rear=html.indexOf('id="quoteSpecRearGripLength"');
+  assert.ok(seat>0 && seat<ref && ref<rear);
+  assert.doesNotMatch(html,/quoteSpecHookKeeperPosition/);
   assert.match(html,/Measured from the rod butt to the/);
   assert.match(fn('rodLayoutSeatRefLabels'),/Rear of seat.*Centre of seat.*Front of seat/);
 });
@@ -91,4 +92,9 @@ test('bottom SAVE TO BUILD & RETURN sits above the disclaimer, uses the same fun
   c.layoutEntryOrigin='';
   c.syncLayoutReturnControl();
   assert.equal(nodes.layoutSaveToBuildBtn.hidden,true);
+});
+
+test('Hook Keeper Position is hidden from the form and customer output but its stored value is still normalised',()=>{
+  assert.match(source,/key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'stored'/);
+  assert.match(fn('normalizeBuildSpecifications'),/BUILD_SPEC_FIELDS\.forEach/);
 });
