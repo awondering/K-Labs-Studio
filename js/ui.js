@@ -13145,45 +13145,60 @@ function formatCustomerEmailLongDate(value){
     return 'To be confirmed';
   }
 }
-function emailCurrentQuote(){
+function customerEmailSignatureLines(){
+  const seen=new Set();
+  return [businessProfile.businessName,businessProfile.contactName,businessProfile.phone,businessProfile.email,businessProfile.website]
+    .map((value)=>specificationValue(value))
+    .filter((value)=>{
+      const key=normalizeNameKey(value);
+      if(!key||seen.has(key))return false;
+      seen.add(key);
+      return true;
+    });
+}
+function customerEmailLines(){
   const math=depositMaths();
   const customerName=specificationValue(quote.customerName)||'Customer';
   const customerFirstName=customerName.split(/\s+/).filter(Boolean)[0]||'there';
-  const email=specificationValue(quote.email);
-  const dueRaw=specificationValue(quote.estimatedCompletionDate);
-  const dueText=dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed';
   const includedParts=customerIncludedParts();
   const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
-  const businessProfileLines=[specificationValue(businessProfile.businessName),...customerQuoteBusinessLines()].filter(Boolean);
+  const isComplete=docLabels.key==='complete';
+  const reference=quoteNumber||docLabels.emailName;
+  const completedRaw=specificationValue(quote.completedAt);
+  const completedDate=new Date(completedRaw);
+  const hasCompletedDate=isComplete&&!!completedRaw&&!Number.isNaN(completedDate.getTime());
+  const balanceDue=isComplete?math.balanceOwing>0:(math.amountReceived<=0||math.depositOutstanding||math.balanceOwing>0);
   const lines=[
-    ...businessProfileLines,
-    ...(businessProfileLines.length?['']:[]),
     `Hi ${customerFirstName},`,
     '',
     docLabels.key==='active'
-      ?`Thank you for confirming your custom rod build with ${businessName}. Your build is now proceeding.`
-      :docLabels.key==='complete'
-      ?`Your custom rod build with ${businessName} is complete. Here is your build summary.`
-      :`Thank you for choosing ${businessName} for your custom rod build.`,
+      ?`Your custom rod build with ${businessName} has been confirmed. Thank you for your order. Below are the agreed build details.`
+      :isComplete
+      ?`Your custom ${businessName} fishing rod is complete. Below is a summary of your finished build.`
+      :`Thank you for your interest in a custom rod build with ${businessName}. Below is your proposed custom rod build and quotation.`,
     '',
-    `Custom Rod Build — ${quoteNumber||docLabels.emailName}`,
+    `Custom Rod Build — ${reference}`,
     '',
     `Total: ${currencyWithCode(math.total)}`,
-    ...(math.amountReceived>0
-      ?[
-        ...(math.depositEnabled&&math.depositOutstanding?[`Deposit required: ${currencyWithCode(math.depositAmount)}`]:[]),
-        `Deposit received: ${currencyWithCode(math.amountReceived)}`,
-        ...(math.depositEnabled&&math.depositOutstanding?[`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`]:[]),
-        `Balance owing: ${currencyWithCode(math.balanceOwing)}`,
-      ]
-      :[
-        `Deposit required: ${currencyWithCode(math.depositAmount)}`,
-        `Balance remaining: ${currencyWithCode(math.remainingBalance)}`,
-      ]),
-    `Estimated completion: ${dueText}`,
   ];
+  if(isComplete){
+    if(math.amountReceived>0)lines.push(`Payments received: ${currencyWithCode(math.amountReceived)}`);
+    lines.push(`Balance outstanding: ${currencyWithCode(math.balanceOwing)}`);
+    if(hasCompletedDate)lines.push(`Completed: ${formatCustomerEmailLongDate(completedDate)}`);
+  }else{
+    if(math.amountReceived>0){
+      if(math.depositEnabled&&math.depositOutstanding)lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`);
+      lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
+      if(math.depositEnabled&&math.depositOutstanding)lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
+      lines.push(`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
+    }else{
+      lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`,`Balance remaining: ${currencyWithCode(math.remainingBalance)}`);
+    }
+    const dueRaw=specificationValue(quote.estimatedCompletionDate);
+    lines.push(`Estimated completion: ${dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed'}`);
+  }
   if(includedParts.length){
     lines.push('', 'Components Included', ...includedParts.map((part)=>`- ${part}`));
   }
@@ -13194,16 +13209,26 @@ function emailCurrentQuote(){
     if(emailDeliveryCharge>0)lines.push(`Delivery (included in Total Price): ${currencyWithCode(emailDeliveryCharge)}`);
     lines.push(...emailAddressLines);
   }
-  if(businessProfileHasPaymentDetails()){
+  if(balanceDue && businessProfileHasPaymentDetails()){
     lines.push(
       '',
       'Payment Details',
       `Account name: ${businessProfile.paymentAccountName}`,
       `Bank account: ${businessProfile.paymentAccountNumber}`,
-      `Reference: ${quoteNumber||docLabels.emailName}`
+      `Reference: ${reference}`
     );
   }
   if(docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', 'Once the deposit has been received, your build will be confirmed.');
+  const signature=customerEmailSignatureLines();
+  if(signature.length)lines.push('', 'Kind regards,', ...signature);
+  return lines;
+}
+function emailCurrentQuote(){
+  const email=specificationValue(quote.email);
+  const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
+  const quoteNumber=specificationValue(quote.quoteNumber);
+  const docLabels=customerDocumentLabels();
+  const lines=customerEmailLines();
   const subject=`${businessName} ${docLabels.key==='quote'?'Custom Rod Build Quote':docLabels.emailName} — ${quoteNumber||docLabels.emailName}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;

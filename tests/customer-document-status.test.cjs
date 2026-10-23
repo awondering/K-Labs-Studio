@@ -45,10 +45,11 @@ test('quote wording keeps acceptance text; active/complete drop it',()=>{
 });
 
 test('email draft wording is status-aware and keeps the quote reference',()=>{
-  const email=source.slice(source.indexOf('function emailCurrentQuote('));
+  const email=source.slice(source.indexOf('function customerEmailLines('),source.indexOf('function requestDeleteBlank('));
   assert.match(email,/const docLabels=customerDocumentLabels\(\)/);
-  assert.match(email,/Custom Rod Build — \$\{quoteNumber\|\|docLabels\.emailName\}/);
+  assert.match(email,/Custom Rod Build — \$\{reference\}/);
+  assert.match(email,/const reference=quoteNumber\|\|docLabels\.emailName/);
   assert.match(email,/docLabels\.key==='quote'\?'Custom Rod Build Quote':docLabels\.emailName/);
   assert.match(email,/docLabels\.key==='quote' && \(math\.amountReceived<=0/);
-  assert.match(email,/Reference: \$\{quoteNumber\|\|docLabels\.emailName\}/);
+  assert.match(email,/Reference: \$\{reference\}/);
 });
