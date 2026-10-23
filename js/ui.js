@@ -1401,6 +1401,8 @@ function initializeGuideSetupStages(){
     if(index===2){
       body.appendChild(rod);
       body.appendChild(list);
+      const saveToBuild=$('layoutSaveToBuildBtn');
+      if(saveToBuild)body.appendChild(saveToBuild);
     }
     if(index<2){
       const next=document.createElement('button');
@@ -1831,6 +1833,8 @@ function syncLayoutReturnControl(){
   const fromBuild=layoutEntryOrigin==='build';
   if(label)label.textContent=fromBuild?'SAVE TO BUILD & RETURN':'Workshop';
   button.setAttribute('aria-label',fromBuild?'Save the guide layout to the build and return':'Return to Workshop landing screen');
+  const saveToBuild=$('layoutSaveToBuildBtn');
+  if(saveToBuild)saveToBuild.hidden=!fromBuild;
 }
 // Mirrors syncLayoutReturnControl for the currently visible Workshop tool card (Diameter/Grip).
 function syncWorkshopToolBackControl(){
@@ -3101,7 +3105,7 @@ function newQuoteTemplate(){
     customerName:'',company:'',phone:'',email:'',buildName:'',estimatedCompletionDate:'',notes:'',
     addressLine1:'',addressLine2:'',suburbLocality:'',cityTown:'',regionState:'',postcode:'',country:'New Zealand',
     blankId:'',blankName:'',blankMaker:'',blankSeries:'',blankLength:'',blankPower:'',blankAction:'',blankPieces:'',blankCost:0,blankSku:'',blankNotes:'',
-    buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:''},
+    buildSpecifications:{reelSeatPosition:'',rearGripLength:'',gripBelowReelSeatLength:'',foreGripLength:'',hookKeeperPosition:'',builderNotes:'',layout:{reelSeatPositionRef:'rear'}},
     guideSpecification:{guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]},
     components:[{category:'',description:'',supplier:'',cost:0}],
     labourRate:activeDefaultLabourRate(),labourHours:0,deliveryEntryMode:'breakdown',freight:0,packaging:0,deliveryTotal:0,markupPercent:0,marginPercent:0,targetProfit:0,pricingDriver:'price',finalCustomerPrice:0,naturalCustomerPrice:0,priceAdjustment:0,taxEnabled:activeTaxEnabled(),includeGst:activeTaxEnabled(),quoteMode:'internal',gstRate:activeTaxRate(),quoteStatus:'quote',
@@ -7678,13 +7682,23 @@ function requestDeleteCurrentBuild(){
     finalizeDeletedCurrentBuild();
   });
 }
+// The default reel-seat reference on a new build is not user content.
+function buildSpecsHaveContent(specs){
+  const source=specs&&typeof specs==='object'?specs:{};
+  return Object.keys(source).some((key)=>{
+    if(key!=='layout')return !!specificationValue(source[key]);
+    const layout={...(source.layout&&typeof source.layout==='object'?source.layout:{})};
+    if(layout.reelSeatPositionRef==='rear')delete layout.reelSeatPositionRef;
+    return !!normalizeBuildLayout(layout);
+  });
+}
 function quoteHasMeaningfulDraft(currentQuote){
   const candidate=normalizeQuote(currentQuote||{});
   const baseline=normalizeQuote(newQuoteTemplate());
   const hasIdentity=[candidate.customerName,candidate.phone,candidate.email,candidate.buildName,candidate.notes,candidate.addressLine1,candidate.addressLine2,candidate.suburbLocality,candidate.cityTown,candidate.regionState,candidate.postcode]
     .some((value)=>!!specificationValue(value));
   const hasCountryOverride=specificationValue(candidate.country)!==specificationValue(baseline.country);
-  const hasBuildSpecs=Object.keys(candidate.buildSpecifications||{}).some((key)=>!!specificationValue(candidate.buildSpecifications&&candidate.buildSpecifications[key]));
+  const hasBuildSpecs=buildSpecsHaveContent(candidate.buildSpecifications);
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
   const hasCosts=numberOrZero(candidate.blankCost)>0 || quoteHasCustomLabourRate(candidate) || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0 || deliveryAmounts(candidate).charge>0 || deliveryAmounts(candidate).cost>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
@@ -10975,7 +10989,7 @@ function isCustomerOnlyRecord(record){
   if(specificationValue(source.buildName) || specificationValue(source.estimatedCompletionDate))return false;
   if(specificationValue(source.blankId) || specificationValue(source.blankName) || specificationValue(source.blankMaker) || specificationValue(source.blankSeries) || specificationValue(source.blankSku))return false;
   const specs=source.buildSpecifications&&typeof source.buildSpecifications==='object'?source.buildSpecifications:{};
-  if(Object.keys(specs).some((key)=>!!specificationValue(specs[key])))return false;
+  if(buildSpecsHaveContent(specs))return false;
   const guide=source.guideSpecification&&typeof source.guideSpecification==='object'?source.guideSpecification:{};
   if(guide.guideCount!==null && guide.guideCount!==undefined)return false;
   if(guide.firstGuideMm!==null && guide.firstGuideMm!==undefined)return false;
@@ -13554,6 +13568,14 @@ function bindLayoutControls(){
     });
   }
 
+  const saveToBuildBtn=$('layoutSaveToBuildBtn');
+  if(saveToBuildBtn && saveToBuildBtn.getAttribute('data-save-to-build-bound')!=='true'){
+    saveToBuildBtn.setAttribute('data-save-to-build-bound','true');
+    saveToBuildBtn.addEventListener('click',()=>{
+      if(layoutEntryOrigin==='build')returnToOriginatingBuildFromGuideLayout();
+    });
+  }
+
   const statusBadge=$('layoutStatusBadge');
   if(statusBadge && statusBadge.getAttribute('data-layout-lock-bound')!=='true'){
     statusBadge.setAttribute('data-layout-lock-bound','true');
@@ -13871,6 +13893,14 @@ function bindBuildSpecificationInputs(){
       goScreen('layoutScreen');
     });
   }
+  const seatRefHost=$('quoteSpecReelSeatRef');
+  if(seatRefHost && seatRefHost.getAttribute('data-seat-ref-bound')!=='true'){
+    seatRefHost.setAttribute('data-seat-ref-bound','true');
+    seatRefHost.addEventListener('click',(event)=>{
+      const ref=event.target.closest('[data-layout-seat-ref]');
+      if(ref)setBuildLayoutValue('reelSeatPositionRef',ref.getAttribute('data-layout-seat-ref'));
+    });
+  }
   BUILD_SPEC_FIELDS.forEach((field)=>{
     const el=$(field.id);
     if(!el)return;
@@ -13896,11 +13926,6 @@ function bindBuildSpecificationInputs(){
       const edit=target.closest('[data-layout-edit]');
       if(edit){
         editRodLayoutItem(edit.getAttribute('data-layout-edit'));
-        return true;
-      }
-      const ref=target.closest('[data-layout-seat-ref]');
-      if(ref){
-        setBuildLayoutValue('reelSeatPositionRef',ref.getAttribute('data-layout-seat-ref'));
         return true;
       }
       const item=target.closest('[data-layout-item]');
@@ -14044,7 +14069,7 @@ function rodLayoutModel(){
   }else if(seatPosition.state==='unreadable'){
     unreadable('Reel seat position','reelSeatPosition');
   }else{
-    if(!seatRef)prompts.push({label:'Reel seat position',reason:`You entered ${formatGuideListMeasurement(seatPosition.mm)} from the butt. Where on the reel seat is that measured?`,choice:true});
+    if(!seatRef)prompts.push({label:'Reel seat position',reason:`You entered ${formatGuideListMeasurement(seatPosition.mm)} from the butt. Choose where on the reel seat that is measured, under Reel Seat Position in Build Details.`,spec:'reelSeatPosition'});
     if(seatRef){
       // No reel seat length on record: draw with a nominal length that is never saved or shown as a measurement.
       const approximate=seatLength===null;
@@ -14205,7 +14230,6 @@ function rodLayoutReadout(model){
       if(item.approximate)notes.push('Seat length shown approximately for layout.');
       else notes.push(`${f(item.endMm-item.startMm)} long \u00b7 ${f(item.startMm)}\u2013${f(item.endMm)} from butt`);
       if(item.component)notes.push(item.component);
-      extra=rodLayoutSeatRefChoice(model.seatRef);
     }else{
       main=`${f(item.endMm-item.startMm)} long \u00b7 ${approx}${f(item.startMm)}\u2013${f(item.endMm)} from butt`;
       const where={rearGrip:'At the butt end',lowerGrip:'Grip below the reel seat',foreGrip:'In front of the reel seat'}[item.key];
@@ -14227,9 +14251,7 @@ function rodLayoutPromptsMarkup(prompts){
   return `<div class="rod-layout__prompts">${prompts.map((prompt)=>{
     const control=prompt.input
       ?`<button class="guide-specification__edit" type="button" data-layout-edit="finishedLength">Enter in Build Details <span aria-hidden="true">&#x203a;</span></button>`
-      :prompt.choice
-        ?rodLayoutSeatRefChoice(null)
-        :`<button class="guide-specification__edit" type="button" data-layout-edit="spec:${escapeHtml(prompt.spec)}">Edit in Build Details <span aria-hidden="true">&#x203a;</span></button>`;
+      :`<button class="guide-specification__edit" type="button" data-layout-edit="spec:${escapeHtml(prompt.spec)}">Edit in Build Details <span aria-hidden="true">&#x203a;</span></button>`;
     return `<div class="rod-layout__prompt"><strong>${escapeHtml(prompt.label)}</strong><span>${escapeHtml(prompt.reason)}</span>${control}</div>`;
   }).join('')}</div>`;
 }
@@ -14262,6 +14284,11 @@ function syncRodLayoutRange(host){
   range.style.width=`${Math.max(0.6,((end-start)*988)/10)}%`;
 }
 function renderRodBuildLayout(options){
+  const seatRefHost=$('quoteSpecReelSeatRef');
+  if(seatRefHost){
+    const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
+    seatRefHost.innerHTML=rodLayoutSeatRefChoice(layout.reelSeatPositionRef);
+  }
   const host=$('rodBuildLayout');
   if(!host)return;
   const model=rodLayoutModel();
