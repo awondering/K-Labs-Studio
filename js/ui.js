@@ -11343,7 +11343,10 @@ function updateCustomerFinderIntentUi(){
   if(title)title.textContent=modeTitle;
   if(panel)panel.setAttribute('aria-label',modeTitle);
   const intro=$('customerFinderIntro');
-  if(intro)intro.textContent=customerFinderActionIntroText();
+  if(intro){
+    intro.textContent=customerFinderActionIntroText();
+    intro.hidden=customerFinderIntent==='browse';
+  }
   const startActions=$('customerFinderStartActions');
   const searchBlock=$('customerFinderSearchBlock');
   const rootView=$('customerFinderRootView');
@@ -12226,11 +12229,9 @@ function ensureCustomerFinderSheet(){
                 <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
                 <span>Studio</span>
               </button>
-              <h3>Customers</h3>
-              <p>Find and manage customers.</p>
             </div>
             <div class="customer-finder__root-controls">
-              <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" />
+              <input id="customerFinderSearch" class="component-sheet__search" type="search" placeholder="Search customers" autocomplete="off" spellcheck="false" />
               <button id="customerFinderBrowseAddBtn" class="ghost-action" type="button" data-customer-finder-action="browse-add-customer">Add Customer</button>
             </div>
             <div id="customerFinderResults" class="component-sheet__list customer-finder__list" aria-label="Customer matches"></div>
