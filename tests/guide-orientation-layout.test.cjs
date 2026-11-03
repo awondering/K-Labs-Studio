@@ -30,6 +30,14 @@ test('Rod Style and orientation mode controls retain 44px touch targets',()=>{
   assert.match(css,/#workshopToolSpiral \.spiral-rod-style__options \.ghost-action\{\s*min-height:44px;/);
 });
 
+test('Offset label wraps fully while input and action buttons keep their grid placement',()=>{
+  assert.match(html,/<span class="spiral-offset-start-control__label">Stripper rotation from reel side<\/span>/);
+  assert.match(css,/#workshopToolSpiral \.spiral-offset-start-control__label\{\s*display:block;\s*min-width:0;[\s\S]*?white-space:normal;/);
+  assert.doesNotMatch(css,/#workshopToolSpiral \.spiral-offset-start-control__label\{[^}]*text-overflow:ellipsis/);
+  assert.match(css,/#workshopToolSpiral \.spiral-manual-control-band\{\s*display:grid;\s*grid-template-columns:minmax\(100px,1fr\) minmax\(78px,auto\) minmax\(78px,auto\);/);
+  assert.match(html,/id="workshopSpiralOffsetStart"[\s\S]*?id="workshopSpiralResetBtn"[\s\S]*?id="workshopSpiralCopyBtn"/);
+});
+
 test('orientation selected-state and mapper reveal behavior remain wired',()=>{
   assert.match(css,/\.workshop-tool-unit-row \.ghost-action\.active\{\s*border-color:rgba\(var\(--kl-red-rgb\),\.75\);/);
   assert.match(html,/data-spiral-method="progressive" aria-pressed="true"/);

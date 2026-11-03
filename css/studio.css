@@ -9290,15 +9290,15 @@ textarea::-moz-selection,
 }
 
 #workshopToolSpiral .spiral-offset-start-control__label{
-  overflow:hidden;
+  display:block;
+  min-width:0;
   color:rgba(214,210,200,.68);
   font-size:8px;
   font-weight:700;
   letter-spacing:.08em;
-  line-height:1;
-  text-overflow:ellipsis;
+  line-height:1.2;
   text-transform:uppercase;
-  white-space:nowrap;
+  white-space:normal;
 }
 
 #workshopToolSpiral .spiral-offset-start-control__value{
