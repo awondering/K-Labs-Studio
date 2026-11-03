@@ -8997,6 +8997,7 @@ textarea::-moz-selection,
 
 #workshopToolGrip .workshop-tool-fields--two label > span{
   min-height:24px;
+  line-height:1.2;
 }
 
 #workshopToolGrip .workshop-tool-unit-row[aria-label="Grip profile"] .ghost-action{
