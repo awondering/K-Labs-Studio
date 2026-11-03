@@ -651,11 +651,19 @@ function applyTaxNameInput(value){
   studioSettings.taxType=isDefault?'gst':'other';
   studioSettings.taxName=isDefault?'':name;
 }
+// Pure label rule: GST/VAT keep their canonical casing, other names are used as typed, blank falls back.
+function taxRegistrationLabelForName(name){
+  const clean=normalizeTaxName(name);
+  if(!clean)return 'Tax Registration Number';
+  const key=clean.toLowerCase();
+  if(key==='gst')return 'GST Number';
+  if(key==='vat')return 'VAT Number';
+  return `${clean} Number`;
+}
 function activeTaxRegistrationLabel(){
-  const name=activeTaxName().toLowerCase();
-  if(name==='gst')return 'GST number';
-  if(name==='vat')return 'VAT number';
-  return 'Tax registration number';
+  const type=activeTaxType();
+  if(type==='other')return taxRegistrationLabelForName(studioSettings&&studioSettings.taxName);
+  return taxRegistrationLabelForName(taxTypeInfo(type).name);
 }
 function syncCurrencyControl(){
   const select=$('settingsCurrency');
@@ -16155,6 +16163,8 @@ function bindSettingsControls(){
     bindSettingsAccountGuard(taxNameInput);
     taxNameInput.addEventListener('input',()=>{
       const isDirty=(normalizeTaxName(taxNameInput.value)||'GST')!==activeTaxName();
+      const registrationLabel=$('settingsTaxRegistrationLabel');
+      if(registrationLabel)registrationLabel.textContent=taxRegistrationLabelForName(taxNameInput.value);
       setSettingsSectionSaveState('PricingTax',isDirty?'dirty':'idle');
     });
     const saveTaxName=()=>{
