@@ -3709,6 +3709,15 @@ function customerIncludedPartsMarkup(parts){
     : '<li>Your final component list will be confirmed before build start.</li>';
   return `<div class="quote-preview-parts"><span>${escapeHtml(customerDocumentLabels().previewPartsHeading)}</span><ul>${listItems}</ul></div>`;
 }
+// Customer-facing Build Notes come only from the "Build Note · Shown on Quote" field (quote.notes);
+// the private Workshop Notes (buildSpecifications.builderNotes) are never read here.
+function customerBuildNotesText(){
+  return customerRequestText(quote.notes);
+}
+function customerBuildNotesMarkup(){
+  const notesText=customerBuildNotesText();
+  return notesText?`<div class="view-quote__notes"><span>Build Notes</span><p>${escapeHtml(notesText)}</p></div>`:'';
+}
 function workshopSpecificationRows(){
   const rows=customerSpecificationRows();
   BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='workshop').forEach((field)=>{
@@ -13170,7 +13179,6 @@ function customerQuoteSummaryMarkup(){
   const parts=customerIncludedParts();
   const dueRaw=specificationValue(quote.estimatedCompletionDate);
   const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'To be confirmed';
-  const notesText=customerRequestText(quote.notes);
   const deliveryBlock=customerQuoteDeliveryMarkup();
   const confirmationText=customerDocumentConfirmationText(math.depositOutstanding);
   const totalRow=`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
@@ -13197,11 +13205,11 @@ function customerQuoteSummaryMarkup(){
       <div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>
       ${specRows.length?`<div class="view-quote__specs">${specificationRowsMarkup(specRows)}</div>`:''}
       ${customerIncludedPartsMarkup(parts)}
+      ${customerBuildNotesMarkup()}
       ${deliveryBlock}
       <div class="view-quote__pricing">${pricingRows}</div>
       <div class="view-quote__row"><span>Estimated Completion</span><strong>${escapeHtml(dueText)}</strong></div>
       <p class="view-quote__confirmation">${escapeHtml(confirmationText)}</p>
-      ${notesText?`<div class="view-quote__notes"><span>Customer Notes</span><p>${escapeHtml(notesText)}</p></div>`:''}
       ${paymentBlock}
     </div>
   `;
@@ -13416,6 +13424,8 @@ function customerEmailLines(){
   if(includedParts.length){
     lines.push('', docLabels.partsHeading, ...includedParts.map((part)=>`- ${part}`));
   }
+  const buildNotes=customerBuildNotesText();
+  if(buildNotes)lines.push('', 'Build Notes', ...buildNotes.split(/\r\n|\r|\n/));
   const fulfilment=customerFulfilmentSection();
   if(fulfilment){
     lines.push('', fulfilment.heading);

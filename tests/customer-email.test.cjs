@@ -36,7 +36,7 @@ function build({status='quote',quote={},profile:p=profile}={}){
     formatCustomerEmailLongDate:(d)=>`D:${new Date(d).toISOString().slice(0,10)}`,
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','customerEmailLines'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines'].map(fn).join('\n'),c);
   return c.customerEmailLines().join('\n');
 }
 

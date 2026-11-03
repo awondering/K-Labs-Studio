@@ -32,7 +32,7 @@ function emailCtx(studioSettings){
     formatCustomerEmailLongDate:()=>'1 December 2026',
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','activeEmailIncludeSignature','customerDocumentLabels','customerEmailSignatureLines','customerEmailLines'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','activeEmailIncludeSignature','customerDocumentLabels','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines'].map(fn).join('\n'),c);
   return c;
 }
 

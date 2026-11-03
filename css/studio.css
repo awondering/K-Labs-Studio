@@ -3564,6 +3564,7 @@ textarea::placeholder{
   color:#ddd5c7;
   font-size:12px;
   line-height:1.4;
+  white-space:pre-wrap;
 }
 
 @media (max-width:520px){

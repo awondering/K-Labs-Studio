@@ -45,7 +45,7 @@ function ctx(over={},status='quote'){
     document:{querySelectorAll:()=>[]},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
   return c;
 }
 const full={addressLine1:'5 River Rd',cityTown:'Taupo',postcode:'3330'};
