@@ -27,5 +27,33 @@
     return allocated;
   }
 
-  window.KLABS_QUOTE_NUMBERS = { allocate };
+  // Read-only: selects the caller's own counter row (RLS select policy) and never calls the allocation RPC.
+  // Resolves { userId, nextNumber } where nextNumber is null if no number has been allocated yet.
+  async function peek() {
+    const supabase = client();
+    if (!supabase) throw new Error("Quote number service is unavailable.");
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const userId = String(sessionData?.session?.user?.id || "");
+    if (!userId || userId !== String(window.KLABS_ACCOUNT_ID || "")) {
+      throw new Error("Sign in to read the synced quote number.");
+    }
+    const { data, error } = await supabase
+      .from("quote_number_counters")
+      .select("next_number")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { userId, nextNumber: null };
+    const nextNumber = Number(data.next_number);
+    if (!Number.isSafeInteger(nextNumber) || nextNumber < 1) {
+      throw new Error("The quote number service returned an invalid sequence.");
+    }
+    if (String(window.KLABS_ACCOUNT_ID || "") !== userId) {
+      throw new Error("Account changed while reading the quote number.");
+    }
+    return { userId, nextNumber };
+  }
+
+  window.KLABS_QUOTE_NUMBERS = { allocate, peek };
 })();

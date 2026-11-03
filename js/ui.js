@@ -482,6 +482,7 @@ function applyStudioSettingsSyncPayload(payload){
   }
 }
 function reloadBusinessProfileForAccount(){
+  resetServerQuoteCounter();
   const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
   const profileKey=businessProfileStorageKey();
   let storedProfile=Store.get(profileKey,null);
@@ -511,6 +512,7 @@ function reloadBusinessProfileForAccount(){
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
   syncCurrencyControl();
   if($('settingsTrackComponentStock'))$('settingsTrackComponentStock').checked=activeTrackComponentStock();
+  refreshServerQuoteCounter();
 }
 function readAnonymousStudioSettingsSyncPayload(){
   return {
@@ -559,6 +561,7 @@ async function assignNextQuoteNumber(){
     businessProfile.quoteNextNumber=Math.max(historicalQuoteSequenceFloor(),sequence+1);
     saveBusinessProfile();
     syncBusinessProfileControls();
+    refreshServerQuoteCounter({force:true});
     return formatQuoteNumber(sequence);
   }
   const assigned=formatQuoteNumber(businessProfile.quoteNextNumber);
@@ -566,6 +569,67 @@ async function assignNextQuoteNumber(){
   saveBusinessProfile();
   syncBusinessProfileControls();
   return assigned;
+}
+// Display-only copy of the authoritative server counter for signed-in accounts. It is never written to the
+// business profile and never feeds the allocation floor; only the newest request for the active account applies.
+let serverQuoteCounter={accountId:'',status:'idle',next:null};
+let serverQuoteCounterSeq=0;
+let serverQuoteCounterInFlight=null;
+function signedInQuoteNumbering(){
+  return !!String(window.KLABS_ACCOUNT_ID||'').trim();
+}
+function currentServerQuoteCounter(){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  return serverQuoteCounter.accountId===accountId?serverQuoteCounter:{accountId,status:'idle',next:null};
+}
+function resetServerQuoteCounter(){
+  serverQuoteCounterSeq+=1;
+  serverQuoteCounterInFlight=null;
+  serverQuoteCounter={accountId:String(window.KLABS_ACCOUNT_ID||'').trim(),status:'idle',next:null};
+}
+async function refreshServerQuoteCounter(options){
+  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
+  if(!accountId)return null;
+  const force=!!(options&&options.force);
+  if(!force&&serverQuoteCounterInFlight&&serverQuoteCounter.accountId===accountId)return serverQuoteCounterInFlight;
+  const seq=++serverQuoteCounterSeq;
+  const lastKnown=serverQuoteCounter.accountId===accountId?serverQuoteCounter.next:null;
+  const isCurrent=()=>seq===serverQuoteCounterSeq&&String(window.KLABS_ACCOUNT_ID||'').trim()===accountId;
+  serverQuoteCounter={accountId,status:'loading',next:lastKnown};
+  syncBusinessProfileControls();
+  const request=(async()=>{
+    try{
+      const allocator=window.KLABS_QUOTE_NUMBERS;
+      if(!allocator || typeof allocator.peek!=='function')throw new Error('Quote number service is unavailable.');
+      const result=await allocator.peek();
+      if(!isCurrent() || String(result&&result.userId||'')!==accountId)return null;
+      const next=result.nextNumber===null||result.nextNumber===undefined?null:Number(result.nextNumber);
+      serverQuoteCounter={accountId,status:next===null?'empty':'ready',next};
+    }catch(error){
+      if(!isCurrent())return null;
+      console.error('[K-Labs Studio] Could not read the quote number counter:',error);
+      serverQuoteCounter={accountId,status:'unavailable',next:lastKnown};
+    }
+    syncBusinessProfileControls();
+    return serverQuoteCounter;
+  })();
+  serverQuoteCounterInFlight=request;
+  try{
+    return await request;
+  }finally{
+    if(serverQuoteCounterInFlight===request)serverQuoteCounterInFlight=null;
+  }
+}
+function quoteNumberingPreview(prefix,rawNext){
+  if(signedInQuoteNumbering()){
+    const counter=currentServerQuoteCounter();
+    return counter.next===null?'—':`${prefix}${counter.next}`;
+  }
+  return `${prefix}${Math.max(1,Math.round(numberOrZero(rawNext))||1)}`;
+}
+function quoteNumberingDirty(prefix,rawNext){
+  if(prefix!==(businessProfile.quotePrefix||''))return true;
+  return !signedInQuoteNumbering() && rawNext!==String(businessProfile.quoteNextNumber);
 }
 function activeTaxRate(){
   return Math.max(0,numberOrZero(studioSettings&&studioSettings.taxRate)||15);
@@ -15643,6 +15707,7 @@ function onScreenChange(screenId){
     closeCurrentBuildActionsMenu();
   }
   clearLayoutFieldFocusSelection();
+  if(screenId==='settingsScreen')refreshServerQuoteCounter();
   if(screenId!=='layoutScreen' && layoutEntryOrigin==='build')clearLayoutEntryOrigin();
   if(screenId==='homeScreen'){
     homeRodRefreshFromState(true);
@@ -15882,9 +15947,40 @@ function syncBusinessProfileControls(force){
     if(input && (force || document.activeElement!==input)){input.value=businessProfile[field.key]||'';}
   });
   const nextNumberInput=$('settingsQuoteNextNumber');
-  if(nextNumberInput && (force || document.activeElement!==nextNumberInput)){nextNumberInput.value=String(businessProfile.quoteNextNumber);}
   const preview=$('settingsQuoteNumberPreview');
+  const statusNote=$('settingsQuoteNumberStatus');
+  if(signedInQuoteNumbering()){
+    const counter=currentServerQuoteCounter();
+    const hasValue=counter.next!==null;
+    if(nextNumberInput){
+      nextNumberInput.readOnly=true;
+      nextNumberInput.setAttribute('aria-readonly','true');
+      nextNumberInput.value=hasValue?String(counter.next):'';
+      nextNumberInput.placeholder=counter.status==='unavailable'?'Unavailable':counter.status==='empty'?'Not yet allocated':'Checking…';
+    }
+    if(preview)preview.textContent=hasValue?formatQuoteNumber(counter.next):'—';
+    if(statusNote){
+      const messages={
+        ready:'',
+        empty:'No quote number has been allocated yet. The server assigns it when the first quote is created.',
+        unavailable:hasValue
+          ?'Could not reach the server, so this number may be out of date. The server assigns the real number when a quote is created.'
+          :'Server number unavailable. The server assigns the real number when a quote is created.',
+      };
+      const message=counter.status in messages?messages[counter.status]:'Checking the synced quote number…';
+      statusNote.textContent=message;
+      statusNote.hidden=!message;
+    }
+    return;
+  }
+  if(nextNumberInput){
+    nextNumberInput.readOnly=false;
+    nextNumberInput.removeAttribute('aria-readonly');
+    nextNumberInput.placeholder='1000';
+    if(force || document.activeElement!==nextNumberInput){nextNumberInput.value=String(businessProfile.quoteNextNumber);}
+  }
   if(preview)preview.textContent=formatQuoteNumber(businessProfile.quoteNextNumber);
+  if(statusNote){statusNote.textContent='';statusNote.hidden=true;}
 }
 function bindBusinessProfileControls(){
   BUSINESS_PROFILE_BASE_FIELDS.forEach((field)=>{
@@ -15969,9 +16065,9 @@ function bindBusinessProfileControls(){
       const currentPrefix=String(quotePrefixInput.value||'').trim();
       const nextInput=$('settingsQuoteNextNumber');
       const currentNext=nextInput?String(nextInput.value||'').trim():String(businessProfile.quoteNextNumber);
-      const isDirty=currentPrefix!==(businessProfile.quotePrefix||'') || currentNext!==String(businessProfile.quoteNextNumber);
+      const isDirty=quoteNumberingDirty(currentPrefix,currentNext);
       const preview=$('settingsQuoteNumberPreview');
-      if(preview)preview.textContent=`${currentPrefix}${Math.max(1,Math.round(numberOrZero(currentNext))||1)}`;
+      if(preview)preview.textContent=quoteNumberingPreview(currentPrefix,currentNext);
       setSettingsSectionSaveState('QuoteNumbering',isDirty?'dirty':'idle');
     });
     const commitPrefix=()=>{
@@ -15991,14 +16087,16 @@ function bindBusinessProfileControls(){
     bindSettingsAccountGuard(nextNumberInput);
     nextNumberInput.setAttribute('data-business-profile-bound','true');
     nextNumberInput.addEventListener('input',()=>{
+      if(signedInQuoteNumbering()){syncBusinessProfileControls(true);return;}
       const currentPrefix=quotePrefixInput?String(quotePrefixInput.value||'').trim():businessProfile.quotePrefix;
       const currentNext=String(nextNumberInput.value||'').trim();
-      const isDirty=currentPrefix!==(businessProfile.quotePrefix||'') || currentNext!==String(businessProfile.quoteNextNumber);
+      const isDirty=quoteNumberingDirty(currentPrefix,currentNext);
       const preview=$('settingsQuoteNumberPreview');
-      if(preview)preview.textContent=`${currentPrefix}${Math.max(1,Math.round(numberOrZero(currentNext))||1)}`;
+      if(preview)preview.textContent=quoteNumberingPreview(currentPrefix,currentNext);
       setSettingsSectionSaveState('QuoteNumbering',isDirty?'dirty':'idle');
     });
     const commitNextNumber=()=>{
+      if(signedInQuoteNumbering()){syncBusinessProfileControls(true);return;}
       if(!settingsControlCanCommit(nextNumberInput))return;
       businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
       nextNumberInput.value=String(businessProfile.quoteNextNumber);
@@ -16014,7 +16112,7 @@ function bindBusinessProfileControls(){
     saveQuoteNumberingBtn.setAttribute('data-quote-numbering-bound','true');
     saveQuoteNumberingBtn.addEventListener('click',()=>runExplicitSave(saveQuoteNumberingBtn,()=>{
       if(quotePrefixInput)businessProfile.quotePrefix=String(quotePrefixInput.value||'').trim();
-      if(nextNumberInput)businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
+      if(nextNumberInput && !signedInQuoteNumbering())businessProfile.quoteNextNumber=Math.max(1,Math.round(numberOrZero(nextNumberInput.value))||1);
       const ok=saveBusinessProfile();
       syncBusinessProfileControls(true);
       return ok;
@@ -16373,4 +16471,9 @@ window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
 window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
 window.readAnonymousStudioSettingsSyncPayload=readAnonymousStudioSettingsSyncPayload;
 window.studioSettingsSyncCacheState=studioSettingsSyncCacheState;
+// Returning to the app (tab/PWA resume) re-reads the server counter; in-flight reads are deduplicated.
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible')refreshServerQuoteCounter();
+});
+window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
