@@ -3805,6 +3805,10 @@ textarea::placeholder{
 }
 
 @media (min-width:761px){
+  .app-shell:has(#buildsScreen.active){
+    width:min(100%,840px);
+  }
+
   #buildsScreen.active{
     display:grid;
     grid-template-rows:auto auto minmax(0,1fr);
@@ -7613,6 +7617,39 @@ textarea::-moz-selection,
 
 #buildsScreen.active:has(.saved-build-card__menu){
   animation:none;
+}
+
+#buildsScreen .saved-build-card__open,
+#buildsScreen .saved-build-card__head{
+  min-width:0;
+}
+
+#buildsScreen .saved-build-card__head strong,
+#buildsScreen .saved-build-card__title{
+  overflow-wrap:anywhere;
+}
+
+#buildsScreen .saved-build-card__meta{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px 8px;
+  min-width:0;
+}
+
+#buildsScreen .saved-build-card__meta small{
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+
+#buildsScreen .saved-build-card__menu-toggle{
+  min-width:44px;
+  min-height:44px;
+}
+
+#buildsScreen .saved-build-card__menu-item{
+  min-height:44px;
 }
 
 .saved-build-card__menu-item{
