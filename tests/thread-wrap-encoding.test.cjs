@@ -184,8 +184,8 @@ test('Thread Wrap entity references used by the HTML decode to the intended char
   for(const [entity,glyph] of Object.entries(entities)){
     if(card.includes(entity))assert.equal(glyph.codePointAt(0)>127,true,entity);
   }
-  assert.ok(card.includes('Approximate &mdash; test on a spare section first.'));
+  assert.ok(card.includes('<strong>Beta</strong> &mdash; the decorative-wrap geometry and instructions have not yet been physically validated'));
   assert.ok(card.includes('&minus;'));
   const decode=(text)=>text.replace(/&#x([0-9a-f]+);/gi,(_,hex)=>String.fromCodePoint(parseInt(hex,16))).replace(/&mdash;/g,'\u2014').replace(/&minus;/g,'\u2212');
-  assert.ok(decode(card).includes('Approximate \u2014 test'));
+  assert.ok(decode(card).includes('Beta</strong> \u2014 the decorative-wrap'));
 });
