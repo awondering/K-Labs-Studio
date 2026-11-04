@@ -277,7 +277,7 @@ const workshopToolsState={
     reductionCount:5,
     stripperIdMm:30,
     tipTopIdMm:5,
-    tipTopHeightMm:4,
+    tipTopCentreHeightMm:2.8,
     flareAngleDeg:1.5,
     settledLineMm:4,
     clearancePct:25,
@@ -285,6 +285,7 @@ const workshopToolsState={
     runnerRatio:0.85,
     runnerMinGapMm:50,
     guides:[],
+    guideSet:[],
     selected:0,
     invalid:{},
     notice:false,
@@ -2766,7 +2767,7 @@ function guideTrainRequest(state){
     reductionCount:state.reductionCount,
     stripperIdMm:state.stripperIdMm,
     tipTopIdMm:state.tipTopIdMm,
-    tipTopHeightMm:state.tipTopHeightMm,
+    tipTopCentreHeightMm:state.tipTopCentreHeightMm,
     flareAngleDeg:state.flareAngleDeg,
     settledLineMm:state.settledLineMm,
     clearancePct:state.clearancePct,
@@ -2777,20 +2778,43 @@ function guideTrainRequest(state){
   };
 }
 function guideTrainStatus(guide,fmt){
+  if(!guide.proposalSolved && !guide.moved)return {text:'No fitting position',level:'warn'};
   if(!guide.fits)return {text:`Ring ${fmt.length(-guide.marginMm)} short`,level:'warn'};
   if(guide.ringTopClearanceMm!==null && guide.ringTopClearanceMm<-1e-9)return {text:'Overlaps blank',level:'warn'};
   return {text:'Fits',level:'ok'};
 }
-function guideTrainCardsMarkup(design){
+// The builder's own guide set, checked by the engine. Only valid entries can be chosen on a guide card.
+function guideTrainSetEntries(state,engine,fmt){
+  return state.guideSet.map((entry,index)=>{
+    const check=engine.validateGuideSpec({idMm:entry.idMm,centreHeightMm:entry.centreHeightMm},fmt);
+    return {
+      index,name:entry.name || `Guide ${index+1}`,idMm:entry.idMm,centreHeightMm:entry.centreHeightMm,
+      valid:check.ok,error:check.ok?'':check.errors[0].message,code:check.ok?'':check.errors[0].code,
+    };
+  });
+}
+function guideTrainSetSignature(entries,fmt){
+  return entries.map((entry)=>`${entry.valid?'v':'x'}${entry.name}|${entry.valid?fmt.number(entry.idMm)+'/'+fmt.number(entry.centreHeightMm):''}`).join(';');
+}
+function guideTrainSpecMatch(entries,override){
+  if(!override || !Number.isFinite(override.idMm) || !Number.isFinite(override.centreHeightMm))return -1;
+  const found=entries.find((entry)=>entry.valid && Math.abs(entry.idMm-override.idMm)<1e-9 && Math.abs(entry.centreHeightMm-override.centreHeightMm)<1e-9);
+  return found?found.index:-1;
+}
+function guideTrainCardsMarkup(design,entries,fmt){
+  const choices=entries||[];
   return design.guides.map((guide)=>{
     const label=escapeHtml(guide.label);
     const fixedPosition=guide.role==='tip-top';
-    const field=(key,title,disabled)=>`<label><span>${title}</span><input type="text" inputmode="decimal" autocomplete="off" data-gt-field="${key}" data-guide="${guide.index}"${disabled?' disabled':''} aria-label="${label}: ${title.toLowerCase()}" /></label>`;
-    return `<div class="gt-guide${guide.role==='runner'?' gt-guide--runner':''}" data-guide="${guide.index}"><div class="gt-guide__head"><strong>${label}</strong><span class="gt-guide__butt" data-gt-out="butt"></span><span class="gt-guide__status" data-gt-out="status"></span></div><div class="gt-guide__fields">${field('position','From tip',fixedPosition)}${field('id','Ring ID',false)}${field('height','Height',false)}</div><div class="gt-guide__foot"><span data-gt-out="min"></span><span data-gt-out="line"></span></div></div>`;
+    const field=(key,title,disabled,aria)=>`<label><span>${title}</span><input type="text" inputmode="decimal" autocomplete="off" data-gt-field="${key}" data-guide="${guide.index}"${disabled?' disabled':''} aria-label="${label}: ${aria||title.toLowerCase()}" /></label>`;
+    const options=choices.map((entry)=>`<option value="${entry.index}"${entry.valid?'':' disabled'}>${escapeHtml(entry.name)}${entry.valid && fmt?` (${fmt.number(entry.idMm)} / ${fmt.number(entry.centreHeightMm)})`:' (incomplete)'}</option>`).join('');
+    const spec=choices.length?`<label class="gt-guide__spec"><span>Guide</span><select data-gt-spec data-guide="${guide.index}" aria-label="${label}: choose a guide from your set"><option value="">Illustrative</option><option value="custom" disabled hidden>Custom values</option>${options}</select></label>`:'';
+    return `<div class="gt-guide${guide.role==='runner'?' gt-guide--runner':''}" data-guide="${guide.index}"><div class="gt-guide__head"><strong>${label}</strong><span class="gt-guide__butt" data-gt-out="butt"></span><span class="gt-guide__source" data-gt-out="source" hidden>Measured</span><span class="gt-guide__status" data-gt-out="status"></span></div>${spec}<div class="gt-guide__fields">${field('position','From tip',fixedPosition)}${field('id','Ring ID',false)}${field('height','Height',false,'centre height above the blank')}</div><div class="gt-guide__foot"><span data-gt-out="min"></span><span data-gt-out="line"></span></div></div>`;
   }).join('');
 }
 // Writes the current values into the existing cards without rebuilding them, so a field being typed in keeps focus.
-function updateGuideTrainCards(host,design,state,fmt){
+function updateGuideTrainCards(host,design,state,fmt,entriesIn){
+  const entries=entriesIn||[];
   host.querySelectorAll('.gt-guide').forEach((card)=>{
     const index=Number(card.getAttribute('data-guide'));
     const guide=design.guides[index];
@@ -2800,10 +2824,8 @@ function updateGuideTrainCards(host,design,state,fmt){
     card.classList.toggle('has-warning',status.level==='warn');
     card.querySelectorAll('[data-gt-field]').forEach((input)=>{
       const key=input.getAttribute('data-gt-field');
-      const value=key==='position'?guide.fromTipMm:key==='id'?guide.idMm:guide.heightMm;
-      const edited=key==='position'?guide.moved:key==='id'
-        ?(guide.role==='reduction' || guide.role==='choke' || guide.role==='runner') && Math.abs(guide.idMm-guide.proposed.idMm)>1e-9
-        :guide.role!=='tip-top' && Math.abs(guide.heightMm-guide.proposed.heightMm)>1e-9;
+      const value=key==='position'?guide.fromTipMm:key==='id'?guide.idMm:guide.centreHeightMm;
+      const edited=key==='position'?guide.moved:key==='id'?guide.measured.id:guide.measured.height;
       input.classList.toggle('is-edited',!!edited);
       input.setAttribute('aria-invalid',state.invalid[`${index}.${key}`]?'true':'false');
       if(document.activeElement!==input)input.value=fmt.number(value);
@@ -2815,6 +2837,12 @@ function updateGuideTrainCards(host,design,state,fmt){
         if(level)out.setAttribute('data-level',level);
       });
     };
+    card.querySelectorAll('[data-gt-out="source"]').forEach((tag)=>{tag.hidden=guide.source!=='measured';});
+    card.querySelectorAll('[data-gt-spec]').forEach((select)=>{
+      if(document.activeElement===select)return;
+      const match=guideTrainSpecMatch(entries,state.guides[index]);
+      select.value=match>=0?String(match):(guide.source==='measured'?'custom':'');
+    });
     setOut('butt',`${fmt.length(guide.fromButtMm)} from butt`);
     setOut('status',status.text,status.level);
     setOut('min',`Needs at least ${fmt.length(guide.requiredIdMm)}`);
@@ -2852,6 +2880,45 @@ function resetGuideTrainOverridesForCount(state,key){
   }
   state.selected=0;
 }
+const GUIDE_TRAIN_SET_MAX=8;
+function guideTrainSetMarkup(state){
+  return state.guideSet.map((entry,i)=>{
+    const n=i+1;
+    return `<div class="gt-set-row" data-set="${i}"><label class="gt-set-name"><span>Name</span><input type="text" maxlength="24" autocomplete="off" data-gt-set="name" aria-label="Guide ${n} name" /></label><button type="button" class="ghost-action gt-set-remove" data-gt-set-remove="${i}" aria-label="Remove guide ${n} from the set">Remove</button><label><span>Ring ID</span><input type="text" inputmode="decimal" autocomplete="off" data-gt-set="id" aria-label="Guide ${n} ring inner diameter" /></label><label><span>Centre height</span><input type="text" inputmode="decimal" autocomplete="off" data-gt-set="height" aria-label="Guide ${n} centre height above the blank" /></label><p class="gt-set-error" data-gt-out="error" role="alert" hidden></p></div>`;
+  }).join('');
+}
+// Shows the builder's guide set. Rows are only rebuilt when entries are added or removed, so typing keeps its focus.
+function renderGuideTrainSet(state,engine,fmt){
+  const host=$('gtSetRows');
+  if(!host)return;
+  if(host.getAttribute('data-count')!==String(state.guideSet.length)){
+    host.innerHTML=guideTrainSetMarkup(state);
+    host.setAttribute('data-count',String(state.guideSet.length));
+  }
+  const entries=guideTrainSetEntries(state,engine,fmt);
+  host.querySelectorAll('.gt-set-row').forEach((row)=>{
+    const index=Number(row.getAttribute('data-set'));
+    const entry=state.guideSet[index];
+    const info=entries[index];
+    if(!entry || !info)return;
+    row.querySelectorAll('[data-gt-set]').forEach((input)=>{
+      if(document.activeElement===input)return;
+      const key=input.getAttribute('data-gt-set');
+      if(key==='name')input.value=entry.name;
+      else{
+        const value=key==='id'?entry.idMm:entry.centreHeightMm;
+        input.value=Number.isFinite(value)?fmt.number(value):'';
+      }
+    });
+    row.querySelectorAll('[data-gt-out="error"]').forEach((out)=>{
+      const show=!info.valid && (info.code!=='missing' || (entry.idMm!==null && entry.centreHeightMm!==null));
+      out.textContent=show?info.error:'';
+      out.hidden=!show;
+    });
+  });
+  const add=$('gtSetAdd');
+  if(add)add.disabled=state.guideSet.length>=GUIDE_TRAIN_SET_MAX;
+}
 function renderGuideTrainTool(){
   const card=$('workshopToolGuideTrain');
   const engine=guideTrainEngine();
@@ -2870,6 +2937,7 @@ function renderGuideTrainTool(){
   }
   state.last=design;
   renderGuideTrainMethod(engine);
+  renderGuideTrainSet(state,engine,fmt);
 
   GUIDE_TRAIN_MAIN_FIELDS.forEach(([id,key])=>{
     const input=$(id);
@@ -2934,16 +3002,27 @@ function renderGuideTrainTool(){
   setText('gtSumRatio',`${formatDecimal(summary.reductionRatio,3)} per step`);
   setText('gtSumRunners',summary.runnerCount?`${summary.runnerCount}, last ${fmt.length(summary.lastRunnerFromTipMm)} from tip-top`:'None');
   setText('gtSumClearance',summary.minBlankClearanceMm<-1e-9?'Touches the blank':`${fmt.length(summary.minBlankClearanceMm)}, ${fmt.length(summary.minBlankClearanceFromTipMm)} from tip`);
-  setText('gtGuidesUnit',`Distances in ${workshopUnitSuffix(state.unit)}. Edited values are highlighted; clear a field to return to the proposal.${summary.runnerCount?' Runner positions are provisional: check them against blank deflection and a static-load test.':''}`);
+  const modeText=summary.mode==='illustrative'
+    ?'Illustrative geometry'
+    :summary.mode==='measured'?'All guides measured':`${summary.measuredCount} of ${summary.totalGuides} measured`;
+  setText('gtMode',modeText);
+  const modeBadge=$('gtMode');
+  if(modeBadge)modeBadge.setAttribute('data-mode',summary.mode);
+  const modeNote=summary.mode==='illustrative'
+    ?' Illustrative geometry: ring sizes and heights are proposals, not guide specifications. Enter measured values to fix them.'
+    :' Measured values are kept as entered and the guides are positioned around them. Guides without measurements stay illustrative.';
+  setText('gtGuidesUnit',`Distances in ${workshopUnitSuffix(state.unit)}. Height is the ring centre above the blank surface.${modeNote} Edited values are highlighted; clear a field to return to the proposal.${summary.runnerCount?' Runner positions are provisional: check them against blank deflection and a static-load test.':''}`);
+  setText('gtCaption',`Drag a guide along the rod, or edit its values below. Triangles mark the proposed positions.${summary.measuredCount?' Brighter rings use your measured dimensions.':''}`);
 
+  const entries=guideTrainSetEntries(state,engine,fmt);
   const host=$('gtGuides');
   if(host){
-    const layout=design.guides.map((guide)=>guide.role.charAt(0)).join('');
+    const layout=`${design.guides.map((guide)=>guide.role.charAt(0)).join('')}#${guideTrainSetSignature(entries,fmt)}`;
     if(host.getAttribute('data-layout')!==layout){
-      host.innerHTML=guideTrainCardsMarkup(design);
+      host.innerHTML=guideTrainCardsMarkup(design,entries,fmt);
       host.setAttribute('data-layout',layout);
     }
-    updateGuideTrainCards(host,design,state,fmt);
+    updateGuideTrainCards(host,design,state,fmt,entries);
   }
   const reset=$('gtResetGuides');
   if(reset)reset.hidden=!state.guides.some(Boolean);
@@ -2969,8 +3048,14 @@ function setGuideTrainOverride(state,index,prop,value){
   else entry[prop]=value;
   state.guides[index]=Object.keys(entry).length?entry:null;
 }
-// Applies one guide field edit. Edits that would make the train impossible are refused with a message
-// instead of being applied, so the guide cards never disappear while a value is being typed.
+// Runs the engine on the current entries and refuses a change that makes the train impossible, so the guide
+// cards never disappear while a value is being typed.
+function guideTrainRefusal(state,engine){
+  const trial=engine.designGuideTrain(guideTrainRequest(state),guideTrainFormatter(state));
+  return trial.ok?null:trial.errors.find((entry)=>/^guide\d+\./.test(entry.field) || entry.code==='no-room')||null;
+}
+// Applies one guide field edit. Ring size and height are measurements: entering one makes it a physical constraint
+// and the guide is repositioned around it. Clearing a field returns that value to the illustrative proposal.
 function commitGuideTrainEdit(index,field,rawText){
   const state=workshopToolsState.guideTrain;
   const engine=guideTrainEngine();
@@ -2978,34 +3063,41 @@ function commitGuideTrainEdit(index,field,rawText){
   const key=`${index}.${field}`;
   const count=state.reductionCount+state.runnerCount+2;
   const value=readGuideTrainMeasurement(rawText,state.unit);
-  const names={position:'position',id:'ring inner diameter',height:'centre height'};
+  const names={position:'position',id:'ring inner diameter',height:'centre height above the blank'};
   const label=engine.guideLabel(index,count,state.runnerCount);
   if(Number.isNaN(value)){
     state.invalid[key]=`${label}: the ${names[field]} is not a valid number.`;
     return false;
   }
-  if(index===0 && field==='id'){
-    state.stripperIdMm=value;
-    delete state.invalid[key];
-    return true;
-  }
-  if(index===count-1 && (field==='id' || field==='height')){
-    state[field==='id'?'tipTopIdMm':'tipTopHeightMm']=value;
-    delete state.invalid[key];
-    return true;
-  }
-  const prop=field==='position'?'positionMm':field==='id'?'idMm':'heightMm';
+  const prop=field==='position'?'positionMm':field==='id'?'idMm':'centreHeightMm';
   const stored=value===null?null:(field==='position'?state.rodLengthMm-value:value);
   const before=state.guides.map((entry)=>entry?{...entry}:entry);
   setGuideTrainOverride(state,index,prop,stored);
-  const trial=engine.designGuideTrain(guideTrainRequest(state),guideTrainFormatter(state));
-  const refusal=trial.ok?null:trial.errors.find((entry)=>/^guide\d+\./.test(entry.field));
+  const refusal=guideTrainRefusal(state,engine);
   if(refusal){
     state.guides=before;
     state.invalid[key]=refusal.message;
     return false;
   }
   delete state.invalid[key];
+  return true;
+}
+// Chooses a guide from the builder's set (or clears it). Both measurements are applied together or not at all.
+function commitGuideTrainSpec(index,entry){
+  const state=workshopToolsState.guideTrain;
+  const engine=guideTrainEngine();
+  if(!engine)return false;
+  const before=state.guides.map((item)=>item?{...item}:item);
+  setGuideTrainOverride(state,index,'idMm',entry?entry.idMm:null);
+  setGuideTrainOverride(state,index,'centreHeightMm',entry?entry.centreHeightMm:null);
+  const refusal=guideTrainRefusal(state,engine);
+  delete state.invalid[`${index}.id`];
+  delete state.invalid[`${index}.height`];
+  if(refusal){
+    state.guides=before;
+    state.invalid[`${index}.id`]=refusal.message;
+    return false;
+  }
   return true;
 }
 function bindGuideTrainControls(){
@@ -3068,6 +3160,17 @@ function bindGuideTrainControls(){
     };
     guidesHost.addEventListener('input',onFieldEvent);
     guidesHost.addEventListener('change',onFieldEvent);
+    guidesHost.addEventListener('change',(event)=>{
+      const target=event.target;
+      if(!target || typeof target.getAttribute!=='function' || !target.hasAttribute('data-gt-spec'))return;
+      const index=Number(target.getAttribute('data-guide'));
+      const engine=guideTrainEngine();
+      const entries=engine?guideTrainSetEntries(state,engine,guideTrainFormatter(state)):[];
+      const chosen=target.value===''?null:entries[Number(target.value)];
+      state.selected=index;
+      if(target.value==='' || (chosen && chosen.valid))commitGuideTrainSpec(index,chosen);
+      renderGuideTrainTool();
+    });
     guidesHost.addEventListener('focusin',(event)=>{
       const target=event.target;
       const holder=target && typeof target.closest==='function'?target.closest('.gt-guide'):null;
@@ -3079,6 +3182,37 @@ function bindGuideTrainControls(){
       }
     });
   }
+
+  // The builder's own guide set (session only, never saved): name, ring inner diameter, centre height above the blank.
+  const setHost=$('gtSetRows');
+  if(setHost){
+    const onSetInput=(event)=>{
+      const target=event.target;
+      if(!target || typeof target.getAttribute!=='function' || !target.getAttribute('data-gt-set'))return;
+      const row=typeof target.closest==='function'?target.closest('.gt-set-row'):null;
+      const entry=row?state.guideSet[Number(row.getAttribute('data-set'))]:null;
+      if(!entry)return;
+      const key=target.getAttribute('data-gt-set');
+      if(key==='name')entry.name=String(target.value||'').slice(0,24);
+      else if(key==='id')entry.idMm=readGuideTrainMeasurement(target.value,state.unit);
+      else entry.centreHeightMm=readGuideTrainMeasurement(target.value,state.unit);
+      renderGuideTrainTool();
+    };
+    setHost.addEventListener('input',onSetInput);
+    setHost.addEventListener('change',onSetInput);
+    setHost.addEventListener('click',(event)=>{
+      const button=event.target && typeof event.target.closest==='function'?event.target.closest('[data-gt-set-remove]'):null;
+      if(!button)return;
+      state.guideSet.splice(Number(button.getAttribute('data-gt-set-remove')),1);
+      renderGuideTrainTool();
+    });
+  }
+  const setAdd=$('gtSetAdd');
+  if(setAdd)setAdd.addEventListener('click',()=>{
+    if(state.guideSet.length>=GUIDE_TRAIN_SET_MAX)return;
+    state.guideSet.push({name:'',idMm:null,centreHeightMm:null});
+    renderGuideTrainTool();
+  });
 
   // Dragging a guide along the rod in the side view.
   const canvas=$('gtViewCanvas');

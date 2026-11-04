@@ -115,7 +115,7 @@ test('coordinates are consistent: from-tip plus from-butt equals the rod length 
 test('uniformly scaling every length scales every position and ring size and keeps every angle',()=>{
   const k=1.3;
   const scaled={...base};
-  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopHeightMm','settledLineMm'])scaled[key]=base[key]*k;
+  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','settledLineMm'])scaled[key]=base[key]*k;
   const a=G.designGuideTrain(base),b=G.designGuideTrain(scaled);
   assert.equal(b.ok,true,JSON.stringify(b.errors));
   a.guides.forEach((g,i)=>{
@@ -147,7 +147,7 @@ test('reel axis offset adds twice the perpendicular distance to the stripper req
   const v={...base,reelAngleDeg:1.2};
   const probe=G.designGuideTrain(v);
   const lift=6;
-  const o=G.designGuideTrain({...v,guides:[{heightMm:probe.guides[0].heightMm+lift}]});
+  const o=G.designGuideTrain({...v,guides:[{positionMm:probe.guides[0].xMm,centreHeightMm:probe.guides[0].centreHeightMm+lift}]});
   assert.equal(o.ok,true,JSON.stringify(o.errors));
   const dx=o.guides[0].xMm-v.spoolLipMm,dy=o.guides[0].heightMm-v.reelHeightMm;
   const expected=Math.abs(dx*Math.sin(rad(1.2))+dy*Math.cos(rad(1.2)));
@@ -170,7 +170,7 @@ test('path length and arc positions are the polyline through the ring centres',(
 });
 
 test('blank clearance: reported minimum matches a brute-force scan along the line path',()=>{
-  for(const overrides of [{},{reelAngleDeg:2},{tipTopHeightMm:2.6},{buttOdMm:20,reelHeightMm:40}]){
+  for(const overrides of [{},{reelAngleDeg:2},{tipTopCentreHeightMm:2.6},{buttOdMm:20,reelHeightMm:40}]){
     const d=design(overrides);
     assert.equal(d.ok,true,JSON.stringify(d.errors));
     const v=d.input;
@@ -195,23 +195,27 @@ test('blank clearance: reported minimum matches a brute-force scan along the lin
 
 test('user edits recalculate from the entered values and keep the proposal for comparison',()=>{
   const ref=design({});
-  const moved=G.designGuideTrain({...base,guides:[null,{positionMm:ref.guides[1].xMm+12},{idMm:18},{heightMm:ref.guides[3].heightMm+3}]});
+  const moved=G.designGuideTrain({...base,guides:[null,{positionMm:ref.guides[1].xMm+12},{idMm:18},{centreHeightMm:ref.guides[3].centreHeightMm+3}]});
   assert.equal(moved.ok,true,JSON.stringify(moved.errors));
   assert.equal(moved.guides[1].moved,true);
   close(moved.guides[1].xMm,ref.guides[1].xMm+12,1e-9);
   close(moved.guides[1].proposed.xMm,ref.guides[1].xMm,1e-9,'proposal is preserved');
   assert.equal(moved.guides[1].fromTipMm,base.rodLengthMm-moved.guides[1].xMm);
   assert.equal(moved.guides[2].idMm,18);
-  assert.equal(moved.guides[2].proposed.idMm,ref.guides[2].idMm);
-  close(moved.guides[3].heightMm,ref.guides[3].heightMm+3,1e-9);
+  assert.equal(moved.guides[2].proposed.idMm,18,'a measured ring size is a constraint, so the proposal uses it');
+  assert.ok(moved.guides[2].xMm<ref.guides[2].xMm,'a larger ring fits the line cone earlier, so it is proposed nearer the reel');
+  close(moved.guides[3].centreHeightMm,ref.guides[3].centreHeightMm+3,1e-9);
+  assert.equal(moved.guides[3].measured.height,true);
   assert.equal(moved.guides[0].moved,false);
-  assert.equal(moved.guides[4].xMm,ref.guides[4].xMm);
-  // the stripper and tip-top ring sizes come from the main inputs and cannot be overridden per guide
-  const ignored=G.designGuideTrain({...base,guides:[{idMm:99},null,null,null,null,null,{idMm:99,positionMm:10,heightMm:50}]});
-  assert.equal(ignored.guides[0].idMm,base.stripperIdMm);
-  assert.equal(ignored.guides[6].idMm,base.tipTopIdMm);
-  assert.equal(ignored.guides[6].xMm,base.rodLengthMm);
-  assert.equal(ignored.guides[6].heightMm,base.tipTopHeightMm);
+  assert.ok(Math.abs(moved.guides[4].xMm-ref.guides[4].xMm)<2,'later guides are recalculated around the constraint');
+  // The stripper and tip-top take measured ring sizes and heights too; the tip-top position stays at the tip.
+  const taken=G.designGuideTrain({...base,guides:[{idMm:28},null,null,null,null,null,{idMm:6,positionMm:10,centreHeightMm:3.5}]});
+  assert.equal(taken.ok,true,JSON.stringify(taken.errors));
+  assert.equal(taken.guides[0].idMm,28);
+  assert.equal(taken.guides[6].idMm,6);
+  assert.equal(taken.guides[6].xMm,base.rodLengthMm);
+  close(taken.guides[6].centreHeightMm,3.5,1e-12);
+  close(taken.guides[6].heightMm,G.bladeRadius(taken.input,base.rodLengthMm)+3.5,1e-12);
 });
 
 test('invalid or missing main measurements are rejected with a field and a plain-English message',()=>{
@@ -256,7 +260,7 @@ test('invalid guide edits are rejected',()=>{
   assert.ok(code(withGuides([null,{positionMm:NaN}])).includes('guide-invalid'));
   assert.ok(code(withGuides([null,null,{idMm:0.4}])).includes('guide-range'));
   assert.ok(code(withGuides([null,null,{idMm:81}])).includes('guide-range'));
-  assert.ok(code(withGuides([null,null,null,{heightMm:-1}])).includes('guide-range'));
+  assert.ok(code(withGuides([null,null,null,{centreHeightMm:-1}])).includes('guide-range'));
   assert.ok(code(withGuides([{positionMm:base.spoolLipMm-5}])).includes('guide-before-reel'));
   assert.ok(code(withGuides([null,{positionMm:base.rodLengthMm+1}])).includes('guide-beyond-tip'));
   assert.ok(code(withGuides([null,{positionMm:ref.guides[2].xMm+5}])).includes('guide-order'));
@@ -268,7 +272,7 @@ test('invalid guide edits are rejected',()=>{
 
 test('design warnings: ring too small, train not reducing, ring overlapping the blank, line touching the blank',()=>{
   const ref=design({});
-  const small=G.designGuideTrain({...base,guides:[null,null,{idMm:9}]});
+  const small=G.designGuideTrain({...base,guides:[null,null,{positionMm:ref.guides[2].xMm,idMm:9}]});
   assert.equal(small.ok,true);
   const w=small.warnings.find((x)=>x.code==='ring-too-small');
   assert.ok(w && w.field==='guide2.idMm');
@@ -277,15 +281,15 @@ test('design warnings: ring too small, train not reducing, ring overlapping the 
   assert.ok(small.guides[2].marginMm<0);
   const rising=G.designGuideTrain({...base,guides:[null,null,{idMm:ref.guides[1].idMm+4}]});
   assert.ok(warnCodes(rising).includes('id-not-reducing'));
-  const low=G.designGuideTrain({...base,guides:[null,null,null,{heightMm:4}]});
+  const low=G.designGuideTrain({...base,guides:[null,null,null,{centreHeightMm:4}]});
   assert.ok(warnCodes(low).includes('ring-overlaps-blank'));
-  const touching=G.designGuideTrain({...base,guides:[null,{heightMm:12},{heightMm:10},{heightMm:9},{heightMm:8},{heightMm:7}]});
+  const touching=G.designGuideTrain({...base,guides:[null,{centreHeightMm:4},{centreHeightMm:3.2},{centreHeightMm:2.8},{centreHeightMm:2.4},{centreHeightMm:2.1}]});
   assert.ok(warnCodes(touching).includes('blank-contact'),JSON.stringify(touching.warnings));
   assert.ok(touching.summary.minBlankClearanceMm<0);
   assert.ok(!warnCodes(ref).includes('blank-contact'));
   // the tip-top ring is exempt from the ring-overlaps-blank rule (it sits beyond the end of the blank)
-  const tt=design({tipTopHeightMm:0.5,tipTopIdMm:5});
-  assert.ok(!tt.warnings.some((x)=>x.code==='ring-overlaps-blank' && x.field==='guide6.heightMm'));
+  const tt=design({tipTopCentreHeightMm:0.5,tipTopIdMm:5});
+  assert.ok(!tt.warnings.some((x)=>x.code==='ring-overlaps-blank' && x.field==='guide6.centreHeightMm'));
 });
 
 test('choke beyond the tip: warned, and the reduction chain is compressed to end before the tip-top',()=>{
@@ -305,7 +309,7 @@ test('choke beyond the tip: warned, and the reduction chain is compressed to end
 
 test('measurements use the supplied unit formatter',()=>{
   const fmt={length:(mm)=>`${(mm/25.4).toFixed(3)} in`,degrees:(d)=>`${d.toFixed(1)} deg`};
-  const w=G.designGuideTrain({...base,guides:[null,null,{idMm:9}]},fmt).warnings.find((x)=>x.code==='ring-too-small');
+  const w=G.designGuideTrain({...base,guides:[null,null,{positionMm:design({}).guides[2].xMm,idMm:9}]},fmt).warnings.find((x)=>x.code==='ring-too-small');
   assert.match(w.message,/the 0\.354 in ring is/);
   assert.ok(!/ mm\b/.test(w.message));
   assert.match(design({reelHeightMm:12},fmt).errors[0].message,/overlap the blank/);
@@ -430,12 +434,11 @@ test('side-view SVG: pointer positions convert back to millimetres exactly',()=>
 });
 
 test('side-view SVG: selection, warnings and moved-guide markers',()=>{
-  const d=G.designGuideTrain({...base,guides:[null,{positionMm:1010},{idMm:9}]});
+  const d=G.designGuideTrain({...base,guides:[null,{positionMm:1010},{positionMm:design({}).guides[2].xMm,idMm:9}]});
   const p=svgParts(G.buildSideViewSvg(d,{width:340,selectedIndex:2}));
   assert.ok(p.tags('gt-ring').some((t)=>/gt-ring--selected/.test(t) && p.attr(t,'data-guide')==='2'));
   assert.ok(p.tags('gt-ring').some((t)=>/gt-ring--warn/.test(t) && p.attr(t,'data-guide')==='2'),'a ring that is too small is flagged');
-  assert.equal(p.tags('gt-proposed').length,1,'one moved guide shows its proposed position');
-  assert.equal(p.tags('gt-proposed').map((t)=>p.attr(t,'data-guide'))[0],'1');
+  assert.deepEqual(p.tags('gt-proposed').map((t)=>p.attr(t,'data-guide')),['1','2'],'each moved guide shows its proposed position');
   const none=svgParts(G.buildSideViewSvg(design({}),{width:340}));
   assert.equal(none.tags('gt-proposed').length,0);
   assert.equal(none.tags('gt-ring').filter((t)=>/gt-ring--selected/.test(t)).length,0);

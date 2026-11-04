@@ -32,8 +32,8 @@ const trainSource=source.slice(uiStart,uiEnd);
 function harness({unit='metric',runnerCount=0}={}){
   const state={
     unit,imperialDisplay:'decimal',rodLengthMm:2130,buttOdMm:14,tipOdMm:2.4,spoolLipMm:560,spoolDiameterMm:40,
-    reelHeightMm:36,reelAngleDeg:0,reductionCount:5,stripperIdMm:30,tipTopIdMm:5,tipTopHeightMm:4,
-    flareAngleDeg:1.5,settledLineMm:4,clearancePct:25,runnerCount,runnerRatio:0.85,runnerMinGapMm:50,guides:[],selected:0,invalid:{},notice:'',
+    reelHeightMm:36,reelAngleDeg:0,reductionCount:5,stripperIdMm:30,tipTopIdMm:5,tipTopCentreHeightMm:2.8,
+    flareAngleDeg:1.5,settledLineMm:4,clearancePct:25,runnerCount,runnerRatio:0.85,runnerMinGapMm:50,guides:[],guideSet:[],selected:0,invalid:{},notice:'',
   };
   const c=vm.createContext({
     KLabsGuideTrain:Engine,
@@ -46,10 +46,11 @@ function harness({unit='metric',runnerCount=0}={}){
     'parseImperialInchesInput','normalizeWorkshopUnit','normalizeWorkshopImperialDisplay','workshopUnitSuffix',
     'parseWorkshopMeasurementMm','formatWorkshopMeasurementNumber','formatWorkshopMeasurementValue','escapeHtml',
     'guideTrainEngine','guideTrainFormatter','readGuideTrainMeasurement','readGuideTrainNumber','guideTrainRequest',
-    'guideTrainStatus','guideTrainCardsMarkup','guideTrainDragPosition','setGuideTrainOverride','commitGuideTrainEdit',
+    'guideTrainStatus','guideTrainSetEntries','guideTrainSetSignature','guideTrainSpecMatch','guideTrainCardsMarkup','guideTrainDragPosition','setGuideTrainOverride','guideTrainRefusal','commitGuideTrainEdit','commitGuideTrainSpec',
   ]){
     vm.runInContext(extract(name),c);
   }
+  vm.runInContext('const GUIDE_TRAIN_SET_MAX=8;',c);
   const design=()=>c.KLabsGuideTrain.designGuideTrain(c.guideTrainRequest(state),c.guideTrainFormatter(state));
   return {c,state,design};
 }
@@ -63,7 +64,7 @@ test('UI defaults equal the engine defaults, so the first render matches the doc
     assert.equal(state[key],d[key],`default ${key}`);
   }
   const block=source.slice(source.indexOf('  guideTrain:{'),source.indexOf('  guideTrain:{')+900);
-  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','reelAngleDeg','reductionCount','stripperIdMm','tipTopIdMm','tipTopHeightMm','flareAngleDeg','settledLineMm','clearancePct','runnerCount','runnerRatio','runnerMinGapMm']){
+  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','reelAngleDeg','reductionCount','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','flareAngleDeg','settledLineMm','clearancePct','runnerCount','runnerRatio','runnerMinGapMm']){
     const match=block.match(new RegExp(`${key}:([-\\d.]+)`));
     assert.ok(match,`state declares ${key}`);
     assert.equal(Number(match[1]),d[key],`ui.js default ${key} equals the engine`);
@@ -104,7 +105,7 @@ test('guide cards are built once per guide with labelled inputs; the tip-top pos
   assert.equal((markup.match(/ disabled/g)||[]).length,1,'only the tip-top position is disabled');
   assert.ok(/aria-label="Stripper: from tip"/.test(markup));
   assert.ok(/aria-label="Guide 5 \(choke\): ring id"/.test(markup));
-  assert.ok(/aria-label="Tip-top: height"/.test(markup));
+  assert.ok(/aria-label="Tip-top: centre height above the blank"/.test(markup));
 });
 
 test('dragging stays between the neighbours and snaps to 0.5 mm',()=>{
@@ -149,15 +150,24 @@ test('clearing a field returns the guide to its proposal and removes the stored 
   assert.deepEqual(xs(design()),proposal);
 });
 
-test('stripper and tip-top ring edits update the main inputs, not the guide overrides',()=>{
-  const {c,state}=harness();
+test('stripper and tip-top ring and height edits are measured overrides; the illustrative defaults are never rewritten',()=>{
+  const {c,state,design}=harness();
   assert.equal(c.commitGuideTrainEdit(0,'id','28'),true);
-  assert.equal(state.stripperIdMm,28);
+  assert.equal(state.guides[0].idMm,28);
   assert.equal(c.commitGuideTrainEdit(6,'id','6'),true);
-  assert.equal(state.tipTopIdMm,6);
-  assert.equal(c.commitGuideTrainEdit(6,'height','5'),true);
-  assert.equal(state.tipTopHeightMm,5);
-  assert.equal(state.guides.length,0);
+  assert.equal(state.guides[6].idMm,6);
+  assert.equal(c.commitGuideTrainEdit(6,'height','3.5'),true);
+  assert.equal(state.guides[6].centreHeightMm,3.5);
+  assert.equal(state.stripperIdMm,30);
+  assert.equal(state.tipTopIdMm,5);
+  assert.equal(state.tipTopCentreHeightMm,2.8);
+  const d=design();
+  assert.equal(d.guides[0].idMm,28);
+  assert.equal(d.guides[6].idMm,6);
+  assert.equal(d.guides[0].source,'measured');
+  assert.equal(d.guides[6].source,'measured');
+  assert.equal(c.commitGuideTrainEdit(0,'id',''),true);
+  assert.equal(design().guides[0].idMm,30,'clearing returns the illustrative proposal');
 });
 
 test('imperial edits convert to millimetres exactly once',()=>{
@@ -171,10 +181,11 @@ test('status text distinguishes fitting, short and blank-overlapping rings',()=>
   const d=design();
   const fmt=c.guideTrainFormatter(harness().state);
   assert.deepEqual(JSON.parse(JSON.stringify(c.guideTrainStatus(d.guides[1],fmt))),{text:'Fits',level:'ok'});
-  const short=JSON.parse(JSON.stringify(c.guideTrainStatus({fits:false,marginMm:-5.8,ringTopClearanceMm:1},fmt)));
+  const short=JSON.parse(JSON.stringify(c.guideTrainStatus({proposalSolved:true,fits:false,marginMm:-5.8,ringTopClearanceMm:1},fmt)));
   assert.equal(short.level,'warn');
   assert.match(short.text,/^Ring 5\.8 mm short$/);
-  assert.equal(c.guideTrainStatus({fits:true,marginMm:1,ringTopClearanceMm:-1},fmt).text,'Overlaps blank');
+  assert.equal(c.guideTrainStatus({proposalSolved:true,fits:true,marginMm:1,ringTopClearanceMm:-1},fmt).text,'Overlaps blank');
+  assert.deepEqual(JSON.parse(JSON.stringify(c.guideTrainStatus({proposalSolved:false,moved:false,fits:false,marginMm:-2,ringTopClearanceMm:1},fmt))),{text:'No fitting position',level:'warn'});
 });
 
 test('Workshop wiring: launcher, card, script order and offline asset exist; existing tools are unchanged',()=>{

@@ -1,4 +1,4 @@
-/* K-Labs Studio - Guide Train Designer geometry engine (Phase 2, prototype: reduction train plus running guides).
+/* K-Labs Studio - Guide Train Designer geometry engine (prototype: reduction train, running guides, measured guides).
    Pure functions only: no DOM access, storage, pricing or network. This file is ASCII-only on purpose, so
    no page charset can corrupt it. All lengths are millimetres, all angles are degrees.
 
@@ -13,6 +13,31 @@
      y = distance BELOW the blank axis (positive = towards the line side). The blank occupies |y| <= r(x),
          where r(x) is half of the blank diameter, linear between the butt and tip diameters.
    Distances "from the tip" are rodLength - x.
+
+   THREE SEPARATE GUIDE MEASUREMENTS (guide geometry)
+   A real guide is a rigid frame. Its ring size and the height of its ring above the foot are fixed by the guide;
+   only where the foot is wrapped on the blank is chosen by the builder. The model keeps the three apart:
+     1. Ring inner diameter  idMm            - a property of the guide.
+     2. Centre height        centreHeightMm  - distance from the BLANK SURFACE (where the foot sits) up to the ring
+                                               centre, measured square to the blank. A property of the guide.
+     3. Mounting position    xMm             - where the guide is mounted along the blank. The builder chooses it.
+   The ring centre therefore sits at  y = r(x) + centreHeightMm  (axis-referenced, used for the line path), so a
+   guide moved along a tapering blank keeps its own height above the blank surface and its axis height follows
+   the taper. Ring clearance to the blank is exactly  centreHeightMm - idMm / 2  and must not be negative.
+   Mounting position is taken to be the position of the ring plane. Ring offset from the foot (single-foot frames),
+   foot length, wrap thickness and ring wall thickness are NOT modelled.
+
+   ILLUSTRATIVE GEOMETRY and MEASURED GUIDES
+   Until a builder enters a guide's measured ring diameter and centre height, that guide is ILLUSTRATIVE: its size and
+   height are proposals computed from the line path and are not guide specifications. Once measured values are
+   entered (or chosen from the builder's own guide set) they are PHYSICAL CONSTRAINTS: the engine never changes
+   them, it moves the guide instead. Mixed trains are allowed, guide by guide.
+   Proposed positions around constraints (the first-fit rule): a guide is placed at the first position, going from the
+   reel toward the tip, where its ring is large enough for the line cone at that point, using its fixed ring
+   diameter and (if measured) its fixed height above the blank, with the line path bending through the actual ring
+   centres. The path length to the guide depends on the position through its height, so the position is found by
+   scanning and refining (bisection) along the rod. If no position on the rod makes the ring fit, the engine does not
+   change the guide: it places it where the shortfall is smallest and reports 'no-fit-position'.
 
    THE LINE ENVELOPE (the key idea)
    Line leaves a fixed spool in coils. We model the cloud of coils as a cone around the line path:
@@ -67,6 +92,7 @@
    output is identical to Phase 1.
 
    LIMITATIONS (also shown in the app)
+     - Guide dimensions are only what the builder enters. There is no guide catalogue and no manufacturer data.
      - Geometry only. It says nothing about casting distance, line friction, rod action, guide weight or
        whether a guide model exists in the sizes proposed.
      - Rod bend under load is ignored (a straight, unloaded blank).
@@ -98,7 +124,7 @@
     {key:'reductionCount',label:'reduction guide count',kind:'int',min:1,max:12},
     {key:'stripperIdMm',label:'stripper ring inner diameter',kind:'length',min:5,max:80},
     {key:'tipTopIdMm',label:'tip-top ring inner diameter',kind:'length',min:1,max:30},
-    {key:'tipTopHeightMm',label:'tip-top ring centre height',kind:'length',min:0,max:60},
+    {key:'tipTopCentreHeightMm',label:'tip-top ring centre height above the blank',kind:'length',min:0,max:60},
     {key:'flareAngleDeg',label:'line flare half-angle',kind:'angle',min:0.2,max:8},
     {key:'settledLineMm',label:'settled line diameter',kind:'length',min:0.5,max:15},
     {key:'clearancePct',label:'ring clearance',kind:'percent',min:0,max:100},
@@ -108,7 +134,10 @@
     {key:'runnerMinGapMm',label:'minimum running guide gap',kind:'length',min:10,max:300},
   ];
   const FIELD_BY_KEY=FIELDS.reduce((map,field)=>{map[field.key]=field;return map;},{});
-  const GUIDE_LIMITS={idMm:{min:1,max:80},heightMm:{min:0,max:200}};
+  const GUIDE_LIMITS={idMm:{min:1,max:80},centreHeightMm:{min:0,max:200}};
+  const PROPOSAL_MIN_STEP_MM=0.2;
+  const SCAN_STEP_MM=0.5;
+  const FIT_TOLERANCE_MM=1e-9;
   const MIN_GAP_MM=0.1;
   const CHAIN_END_FRACTION=0.05;
 
@@ -124,7 +153,7 @@
     reductionCount:5,
     stripperIdMm:30,
     tipTopIdMm:5,
-    tipTopHeightMm:4,
+    tipTopCentreHeightMm:2.8,
     flareAngleDeg:1.5,
     settledLineMm:4,
     clearancePct:25,
@@ -140,7 +169,9 @@
     'Line path: straight segments through the centre of the stripper, each reduction guide and the tip-top, using the heights you enter. The line leaves the spool along the reel axis.',
     'Fit rule: required ring ID = D(s) x (1 + clearance), plus twice the distance the stripper centre sits off the reel axis.',
     'Initial train: the stripper sits where the envelope just fits its ring. Required ring sizes then step down by a constant ratio to the settled-line ring, and each guide sits where the envelope equals its required size. The last reduction guide is at the choke.',
-    'Heights: proposed on the line path. Edit any height, size or position and everything recalculates from your values.',
+    'Guide geometry: a guide\'s ring size, its ring centre height above the blank surface and its mounting position are separate. Size and height belong to the guide; only the mounting position is chosen. The ring centre sits at the blank radius plus the centre height, so it follows the blank taper.',
+    'Measured guides: a ring size or centre height you enter is treated as fixed. The guide is placed at the first point from the reel where its ring is large enough for the line cone, with the line path bending through the actual ring centres. If no position works the entered values are kept and a warning is shown.',
+    'Illustrative guides: without measurements, sizes and heights are proposals on the line path. Edit any size, height or position and everything recalculates from your values.',
     'Running guides: the span from the choke guide to the tip-top is divided into gaps that shrink by a fixed ratio toward the tip, and the last gap is never shorter than the minimum gap. This is an adjustable starting progression, not a formula for the right positions.',
   ];
   const ASSUMPTIONS=[
@@ -150,10 +181,13 @@
     'Ring wall thickness, frame shape and guide weight are ignored.',
     'Proposed ring sizes are computed minimums rounded up to 0.5 mm. They are not product specifications.',
     'The running-guide spacing ratio and minimum gap are adjustable starting values, not industry values.',
+    'Guides without measurements are illustrative: their sizes and heights are proposals, not guide specifications.',
+    'Mounting position is taken as the ring plane. Ring offset from the foot, foot length, wraps and ring wall thickness are ignored.',
   ];
   const LIMITATIONS=[
     'Geometry only: nothing here predicts casting distance, friction or rod performance.',
     'Running-guide positions are provisional: check them against the real blank under load and a static-load test, and adjust them there.',
+    'Only the guide dimensions you enter are used. There is no guide catalogue and no manufacturer data.',
     'Not physically validated on a real rod.',
   ];
 
@@ -250,31 +284,93 @@
     return {gaps,tipGapRaised};
   }
 
-  // Initial train. Returns {ok:false,errors} or {ok:true,model,guides:[{role,xMm,idMm,heightMm}],...}.
-  function proposeTrain(v,fmt){
+  // Smallest x in [lo,hi] where margin(x) >= 0, found by scanning then bisection. If no x qualifies, the x with the
+  // largest margin is returned and solved is false.
+  function firstFit(margin,lo,hi){
+    const first=margin(lo);
+    if(first>=-FIT_TOLERANCE_MM)return {x:lo,margin:first,solved:true};
+    if(hi<=lo)return {x:lo,margin:first,solved:false};
+    let best={x:lo,margin:first};
+    let prev=lo;
+    for(let x=lo+SCAN_STEP_MM;;x+=SCAN_STEP_MM){
+      const xx=Math.min(x,hi);
+      const value=margin(xx);
+      if(value>=-FIT_TOLERANCE_MM){
+        let a=prev;
+        let b=xx;
+        for(let i=0;i<60;i+=1){
+          const mid=(a+b)/2;
+          if(margin(mid)>=-FIT_TOLERANCE_MM)b=mid;else a=mid;
+        }
+        return {x:b,margin:margin(b),solved:true};
+      }
+      if(value>best.margin)best={x:xx,margin:value};
+      prev=xx;
+      if(xx>=hi)break;
+    }
+    return {x:best.x,margin:best.margin,solved:false};
+  }
+
+  // Initial train. constraints[i] may carry the measured idMm and/or centreHeightMm of guide i; those are physical and are
+  // never changed here, the guide is moved instead. Returns {ok:false,errors} or {ok:true,model,guides,...}.
+  function proposeTrain(v,fmt,constraints){
     const f={...DEFAULT_FMT,...(fmt||{})};
     const m=buildModel(v);
     const errors=[];
     const err=(field,code,message)=>errors.push({field,code,message});
-    const stripperEnvelope=v.stripperIdMm/m.fit;
+    const con=Array.isArray(constraints)?constraints:[];
+    const conAt=(i)=>(con[i] && typeof con[i]==='object'?con[i]:{});
+    const measuredId=(i)=>isNumber(conAt(i).idMm);
+    const measuredHeight=(i)=>isNumber(conAt(i).centreHeightMm);
+    const lastIndex=v.reductionCount+v.runnerCount+1;
+    const stripperId=measuredId(0)?conAt(0).idMm:v.stripperIdMm;
+    const stripperField=measuredId(0)?'guide0.idMm':'stripperIdMm';
+    const tipId=measuredId(lastIndex)?conAt(lastIndex).idMm:v.tipTopIdMm;
+    const tipCentre=measuredHeight(lastIndex)?conAt(lastIndex).centreHeightMm:v.tipTopCentreHeightMm;
+    const tipY=bladeRadius(v,v.rodLengthMm)+tipCentre;
+    const stripperEnvelope=stripperId/m.fit;
     const chokeId=v.settledLineMm*m.fit;
     if(stripperEnvelope>=v.spoolDiameterMm){
-      err('stripperIdMm','stripper-too-big','The stripper ring is as large as the line cone at the spool, so it would have to sit on the spool. Use a smaller stripper ring.');
+      err(stripperField,'stripper-too-big','The stripper ring is as large as the line cone at the spool, so it would have to sit on the spool. Use a smaller stripper ring.');
     }
-    if(v.stripperIdMm<=chokeId){
-      err('stripperIdMm','not-reducing',`The stripper ring must be larger than ${f.length(chokeId)}, the smallest ring the settled line needs, otherwise there is nothing to reduce.`);
+    if(stripperId<=chokeId){
+      err(stripperField,'not-reducing',`The stripper ring must be larger than ${f.length(chokeId)}, the smallest ring the settled line needs, otherwise there is nothing to reduce.`);
     }
     if(errors.length)return {ok:false,errors};
-    const s1=m.sForDiameter(stripperEnvelope);
-    const x1=v.spoolLipMm+s1*m.cosT;
-    const y1=v.reelHeightMm-s1*m.sinT;
+
+    // Stripper: on the reel axis line when illustrative, or at its measured height above the blank.
+    let s1;
+    let x1;
+    let y1;
+    let stripperSolved=true;
+    let stripperShortfall=0;
+    if(!measuredHeight(0)){
+      s1=m.sForDiameter(stripperEnvelope);
+      x1=v.spoolLipMm+s1*m.cosT;
+      y1=v.reelHeightMm-s1*m.sinT;
+    }else{
+      const centre=conAt(0).centreHeightMm;
+      const margin=(x)=>{
+        const dx=x-v.spoolLipMm;
+        const dy=bladeRadius(v,x)+centre-v.reelHeightMm;
+        const off=Math.abs(dx*m.sinT+dy*m.cosT);
+        return stripperId-(m.envelope(hypot(dx,dy))*m.fit+2*off);
+      };
+      const fit=firstFit(margin,v.spoolLipMm+1,v.rodLengthMm-CHAIN_END_FRACTION*(v.rodLengthMm-v.spoolLipMm));
+      x1=fit.x;
+      y1=bladeRadius(v,x1)+centre;
+      s1=hypot(x1-v.spoolLipMm,y1-v.reelHeightMm);
+      stripperSolved=fit.solved;
+      stripperShortfall=fit.solved?0:-fit.margin;
+    }
     if(x1>=v.rodLengthMm){
-      return {ok:false,errors:[{field:'stripperIdMm',code:'stripper-beyond-tip',message:'With these settings the stripper would fall beyond the tip of the rod. Use a smaller stripper ring or a larger flare angle.'}]};
+      return {ok:false,errors:[{field:stripperField,code:'stripper-beyond-tip',message:'With these settings the stripper would fall beyond the tip of the rod. Use a smaller stripper ring or a larger flare angle.'}]};
     }
     const dxc=v.rodLengthMm-x1;
-    const dyc=v.tipTopHeightMm-y1;
+    const dyc=tipY-y1;
     const chord=hypot(dxc,dyc);
     const cosPsi=dxc/chord;
+    const chordY=(x)=>y1+(x-x1)*dyc/dxc;
     const chokeX=m.sChoke<=s1?v.spoolLipMm+m.sChoke*m.cosT:x1+(m.sChoke-s1)*cosPsi;
     const endLimit=v.rodLengthMm-CHAIN_END_FRACTION*(v.rodLengthMm-x1);
     let sEnd=m.sChoke;
@@ -284,27 +380,84 @@
       chainCompressed=true;
     }
     const endId=m.envelope(sEnd)*m.fit;
-    const rho=Math.pow(endId/v.stripperIdMm,1/v.reductionCount);
-    const guides=[{role:'stripper',xMm:x1,idMm:v.stripperIdMm,heightMm:y1,targetIdMm:v.stripperIdMm,sMm:s1}];
+    const rho=Math.pow(endId/stripperId,1/v.reductionCount);
+    const guides=[{
+      role:'stripper',xMm:x1,idMm:stripperId,heightMm:y1,centreHeightMm:y1-bladeRadius(v,x1),targetIdMm:stripperId,sMm:s1,
+      solved:stripperSolved,shortfallMm:stripperShortfall,
+    }];
+    let prevX=x1;
+    let prevY=y1;
+    let prevS=s1;
+    let onChord=true;
+    const noRoom=()=>({ok:false,errors:[{field:'reductionCount',code:'no-room',message:'There is not enough room on the rod for these guides. Use fewer guides or a smaller stripper ring.'}]});
     for(let k=1;k<=v.reductionCount;k+=1){
-      const target=v.stripperIdMm*Math.pow(rho,k);
-      const sk=m.sForDiameter(target/m.fit);
-      const xk=x1+(sk-s1)*cosPsi;
+      const ratioTarget=stripperId*Math.pow(rho,k);
+      const target=measuredId(k)?conAt(k).idMm:ratioTarget;
+      let xk;
+      let yk;
+      let sk;
+      let solved=true;
+      let shortfall=0;
+      if(!measuredHeight(k) && onChord){
+        sk=m.sForDiameter(target/m.fit);
+        xk=x1+(sk-s1)*cosPsi;
+        if(target/m.fit<m.settled-FIT_TOLERANCE_MM || xk>endLimit){
+          // Even the narrowest line cone cannot pass this ring (or it would fall past the chain end).
+          xk=Math.max(prevX+PROPOSAL_MIN_STEP_MM,Math.min(endLimit,xk));
+          sk=s1+(xk-x1)/cosPsi;
+          shortfall=Math.max(0,m.envelope(sk)*m.fit-target);
+          solved=shortfall<=1e-9;
+        }else if(xk<prevX+PROPOSAL_MIN_STEP_MM){
+          xk=prevX+PROPOSAL_MIN_STEP_MM;
+          sk=s1+(xk-x1)/cosPsi;
+        }
+        yk=chordY(xk);
+      }else{
+        const heightAt=measuredHeight(k)?(x)=>bladeRadius(v,x)+conAt(k).centreHeightMm:chordY;
+        const margin=(x)=>target-m.envelope(prevS+hypot(x-prevX,heightAt(x)-prevY))*m.fit;
+        const low=prevX+PROPOSAL_MIN_STEP_MM;
+        const fit=firstFit(margin,low,Math.max(low,endLimit));
+        xk=fit.x;
+        yk=heightAt(xk);
+        sk=prevS+hypot(xk-prevX,yk-prevY);
+        solved=fit.solved;
+        shortfall=fit.solved?0:-fit.margin;
+        if(measuredHeight(k))onChord=false;
+      }
+      if(xk>=v.rodLengthMm-0.5)return noRoom();
       guides.push({
         role:k===v.reductionCount?'choke':'reduction',
-        xMm:xk,idMm:ceilHalf(target),heightMm:y1+(xk-x1)*dyc/dxc,targetIdMm:target,sMm:sk,
+        xMm:xk,idMm:measuredId(k)?target:ceilHalf(target),heightMm:yk,centreHeightMm:yk-bladeRadius(v,xk),targetIdMm:target,sMm:sk,
+        solved,shortfallMm:shortfall,
       });
+      prevX=xk;prevY=yk;prevS=sk;
     }
     const chokeGuideX=guides[guides.length-1].xMm;
     const plan=planRunnerGaps(v.rodLengthMm-chokeGuideX,v.runnerCount,v.runnerRatio,v.runnerMinGapMm);
     let runnerX=chokeGuideX;
     for(let k=0;k<v.runnerCount;k+=1){
+      const index=v.reductionCount+1+k;
       runnerX+=plan.gaps[k];
-      const sk=s1+(runnerX-x1)/cosPsi;
-      const target=m.envelope(sk)*m.fit;
-      guides.push({role:'runner',xMm:runnerX,idMm:ceilHalf(target),heightMm:y1+(runnerX-x1)*dyc/dxc,targetIdMm:target,sMm:sk});
+      let yk;
+      let sk;
+      if(!measuredHeight(index) && onChord){
+        sk=s1+(runnerX-x1)/cosPsi;
+        yk=chordY(runnerX);
+      }else{
+        yk=measuredHeight(index)?bladeRadius(v,runnerX)+conAt(index).centreHeightMm:chordY(runnerX);
+        sk=prevS+hypot(runnerX-prevX,yk-prevY);
+        if(measuredHeight(index))onChord=false;
+      }
+      const target=measuredId(index)?conAt(index).idMm:m.envelope(sk)*m.fit;
+      guides.push({
+        role:'runner',xMm:runnerX,idMm:measuredId(index)?target:ceilHalf(target),heightMm:yk,centreHeightMm:yk-bladeRadius(v,runnerX),
+        targetIdMm:target,sMm:sk,solved:true,shortfallMm:0,
+      });
+      prevX=runnerX;prevY=yk;prevS=sk;
     }
-    guides.push({role:'tip-top',xMm:v.rodLengthMm,idMm:v.tipTopIdMm,heightMm:v.tipTopHeightMm,targetIdMm:v.tipTopIdMm,sMm:null});
+    guides.push({
+      role:'tip-top',xMm:v.rodLengthMm,idMm:tipId,heightMm:tipY,centreHeightMm:tipCentre,targetIdMm:tipId,sMm:null,solved:true,shortfallMm:0,
+    });
     return {ok:true,model:m,guides,ratio:rho,chainCompressed,stripperArcMm:s1,chokeXMm:chokeX,runnerGapsMm:plan.gaps,tipGapRaised:plan.tipGapRaised,errors:[]};
   }
 
@@ -328,10 +481,6 @@
     FIELDS.forEach((field)=>{v[field.key]=src[field.key];});
     const geometryErrors=checkGeometry(v,f);
     if(geometryErrors.length)return {ok:false,errors:geometryErrors,warnings:[]};
-    const proposal=proposeTrain(v,f);
-    if(!proposal.ok)return {ok:false,errors:proposal.errors,warnings:[]};
-
-    const m=proposal.model;
     const count=v.reductionCount+v.runnerCount+2;
     const overrides=Array.isArray(src.guides)?src.guides:[];
     const errors=[];
@@ -339,32 +488,54 @@
     const err=(field,code,message)=>errors.push({field,code,message});
     const warn=(field,code,message)=>warnings.push({field,code,message});
 
-    const guides=proposal.guides.map((proposed,index)=>{
-      const o=overrides[index]&&typeof overrides[index]==='object'?overrides[index]:{};
+    // The builder's entries: position, measured ring diameter and measured centre height above the blank. A blank entry
+    // means "illustrative" (undefined). A valid ring diameter or centre height is a physical constraint.
+    const parsed=[];
+    for(let index=0;index<count;index+=1){
+      const o=overrides[index] && typeof overrides[index]==='object'?overrides[index]:{};
       const label=guideLabel(index,count,v.runnerCount);
-      const role=proposed.role;
-      const fixedPosition=role==='tip-top';
-      const fixedId=role==='stripper' || role==='tip-top';
-      const fixedHeight=role==='tip-top';
-      const pick=(own,fallback,key,name,limits)=>{
-        if(isBlank(own))return fallback;
+      const pick=(own,key,name,limits)=>{
+        if(isBlank(own))return undefined;
         if(!isNumber(own)){
           err(`guide${index}.${key}`,'guide-invalid',`${label}: the ${name} is not a valid number.`);
-          return fallback;
+          return undefined;
         }
         if(limits && (own<limits.min || own>limits.max)){
           err(`guide${index}.${key}`,'guide-range',`${label}: the ${name} must be between ${f.length(limits.min)} and ${f.length(limits.max)}.`);
-          return fallback;
+          return undefined;
         }
         return own;
       };
-      const xMm=fixedPosition?proposed.xMm:pick(o.positionMm,proposed.xMm,'positionMm','position',null);
-      const idMm=fixedId?proposed.idMm:pick(o.idMm,proposed.idMm,'idMm','ring inner diameter',GUIDE_LIMITS.idMm);
-      const heightMm=fixedHeight?proposed.heightMm:pick(o.heightMm,proposed.heightMm,'heightMm','centre height',GUIDE_LIMITS.heightMm);
+      parsed.push({
+        positionMm:index===count-1?undefined:pick(o.positionMm,'positionMm','position',null),
+        idMm:pick(o.idMm,'idMm','ring inner diameter',GUIDE_LIMITS.idMm),
+        centreHeightMm:pick(o.centreHeightMm,'centreHeightMm','centre height above the blank',GUIDE_LIMITS.centreHeightMm),
+      });
+    }
+    const proposal=proposeTrain(v,f,parsed);
+    if(!proposal.ok)return {ok:false,errors:errors.concat(proposal.errors),warnings:[]};
+
+    const m=proposal.model;
+    const guides=proposal.guides.map((proposed,index)=>{
+      const p=parsed[index];
+      const label=guideLabel(index,count,v.runnerCount);
+      const role=proposed.role;
+      const fixedPosition=role==='tip-top';
+      const xMm=fixedPosition || p.positionMm===undefined?proposed.xMm:p.positionMm;
+      const idMm=p.idMm!==undefined?p.idMm:proposed.idMm;
+      const heightGiven=p.centreHeightMm!==undefined;
+      const moved=!fixedPosition && round(Math.abs(xMm-proposed.xMm),3)>0;
+      const centreHeightMm=heightGiven?p.centreHeightMm:proposed.centreHeightMm;
+      // The ring keeps its height above the blank surface wherever it is mounted, so its axis height follows the taper.
+      const heightMm=(!heightGiven && !moved)?proposed.heightMm:bladeRadius(v,xMm)+centreHeightMm;
+      const measured={id:p.idMm!==undefined,height:heightGiven};
       return {
-        index,label,role,xMm,idMm,heightMm,
-        proposed:{xMm:proposed.xMm,idMm:proposed.idMm,heightMm:proposed.heightMm,targetIdMm:proposed.targetIdMm},
-        moved:!fixedPosition && round(Math.abs(xMm-proposed.xMm),3)>0,
+        index,label,role,xMm,idMm,heightMm,centreHeightMm,measured,
+        source:measured.id || measured.height?'measured':'illustrative',
+        proposed:{xMm:proposed.xMm,idMm:proposed.idMm,heightMm:proposed.heightMm,centreHeightMm:proposed.centreHeightMm,targetIdMm:proposed.targetIdMm},
+        proposalSolved:proposed.solved!==false,
+        proposalShortfallMm:proposed.shortfallMm||0,
+        moved,
       };
     });
 
@@ -474,11 +645,16 @@
 
     // Warnings (design problems; the design is still drawn).
     guides.forEach((g)=>{
-      if(!g.fits){
+      const noFitPosition=!g.proposalSolved && !g.moved;
+      if(noFitPosition){
+        warn(`guide${g.index}.idMm`,'no-fit-position',`${g.label}: no position on the rod lets the ${f.length(g.idMm)} ring at a ${f.length(g.centreHeightMm)} centre height fit the line cone. Its closest position is ${f.length(g.proposalShortfallMm)} short. Use a larger ring or a guide with a different centre height; the entered values were not changed.`);
+      }else if(!g.fits){
         warn(`guide${g.index}.idMm`,'ring-too-small',`${g.label}: the ${f.length(g.idMm)} ring is ${f.length(-g.marginMm)} short of the ${f.length(g.requiredIdMm)} this position needs.`);
       }
       if(g.ringTopClearanceMm!==null && g.ringTopClearanceMm<-1e-9){
-        warn(`guide${g.index}.heightMm`,'ring-overlaps-blank',`${g.label}: the ring would overlap the blank. Increase its centre height.`);
+        warn(`guide${g.index}.centreHeightMm`,'ring-overlaps-blank',g.measured.id && g.measured.height
+          ?`${g.label}: the measured ${f.length(g.idMm)} ring needs a centre height of at least ${f.length(g.idMm/2)} above the blank, but ${f.length(g.centreHeightMm)} was entered. Check the two measurements.`
+          :`${g.label}: the ring would overlap the blank. Increase its centre height.`);
       }
     });
     if(minClear.clearanceMm<-1e-9){
@@ -533,6 +709,9 @@
       minBlankClearanceFromTipMm:v.rodLengthMm-minClear.xMm,
       pathLengthMm:tipTopS,
       chainCompressed:proposal.chainCompressed,
+      measuredCount:guides.filter((g)=>g.source==='measured').length,
+      totalGuides:guides.length,
+      mode:guides.every((g)=>g.source==='illustrative')?'illustrative':(guides.every((g)=>g.source==='measured')?'measured':'mixed'),
     };
     return {
       ok:true,model:MODEL_ID,modelVersion:MODEL_VERSION,input:v,errors:[],warnings,
@@ -540,6 +719,30 @@
       reel:{lipXMm:lip.xMm,axisYMm:lip.yMm,spoolDiameterMm:v.spoolDiameterMm,axisAngleDeg:v.reelAngleDeg},
       guides,path:pts,segments:segs,envelope,choke:{xMm:chokeX,yMm:chokeY,sMm:m.sChoke,beyondTip:chokeBeyond},summary,
     };
+  }
+
+  // Checks one entry of the builder's own guide set: a measured ring diameter and centre height above the blank.
+  function validateGuideSpec(spec,fmt){
+    const f={...DEFAULT_FMT,...(fmt||{})};
+    const input=spec && typeof spec==='object'?spec:{};
+    const errors=[];
+    const err=(field,code,message)=>errors.push({field,code,message});
+    const read=(key,name,limits)=>{
+      const value=input[key];
+      if(isBlank(value)){err(key,'missing',`Enter the ${name}.`);return null;}
+      if(!isNumber(value)){err(key,'invalid',`The ${name} is not a valid number.`);return null;}
+      if(value<limits.min || value>limits.max){
+        err(key,'range',`The ${name} must be between ${f.length(limits.min)} and ${f.length(limits.max)}.`);
+        return null;
+      }
+      return value;
+    };
+    const id=read('idMm','ring inner diameter',GUIDE_LIMITS.idMm);
+    const centre=read('centreHeightMm','centre height above the blank',GUIDE_LIMITS.centreHeightMm);
+    if(id!==null && centre!==null && centre<id/2-1e-9){
+      err('centreHeightMm','spec-ring-overlaps-blank',`A ${f.length(id)} ring needs a centre height of at least ${f.length(id/2)} above the blank. ${f.length(centre)} would put the ring through the blank.`);
+    }
+    return {ok:errors.length===0,errors};
   }
 
   const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
@@ -629,7 +832,8 @@
       if(ringTop>blankBottom){
         parts.push(`<line class="gt-leg" data-guide="${g.index}" x1="${gx}" y1="${blankBottom}" x2="${gx}" y2="${ringTop}" stroke="${colour}" stroke-width="1.2"/>`);
       }
-      parts.push(`<rect class="gt-ring${isRunner?' gt-ring--runner':''}${warn?' gt-ring--warn':''}${g.index===selected?' gt-ring--selected':''}" data-guide="${g.index}" x="${px(gx-3)}" y="${ringTop}" width="6" height="${ringH}" rx="3" fill="rgba(16,19,21,.7)" stroke="${colour}" stroke-width="${g.index===selected?2:1.4}"/>`);
+      const isMeasured=g.source==='measured';
+      parts.push(`<rect class="gt-ring${isRunner?' gt-ring--runner':''}${isMeasured?' gt-ring--measured':''}${warn?' gt-ring--warn':''}${g.index===selected?' gt-ring--selected':''}" data-guide="${g.index}" x="${px(gx-3)}" y="${ringTop}" width="6" height="${ringH}" rx="3" fill="${isMeasured?'rgba(231,225,213,.34)':'rgba(16,19,21,.7)'}" stroke="${colour}" stroke-width="${g.index===selected?2:1.4}"/>`);
       const mark=g.role==='stripper'?'S':(g.role==='tip-top'?'T':(isRunner?`R${g.index-design.guides.findIndex((o)=>o.role==='runner')+1}`:String(g.index)));
       parts.push(`<text class="gt-guidelabel" data-guide="${g.index}" x="${gx}" y="${px(Y(g.heightMm+g.idMm/2)+12)}" text-anchor="middle" font-size="10" fill="${colour}">${mark}</text>`);
       if(g.moved){
@@ -690,6 +894,6 @@
 
   return {
     MODEL_ID,MODEL_VERSION,FIELDS,FIELD_BY_KEY,GUIDE_LIMITS,DEFAULTS,METHOD_STEPS,ASSUMPTIONS,LIMITATIONS,DEFAULT_FMT,
-    bladeRadius,buildModel,planRunnerGaps,proposeTrain,designGuideTrain,buildSideViewSvg,viewGeometry,viewXToMm,guideLabel,assignLanes,
+    bladeRadius,buildModel,planRunnerGaps,proposeTrain,designGuideTrain,validateGuideSpec,buildSideViewSvg,viewGeometry,viewXToMm,guideLabel,assignLanes,
   };
 });

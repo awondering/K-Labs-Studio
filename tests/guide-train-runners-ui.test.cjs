@@ -27,7 +27,7 @@ const ELEMENT_IDS=[
   'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
   'gtSumRunners','gtSumClearance','gtGuidesUnit','gtGuides','gtResetGuides','gtMethodBody','gtRodLength','gtSpoolLip','gtButtOd',
   'gtTipOd','gtSpoolDiameter','gtReelHeight','gtSettledLine','gtRunnerMinGap','gtReelAngle','gtFlareAngle','gtClearance',
-  'gtReductionCount','gtRunnerCount','gtRunnerRatio',
+  'gtReductionCount','gtRunnerCount','gtRunnerRatio','gtMode','gtCaption','gtSetRows','gtSetAdd',
 ];
 
 function harness({unit='metric'}={}){
@@ -41,7 +41,7 @@ function harness({unit='metric'}={}){
   ELEMENT_IDS.forEach((id)=>elements.set(id,makeElement(id)));
   const defaults=Engine.DEFAULTS;
   const state={
-    unit,imperialDisplay:'decimal',...defaults,guides:[],selected:0,invalid:{},notice:false,
+    unit,imperialDisplay:'decimal',...defaults,guides:[],guideSet:[],selected:0,invalid:{},notice:false,
   };
   const c=vm.createContext({
     document:{activeElement:null},
@@ -58,12 +58,12 @@ function harness({unit='metric'}={}){
     'parseWorkshopMeasurementMm','formatWorkshopMeasurementNumber','formatWorkshopMeasurementValue','workshopMeasurementInputText',
     'syncWorkshopMeasurementInput','escapeHtml','guideTrainEngine','guideTrainFormatter','readGuideTrainMeasurement',
     'readGuideTrainNumber','guideTrainRequest','guideTrainStatus','guideTrainCardsMarkup','updateGuideTrainCards',
-    'renderGuideTrainMethod','resetGuideTrainOverridesForCount','renderGuideTrainTool','guideTrainDragPosition',
-    'setGuideTrainOverride','commitGuideTrainEdit',
+    'renderGuideTrainMethod','resetGuideTrainOverridesForCount','guideTrainSetEntries','guideTrainSetSignature','guideTrainSpecMatch','guideTrainSetMarkup','renderGuideTrainSet','renderGuideTrainTool','guideTrainDragPosition',
+    'setGuideTrainOverride','guideTrainRefusal','commitGuideTrainEdit','commitGuideTrainSpec',
   ]){
     vm.runInContext(extract(name),c);
   }
-  vm.runInContext(`${constBlock('GUIDE_TRAIN_MAIN_FIELDS')}\n${constBlock('GUIDE_TRAIN_NUMBER_FIELDS')}`,c);
+  vm.runInContext(`${constBlock('GUIDE_TRAIN_MAIN_FIELDS')}\n${constBlock('GUIDE_TRAIN_NUMBER_FIELDS')}\nconst GUIDE_TRAIN_SET_MAX=8;`,c);
   const design=()=>Engine.designGuideTrain(c.guideTrainRequest(state),c.guideTrainFormatter(state));
   const e=(id)=>elements.get(id);
   return {c,state,design,e};
@@ -87,7 +87,7 @@ test('guide cards: runners are built as editable cards, labelled and styled apar
   assert.equal((markup.match(/class="gt-guide gt-guide--runner"/g)||[]).length,4);
   assert.equal((markup.match(/ disabled/g)||[]).length,1,'only the tip-top position is fixed');
   for(const n of [1,2,3,4]){
-    for(const field of ['from tip','ring id','height']){
+    for(const field of ['from tip','ring id','centre height above the blank']){
       assert.ok(markup.includes(`aria-label="Runner ${n}: ${field}"`),`Runner ${n} ${field}`);
     }
   }
@@ -106,7 +106,7 @@ test('runner edits are stored from the butt, move only that runner, and clearing
   assert.equal(c.commitGuideTrainEdit(7,'id','7'),true);
   assert.equal(state.guides[7].idMm,7);
   assert.equal(c.commitGuideTrainEdit(7,'height','14'),true);
-  assert.equal(state.guides[7].heightMm,14);
+  assert.equal(state.guides[7].centreHeightMm,14);
   assert.equal(c.commitGuideTrainEdit(7,'position',''),true);
   assert.equal(state.guides[7].positionMm,undefined);
   assert.deepEqual(xs(design()),before);
@@ -130,19 +130,19 @@ test('runner edits next to a neighbour: the minimum gap and the order are enforc
   assert.match(state.invalid['5.position'],/Guide 5 \(choke\) and Runner 1 are too close/);
 });
 
-test('the tip-top is the last guide: its ring and height edits go to the main inputs, runner edits to overrides',()=>{
+test('the tip-top is the last guide: its measured ring and height are overrides at the last index, wherever the runners end',()=>{
   const {c,state}=harness();
   assert.equal(c.commitGuideTrainEdit(10,'id','6'),true);
-  assert.equal(state.tipTopIdMm,6);
-  assert.equal(c.commitGuideTrainEdit(10,'height','5'),true);
-  assert.equal(state.tipTopHeightMm,5);
+  assert.equal(state.guides[10].idMm,6);
+  assert.equal(c.commitGuideTrainEdit(10,'height','3.5'),true);
+  assert.equal(state.guides[10].centreHeightMm,3.5);
   assert.equal(c.commitGuideTrainEdit(9,'id','5.5'),true);
   assert.equal(state.guides[9].idMm,5.5);
-  assert.equal(state.guides.length,10,'no override was created for the tip-top');
+  assert.equal(state.tipTopIdMm,5,'the illustrative default is untouched');
   const none=harness();
   none.state.runnerCount=0;
   assert.equal(none.c.commitGuideTrainEdit(6,'id','6'),true);
-  assert.equal(none.state.tipTopIdMm,6,'with no runners the tip-top is index reductionCount + 1, as in Phase 1');
+  assert.equal(none.state.guides[6].idMm,6,'with no runners the tip-top is index reductionCount + 1, as in Phase 1');
 });
 
 test('dragging a runner keeps the minimum gap; dragging between reduction guides keeps 0.5 mm',()=>{
@@ -206,7 +206,7 @@ test('rendering: summary, provisional note, diagram and cards reflect the runner
   assert.match(e('gtGuidesUnit').textContent,/^Distances in mm\./);
   assert.match(e('gtViewCanvas').innerHTML,/gt-ring--runner/);
   assert.equal((e('gtViewCanvas').innerHTML.match(/class="gt-ring[ "]/g)||[]).length,11);
-  assert.equal(e('gtGuides').getAttribute('data-layout'),'srrrrcrrrrt');
+  assert.equal(e('gtGuides').getAttribute('data-layout').split('#')[0],'srrrrcrrrrt');
   assert.equal((e('gtGuides').innerHTML.match(/gt-guide--runner/g)||[]).length,4);
   assert.equal(e('gtRunnerCount').value,'4');
   assert.equal(e('gtRunnerRatio').value,'0.85');
@@ -217,17 +217,17 @@ test('rendering: summary, provisional note, diagram and cards reflect the runner
   assert.equal(e('gtSumRunners').textContent,'None');
   assert.doesNotMatch(e('gtGuidesUnit').textContent,/provisional/);
   assert.doesNotMatch(e('gtViewCanvas').innerHTML,/gt-ring--runner|gt-legend/);
-  assert.equal(e('gtGuides').getAttribute('data-layout'),'srrrrct');
+  assert.equal(e('gtGuides').getAttribute('data-layout').split('#')[0],'srrrrct');
   assert.equal((e('gtGuides').innerHTML.match(/class="gt-guide[ "]/g)||[]).length,7);
 });
 
 test('rendering: layout changes rebuild the cards even when the guide count is unchanged',()=>{
   const {c,state,e}=harness();
   c.renderGuideTrainTool();
-  assert.equal(e('gtGuides').getAttribute('data-layout'),'srrrrcrrrrt');
+  assert.equal(e('gtGuides').getAttribute('data-layout').split('#')[0],'srrrrcrrrrt');
   state.reductionCount=6;state.runnerCount=3;
   c.renderGuideTrainTool();
-  assert.equal(e('gtGuides').getAttribute('data-layout'),'srrrrrcrrrt');
+  assert.equal(e('gtGuides').getAttribute('data-layout').split('#')[0],'srrrrrcrrrt');
   assert.ok(e('gtGuides').innerHTML.includes('aria-label="Guide 6 (choke): ring id"'));
   assert.ok(e('gtGuides').innerHTML.includes('aria-label="Runner 3: ring id"'));
   assert.ok(!e('gtGuides').innerHTML.includes('Runner 4'));

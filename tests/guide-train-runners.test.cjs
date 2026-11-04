@@ -205,25 +205,27 @@ test('runner heights follow the same straight line as the reduction guides, so t
 test('edits: runner position, ring size and height recalculate and the proposal is kept for reset',()=>{
   const ref=design({});
   const r2=ref.guides[7];
-  const edited=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,{positionMm:r2.xMm+20,idMm:7,heightMm:r2.heightMm+2}]});
+  const edited=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,{positionMm:r2.xMm+20,idMm:7,centreHeightMm:r2.centreHeightMm+2}]});
   assert.equal(edited.ok,true,JSON.stringify(edited.errors));
   const g=edited.guides[7];
   assert.equal(g.label,'Runner 2');
   close(g.xMm,r2.xMm+20,1e-9);
   assert.equal(g.idMm,7);
-  close(g.heightMm,r2.heightMm+2,1e-9);
+  close(g.centreHeightMm,r2.centreHeightMm+2,1e-9);
   assert.equal(g.moved,true);
   close(g.proposed.xMm,r2.xMm,1e-9,'proposal kept');
-  assert.equal(g.proposed.idMm,r2.idMm);
+  assert.equal(g.proposed.idMm,7,'the measured ring size is the constraint the proposal is built around');
   close(g.fromTipMm,base.rodLengthMm-(r2.xMm+20),1e-9);
   edited.guides.forEach((other,i)=>{if(i!==7)assert.equal(other.xMm,ref.guides[i].xMm,`guide ${i} unchanged`);});
   // Removing the overrides is the reset: the design returns to the proposal exactly.
   const reset=G.designGuideTrain({...base,guides:[]});
   assert.equal(JSON.stringify(reset.guides.map((x)=>[x.xMm,x.idMm,x.heightMm])),JSON.stringify(ref.guides.map((x)=>[x.xMm,x.idMm,x.heightMm])));
-  // The tip-top stays fixed whatever is sent for it.
-  const ignored=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,null,null,null,{positionMm:5,idMm:99,heightMm:50}]});
-  assert.equal(ignored.guides[10].xMm,base.rodLengthMm);
-  assert.equal(ignored.guides[10].idMm,base.tipTopIdMm);
+  // The tip-top position stays at the tip whatever is sent for it; its ring and height may be measured.
+  const tip=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,null,null,null,{positionMm:5,idMm:6,centreHeightMm:3.5}]});
+  assert.equal(tip.ok,true,JSON.stringify(tip.errors));
+  assert.equal(tip.guides[10].xMm,base.rodLengthMm);
+  assert.equal(tip.guides[10].idMm,6);
+  assert.equal(tip.guides[10].centreHeightMm,3.5);
 });
 
 test('validation: guides must stay in order and keep the minimum gap, so rings never overlap',()=>{
@@ -261,7 +263,7 @@ test('validation: guides must stay in order and keep the minimum gap, so rings n
   // moving a reduction guide that is not next to a runner is unaffected by the runner rule (Phase 1 behaviour)
   assert.equal(at(4,ref.guides[5].xMm-1).ok,true);
   // invalid and out-of-range runner values
-  const bad=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,{idMm:0.2,heightMm:-3}]});
+  const bad=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,{idMm:0.2,centreHeightMm:-3}]});
   assert.deepEqual(code(bad).sort(),['guide-range','guide-range']);
   assert.ok(bad.errors.every((e)=>/^Runner 1:/.test(e.message)));
   const notNumber=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,{idMm:'x'}]});
@@ -311,12 +313,12 @@ test('a runner ring that is too small or larger than the one before it is report
   assert.match(small.warnings.find((w)=>w.code==='ring-too-small').message,/^Runner 2:/);
   const bigger=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,{idMm:9}]});
   assert.ok(warnCodes(bigger).includes('id-not-reducing'),'runner larger than the one before it');
-  const overlap=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,null,{heightMm:0.5}]});
+  const overlap=G.designGuideTrain({...base,guides:[null,null,null,null,null,null,null,null,{centreHeightMm:0.5}]});
   assert.ok(warnCodes(overlap).includes('ring-overlaps-blank'));
 });
 
 test('blank clearance is still exact with runners: reported minimum matches a brute-force scan',()=>{
-  for(const guides of [[],[null,null,null,null,null,null,{heightMm:20}],[null,null,null,null,null,null,null,null,null,{heightMm:2.5}]]){
+  for(const guides of [[],[null,null,null,null,null,null,{centreHeightMm:20}],[null,null,null,null,null,null,null,null,null,{centreHeightMm:2.5}]]){
     const d=G.designGuideTrain({...base,guides});
     assert.equal(d.ok,true,JSON.stringify(d.errors));
     const v=d.input;
@@ -339,7 +341,7 @@ test('blank clearance is still exact with runners: reported minimum matches a br
 
 test('scaling every length uniformly scales runner positions, and messages follow the unit formatter',()=>{
   const k=1.1;
-  const lengths=['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopHeightMm','settledLineMm','runnerMinGapMm'];
+  const lengths=['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','settledLineMm','runnerMinGapMm'];
   const scaled={...base};
   lengths.forEach((key)=>{scaled[key]=base[key]*k;});
   const a=design({}),b=G.designGuideTrain(scaled);

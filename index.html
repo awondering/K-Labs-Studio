@@ -377,7 +377,7 @@
 
             <figure id="gtView" class="guide-train-view" hidden>
               <div id="gtViewCanvas" class="guide-train-view__canvas"></div>
-              <figcaption>Drag a guide along the rod, or edit its values below. Triangles mark the proposed positions.</figcaption>
+              <figcaption id="gtCaption">Drag a guide along the rod, or edit its values below. Triangles mark the proposed positions.</figcaption>
             </figure>
 
             <section id="gtResults" class="guide-train-results" aria-label="Guide train results" hidden>
@@ -391,11 +391,21 @@
               </div>
               <div class="guide-train-guides-head">
                 <h4>Guides</h4>
+                <span id="gtMode" class="guide-train-mode" data-mode="illustrative">Illustrative geometry</span>
                 <button id="gtResetGuides" class="ghost-action" type="button" hidden>Reset To Proposal</button>
               </div>
               <p id="gtGuidesUnit" class="workshop-tool-note"></p>
               <div id="gtGuides" class="guide-train-guides"></div>
             </section>
+
+            <details class="guide-train-set">
+              <summary>Measured guide set</summary>
+              <div class="guide-train-set__body">
+                <p class="workshop-tool-note">Enter each guide as you measure it: ring inner diameter and ring centre height above the blank surface. Then choose it on a guide card. Not saved when you leave the page.</p>
+                <div id="gtSetRows" class="gt-set-rows"></div>
+                <button id="gtSetAdd" class="ghost-action" type="button">Add Guide</button>
+              </div>
+            </details>
 
             <details class="guide-train-advanced">
               <summary>Model settings and method</summary>
