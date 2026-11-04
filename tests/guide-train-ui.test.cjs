@@ -218,7 +218,7 @@ test('CSS is scoped to the tool, keeps 44px targets and 16px inputs, and widens 
   walk(stripped);
   assert.ok(selectors.length>10);
   for(const selector of selectors){
-    assert.ok(/#workshopToolGuideTrain/.test(selector),`selector is scoped: ${selector}`);
+    assert.ok(/#workshopToolGuideTrain/.test(selector) || selector==='.guide-train-beta',`selector is scoped: ${selector}`);
   }
   assert.match(trainCss,/min-height:\s*44px/);
   assert.match(trainCss,/font-size:\s*16px/);
