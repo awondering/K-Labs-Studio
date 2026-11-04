@@ -251,6 +251,19 @@ const workshopToolsState={
     coverWidthMm:25,
     allowancePercent:5,
   },
+  threadWrap:{
+    unit:'metric',
+    imperialDisplay:'fractional',
+    lengthMm:250,
+    buttDiameterMm:16.9,
+    tipDiameterMm:15.3,
+    axes:2,
+    repeatsMode:'auto',
+    repeats:null,
+    accentThreads:1,
+    mainColour:'black',
+    accentColour:'gold',
+  },
   spiral:{
     unit:'metric',
     imperialDisplay:'fractional',
@@ -1878,10 +1891,12 @@ function renderWorkshopToolVisibility(){
   const list=$('workshopToolsList');
   const diameterCard=$('workshopToolDiameter');
   const gripCard=$('workshopToolGrip');
+  const threadWrapCard=$('workshopToolThreadWrap');
   const activeTool=workshopToolsState.activeTool;
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
+  if(threadWrapCard)threadWrapCard.hidden=activeTool!=='thread-wrap';
   const intro=document.querySelector('#workshopToolsPanel .workshop-landing-panel__intro');
   if(intro)intro.hidden=activeTool!=='list';
   const panel=$('workshopToolsPanel');
@@ -2000,7 +2015,7 @@ function openWorkshopTool(tool){
     goScreen('layoutScreen');
     return;
   }
-  workshopToolsState.activeTool=tool==='grip'?'grip':'diameter';
+  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
@@ -2449,11 +2464,250 @@ function renderGripCoveringTool(){
 
   syncWorkshopToggleButtons(panel,'[data-grip-profile]','data-grip-profile',state.profile);
 }
+function threadWrapEngine(){
+  return typeof KLabsThreadWrap!=='undefined'?KLabsThreadWrap:null;
+}
+// Lengths in tables and instructions are marking measurements, so imperial is always decimal inches here.
+function threadWrapFormatter(state){
+  const options={decimalsMetric:1,decimalsImperial:3};
+  return {
+    number:(mm)=>formatWorkshopMeasurementNumber(mm,state.unit,'decimal',options),
+    length:(mm)=>formatWorkshopMeasurementValue(mm,state.unit,'decimal',options),
+    degrees:(deg)=>`${formatDecimal(deg,1)}\u00B0`,
+  };
+}
+// Empty text -> null (missing); unparsable or negative text -> NaN (invalid). The engine reports both.
+function readThreadWrapMeasurement(rawValue,unit){
+  const raw=String(rawValue===undefined || rawValue===null?'':rawValue).trim();
+  if(!raw)return null;
+  const mm=parseWorkshopMeasurementMm(raw,unit,NaN,true);
+  return Number.isFinite(mm)?mm:NaN;
+}
+function threadWrapRequest(state){
+  return {
+    lengthMm:state.lengthMm,
+    buttDiameterMm:state.buttDiameterMm,
+    tipDiameterMm:state.tipDiameterMm,
+    axes:state.axes,
+    repeats:state.repeatsMode==='manual'?state.repeats:null,
+    accentThreads:state.accentThreads,
+    mainColour:state.mainColour,
+    accentColour:state.accentColour,
+  };
+}
+function threadWrapEffectiveRepeats(state){
+  if(state.repeatsMode==='manual' && Number.isFinite(state.repeats))return state.repeats;
+  const engine=threadWrapEngine();
+  return (engine && engine.suggestRepeats(threadWrapRequest(state)))||1;
+}
+function ensureThreadWrapSwatches(engine){
+  [['main','threadWrapMainColours','Main'],['accent','threadWrapAccentColours','Accent']].forEach(([role,hostId,roleLabel])=>{
+    const host=$(hostId);
+    if(!host || host.getAttribute('data-built')==='true')return;
+    host.innerHTML=engine.THREAD_COLOURS.map((colour)=>`<button class="thread-wrap-swatch" type="button" data-thread-wrap-colour="${role}" data-colour-id="${colour.id}" aria-pressed="false" aria-label="${roleLabel} thread: ${colour.label}" style="--swatch:${colour.hex}"><span class="thread-wrap-swatch__dot" aria-hidden="true"></span><span class="thread-wrap-swatch__name">${colour.label}</span></button>`).join('');
+    host.setAttribute('data-built','true');
+  });
+}
+function renderThreadWrapMethod(engine){
+  const host=$('threadWrapMethodBody');
+  if(!host || host.getAttribute('data-built')==='true')return;
+  const sourceName=(id)=>{
+    const source=engine.SOURCES.find((entry)=>entry.id===id);
+    return source?source.short:id;
+  };
+  const documented=engine.DOCUMENTED.map((item)=>`<li>${escapeHtml(item.text)} <em>(${escapeHtml(item.sources.map(sourceName).join('; '))})</em></li>`).join('');
+  const assumed=engine.ASSUMPTIONS.map((item)=>`<li>${escapeHtml(item.text)}</li>`).join('');
+  const sources=engine.SOURCES.map((source)=>`<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a> &mdash; ${escapeHtml(source.publisher)}</li>`).join('');
+  host.innerHTML=`<h5>Published practice</h5><ul>${documented}</ul><h5>This tool&rsquo;s own assumptions</h5><ul>${assumed}</ul><h5>Needs checking on a real blank</h5><p>Automated tests confirm the arithmetic and the match with published worked examples, not the physical result. Try the layout on a spare section of blank before committing to a rod.</p><h5>Sources</h5><ul class="thread-wrap-sources">${sources}</ul>`;
+  host.setAttribute('data-built','true');
+}
+function renderThreadWrapTool(){
+  const card=$('workshopToolThreadWrap');
+  const engine=threadWrapEngine();
+  if(!card || !engine || workshopToolsState.activeTool!=='thread-wrap')return;
+  const state=workshopToolsState.threadWrap;
+  state.unit=activeMeasurementUnits();
+  state.imperialDisplay=activeImperialDisplay();
+  const fmt=threadWrapFormatter(state);
+  const request=threadWrapRequest(state);
+  const design=engine.designDiamondWrap(request,fmt);
+  const suggested=engine.suggestRepeats(request);
+
+  ensureThreadWrapSwatches(engine);
+  renderThreadWrapMethod(engine);
+
+  [['workshopThreadWrapLength','lengthMm'],['workshopThreadWrapButtDiameter','buttDiameterMm'],['workshopThreadWrapTipDiameter','tipDiameterMm']].forEach(([id,key])=>{
+    const input=$(id);
+    if(!input)return;
+    if(Number.isFinite(state[key])){
+      // Decimal inches regardless of the fractional preference: 1/8 in rounding would hide a blank's taper.
+      syncWorkshopMeasurementInput(input,state[key],state.unit,'decimal');
+    }else if(state[key]===null && document.activeElement!==input){
+      input.value='';
+    }
+  });
+
+  const repeatsInput=$('workshopThreadWrapRepeats');
+  const effectiveRepeats=state.repeatsMode==='manual'?state.repeats:suggested;
+  if(repeatsInput && document.activeElement!==repeatsInput)repeatsInput.value=Number.isFinite(effectiveRepeats)?String(effectiveRepeats):'';
+  const repeatsNote=$('threadWrapRepeatsNote');
+  if(repeatsNote){
+    repeatsNote.textContent=suggested
+      ?(state.repeatsMode==='manual'?`Suggested: ${suggested} (about 45\u00B0 thread angle).`:`Suggested automatically for about 45\u00B0: ${suggested}.`)
+      :'Enter the wrap length and diameters to get a suggestion.';
+  }
+  const autoButton=$('threadWrapRepeatsAuto');
+  if(autoButton)autoButton.hidden=!(state.repeatsMode==='manual' && suggested);
+
+  const fieldInputs={lengthMm:'workshopThreadWrapLength',buttDiameterMm:'workshopThreadWrapButtDiameter',tipDiameterMm:'workshopThreadWrapTipDiameter',repeats:'workshopThreadWrapRepeats'};
+  const invalidFields=new Set(design.errors.map((entry)=>entry.field));
+  Object.keys(fieldInputs).forEach((field)=>{
+    const input=$(fieldInputs[field]);
+    if(input)input.setAttribute('aria-invalid',invalidFields.has(field)?'true':'false');
+  });
+
+  const messages=$('threadWrapMessages');
+  if(messages){
+    const entries=[...design.errors.map((entry)=>({kind:'error',message:entry.message})),...design.warnings.map((entry)=>({kind:'warning',message:entry.message}))];
+    messages.innerHTML=entries.map((entry)=>`<p class="thread-wrap-message thread-wrap-message--${entry.kind}">${escapeHtml(entry.message)}</p>`).join('');
+  }
+
+  syncWorkshopToggleButtons(card,'[data-thread-wrap-axes]','data-thread-wrap-axes',String(state.axes));
+  syncWorkshopToggleButtons(card,'[data-thread-wrap-accent-count]','data-thread-wrap-accent-count',String(state.accentThreads));
+  syncWorkshopToggleButtons($('threadWrapMainColours'),'[data-colour-id]','data-colour-id',state.mainColour);
+  syncWorkshopToggleButtons($('threadWrapAccentColours'),'[data-colour-id]','data-colour-id',state.accentColour);
+  const accentGroup=$('threadWrapAccentGroup');
+  if(accentGroup)accentGroup.hidden=state.accentThreads===0;
+
+  const results=$('threadWrapResults');
+  const previewBlock=$('threadWrapPreviewBlock');
+  if(previewBlock)previewBlock.hidden=!design.ok;
+  if(!results)return;
+  results.hidden=!design.ok;
+  if(!design.ok)return;
+  const summary=design.summary;
+  const setText=(id,text)=>{const el=$(id);if(el)el.textContent=text;};
+  setText('threadWrapSumRepeats',`${summary.repeatCount} (${summary.rowCount} rows)`);
+  setText('threadWrapSumRepeatLength',Math.abs(summary.firstRepeatMm-summary.lastRepeatMm)<0.05
+    ?fmt.length(summary.firstRepeatMm)
+    :`${fmt.number(summary.firstRepeatMm)} \u2192 ${fmt.length(summary.lastRepeatMm)}`);
+  setText('threadWrapSumAngle',`${fmt.degrees(summary.meanAngleDeg)} (${formatDecimal(summary.minAngleDeg,1)}\u2013${fmt.degrees(summary.maxAngleDeg)})`);
+  setText('threadWrapSumCircumference',`${fmt.number(summary.buttCircumferenceMm)} / ${fmt.length(summary.tipCircumferenceMm)}`);
+  setText('threadWrapSumThread',`\u2248 ${fmt.length(summary.threadPerStrandMm)}`);
+  setText('threadWrapSumThreadTotal',state.accentThreads>0
+    ?`main \u2248 ${fmt.length(summary.mainThreadMm)} \u00B7 accent \u2248 ${fmt.length(summary.accentThreadMm)}`
+    :`main \u2248 ${fmt.length(summary.mainThreadMm)}`);
+
+  const previewHost=$('threadWrapPreview');
+  if(previewHost){
+    const width=Math.round(previewHost.clientWidth)||340;
+    previewHost.innerHTML=engine.buildPreviewSvg(design,{width});
+    previewHost.setAttribute('data-preview-width',String(width));
+  }
+
+  const axesHost=$('threadWrapAxesList');
+  if(axesHost){
+    axesHost.innerHTML=design.axes.map((axis)=>{
+      const crossings=design.rows.filter((row)=>row.axisNumbers.includes(axis.number)).length;
+      return `<li><strong>Axis ${axis.number}</strong><span>${axis.angleDeg}\u00B0${axis.isReference?' \u00B7 reference line':''}</span><span>${crossings} crossings</span></li>`;
+    }).join('');
+  }
+
+  const caption=$('threadWrapTableCaption');
+  if(caption)caption.textContent=`Distances in ${workshopUnitSuffix(state.unit)}. From butt end is measured from the butt-side start line; Gap is the distance from the previous row.`;
+  const tableBody=$('threadWrapTableBody');
+  if(tableBody){
+    const lastIndex=design.rows.length-1;
+    tableBody.innerHTML=design.rows.map((row)=>{
+      const note=row.index===0?' <small>start</small>':(row.index===lastIndex?' <small>end</small>':'');
+      return `<tr data-row="${row.index}" class="${row.isRepeatBoundary?'is-repeat-row':''}"><th scope="row">${row.index}${note}</th><td>${fmt.number(row.positionMm)}</td><td>${row.gapMm===null?'\u2014':fmt.number(row.gapMm)}</td><td>${row.axisNumbers.join(' \u00B7 ')}</td></tr>`;
+    }).join('');
+  }
+
+  const stepsHost=$('threadWrapSteps');
+  if(stepsHost){
+    stepsHost.innerHTML=engine.buildInstructions(design,fmt).map((step)=>`<li data-step="${escapeHtml(step.id)}"><strong>${escapeHtml(step.title)}</strong><ul>${step.lines.map((line)=>`<li>${escapeHtml(line)}</li>`).join('')}</ul></li>`).join('');
+  }
+}
+function bindThreadWrapControls(){
+  const card=$('workshopToolThreadWrap');
+  if(!card || card.getAttribute('data-thread-wrap-bound')==='true')return;
+  card.setAttribute('data-thread-wrap-bound','true');
+  const state=workshopToolsState.threadWrap;
+  const bindMeasurement=(id,key)=>{
+    const input=$(id);
+    bindWorkshopCalculatorInput(input,()=>{
+      state[key]=readThreadWrapMeasurement(input.value,state.unit);
+      renderWorkshopCalculator();
+    });
+  };
+  bindMeasurement('workshopThreadWrapLength','lengthMm');
+  bindMeasurement('workshopThreadWrapButtDiameter','buttDiameterMm');
+  bindMeasurement('workshopThreadWrapTipDiameter','tipDiameterMm');
+
+  const setManualRepeats=(value)=>{
+    state.repeatsMode='manual';
+    state.repeats=value;
+    renderWorkshopCalculator();
+  };
+  const repeatsInput=$('workshopThreadWrapRepeats');
+  bindWorkshopCalculatorInput(repeatsInput,()=>{
+    const raw=String(repeatsInput.value||'').trim();
+    if(raw==='')return;
+    setManualRepeats(Number(raw));
+  });
+  const engine=threadWrapEngine();
+  const stepRepeats=(direction)=>{
+    const limits=engine?engine.LIMITS.repeats:{min:1,max:40};
+    const current=threadWrapEffectiveRepeats(state);
+    setManualRepeats(Math.max(limits.min,Math.min(limits.max,Math.round(current)+direction)));
+  };
+  const minus=$('workshopThreadWrapRepeatsMinus');
+  const plus=$('workshopThreadWrapRepeatsPlus');
+  if(minus)minus.addEventListener('click',()=>stepRepeats(-1));
+  if(plus)plus.addEventListener('click',()=>stepRepeats(1));
+  const autoButton=$('threadWrapRepeatsAuto');
+  if(autoButton)autoButton.addEventListener('click',()=>{
+    state.repeatsMode='auto';
+    state.repeats=null;
+    renderWorkshopCalculator();
+  });
+
+  card.addEventListener('click',(event)=>{
+    const button=event.target && typeof event.target.closest==='function'?event.target.closest('button'):null;
+    if(!button)return;
+    if(button.hasAttribute('data-thread-wrap-axes')){
+      state.axes=Number(button.getAttribute('data-thread-wrap-axes'));
+      renderWorkshopCalculator();
+    }else if(button.hasAttribute('data-thread-wrap-accent-count')){
+      state.accentThreads=Number(button.getAttribute('data-thread-wrap-accent-count'));
+      renderWorkshopCalculator();
+    }else if(button.hasAttribute('data-thread-wrap-colour')){
+      const role=button.getAttribute('data-thread-wrap-colour');
+      const colourId=button.getAttribute('data-colour-id');
+      if(role==='main')state.mainColour=colourId;
+      else state.accentColour=colourId;
+      renderWorkshopCalculator();
+    }
+  });
+
+  // The preview is drawn at its container's pixel width, so redraw when the layout width changes.
+  let resizeFrame=0;
+  window.addEventListener('resize',()=>{
+    if(workshopToolsState.activeTool!=='thread-wrap' || resizeFrame)return;
+    resizeFrame=window.requestAnimationFrame(()=>{
+      resizeFrame=0;
+      const host=$('threadWrapPreview');
+      if(host && Math.abs((Math.round(host.clientWidth)||0)-Number(host.getAttribute('data-preview-width')||0))>2)renderWorkshopCalculator();
+    });
+  });
+}
 function renderWorkshopCalculator(){
   refreshWorkshopMeasurementLabels();
   renderWorkshopToolVisibility();
   renderDiameterCircumferenceTool();
   renderGripCoveringTool();
+  renderThreadWrapTool();
   renderSpiralGuideMapper();
   renderGuideSpecificationSummary();
 }
@@ -2757,6 +3011,8 @@ function bindWorkshopCalculatorControls(){
   bindWorkshopToolEnterFlow(['workshopDcDiameter','workshopDcCircumference','workshopDcWraps']);
   bindWorkshopToolEnterFlow(['workshopGripDiameter','workshopGripStartDiameter','workshopGripEndDiameter','workshopGripLength','workshopGripCoverWidth','workshopGripAllowance']);
   bindWorkshopToolEnterFlow(['workshopSpiralOffsetStart']);
+  bindThreadWrapControls();
+  bindWorkshopToolEnterFlow(['workshopThreadWrapLength','workshopThreadWrapButtDiameter','workshopThreadWrapTipDiameter','workshopThreadWrapRepeats']);
 
   renderWorkshopCalculator();
 }
@@ -13542,7 +13798,9 @@ function shouldAvoidMobileTextAutoFocus(){
 function dismissWorkshopToolPrimaryInputFocus(tool){
   const targetId=tool==='grip'
     ?'workshopGripDiameter'
-    :'workshopDcDiameter';
+    :tool==='thread-wrap'
+      ?'workshopThreadWrapLength'
+      :'workshopDcDiameter';
   const input=$(targetId);
   if(!input)return;
   if(document.activeElement===input)input.blur();
@@ -15788,9 +16046,11 @@ function onScreenChange(screenId){
     syncWorkshopToolBackControl();
     const selector=workshopLandingReturnFocusTool==='grip'
       ?'[data-workshop-tool-open="grip"]'
-      :workshopLandingReturnFocusTool==='guide-spacing'
-        ?'[data-workshop-tool-open="guide-spacing"]'
-        :'[data-workshop-tool-open="diameter"]';
+      :workshopLandingReturnFocusTool==='thread-wrap'
+        ?'[data-workshop-tool-open="thread-wrap"]'
+        :workshopLandingReturnFocusTool==='guide-spacing'
+          ?'[data-workshop-tool-open="guide-spacing"]'
+          :'[data-workshop-tool-open="diameter"]';
     workshopLandingReturnFocusTool='';
     const target=$('workshopToolsList')&&$('workshopToolsList').querySelector(selector);
     if(target){

@@ -132,6 +132,10 @@
               <span class="workshop-tool-launch__title">Diameter &amp; Circumference</span>
               <span class="workshop-tool-launch__meta">Quick measurement conversion.</span>
             </button>
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="thread-wrap">
+              <span class="workshop-tool-launch__title">Thread Wrap Designer</span>
+              <span class="workshop-tool-launch__meta">Diamond cross-wrap layout for a tapered blank.</span>
+            </button>
           </div>
 
           <article id="workshopToolDiameter" class="layout-control-card workshop-tool-card" aria-label="Diameter and circumference tool" hidden>
@@ -217,6 +221,112 @@
             </div>
 
             <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
+          </article>
+
+          <article id="workshopToolThreadWrap" class="layout-control-card workshop-tool-card" aria-label="Thread Wrap Designer" hidden>
+            <div class="workshop-tool-head">
+              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
+              </button>
+              <h3>Thread Wrap Designer</h3>
+              <p>Diamond cross-wrap layout for a tapered blank. Approximate &mdash; test on a spare section first.</p>
+            </div>
+
+            <div class="thread-wrap-config">
+              <div class="thread-wrap-config__col thread-wrap-config__col--inputs">
+                <div class="workshop-tool-fields">
+                  <label><span data-measurement-label="Wrap Length">Wrap Length</span><input id="workshopThreadWrapLength" type="text" inputmode="decimal" autocomplete="off" aria-describedby="threadWrapMessages" /></label>
+                </div>
+                <div class="workshop-tool-fields workshop-tool-fields--two">
+                  <label><span data-measurement-label="Butt-side Diameter">Butt-side Diameter</span><input id="workshopThreadWrapButtDiameter" type="text" inputmode="decimal" autocomplete="off" aria-describedby="threadWrapMessages" /></label>
+                  <label><span data-measurement-label="Tip-side Diameter">Tip-side Diameter</span><input id="workshopThreadWrapTipDiameter" type="text" inputmode="decimal" autocomplete="off" aria-describedby="threadWrapMessages" /></label>
+                </div>
+                <div class="thread-wrap-group">
+                  <span id="threadWrapAxesLabel" class="thread-wrap-group__label">Marking Axes</span>
+                  <div class="workshop-tool-unit-row thread-wrap-segment thread-wrap-segment--three" role="group" aria-labelledby="threadWrapAxesLabel">
+                    <button class="ghost-action" type="button" data-thread-wrap-axes="2" aria-pressed="false">2</button>
+                    <button class="ghost-action" type="button" data-thread-wrap-axes="4" aria-pressed="false">4</button>
+                    <button class="ghost-action" type="button" data-thread-wrap-axes="6" aria-pressed="false">6</button>
+                  </div>
+                </div>
+                <div class="workshop-dc-wraps thread-wrap-repeats">
+                  <label id="threadWrapRepeatsLabel" for="workshopThreadWrapRepeats">PATTERN REPEATS</label>
+                  <div class="component-quantity" role="group" aria-labelledby="threadWrapRepeatsLabel">
+                    <button id="workshopThreadWrapRepeatsMinus" class="component-quantity__step" type="button" aria-label="Decrease pattern repeats">&minus;</button>
+                    <input id="workshopThreadWrapRepeats" class="component-quantity__value" type="number" inputmode="numeric" min="1" max="40" step="1" aria-label="Number of pattern repeats" />
+                    <button id="workshopThreadWrapRepeatsPlus" class="component-quantity__step" type="button" aria-label="Increase pattern repeats">+</button>
+                  </div>
+                </div>
+                <div class="thread-wrap-repeats-note">
+                  <p id="threadWrapRepeatsNote" class="workshop-tool-note"></p>
+                  <button id="threadWrapRepeatsAuto" class="ghost-action" type="button" hidden>Use suggested</button>
+                </div>
+                <div id="threadWrapMessages" class="thread-wrap-messages" aria-live="polite"></div>
+              </div>
+
+              <figure id="threadWrapPreviewBlock" class="thread-wrap-preview" hidden>
+                <div id="threadWrapPreview" class="thread-wrap-preview__canvas"></div>
+                <figcaption>Schematic of the unrolled blank surface. Numbers along the top are rows; each dot is a marked crossing point.</figcaption>
+              </figure>
+
+              <div class="thread-wrap-config__col thread-wrap-config__col--colours">
+                <div class="thread-wrap-group">
+                  <span id="threadWrapMainLabel" class="thread-wrap-group__label">Main Thread</span>
+                  <div id="threadWrapMainColours" class="thread-wrap-swatches" role="group" aria-labelledby="threadWrapMainLabel"></div>
+                </div>
+                <div class="thread-wrap-group">
+                  <span id="threadWrapAccentCountLabel" class="thread-wrap-group__label">Accent Threads Each Side</span>
+                  <div class="workshop-tool-unit-row thread-wrap-segment thread-wrap-segment--four" role="group" aria-labelledby="threadWrapAccentCountLabel">
+                    <button class="ghost-action" type="button" data-thread-wrap-accent-count="0" aria-pressed="false">0</button>
+                    <button class="ghost-action" type="button" data-thread-wrap-accent-count="1" aria-pressed="false">1</button>
+                    <button class="ghost-action" type="button" data-thread-wrap-accent-count="2" aria-pressed="false">2</button>
+                    <button class="ghost-action" type="button" data-thread-wrap-accent-count="3" aria-pressed="false">3</button>
+                  </div>
+                </div>
+                <div id="threadWrapAccentGroup" class="thread-wrap-group">
+                  <span id="threadWrapAccentLabel" class="thread-wrap-group__label">Accent Thread</span>
+                  <div id="threadWrapAccentColours" class="thread-wrap-swatches" role="group" aria-labelledby="threadWrapAccentLabel"></div>
+                </div>
+              </div>
+            </div>
+
+            <section id="threadWrapResults" class="thread-wrap-results" aria-label="Diamond wrap design" hidden>
+              <div class="workshop-tool-details workshop-tool-details--compact thread-wrap-summary" aria-live="polite">
+                <div><span>Pattern Repeats</span><strong id="threadWrapSumRepeats">0</strong></div>
+                <div><span>Repeat Length</span><strong id="threadWrapSumRepeatLength">&mdash;</strong></div>
+                <div><span>Thread Angle From Rod</span><strong id="threadWrapSumAngle">&mdash;</strong></div>
+                <div><span>Butt / Tip Circumference</span><strong id="threadWrapSumCircumference">&mdash;</strong></div>
+                <div><span>Thread Per Strand (approx.)</span><strong id="threadWrapSumThread">&mdash;</strong></div>
+                <div><span>Total Thread (approx.)</span><strong id="threadWrapSumThreadTotal">&mdash;</strong></div>
+              </div>
+
+              <section class="thread-wrap-block" aria-labelledby="threadWrapAxesTitle">
+                <h4 id="threadWrapAxesTitle">Marking Axes</h4>
+                <ul id="threadWrapAxesList" class="thread-wrap-axes"></ul>
+              </section>
+
+              <section class="thread-wrap-block" aria-labelledby="threadWrapTableTitle">
+                <h4 id="threadWrapTableTitle">Layout Table</h4>
+                <div class="thread-wrap-table-wrap">
+                  <table id="threadWrapTable" class="thread-wrap-table">
+                    <caption id="threadWrapTableCaption" class="thread-wrap-table__caption"></caption>
+                    <thead><tr><th scope="col">Row</th><th scope="col">From butt end</th><th scope="col">Gap</th><th scope="col">On axes</th></tr></thead>
+                    <tbody id="threadWrapTableBody"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="thread-wrap-block" aria-labelledby="threadWrapStepsTitle">
+                <h4 id="threadWrapStepsTitle">Step By Step</h4>
+                <ol id="threadWrapSteps" class="thread-wrap-steps"></ol>
+              </section>
+            </section>
+
+            <details class="thread-wrap-method">
+              <summary>How this is calculated</summary>
+              <div id="threadWrapMethodBody" class="thread-wrap-method__body"></div>
+            </details>
           </article>
         </section>
       </div>
@@ -926,6 +1036,7 @@
   <script src="js/config.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/guide-layout.js"></script>
+  <script src="js/thread-wrap.js"></script>
   <script src="js/studio-visuals.js"></script>
   <script src="js/navigation.js"></script>
   <script src="js/ui.js"></script>

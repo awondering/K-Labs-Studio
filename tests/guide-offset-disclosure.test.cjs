@@ -202,7 +202,7 @@ test('seven-guide Casting Progressive Placement reveals guides 4–6 through the
   }
   vm.runInContext(fs.readFileSync(path.join(__dirname,'..','js','guide-layout.js'),'utf8'),vm.createContext({window:c}));
   for(const name of ['refreshWorkshopMeasurementLabels','renderWorkshopToolVisibility',
-    'renderDiameterCircumferenceTool','renderGripCoveringTool','renderGuideSpecificationSummary']){
+    'renderDiameterCircumferenceTool','renderGripCoveringTool','renderThreadWrapTool','renderGuideSpecificationSummary']){
     c[name]=()=>{};
   }
   c.state.guideCount=7;
