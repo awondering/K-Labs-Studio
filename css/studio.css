@@ -3823,6 +3823,10 @@ textarea::placeholder{
     width:min(100%,840px);
   }
 
+  .app-shell:has(#workshopScreen.active #studioWorkflowPanel:not([hidden])){
+    width:min(100%,840px);
+  }
+
   #buildsScreen.active{
     display:grid;
     grid-template-rows:auto auto minmax(0,1fr);
