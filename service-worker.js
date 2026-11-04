@@ -19,6 +19,7 @@ const APP_SHELL_ASSETS=[
 	'js/storage.js',
 	'js/guide-layout.js',
 	'js/thread-wrap.js',
+	'js/guide-train.js',
 	'js/studio-visuals.js',
 	'js/navigation.js',
 	'js/ui.js',

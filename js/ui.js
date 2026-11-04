@@ -264,6 +264,28 @@ const workshopToolsState={
     mainColour:'black',
     accentColour:'gold',
   },
+  guideTrain:{
+    unit:'metric',
+    imperialDisplay:'fractional',
+    rodLengthMm:2130,
+    buttOdMm:14,
+    tipOdMm:2.4,
+    spoolLipMm:560,
+    spoolDiameterMm:40,
+    reelHeightMm:36,
+    reelAngleDeg:0,
+    reductionCount:5,
+    stripperIdMm:30,
+    tipTopIdMm:5,
+    tipTopHeightMm:4,
+    flareAngleDeg:1.5,
+    settledLineMm:4,
+    clearancePct:25,
+    guides:[],
+    selected:0,
+    invalid:{},
+    notice:false,
+  },
   spiral:{
     unit:'metric',
     imperialDisplay:'fractional',
@@ -1892,11 +1914,13 @@ function renderWorkshopToolVisibility(){
   const diameterCard=$('workshopToolDiameter');
   const gripCard=$('workshopToolGrip');
   const threadWrapCard=$('workshopToolThreadWrap');
+  const guideTrainCard=$('workshopToolGuideTrain');
   const activeTool=workshopToolsState.activeTool;
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
   if(gripCard)gripCard.hidden=activeTool!=='grip';
   if(threadWrapCard)threadWrapCard.hidden=activeTool!=='thread-wrap';
+  if(guideTrainCard)guideTrainCard.hidden=activeTool!=='guide-train';
   const intro=document.querySelector('#workshopToolsPanel .workshop-landing-panel__intro');
   if(intro)intro.hidden=activeTool!=='list';
   const panel=$('workshopToolsPanel');
@@ -2015,7 +2039,7 @@ function openWorkshopTool(tool){
     goScreen('layoutScreen');
     return;
   }
-  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':'diameter';
+  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':tool==='guide-train'?'guide-train':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
@@ -2702,6 +2726,385 @@ function bindThreadWrapControls(){
     });
   });
 }
+function guideTrainEngine(){
+  return typeof KLabsGuideTrain!=='undefined'?KLabsGuideTrain:null;
+}
+function guideTrainFormatter(state){
+  const options={decimalsMetric:1,decimalsImperial:3};
+  return {
+    number:(mm)=>formatWorkshopMeasurementNumber(mm,state.unit,'decimal',options),
+    whole:(mm)=>formatWorkshopMeasurementNumber(mm,state.unit,'decimal',{decimalsMetric:0,decimalsImperial:1}),
+    length:(mm)=>formatWorkshopMeasurementValue(mm,state.unit,'decimal',options),
+    degrees:(deg)=>`${formatDecimal(deg,1)}\u00B0`,
+  };
+}
+// Empty text -> null (missing); unparsable or negative text -> NaN (invalid). The engine reports both.
+function readGuideTrainMeasurement(rawValue,unit){
+  const raw=String(rawValue===undefined || rawValue===null?'':rawValue).trim();
+  if(!raw)return null;
+  const mm=parseWorkshopMeasurementMm(raw,unit,NaN,true);
+  return Number.isFinite(mm)?mm:NaN;
+}
+function readGuideTrainNumber(rawValue){
+  const raw=String(rawValue===undefined || rawValue===null?'':rawValue).trim();
+  if(!raw)return null;
+  const value=Number(raw);
+  return Number.isFinite(value)?value:NaN;
+}
+function guideTrainRequest(state){
+  return {
+    rodLengthMm:state.rodLengthMm,
+    buttOdMm:state.buttOdMm,
+    tipOdMm:state.tipOdMm,
+    spoolLipMm:state.spoolLipMm,
+    spoolDiameterMm:state.spoolDiameterMm,
+    reelHeightMm:state.reelHeightMm,
+    reelAngleDeg:state.reelAngleDeg,
+    reductionCount:state.reductionCount,
+    stripperIdMm:state.stripperIdMm,
+    tipTopIdMm:state.tipTopIdMm,
+    tipTopHeightMm:state.tipTopHeightMm,
+    flareAngleDeg:state.flareAngleDeg,
+    settledLineMm:state.settledLineMm,
+    clearancePct:state.clearancePct,
+    guides:state.guides,
+  };
+}
+function guideTrainStatus(guide,fmt){
+  if(!guide.fits)return {text:`Ring ${fmt.length(-guide.marginMm)} short`,level:'warn'};
+  if(guide.ringTopClearanceMm!==null && guide.ringTopClearanceMm<-1e-9)return {text:'Overlaps blank',level:'warn'};
+  return {text:'Fits',level:'ok'};
+}
+function guideTrainCardsMarkup(design){
+  return design.guides.map((guide)=>{
+    const label=escapeHtml(guide.label);
+    const fixedPosition=guide.role==='tip-top';
+    const field=(key,title,disabled)=>`<label><span>${title}</span><input type="text" inputmode="decimal" autocomplete="off" data-gt-field="${key}" data-guide="${guide.index}"${disabled?' disabled':''} aria-label="${label}: ${title.toLowerCase()}" /></label>`;
+    return `<div class="gt-guide" data-guide="${guide.index}"><div class="gt-guide__head"><strong>${label}</strong><span class="gt-guide__butt" data-gt-out="butt"></span><span class="gt-guide__status" data-gt-out="status"></span></div><div class="gt-guide__fields">${field('position','From tip',fixedPosition)}${field('id','Ring ID',false)}${field('height','Height',false)}</div><div class="gt-guide__foot"><span data-gt-out="min"></span><span data-gt-out="line"></span></div></div>`;
+  }).join('');
+}
+// Writes the current values into the existing cards without rebuilding them, so a field being typed in keeps focus.
+function updateGuideTrainCards(host,design,state,fmt){
+  host.querySelectorAll('.gt-guide').forEach((card)=>{
+    const index=Number(card.getAttribute('data-guide'));
+    const guide=design.guides[index];
+    if(!guide)return;
+    const status=guideTrainStatus(guide,fmt);
+    card.classList.toggle('is-selected',index===state.selected);
+    card.classList.toggle('has-warning',status.level==='warn');
+    card.querySelectorAll('[data-gt-field]').forEach((input)=>{
+      const key=input.getAttribute('data-gt-field');
+      const value=key==='position'?guide.fromTipMm:key==='id'?guide.idMm:guide.heightMm;
+      const edited=key==='position'?guide.moved:key==='id'
+        ?(guide.role==='reduction' || guide.role==='choke') && Math.abs(guide.idMm-guide.proposed.idMm)>1e-9
+        :guide.role!=='tip-top' && Math.abs(guide.heightMm-guide.proposed.heightMm)>1e-9;
+      input.classList.toggle('is-edited',!!edited);
+      input.setAttribute('aria-invalid',state.invalid[`${index}.${key}`]?'true':'false');
+      if(document.activeElement!==input)input.value=fmt.number(value);
+    });
+    const setOut=(name,text,level)=>{
+      card.querySelectorAll('[data-gt-out]').forEach((out)=>{
+        if(out.getAttribute('data-gt-out')!==name)return;
+        out.textContent=text;
+        if(level)out.setAttribute('data-level',level);
+      });
+    };
+    setOut('butt',`${fmt.length(guide.fromButtMm)} from butt`);
+    setOut('status',status.text,status.level);
+    setOut('min',`Needs at least ${fmt.length(guide.requiredIdMm)}`);
+    setOut('line',`Line ${fmt.length(guide.envelopeMm)}`);
+  });
+}
+function renderGuideTrainMethod(engine){
+  const host=$('gtMethodBody');
+  if(!host || host.getAttribute('data-built')==='true')return;
+  const list=(items)=>`<ul>${items.map((item)=>`<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+  host.innerHTML=`<h5>Method</h5><ol>${engine.METHOD_STEPS.map((item)=>`<li>${escapeHtml(item)}</li>`).join('')}</ol><h5>Assumptions</h5>${list(engine.ASSUMPTIONS)}<h5>Limits</h5>${list(engine.LIMITATIONS)}`;
+  host.setAttribute('data-built','true');
+}
+const GUIDE_TRAIN_MAIN_FIELDS=[
+  ['gtRodLength','rodLengthMm'],['gtSpoolLip','spoolLipMm'],['gtButtOd','buttOdMm'],['gtTipOd','tipOdMm'],
+  ['gtSpoolDiameter','spoolDiameterMm'],['gtReelHeight','reelHeightMm'],['gtSettledLine','settledLineMm'],
+];
+const GUIDE_TRAIN_NUMBER_FIELDS=[
+  ['gtReelAngle','reelAngleDeg'],['gtFlareAngle','flareAngleDeg'],['gtClearance','clearancePct'],['gtReductionCount','reductionCount'],
+];
+function renderGuideTrainTool(){
+  const card=$('workshopToolGuideTrain');
+  const engine=guideTrainEngine();
+  if(!card || !engine || workshopToolsState.activeTool!=='guide-train')return;
+  const state=workshopToolsState.guideTrain;
+  state.unit=activeMeasurementUnits();
+  state.imperialDisplay=activeImperialDisplay();
+  const fmt=guideTrainFormatter(state);
+  let design=engine.designGuideTrain(guideTrainRequest(state),fmt);
+  // Guide edits that no longer fit after a main measurement changed are dropped, never left as a dead end.
+  if(!design.ok && state.guides.some(Boolean) && design.errors.some((entry)=>/^guide\d+\./.test(entry.field))){
+    state.guides=[];
+    state.invalid={};
+    state.notice=true;
+    design=engine.designGuideTrain(guideTrainRequest(state),fmt);
+  }
+  state.last=design;
+  renderGuideTrainMethod(engine);
+
+  GUIDE_TRAIN_MAIN_FIELDS.forEach(([id,key])=>{
+    const input=$(id);
+    if(!input)return;
+    if(Number.isFinite(state[key])){
+      // Decimal inches regardless of the fractional preference: marking and heights need finer than 1/8 in.
+      syncWorkshopMeasurementInput(input,state[key],state.unit,'decimal');
+    }else if(state[key]===null && document.activeElement!==input){
+      input.value='';
+    }
+  });
+  GUIDE_TRAIN_NUMBER_FIELDS.forEach(([id,key])=>{
+    const input=$(id);
+    if(!input)return;
+    if(Number.isFinite(state[key])){
+      if(document.activeElement!==input)input.value=formatDecimal(state[key],2);
+    }else if(state[key]===null && document.activeElement!==input){
+      input.value='';
+    }
+  });
+
+  const fieldToInput={};
+  GUIDE_TRAIN_MAIN_FIELDS.concat(GUIDE_TRAIN_NUMBER_FIELDS).forEach(([id,key])=>{fieldToInput[key]=id;});
+  const invalidFields=new Set(design.errors.map((entry)=>entry.field));
+  Object.keys(fieldToInput).forEach((key)=>{
+    const input=$(fieldToInput[key]);
+    if(input)input.setAttribute('aria-invalid',invalidFields.has(key)?'true':'false');
+  });
+
+  const messages=$('gtMessages');
+  if(messages){
+    const entries=[
+      ...design.errors.map((entry)=>({kind:'error',message:entry.message})),
+      ...Object.keys(state.invalid).map((key)=>({kind:'error',message:state.invalid[key]})),
+      ...(design.warnings||[]).map((entry)=>({kind:'warning',message:entry.message})),
+    ];
+    if(state.notice){
+      entries.push({kind:'warning',message:'Guide edits were reset because they no longer fit the rod measurements.'});
+      state.notice=false;
+    }
+    messages.innerHTML=entries.map((entry)=>`<p class="guide-train-message guide-train-message--${entry.kind}">${escapeHtml(entry.message)}</p>`).join('');
+  }
+
+  const view=$('gtView');
+  const results=$('gtResults');
+  if(view)view.hidden=!design.ok;
+  if(results)results.hidden=!design.ok;
+  if(!design.ok)return;
+
+  const canvas=$('gtViewCanvas');
+  if(canvas){
+    const width=Math.round(canvas.clientWidth)||340;
+    canvas.innerHTML=engine.buildSideViewSvg(design,{width,number:fmt.whole,selectedIndex:state.selected});
+    canvas.setAttribute('data-view-width',String(width));
+  }
+
+  const summary=design.summary;
+  const setText=(id,text)=>{const el=$(id);if(el)el.textContent=text;};
+  setText('gtSumChoke',summary.chokeBeyondTip?'Beyond the tip':`${fmt.length(summary.chokeFromTipMm)} from tip`);
+  setText('gtSumCone',fmt.length(summary.coneLengthMm));
+  setText('gtSumStripper',fmt.length(summary.stripperFromTipMm));
+  setText('gtSumRatio',`${formatDecimal(summary.reductionRatio,3)} per step`);
+  setText('gtSumClearance',summary.minBlankClearanceMm<-1e-9?'Touches the blank':`${fmt.length(summary.minBlankClearanceMm)}, ${fmt.length(summary.minBlankClearanceFromTipMm)} from tip`);
+  setText('gtGuidesUnit',`Distances in ${workshopUnitSuffix(state.unit)}. Edited values are highlighted; clear a field to return to the proposal.`);
+
+  const host=$('gtGuides');
+  if(host){
+    if(host.getAttribute('data-count')!==String(design.guides.length)){
+      host.innerHTML=guideTrainCardsMarkup(design);
+      host.setAttribute('data-count',String(design.guides.length));
+    }
+    updateGuideTrainCards(host,design,state,fmt);
+  }
+  const reset=$('gtResetGuides');
+  if(reset)reset.hidden=!state.guides.some(Boolean);
+}
+// Nearest legal position for a dragged guide: snapped to 0.5 mm and kept between its neighbours.
+function guideTrainDragPosition(design,index,xMm){
+  const guides=design.guides;
+  const lower=index===0?design.reel.lipXMm+1:guides[index-1].xMm+0.5;
+  const upper=guides[index+1].xMm-0.5;
+  const snapped=Math.round(xMm*2)/2;
+  return Math.min(Math.max(snapped,Math.ceil(lower*2)/2),Math.floor(upper*2)/2);
+}
+function setGuideTrainOverride(state,index,prop,value){
+  while(state.guides.length<=index)state.guides.push(null);
+  const entry={...(state.guides[index]||{})};
+  if(value===null || value===undefined)delete entry[prop];
+  else entry[prop]=value;
+  state.guides[index]=Object.keys(entry).length?entry:null;
+}
+// Applies one guide field edit. Edits that would make the train impossible are refused with a message
+// instead of being applied, so the guide cards never disappear while a value is being typed.
+function commitGuideTrainEdit(index,field,rawText){
+  const state=workshopToolsState.guideTrain;
+  const engine=guideTrainEngine();
+  if(!engine)return false;
+  const key=`${index}.${field}`;
+  const count=state.reductionCount+2;
+  const value=readGuideTrainMeasurement(rawText,state.unit);
+  const names={position:'position',id:'ring inner diameter',height:'centre height'};
+  const label=engine.guideLabel(index,count);
+  if(Number.isNaN(value)){
+    state.invalid[key]=`${label}: the ${names[field]} is not a valid number.`;
+    return false;
+  }
+  if(index===0 && field==='id'){
+    state.stripperIdMm=value;
+    delete state.invalid[key];
+    return true;
+  }
+  if(index===count-1 && (field==='id' || field==='height')){
+    state[field==='id'?'tipTopIdMm':'tipTopHeightMm']=value;
+    delete state.invalid[key];
+    return true;
+  }
+  const prop=field==='position'?'positionMm':field==='id'?'idMm':'heightMm';
+  const stored=value===null?null:(field==='position'?state.rodLengthMm-value:value);
+  const before=state.guides.map((entry)=>entry?{...entry}:entry);
+  setGuideTrainOverride(state,index,prop,stored);
+  const trial=engine.designGuideTrain(guideTrainRequest(state),guideTrainFormatter(state));
+  const refusal=trial.ok?null:trial.errors.find((entry)=>/^guide\d+\./.test(entry.field));
+  if(refusal){
+    state.guides=before;
+    state.invalid[key]=refusal.message;
+    return false;
+  }
+  delete state.invalid[key];
+  return true;
+}
+function bindGuideTrainControls(){
+  const card=$('workshopToolGuideTrain');
+  if(!card || card.getAttribute('data-guide-train-bound')==='true')return;
+  card.setAttribute('data-guide-train-bound','true');
+  const state=workshopToolsState.guideTrain;
+  GUIDE_TRAIN_MAIN_FIELDS.forEach(([id,key])=>{
+    const input=$(id);
+    bindWorkshopCalculatorInput(input,()=>{
+      state[key]=readGuideTrainMeasurement(input.value,state.unit);
+      renderGuideTrainTool();
+    });
+  });
+  GUIDE_TRAIN_NUMBER_FIELDS.forEach(([id,key])=>{
+    const input=$(id);
+    bindWorkshopCalculatorInput(input,()=>{
+      const next=readGuideTrainNumber(input.value);
+      if(key==='reductionCount' && next!==null && next!==state.reductionCount){
+        state.guides=[];
+        state.invalid={};
+      }
+      state[key]=next;
+      renderGuideTrainTool();
+    });
+  });
+  const stepCount=(direction)=>{
+    const engine=guideTrainEngine();
+    const limits=engine?engine.FIELD_BY_KEY.reductionCount:{min:1,max:12};
+    const current=Number.isInteger(state.reductionCount)?state.reductionCount:5;
+    const next=Math.max(limits.min,Math.min(limits.max,current+direction));
+    if(next!==state.reductionCount){
+      state.reductionCount=next;
+      state.guides=[];
+      state.invalid={};
+      state.selected=0;
+    }
+    renderGuideTrainTool();
+  };
+  const minus=$('gtCountMinus');
+  const plus=$('gtCountPlus');
+  if(minus)minus.addEventListener('click',()=>stepCount(-1));
+  if(plus)plus.addEventListener('click',()=>stepCount(1));
+
+  const reset=$('gtResetGuides');
+  if(reset)reset.addEventListener('click',()=>{
+    state.guides=[];
+    state.invalid={};
+    renderGuideTrainTool();
+  });
+
+  const guidesHost=$('gtGuides');
+  if(guidesHost){
+    const onFieldEvent=(event)=>{
+      const target=event.target;
+      if(!target || typeof target.getAttribute!=='function' || !target.getAttribute('data-gt-field'))return;
+      const index=Number(target.getAttribute('data-guide'));
+      state.selected=index;
+      commitGuideTrainEdit(index,target.getAttribute('data-gt-field'),target.value);
+      renderGuideTrainTool();
+    };
+    guidesHost.addEventListener('input',onFieldEvent);
+    guidesHost.addEventListener('change',onFieldEvent);
+    guidesHost.addEventListener('focusin',(event)=>{
+      const target=event.target;
+      const holder=target && typeof target.closest==='function'?target.closest('.gt-guide'):null;
+      if(!holder)return;
+      const index=Number(holder.getAttribute('data-guide'));
+      if(index!==state.selected){
+        state.selected=index;
+        renderGuideTrainTool();
+      }
+    });
+  }
+
+  // Dragging a guide along the rod in the side view.
+  const canvas=$('gtViewCanvas');
+  if(canvas){
+    let drag=null;
+    const endDrag=()=>{drag=null;};
+    canvas.addEventListener('pointerdown',(event)=>{
+      const target=event.target && typeof event.target.closest==='function'?event.target.closest('[data-guide]'):null;
+      const last=state.last;
+      if(!target || !last || !last.ok)return;
+      const index=Number(target.getAttribute('data-guide'));
+      const guide=last.guides[index];
+      if(!guide)return;
+      state.selected=index;
+      if(guide.role!=='tip-top'){
+        drag={index,pointerId:event.pointerId};
+        if(typeof canvas.setPointerCapture==='function'){
+          try{canvas.setPointerCapture(event.pointerId);}catch(error){/* capture is optional */}
+        }
+        event.preventDefault();
+      }
+      renderGuideTrainTool();
+    });
+    canvas.addEventListener('pointermove',(event)=>{
+      const last=state.last;
+      if(!drag || event.pointerId!==drag.pointerId || !last || !last.ok)return;
+      const svg=canvas.querySelector('svg');
+      const engine=guideTrainEngine();
+      if(!svg || !engine)return;
+      const rect=svg.getBoundingClientRect();
+      if(!(rect.width>0))return;
+      const meta={
+        x0:Number(svg.getAttribute('data-gt-x0')),padL:Number(svg.getAttribute('data-gt-padl')),kx:Number(svg.getAttribute('data-gt-kx')),
+      };
+      const svgX=(event.clientX-rect.left)*(Number(svg.getAttribute('data-gt-width'))/rect.width);
+      const xMm=guideTrainDragPosition(last,drag.index,engine.viewXToMm(meta,svgX));
+      setGuideTrainOverride(state,drag.index,'positionMm',xMm);
+      delete state.invalid[`${drag.index}.position`];
+      renderGuideTrainTool();
+    });
+    canvas.addEventListener('pointerup',endDrag);
+    canvas.addEventListener('pointercancel',endDrag);
+    canvas.addEventListener('lostpointercapture',endDrag);
+  }
+
+  // The side view is drawn at its container's pixel width, so redraw when the layout width changes.
+  let resizeFrame=0;
+  window.addEventListener('resize',()=>{
+    if(workshopToolsState.activeTool!=='guide-train' || resizeFrame)return;
+    resizeFrame=window.requestAnimationFrame(()=>{
+      resizeFrame=0;
+      const host=$('gtViewCanvas');
+      if(host && Math.abs((Math.round(host.clientWidth)||0)-Number(host.getAttribute('data-view-width')||0))>2)renderGuideTrainTool();
+    });
+  });
+}
 function renderWorkshopCalculator(){
   refreshWorkshopMeasurementLabels();
   renderWorkshopToolVisibility();
@@ -2709,6 +3112,7 @@ function renderWorkshopCalculator(){
   renderGripCoveringTool();
   renderThreadWrapTool();
   renderSpiralGuideMapper();
+  renderGuideTrainTool();
   renderGuideSpecificationSummary();
 }
 function cancelGuideMapperReveal(){
@@ -3012,7 +3416,9 @@ function bindWorkshopCalculatorControls(){
   bindWorkshopToolEnterFlow(['workshopGripDiameter','workshopGripStartDiameter','workshopGripEndDiameter','workshopGripLength','workshopGripCoverWidth','workshopGripAllowance']);
   bindWorkshopToolEnterFlow(['workshopSpiralOffsetStart']);
   bindThreadWrapControls();
+  bindGuideTrainControls();
   bindWorkshopToolEnterFlow(['workshopThreadWrapLength','workshopThreadWrapButtDiameter','workshopThreadWrapTipDiameter','workshopThreadWrapRepeats']);
+  bindWorkshopToolEnterFlow(['gtRodLength','gtSpoolLip','gtButtOd','gtTipOd','gtSpoolDiameter','gtReelHeight','gtReelAngle','gtReductionCount']);
 
   renderWorkshopCalculator();
 }
@@ -13800,7 +14206,9 @@ function dismissWorkshopToolPrimaryInputFocus(tool){
     ?'workshopGripDiameter'
     :tool==='thread-wrap'
       ?'workshopThreadWrapLength'
-      :'workshopDcDiameter';
+      :tool==='guide-train'
+        ?'gtRodLength'
+        :'workshopDcDiameter';
   const input=$(targetId);
   if(!input)return;
   if(document.activeElement===input)input.blur();
@@ -16048,9 +16456,11 @@ function onScreenChange(screenId){
       ?'[data-workshop-tool-open="grip"]'
       :workshopLandingReturnFocusTool==='thread-wrap'
         ?'[data-workshop-tool-open="thread-wrap"]'
-        :workshopLandingReturnFocusTool==='guide-spacing'
-          ?'[data-workshop-tool-open="guide-spacing"]'
-          :'[data-workshop-tool-open="diameter"]';
+        :workshopLandingReturnFocusTool==='guide-train'
+          ?'[data-workshop-tool-open="guide-train"]'
+          :workshopLandingReturnFocusTool==='guide-spacing'
+            ?'[data-workshop-tool-open="guide-spacing"]'
+            :'[data-workshop-tool-open="diameter"]';
     workshopLandingReturnFocusTool='';
     const target=$('workshopToolsList')&&$('workshopToolsList').querySelector(selector);
     if(target){

@@ -136,6 +136,10 @@
               <span class="workshop-tool-launch__title">Thread Wrap Designer <span class="thread-wrap-beta">Beta</span></span>
               <span class="workshop-tool-launch__meta">Diamond cross-wrap layout for a tapered blank.</span>
             </button>
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="guide-train">
+              <span class="workshop-tool-launch__title">Guide Train Designer</span>
+              <span class="workshop-tool-launch__meta">Geometric reduction train for a spinning rod.</span>
+            </button>
           </div>
 
           <article id="workshopToolDiameter" class="layout-control-card workshop-tool-card" aria-label="Diameter and circumference tool" hidden>
@@ -327,6 +331,71 @@
             <details class="thread-wrap-method">
               <summary>How this is calculated</summary>
               <div id="threadWrapMethodBody" class="thread-wrap-method__body"></div>
+            </details>
+          </article>
+
+          <article id="workshopToolGuideTrain" class="layout-control-card workshop-tool-card" aria-label="Guide Train Designer" hidden>
+            <div class="workshop-tool-head">
+              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
+              </button>
+              <h3>Guide Train Designer</h3>
+              <p>Geometric reduction train for a spinning rod. Example values &mdash; replace them with your own measurements.</p>
+            </div>
+
+            <div class="workshop-tool-fields workshop-tool-fields--two guide-train-inputs">
+              <label><span data-measurement-label="Rod Length">Rod Length</span><input id="gtRodLength" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+              <label><span data-measurement-label="Spool Lip From Butt">Spool Lip From Butt</span><input id="gtSpoolLip" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+              <label><span data-measurement-label="Blank OD At Butt">Blank OD At Butt</span><input id="gtButtOd" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+              <label><span data-measurement-label="Blank OD At Tip">Blank OD At Tip</span><input id="gtTipOd" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+              <label><span data-measurement-label="Spool Diameter">Spool Diameter</span><input id="gtSpoolDiameter" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+              <label><span data-measurement-label="Reel Axis Height">Reel Axis Height</span><input id="gtReelHeight" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+              <label><span>Reel Axis Angle (deg)</span><input id="gtReelAngle" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages gtAngleHint" /></label>
+              <div class="guide-train-count">
+                <span id="gtCountLabel">Reduction Guides</span>
+                <div class="component-quantity" role="group" aria-labelledby="gtCountLabel">
+                  <button id="gtCountMinus" class="component-quantity__step" type="button" aria-label="Fewer reduction guides">&minus;</button>
+                  <input id="gtReductionCount" class="component-quantity__value" type="number" inputmode="numeric" min="1" max="12" step="1" aria-label="Number of reduction guides" />
+                  <button id="gtCountPlus" class="component-quantity__step" type="button" aria-label="More reduction guides">+</button>
+                </div>
+              </div>
+            </div>
+            <p id="gtAngleHint" class="workshop-tool-note">Heights are measured below the blank axis. Reel angle is positive when the reel axis points toward the blank on the way to the tip.</p>
+
+            <div id="gtMessages" class="guide-train-messages" aria-live="polite"></div>
+
+            <figure id="gtView" class="guide-train-view" hidden>
+              <div id="gtViewCanvas" class="guide-train-view__canvas"></div>
+              <figcaption>Drag a guide along the rod, or edit its values below. Triangles mark the proposed positions.</figcaption>
+            </figure>
+
+            <section id="gtResults" class="guide-train-results" aria-label="Guide train results" hidden>
+              <div class="workshop-tool-details workshop-tool-details--compact guide-train-summary" aria-live="polite">
+                <div><span>Geometric Choke</span><strong id="gtSumChoke">&mdash;</strong></div>
+                <div><span>Line Cone Length</span><strong id="gtSumCone">&mdash;</strong></div>
+                <div><span>Stripper From Tip</span><strong id="gtSumStripper">&mdash;</strong></div>
+                <div><span>Ring Size Ratio</span><strong id="gtSumRatio">&mdash;</strong></div>
+                <div><span>Closest Line To Blank</span><strong id="gtSumClearance">&mdash;</strong></div>
+              </div>
+              <div class="guide-train-guides-head">
+                <h4>Guides</h4>
+                <button id="gtResetGuides" class="ghost-action" type="button" hidden>Reset To Proposal</button>
+              </div>
+              <p id="gtGuidesUnit" class="workshop-tool-note"></p>
+              <div id="gtGuides" class="guide-train-guides"></div>
+            </section>
+
+            <details class="guide-train-advanced">
+              <summary>Model settings and method</summary>
+              <div class="guide-train-advanced__body">
+                <div class="workshop-tool-fields workshop-tool-fields--two">
+                  <label><span>Flare Half-Angle (deg)</span><input id="gtFlareAngle" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+                  <label><span data-measurement-label="Settled Line">Settled Line</span><input id="gtSettledLine" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+                  <label><span>Ring Clearance (%)</span><input id="gtClearance" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+                </div>
+                <div id="gtMethodBody" class="guide-train-method"></div>
+              </div>
             </details>
           </article>
         </section>
@@ -1038,6 +1107,7 @@
   <script src="js/storage.js"></script>
   <script src="js/guide-layout.js"></script>
   <script src="js/thread-wrap.js"></script>
+  <script src="js/guide-train.js"></script>
   <script src="js/studio-visuals.js"></script>
   <script src="js/navigation.js"></script>
   <script src="js/ui.js"></script>
