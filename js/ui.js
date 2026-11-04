@@ -12002,9 +12002,27 @@ function renderCustomerFinder(){
       <div class="customer-finder__work-list">${jobRows}</div>
     </section>
   `;
+  if(!detailHost._customerHistoryScrollCueBound){
+    detailHost.addEventListener('scroll',()=>syncCustomerFinderHistoryScrollCue(detailHost),{passive:true});
+    detailHost._customerHistoryScrollCueBound=true;
+  }
+  syncCustomerFinderHistoryScrollCue(detailHost);
   if(rootView)rootView.hidden=true;
   if(customerFinderCustomerMenuOpen || customerFinderBuildRowMenu){
     window.requestAnimationFrame(positionCustomerFinderInlineMenu);
+  }
+}
+function syncCustomerFinderHistoryScrollCue(detailHost){
+  if(!detailHost)return;
+  const rows=detailHost.querySelectorAll('.customer-finder__work-row');
+  const hasScrollableContent=detailHost.scrollHeight>detailHost.clientHeight+1;
+  const visibleBottom=detailHost.getBoundingClientRect().top+detailHost.clientTop+detailHost.clientHeight;
+  const lastRow=rows[rows.length-1];
+  const hasHistoryBelow=hasScrollableContent&&!!lastRow&&lastRow.getBoundingClientRect().bottom>visibleBottom+1;
+  if(hasHistoryBelow){
+    detailHost.classList.add('has-history-more');
+  }else{
+    detailHost.classList.remove('has-history-more');
   }
 }
 function clearCustomerFinderViewportStyles(){
@@ -12069,6 +12087,7 @@ function syncCustomerFinderViewport(){
   if(customerFinderCustomerMenuOpen || customerFinderBuildRowMenu){
     window.requestAnimationFrame(positionCustomerFinderInlineMenu);
   }
+  syncCustomerFinderHistoryScrollCue($('customerFinderDetail'));
 }
 function handleCustomerFinderFocusIn(){
   scheduleCustomerFinderViewportSync();
