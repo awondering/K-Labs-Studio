@@ -453,3 +453,65 @@ test('restrained K-Labs styling: existing design tokens, no new colour system, s
   assert.ok(!/@keyframes|animation:/.test(block),'no decorative animation');
   assert.ok(!/#[0-9a-f]{6}.*gradient.*(#00|#0f)/i.test(block));
 });
+
+// Character encoding of everything the UI writes into the page.
+const UI_MOJIBAKE=/[\u00C2-\u00F4][\u0080-\u00BF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]/;
+const UI_ALLOWED_GLYPHS=new Set([0x00B0,0x00B7,0x00D7,0x03C0,0x2013,0x2014,0x2019,0x201C,0x201D,0x2026,0x2192,0x2248,0x00E9,0x00F4]);
+const OUTPUT_IDS=['threadWrapMessages','threadWrapRepeatsNote','threadWrapSumRepeats','threadWrapSumRepeatLength','threadWrapSumAngle','threadWrapSumCircumference','threadWrapSumThread','threadWrapSumThreadTotal','threadWrapPreview','threadWrapAxesList','threadWrapTableCaption','threadWrapTableBody','threadWrapSteps','threadWrapMainColours','threadWrapAccentColours','threadWrapMethodBody'];
+const collectOutput=(h)=>OUTPUT_IDS.map((id)=>[id,String(h.e(id).innerHTML||'')+'\n'+String(h.e(id).textContent||'')]);
+
+test('rendered output has correct characters and no encoding corruption in metric and imperial, for 2, 4 and 6 axes',()=>{
+  const seen=new Set();
+  for(const [unit,display] of [['metric','decimal'],['imperial','decimal'],['imperial','fractional']]){
+    for(const axes of [2,4,6]){
+      const h=harness({unit,imperialDisplay:display});
+      h.click({'data-thread-wrap-axes':String(axes)});
+      for(const [id,text] of collectOutput(h)){
+        assert.doesNotMatch(text,UI_MOJIBAKE,`${unit}/${axes}/${id}`);
+        assert.ok(!text.includes('\uFFFD'),`replacement character in ${id}`);
+        for(const ch of text){
+          const code=ch.codePointAt(0);
+          if(code>127){
+            seen.add(code);
+            assert.ok(UI_ALLOWED_GLYPHS.has(code),`${unit}/${axes}/${id}: unexpected U+${code.toString(16).toUpperCase()}`);
+          }
+        }
+      }
+      // the SVG preview that the UI injects stays ASCII
+      assert.equal([...h.e('threadWrapPreview').innerHTML].filter((ch)=>ch.codePointAt(0)>127).length,0);
+    }
+  }
+  [0x00B0,0x00B7,0x2014,0x2192,0x2248,0x03C0,0x2019].forEach((code)=>assert.ok(seen.has(code),`U+${code.toString(16).toUpperCase()} rendered somewhere`));
+});
+
+test('rendered summary, table and preview show the intended symbols',()=>{
+  const h=harness();
+  assert.match(h.e('threadWrapSumRepeatLength').textContent,/^48\.1 \u2192 52 mm$/);
+  assert.match(h.e('threadWrapSumAngle').textContent,/^45\.4\u00B0 \(42\.7\u201347\.8\u00B0\)$/);
+  assert.match(h.e('threadWrapSumThread').textContent,/^\u2248 355\.\d mm$/);
+  assert.match(h.e('threadWrapSumThreadTotal').textContent,/^main \u2248 \d+(\.\d)? mm \u00B7 accent \u2248 \d+(\.\d)? mm$/);
+  assert.match(h.e('threadWrapTableBody').innerHTML,/<td>\u2014<\/td>/);
+  assert.match(h.e('threadWrapAxesList').innerHTML,/<span>0\u00B0 \u00B7 reference line<\/span>/);
+  assert.match(h.e('threadWrapAxesList').innerHTML,/<span>180\u00B0<\/span>/);
+  assert.ok(h.e('threadWrapPreview').innerHTML.includes('>A1 0&#176;</text>'));
+  assert.ok(h.e('threadWrapPreview').innerHTML.includes('>A2 180&#176;</text>'));
+  assert.match(h.e('threadWrapRepeatsNote').textContent,/about 45\u00B0: 5\.$/);
+  assert.ok(h.e('threadWrapSteps').innerHTML.includes('180\u00B0 from Axis 1'));
+  assert.ok(h.e('threadWrapSteps').innerHTML.includes('divide that circumference by \u03C0'));
+  assert.ok(h.e('threadWrapSteps').innerHTML.includes('\u201CFrom butt end\u201D'));
+  assert.ok(h.e('threadWrapSteps').innerHTML.includes('A1 r0 \u2192 A2 r1'));
+  const method=h.e('threadWrapMethodBody').innerHTML;
+  assert.ok(method.includes('circumference \u00D7 repeat length'));
+  assert.ok(method.includes('This tool&rsquo;s own assumptions'));
+  assert.ok(method.includes('J\u00E9r\u00F4me'));
+  assert.ok(method.includes('(pen turning)'));
+});
+
+test('validation messages and warnings render with correct degree signs',()=>{
+  const h=harness();
+  h.type('workshopThreadWrapRepeats','8');
+  assert.match(h.e('threadWrapMessages').innerHTML,/about 5\d\.\d\u00B0 from the rod\. Published methods start near 45\u00B0, so/);
+  assert.doesNotMatch(h.e('threadWrapMessages').innerHTML,UI_MOJIBAKE);
+  h.type('workshopThreadWrapRepeats','30');
+  assert.match(h.e('threadWrapMessages').innerHTML,/about 8\d\.\d\u00B0 from the rod/);
+});

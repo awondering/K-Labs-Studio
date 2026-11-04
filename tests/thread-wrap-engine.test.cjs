@@ -360,7 +360,7 @@ test('preview scales to iPhone and MacBook widths and keeps every marker inside 
 test('preview contains no text other than numbers and fixed labels (no injected content)',()=>{
   const svg=T.buildPreviewSvg(design({repeats:5}),{width:340});
   const texts=[...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m)=>m[1]);
-  texts.forEach((text)=>assert.match(text,/^(\d+|A\d( \d+(\.\d+)?°)?|Butt end|Tip end)$/));
+  texts.forEach((text)=>assert.match(text,/^(\d+|A\d( \d+(\.\d+)?&#176;)?|Butt end|Tip end)$/));
   assert.match(svg,/role="img"/);
   assert.match(svg,/aria-label="Diamond cross-wrap preview: 5 repeats, 2 axes, Black main thread, Gold accent/);
 });

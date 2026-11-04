@@ -1,4 +1,4 @@
-/* K-Labs Studio — Thread Wrap Designer engine (diamond cross-wrap, first version).
+/* K-Labs Studio - Thread Wrap Designer engine (diamond cross-wrap, first version).
    Pure functions only: no DOM access, storage, pricing or network. All lengths are millimetres.
 
    MODEL (see SOURCES / ASSUMPTIONS below for what is published practice and what is this tool's own maths):
@@ -74,7 +74,7 @@
     {
       id:'rodhouse',
       short:'Barnouin, Rodhouse',
-      title:'Tutorial: Creating Your First Fish Scale Wrap (Jérôme Barnouin)',
+      title:'Tutorial: Creating Your First Fish Scale Wrap (J\u00E9r\u00F4me Barnouin)',
       publisher:'Rodhouse',
       url:'https://rodhouse.com/en/blogs/rodbuilding/how-to-create-your-first-fish-scale-wrap',
     },
@@ -89,11 +89,11 @@
 
   // Published practice, with the source that states it.
   const DOCUMENTED=[
-    {id:'axes',sources:['ehler','rodhouse'],text:'Mark an axis along the blank (Rodhouse aligns it with the spine) and a second axis 180° opposite, then mark where the wrap starts and ends.'},
+    {id:'axes',sources:['ehler','rodhouse'],text:'Mark an axis along the blank (Rodhouse aligns it with the spine) and a second axis 180\u00B0 opposite, then mark where the wrap starts and ends.'},
     {id:'circumference',sources:['ehler','rodhouse'],text:'Measure the blank circumference at both ends of the wrap; the pattern must be adjusted for the taper.'},
     {id:'closed',sources:['ehler','sturm'],text:'On a taper, the spacing between crossing points must change so the closed pattern has no gaps or overlaps. Repeats are shortest at the thicker end and longest at the thinner end.'},
-    {id:'equal-area',sources:['sturm'],text:'Each pattern repeat must cover the same surface area: blank circumference × repeat length stays constant.'},
-    {id:'forty-five',sources:['ehler','rodhouse','sturm'],text:'A repeat is about one blank circumference long (the thread runs at roughly 45°). Ehler steps a caliper set to the circumference along the axis to count repeats; Sturm uses the mid-wrap circumference.'},
+    {id:'equal-area',sources:['sturm'],text:'Each pattern repeat must cover the same surface area: blank circumference \u00D7 repeat length stays constant.'},
+    {id:'forty-five',sources:['ehler','rodhouse','sturm'],text:'A repeat is about one blank circumference long (the thread runs at roughly 45\u00B0). Ehler steps a caliper set to the circumference along the axis to count repeats; Sturm uses the mid-wrap circumference.'},
     {id:'both-ways',sources:['penturners'],text:'Spirals run in both directions through every marked point; their intersections are the centre lines of the pattern, and thread colours added each side of them make the design.'},
     {id:'tie-off',sources:['ehler'],text:'Leave room beyond the wrap for the tie-off wraps.'},
     {id:'prep-finish',sources:['rodhouse'],text:'Protect the blank with tape and anchor the thread on double-sided tape; keep every pass tight; finish with colour preserver, then varnish.'},
@@ -105,14 +105,14 @@
     {id:'equal-area-rows',text:'Row positions are found by giving every row an equal share of the cone surface area. Sturm\'s spreadsheet and Ehler\'s chart reach nearly the same spacing; this tool solves the equal-area condition exactly for a linear taper.'},
     {id:'straight-between-rows',text:'The thread is drawn as a straight line between consecutive crossing points on the unrolled surface. A taut thread on a slender taper differs from this by a negligible amount.'},
     {id:'more-axes',text:'Published examples use two opposite axes. Four and six axes are an extension of the same equal-area idea and are not covered by a published worked example.'},
-    {id:'round-blank',text:'The blank is treated as round: circumference = π × diameter.'},
+    {id:'round-blank',text:'The blank is treated as round: circumference = \u03C0 \u00D7 diameter.'},
     {id:'thread-thickness',text:'Thread thickness and build-up are ignored. Thread-length figures are rough estimates before waste.'},
-    {id:'angle-limits',text:'The wrap angle is a result, not an input. Angles under 15° or over 75° are refused because the diamonds would be impractical.'},
+    {id:'angle-limits',text:'The wrap angle is a result, not an input. Angles under 15\u00B0 or over 75\u00B0 are refused because the diamonds would be impractical.'},
   ];
 
   const DEFAULT_FMT={
     length(mm){return `${(Math.round(mm*10)/10).toFixed(1).replace(/\.0$/,'')} mm`;},
-    degrees(deg){return `${(Math.round(deg*10)/10).toFixed(1).replace(/\.0$/,'')}°`;},
+    degrees(deg){return `${(Math.round(deg*10)/10).toFixed(1).replace(/\.0$/,'')}\u00B0`;},
   };
 
   function isNumber(value){return typeof value==='number' && Number.isFinite(value);}
@@ -127,7 +127,7 @@
     const n=Number(raw&&raw.axes)||DEFAULTS.axes;
     if(![L,Db,Dt].every((v)=>Number.isFinite(v)&&v>0))return null;
     const meanCircumference=Math.PI*(Db+Dt)/2;
-    // 45°: one row spans (circumference / axes) along the rod, so two rows (one repeat) span 2C/axes.
+    // 45\u00B0: one row spans (circumference / axes) along the rod, so two rows (one repeat) span 2C/axes.
     const raw45=n*L/(2*meanCircumference);
     return Math.max(LIMITS.repeats.min,Math.min(LIMITS.repeats.max,Math.round(raw45)));
   }
@@ -216,7 +216,7 @@
       const spread=`${f.degrees(minAngleDeg)} to ${f.degrees(maxAngleDeg)}`;
       if(minAngleDeg<LIMITS.angleErrorLow || maxAngleDeg>LIMITS.angleErrorHigh){
         if(suggestedRepeats===repeats){
-          // The repeat count is already the 45° suggestion, so more or fewer repeats cannot fix it: the taper is the cause.
+          // The repeat count is already the 45\u00B0 suggestion, so more or fewer repeats cannot fix it: the taper is the cause.
           err('tipDiameterMm','angle-taper-spread',`Over this taper the thread angle would range from ${spread} from the rod, which is too uneven to wrap neatly. Shorten the wrap, or check that both diameters are right.`);
         }else if(minAngleDeg<LIMITS.angleErrorLow){
           err('repeats','angle-too-shallow',`With ${repeats} repeats the thread would run almost straight along the rod (about ${f.degrees(minAngleDeg)} from the rod), which is too shallow to wrap neatly. Use more repeats.${hint}`);
@@ -224,7 +224,7 @@
           err('repeats','angle-too-steep',`With ${repeats} repeats the thread would run almost straight round the blank (about ${f.degrees(maxAngleDeg)} from the rod), which is too steep to wrap neatly. Use fewer repeats.${hint}`);
         }
       }else if(minAngleDeg<LIMITS.angleWarnLow || maxAngleDeg>LIMITS.angleWarnHigh){
-        warn('repeats','angle-unusual',`The thread angle is about ${f.degrees(geometry.summary.meanAngleDeg)} from the rod. Published methods start near 45°, so the diamonds will look ${geometry.summary.meanAngleDeg<LIMITS.targetAngleDeg?'long and narrow':'short and wide'}.${hint}`);
+        warn('repeats','angle-unusual',`The thread angle is about ${f.degrees(geometry.summary.meanAngleDeg)} from the rod. Published methods start near 45\u00B0, so the diamonds will look ${geometry.summary.meanAngleDeg<LIMITS.targetAngleDeg?'long and narrow':'short and wide'}.${hint}`);
       }
       if(geometry.summary.minGapMm<LIMITS.tightRowMm){
         warn('repeats','rows-tight',`The closest rows are only ${f.length(geometry.summary.minGapMm)} apart, which is very tight to mark and wrap.`);
@@ -353,12 +353,12 @@
 
   function axisLabel(design,number){
     const axis=design.axes[number-1];
-    return axis.isReference?`Axis ${number} (${axis.angleDeg}°, reference line)`:`Axis ${number} (${axis.angleDeg}°)`;
+    return axis.isReference?`Axis ${number} (${axis.angleDeg}\u00B0, reference line)`:`Axis ${number} (${axis.angleDeg}\u00B0)`;
   }
   function describePass(design,pass){
     const total=pass.nodes.length;
     const pick=total<=7?pass.nodes:[...pass.nodes.slice(0,3),null,pass.nodes[total-1]];
-    return pick.map((node)=>node?`A${node.axisNumber} r${node.row}`:'…').join(' → ');
+    return pick.map((node)=>node?`A${node.axisNumber} r${node.row}`:'\u2026').join(' \u2192 ');
   }
 
   function buildInstructions(design,fmt){
@@ -374,7 +374,7 @@
       :s.taperDirection==='thicker-to-tip'
         ?`The gaps shrink from about ${f.length(s.firstGapMm)} at the butt-side end to about ${f.length(s.lastGapMm)} at the tip-side end, because the blank gets thicker.`
         :`The gaps are all about ${f.length(s.firstGapMm)} because the blank is the same size at both ends.`;
-    const axisAngles=design.axes.map((axis)=>`Axis ${axis.number}: ${axis.angleDeg}°`).join(', ');
+    const axisAngles=design.axes.map((axis)=>`Axis ${axis.number}: ${axis.angleDeg}\u00B0`).join(', ');
     const mainName=design.colours.main.label.toLowerCase();
     const accentName=design.colours.accent.label.toLowerCase();
     const k=design.input.accentThreads;
@@ -386,7 +386,7 @@
       lines:[
         `Draw Axis 1 along the wrap area. The spine line is a good choice if the blank is already marked.`,
         n===2
-          ?'Draw Axis 2 on the opposite side of the blank, 180° from Axis 1.'
+          ?'Draw Axis 2 on the opposite side of the blank, 180\u00B0 from Axis 1.'
           :`Divide the blank into ${n} equal parts around its circumference (wrap a paper strip round it, mark the strip into ${n} equal parts, and transfer the marks). Draw ${n} axes at ${axisAngles}. Number them in one direction, clockwise as seen looking from the butt end toward the tip.`,
         `Mark the start line at the butt side, then the end line ${f.length(design.input.lengthMm)} from it toward the tip. Leave room beyond each end for tie-off wraps.`,
       ],
@@ -396,17 +396,17 @@
       title:'Check the blank size at both ends',
       lines:[
         `Wrap a paper strip round the blank on each limit line and mark where it overlaps. Expect about ${f.length(s.buttCircumferenceMm)} at the butt-side line and ${f.length(s.tipCircumferenceMm)} at the tip-side line.`,
-        'If a strip is clearly different, divide that circumference by π (3.1416) to get the diameter, and enter it above so the layout updates.',
+        'If a strip is clearly different, divide that circumference by \u03C0 (3.1416) to get the diameter, and enter it above so the layout updates.',
       ],
     });
     steps.push({
       id:'mark',
       title:`Mark the ${R+1} crossing points`,
       lines:[
-        `Row 0 is the butt-side start line. Measure every row from that line using the “From butt end” column of the layout table (or step along with dividers using the “Gap” column).`,
+        `Row 0 is the butt-side start line. Measure every row from that line using the \u201CFrom butt end\u201D column of the layout table (or step along with dividers using the \u201CGap\u201D column).`,
         n===2
-          ?`Put even rows (0, 2, 4…) on Axis 1 and odd rows (1, 3, 5…) on Axis 2.`
-          :`Put even rows (0, 2, 4…) on ${evenAxes}, and odd rows (1, 3, 5…) on ${oddAxes}.`,
+          ?`Put even rows (0, 2, 4\u2026) on Axis 1 and odd rows (1, 3, 5\u2026) on Axis 2.`
+          :`Put even rows (0, 2, 4\u2026) on ${evenAxes}, and odd rows (1, 3, 5\u2026) on ${oddAxes}.`,
         `Row ${R} is the last row and lands exactly on the tip-side limit line, ${f.length(lastRow.positionMm)} from the start.`,
         gapTrend,
       ],
@@ -447,7 +447,7 @@
       title:'Tie off and finish',
       lines:[
         'Tie off in the space you left beyond the limit lines and trim the thread ends.',
-        'Rodhouse applies two coats of colour preserver, allows 24 hours, then two coats of varnish. Follow your own finish manufacturer’s instructions.',
+        'Rodhouse applies two coats of colour preserver, allows 24 hours, then two coats of varnish. Follow your own finish manufacturer\u2019s instructions.',
       ],
     });
     return steps;
@@ -487,13 +487,13 @@
         parts.push(`<text class="tw-rowlabel" x="${rx}" y="${padT-8}" text-anchor="middle" font-size="9" fill="rgba(214,210,200,.72)">${row.index}</text>`);
       }
     });
-    // Axis lines (the final 360° line repeats Axis 1 so the seam is visible).
+    // Axis lines (the final 360\u00B0 line repeats Axis 1 so the seam is visible).
     for(let a=0;a<=n;a+=1){
       const ay=y(360*a/n);
       const label=a<n?design.axes[a]:null;
       parts.push(`<line class="tw-axis" data-axis="${a<n?a+1:1}" x1="${padL}" y1="${ay}" x2="${padL+plotW}" y2="${ay}" stroke="rgba(231,225,213,${a===0||a===n?'.6':'.45'})" stroke-width="1" stroke-dasharray="4 4"/>`);
       if(label){
-        parts.push(`<text class="tw-axislabel" x="${padL-6}" y="${ay+3}" text-anchor="end" font-size="10" fill="rgba(231,225,213,.86)">A${label.number} ${label.angleDeg}°</text>`);
+        parts.push(`<text class="tw-axislabel" x="${padL-6}" y="${ay+3}" text-anchor="end" font-size="10" fill="rgba(231,225,213,.86)">A${label.number} ${label.angleDeg}&#176;</text>`);
       }else{
         parts.push(`<text class="tw-axislabel tw-axislabel--seam" x="${padL-6}" y="${ay+3}" text-anchor="end" font-size="10" fill="rgba(214,210,200,.5)">A1</text>`);
       }
@@ -535,7 +535,7 @@
     });
     parts.push('</g>');
 
-    // Crossing markers (one per row/axis; a mirrored copy on the 360° seam is flagged so it is not double counted).
+    // Crossing markers (one per row/axis; a mirrored copy on the 360\u00B0 seam is flagged so it is not double counted).
     design.rows.forEach((row)=>{
       row.axisNumbers.forEach((axisNumber)=>{
         const cy=y(design.axes[axisNumber-1].angleDeg);
