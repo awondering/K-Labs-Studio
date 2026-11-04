@@ -29,11 +29,11 @@ const uiStart=source.indexOf('function guideTrainEngine(');
 const uiEnd=source.indexOf('function bindGuideTrainControls(');
 const trainSource=source.slice(uiStart,uiEnd);
 
-function harness({unit='metric'}={}){
+function harness({unit='metric',runnerCount=0}={}){
   const state={
     unit,imperialDisplay:'decimal',rodLengthMm:2130,buttOdMm:14,tipOdMm:2.4,spoolLipMm:560,spoolDiameterMm:40,
     reelHeightMm:36,reelAngleDeg:0,reductionCount:5,stripperIdMm:30,tipTopIdMm:5,tipTopHeightMm:4,
-    flareAngleDeg:1.5,settledLineMm:4,clearancePct:25,guides:[],selected:0,invalid:{},notice:'',
+    flareAngleDeg:1.5,settledLineMm:4,clearancePct:25,runnerCount,runnerRatio:0.85,runnerMinGapMm:50,guides:[],selected:0,invalid:{},notice:'',
   };
   const c=vm.createContext({
     KLabsGuideTrain:Engine,
@@ -56,14 +56,14 @@ function harness({unit='metric'}={}){
 const xs=(d)=>d.guides.map((g)=>Math.round(g.xMm*10)/10);
 
 test('UI defaults equal the engine defaults, so the first render matches the documented example',()=>{
-  const {state}=harness();
+  const {state}=harness({runnerCount:Engine.DEFAULTS.runnerCount});
   const d=Engine.DEFAULTS;
   for(const key of Object.keys(d)){
     if(key==='guides')continue;
     assert.equal(state[key],d[key],`default ${key}`);
   }
-  const block=source.slice(source.indexOf('  guideTrain:{'),source.indexOf('  guideTrain:{')+700);
-  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','reelAngleDeg','reductionCount','stripperIdMm','tipTopIdMm','tipTopHeightMm','flareAngleDeg','settledLineMm','clearancePct']){
+  const block=source.slice(source.indexOf('  guideTrain:{'),source.indexOf('  guideTrain:{')+900);
+  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','reelAngleDeg','reductionCount','stripperIdMm','tipTopIdMm','tipTopHeightMm','flareAngleDeg','settledLineMm','clearancePct','runnerCount','runnerRatio','runnerMinGapMm']){
     const match=block.match(new RegExp(`${key}:([-\\d.]+)`));
     assert.ok(match,`state declares ${key}`);
     assert.equal(Number(match[1]),d[key],`ui.js default ${key} equals the engine`);

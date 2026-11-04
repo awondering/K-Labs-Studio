@@ -5,7 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const G=require('../js/guide-train.js');
 
-const base={...G.DEFAULTS};
+const base={...G.DEFAULTS,runnerCount:0};
 const design=(overrides,fmt)=>G.designGuideTrain({...base,...overrides},fmt);
 const close=(actual,expected,tolerance,label)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${label||'value'}: ${actual} vs ${expected} (+/-${tolerance})`);
 const rad=(d)=>d*Math.PI/180;

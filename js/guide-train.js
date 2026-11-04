@@ -1,4 +1,4 @@
-/* K-Labs Studio - Guide Train Designer geometry engine (Phase 1, prototype).
+/* K-Labs Studio - Guide Train Designer geometry engine (Phase 2, prototype: reduction train plus running guides).
    Pure functions only: no DOM access, storage, pricing or network. This file is ASCII-only on purpose, so
    no page charset can corrupt it. All lengths are millimetres, all angles are degrees.
 
@@ -46,6 +46,26 @@
         distance before the tip-top, and a warning is raised.
    Proposed ring sizes are rounded UP to the next 0.5 mm. They are computed minimums, not product specifications.
 
+   RUNNING GUIDES (Phase 2, provisional proposal)
+   Runners fill the span between the last reduction guide (the choke guide) and the tip-top. There is NO
+   universal formula for where running guides belong: it depends on the blank's bend, the line and the owner's
+   preferences, and it must be settled by a static-load test on the real blank. This engine therefore offers only
+   an explicit, adjustable starting progression:
+     - r runners create r + 1 gaps between the choke guide, the runners and the tip-top.
+     - The gaps form a geometric progression G_k = G_1 * q^(k-1), k = 1..r+1, listed from the choke toward the
+       tip, and they add up to the available span S = rodLength - (choke guide position):
+         G_1 = S * (1 - q) / (1 - q^(r+1))       (G_1 = S / (r+1) when q = 1).
+       q < 1 packs the runners closer together toward the tip, q = 1 spaces them evenly, q > 1 does the opposite.
+       The default q is a starting value for the owner to adjust, not an industry value.
+     - The last gap (last runner to tip-top) is never allowed below the minimum gap setting. If the progression
+       would make it shorter, it is set to the minimum and the other gaps share the remaining span with the same ratio.
+     - Runners sit on the same straight line chord as the reduction guides, so the line path is unchanged by them.
+       Their proposed ring size is the computed minimum for the line envelope at that point, rounded up to 0.5 mm.
+     - A runner edited by the user must stay at least the minimum gap from its neighbours. Tight proposals are
+       reported as warnings.
+   The reduction train, the choke and the line path are calculated exactly as in Phase 1; with zero runners the
+   output is identical to Phase 1.
+
    LIMITATIONS (also shown in the app)
      - Geometry only. It says nothing about casting distance, line friction, rod action, guide weight or
        whether a guide model exists in the sizes proposed.
@@ -53,7 +73,8 @@
      - Guides are in one plane; spiral or offset guide trains are not modelled.
      - The line envelope is a straight cone; real coil behaviour depends on line, spool fill and technique.
      - Ring wall thickness and frame geometry are ignored.
-     - Spacing along the rod beyond the choke (run guides) is not designed in Phase 1.
+     - Running-guide positions are a provisional starting progression. They are not derived from blank
+       deflection, so they must be checked against the actual blank and a static-load test.
      - Nothing here has been physically validated. */
 (function(root,factory){
   const api=factory();
@@ -63,7 +84,7 @@
   'use strict';
 
   const MODEL_ID='line-cone-polyline';
-  const MODEL_VERSION=1;
+  const MODEL_VERSION=2;
 
   // key, label (used in messages), kind, min, max
   const FIELDS=[
@@ -81,6 +102,10 @@
     {key:'flareAngleDeg',label:'line flare half-angle',kind:'angle',min:0.2,max:8},
     {key:'settledLineMm',label:'settled line diameter',kind:'length',min:0.5,max:15},
     {key:'clearancePct',label:'ring clearance',kind:'percent',min:0,max:100},
+    // Phase 2. With runnerCount 0 the design is identical to Phase 1.
+    {key:'runnerCount',label:'running guide count',kind:'int',min:0,max:12},
+    {key:'runnerRatio',label:'running guide spacing ratio',kind:'ratio',min:0.5,max:1.5},
+    {key:'runnerMinGapMm',label:'minimum running guide gap',kind:'length',min:10,max:300},
   ];
   const FIELD_BY_KEY=FIELDS.reduce((map,field)=>{map[field.key]=field;return map;},{});
   const GUIDE_LIMITS={idMm:{min:1,max:80},heightMm:{min:0,max:200}};
@@ -103,6 +128,9 @@
     flareAngleDeg:1.5,
     settledLineMm:4,
     clearancePct:25,
+    runnerCount:4,
+    runnerRatio:0.85,
+    runnerMinGapMm:50,
   };
 
   const METHOD_STEPS=[
@@ -113,6 +141,7 @@
     'Fit rule: required ring ID = D(s) x (1 + clearance), plus twice the distance the stripper centre sits off the reel axis.',
     'Initial train: the stripper sits where the envelope just fits its ring. Required ring sizes then step down by a constant ratio to the settled-line ring, and each guide sits where the envelope equals its required size. The last reduction guide is at the choke.',
     'Heights: proposed on the line path. Edit any height, size or position and everything recalculates from your values.',
+    'Running guides: the span from the choke guide to the tip-top is divided into gaps that shrink by a fixed ratio toward the tip, and the last gap is never shorter than the minimum gap. This is an adjustable starting progression, not a formula for the right positions.',
   ];
   const ASSUMPTIONS=[
     'The flare half-angle, the settled line diameter and the ring clearance are modelling assumptions you can edit. They are not industry values.',
@@ -120,10 +149,11 @@
     'The blank is straight and unloaded, and all guides lie in one vertical plane.',
     'Ring wall thickness, frame shape and guide weight are ignored.',
     'Proposed ring sizes are computed minimums rounded up to 0.5 mm. They are not product specifications.',
+    'The running-guide spacing ratio and minimum gap are adjustable starting values, not industry values.',
   ];
   const LIMITATIONS=[
     'Geometry only: nothing here predicts casting distance, friction or rod performance.',
-    'Spacing of run guides beyond the choke is not designed in Phase 1.',
+    'Running-guide positions are provisional: check them against the real blank under load and a static-load test, and adjust them there.',
     'Not physically validated on a real rod.',
   ];
 
@@ -177,7 +207,7 @@
           ?`${f.degrees(field.min)} and ${f.degrees(field.max)}`
           :field.kind==='percent'
             ?`${field.min}% and ${field.max}%`
-            :field.kind==='int'
+            :field.kind==='int' || field.kind==='ratio'
               ?`${field.min} and ${field.max}`
               :`${f.length(field.min)} and ${f.length(field.max)}`;
         err(field.key,'range',`${cap(field.label)} must be between ${range}.`);
@@ -200,6 +230,24 @@
       err('reelHeightMm','spool-in-blank','The spool would overlap the blank. Increase the reel axis height or reduce the spool diameter.');
     }
     return errors;
+  }
+
+  // Gaps from the choke guide to the tip-top: a geometric progression (ratio q from one gap to the next toward
+  // the tip) that sums to the span, with the last gap raised to the minimum when the progression makes it shorter.
+  function planRunnerGaps(spanMm,count,ratio,minGapMm){
+    const n=count+1;
+    const weights=[];
+    for(let k=0;k<n;k+=1)weights.push(Math.pow(ratio,k));
+    const total=weights.reduce((a,b)=>a+b,0);
+    let gaps=weights.map((w)=>spanMm*w/total);
+    let tipGapRaised=false;
+    if(count>0 && gaps[n-1]<minGapMm && spanMm>minGapMm){
+      const restWeight=total-weights[n-1];
+      gaps=weights.slice(0,count).map((w)=>(spanMm-minGapMm)*w/restWeight);
+      gaps.push(minGapMm);
+      tipGapRaised=true;
+    }
+    return {gaps,tipGapRaised};
   }
 
   // Initial train. Returns {ok:false,errors} or {ok:true,model,guides:[{role,xMm,idMm,heightMm}],...}.
@@ -247,14 +295,27 @@
         xMm:xk,idMm:ceilHalf(target),heightMm:y1+(xk-x1)*dyc/dxc,targetIdMm:target,sMm:sk,
       });
     }
+    const chokeGuideX=guides[guides.length-1].xMm;
+    const plan=planRunnerGaps(v.rodLengthMm-chokeGuideX,v.runnerCount,v.runnerRatio,v.runnerMinGapMm);
+    let runnerX=chokeGuideX;
+    for(let k=0;k<v.runnerCount;k+=1){
+      runnerX+=plan.gaps[k];
+      const sk=s1+(runnerX-x1)/cosPsi;
+      const target=m.envelope(sk)*m.fit;
+      guides.push({role:'runner',xMm:runnerX,idMm:ceilHalf(target),heightMm:y1+(runnerX-x1)*dyc/dxc,targetIdMm:target,sMm:sk});
+    }
     guides.push({role:'tip-top',xMm:v.rodLengthMm,idMm:v.tipTopIdMm,heightMm:v.tipTopHeightMm,targetIdMm:v.tipTopIdMm,sMm:null});
-    return {ok:true,model:m,guides,ratio:rho,chainCompressed,stripperArcMm:s1,chokeXMm:chokeX,errors:[]};
+    return {ok:true,model:m,guides,ratio:rho,chainCompressed,stripperArcMm:s1,chokeXMm:chokeX,runnerGapsMm:plan.gaps,tipGapRaised:plan.tipGapRaised,errors:[]};
   }
 
-  function guideLabel(index,count){
+  // count is the total number of guides; runnerCount (default 0) is how many of them are running guides.
+  function guideLabel(index,count,runnerCount){
+    const runners=runnerCount||0;
     if(index===0)return 'Stripper';
     if(index===count-1)return 'Tip-top';
-    return index===count-2?`Guide ${index} (choke)`:`Guide ${index}`;
+    const chokeIndex=count-2-runners;
+    if(index>chokeIndex)return `Runner ${index-chokeIndex}`;
+    return index===chokeIndex?`Guide ${index} (choke)`:`Guide ${index}`;
   }
 
   // Full design: validation, proposal, user overrides, evaluation of the actual guides.
@@ -271,7 +332,7 @@
     if(!proposal.ok)return {ok:false,errors:proposal.errors,warnings:[]};
 
     const m=proposal.model;
-    const count=v.reductionCount+2;
+    const count=v.reductionCount+v.runnerCount+2;
     const overrides=Array.isArray(src.guides)?src.guides:[];
     const errors=[];
     const warnings=[];
@@ -280,7 +341,7 @@
 
     const guides=proposal.guides.map((proposed,index)=>{
       const o=overrides[index]&&typeof overrides[index]==='object'?overrides[index]:{};
-      const label=guideLabel(index,count);
+      const label=guideLabel(index,count,v.runnerCount);
       const role=proposed.role;
       const fixedPosition=role==='tip-top';
       const fixedId=role==='stripper' || role==='tip-top';
@@ -320,6 +381,21 @@
         err(`guide${i}.positionMm`,'guide-order',`${g.label} must sit closer to the tip than ${guides[i-1].label}.`);
       }
     });
+    // A guide the user placed next to a running guide must keep the minimum gap, so rings never overlap.
+    if(!errors.length){
+      for(let i=1;i<guides.length;i+=1){
+        const a=guides[i-1];
+        const b=guides[i];
+        if((a.role==='runner' || b.role==='runner') && (a.moved || b.moved) && b.xMm-a.xMm<v.runnerMinGapMm-1e-6){
+          const mover=b.moved?b:a;
+          const other=mover===b?a:b;
+          err(`guide${mover.index}.positionMm`,'runner-too-close',
+            other.role==='tip-top'
+              ?`${mover.label} must stay at least ${f.length(v.runnerMinGapMm)} from the tip-top.`
+              :`${a.label} and ${b.label} are too close. Keep running guides at least ${f.length(v.runnerMinGapMm)} apart.`);
+        }
+      }
+    }
     if(errors.length)return {ok:false,errors,warnings:[],suggested:proposal.guides};
 
     // Line path through the guide centres.
@@ -417,8 +493,22 @@
       }
     }
 
+    for(let i=1;i<guides.length;i+=1){
+      const a=guides[i-1];
+      const b=guides[i];
+      if((a.role==='runner' || b.role==='runner') && b.xMm-a.xMm<v.runnerMinGapMm-1e-6){
+        warn(`guide${i}.positionMm`,'runner-gap-tight',b.role==='tip-top'
+          ?`${a.label} is only ${f.length(b.xMm-a.xMm)} from the tip-top, closer than the ${f.length(v.runnerMinGapMm)} minimum gap.`
+          :`${b.label} is only ${f.length(b.xMm-a.xMm)} from ${a.label}, closer than the ${f.length(v.runnerMinGapMm)} minimum gap. Use fewer runners or a longer span.`);
+      }
+    }
+
     const reductionGuides=guides.filter((g)=>g.role==='reduction' || g.role==='choke');
-    const chokeGuide=guides[guides.length-2];
+    const runnerGuides=guides.filter((g)=>g.role==='runner');
+    const chokeGuide=guides.find((g)=>g.role==='choke');
+    const lastRunner=runnerGuides.length?runnerGuides[runnerGuides.length-1]:null;
+    const gapsToTipTop=[];
+    for(let i=guides.length-runnerGuides.length-2;i<guides.length-1;i+=1)gapsToTipTop.push(guides[i+1].xMm-guides[i].xMm);
     const deflections=guides.map((g)=>g.deflectionDeg).filter((d)=>d!==null);
     const summary={
       stripperFromTipMm:guides[0].fromTipMm,
@@ -430,6 +520,12 @@
       flareAngleDeg:v.flareAngleDeg,
       reductionRatio:proposal.ratio,
       reductionCount:reductionGuides.length,
+      runnerCount:runnerGuides.length,
+      lastRunnerFromTipMm:lastRunner?lastRunner.fromTipMm:null,
+      runnerSpanMm:v.rodLengthMm-chokeGuide.xMm,
+      runnerGapsMm:gapsToTipTop,
+      runnerMinGapMm:v.runnerMinGapMm,
+      runnerTipGapRaised:proposal.tipGapRaised,
       chokeGuideOffsetMm:chokeGuide.xMm-chokeX,
       axisOffsetMm,
       maxDeflectionDeg:deflections.length?Math.max(...deflections):0,
@@ -495,7 +591,11 @@
     const X=(x)=>px(geo.padL+(x-geo.x0)*geo.kx);
     const Y=(y)=>px(geo.padT+(y-geo.yTop)*geo.ky);
     const parts=[];
-    parts.push(`<svg class="guide-train-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${geo.W} ${geo.H}" width="${geo.W}" height="${geo.H}" data-gt-width="${geo.W}" data-gt-x0="${px(geo.x0)}" data-gt-span="${px(geo.span)}" data-gt-padl="${geo.padL}" data-gt-plotw="${geo.plotW}" data-gt-kx="${geo.kx}" role="img" aria-label="Side view of the guide train: ${design.guides.length-2} reduction guides between the stripper and the tip-top. Butt on the left, tip on the right. Vertical scale exaggerated.">`);
+    const runnerTotal=design.guides.filter((g)=>g.role==='runner').length;
+    const reductionTotal=design.guides.length-2-runnerTotal;
+    const RUNNER_COLOUR='#aeb9c2';
+    const trainSummary=runnerTotal?`${reductionTotal} reduction guides and ${runnerTotal} running guides`:`${reductionTotal} reduction guides`;
+    parts.push(`<svg class="guide-train-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${geo.W} ${geo.H}" width="${geo.W}" height="${geo.H}" data-gt-width="${geo.W}" data-gt-x0="${px(geo.x0)}" data-gt-span="${px(geo.span)}" data-gt-padl="${geo.padL}" data-gt-plotw="${geo.plotW}" data-gt-kx="${geo.kx}" role="img" aria-label="Side view of the guide train: ${trainSummary} between the stripper and the tip-top. Butt on the left, tip on the right. Vertical scale exaggerated.">`);
     parts.push('<title>Guide train side view (schematic, vertical scale exaggerated)</title>');
     parts.push(`<rect class="gt-bg" x="0.5" y="0.5" width="${geo.W-1}" height="${geo.H-1}" rx="10" fill="#101315" stroke="rgba(214,210,200,.16)"/>`);
 
@@ -524,12 +624,13 @@
       const ringH=px(g.idMm*geo.ky);
       const blankBottom=Y(g.blankRadiusMm);
       const warn=!g.fits || (g.ringTopClearanceMm!==null && g.ringTopClearanceMm<-1e-9);
-      const colour=g.index===selected?'#e0525f':(warn?'#e07b86':'#e7dfd1');
+      const isRunner=g.role==='runner';
+      const colour=g.index===selected?'#e0525f':(warn?'#e07b86':(isRunner?RUNNER_COLOUR:'#e7dfd1'));
       if(ringTop>blankBottom){
         parts.push(`<line class="gt-leg" data-guide="${g.index}" x1="${gx}" y1="${blankBottom}" x2="${gx}" y2="${ringTop}" stroke="${colour}" stroke-width="1.2"/>`);
       }
-      parts.push(`<rect class="gt-ring${warn?' gt-ring--warn':''}${g.index===selected?' gt-ring--selected':''}" data-guide="${g.index}" x="${px(gx-3)}" y="${ringTop}" width="6" height="${ringH}" rx="3" fill="rgba(16,19,21,.7)" stroke="${colour}" stroke-width="${g.index===selected?2:1.4}"/>`);
-      const mark=g.role==='stripper'?'S':(g.role==='tip-top'?'T':String(g.index));
+      parts.push(`<rect class="gt-ring${isRunner?' gt-ring--runner':''}${warn?' gt-ring--warn':''}${g.index===selected?' gt-ring--selected':''}" data-guide="${g.index}" x="${px(gx-3)}" y="${ringTop}" width="6" height="${ringH}" rx="3" fill="rgba(16,19,21,.7)" stroke="${colour}" stroke-width="${g.index===selected?2:1.4}"/>`);
+      const mark=g.role==='stripper'?'S':(g.role==='tip-top'?'T':(isRunner?`R${g.index-design.guides.findIndex((o)=>o.role==='runner')+1}`:String(g.index)));
       parts.push(`<text class="gt-guidelabel" data-guide="${g.index}" x="${gx}" y="${px(Y(g.heightMm+g.idMm/2)+12)}" text-anchor="middle" font-size="10" fill="${colour}">${mark}</text>`);
       if(g.moved){
         parts.push(`<path class="gt-proposed" data-guide="${g.index}" d="M${X(g.proposed.xMm)} ${px(blankBottom+4)} l-3 6 l6 0 z" fill="none" stroke="rgba(214,210,200,.6)" stroke-width="1"/>`);
@@ -575,6 +676,12 @@
         parts.push(`<text class="gt-tip" data-guide="${g.index}" x="${gx}" y="${px(bottomY+13+tipLanes[i]*10)}" text-anchor="middle" font-size="9" fill="rgba(231,225,213,.9)">${tipText[i].text}</text>`);
       }
     });
+    if(runnerTotal){
+      // Bottom row, right of the "From tip" label, where no ruler label can reach.
+      const lx=Math.round(geo.W/2-53);
+      const ly=px(geo.H-6);
+      parts.push(`<g class="gt-legend" font-size="9"><circle class="gt-legend-reduction" cx="${lx+2.5}" cy="${px(ly-3.2)}" r="2.6" fill="#e7dfd1"/><text x="${lx+8}" y="${ly}" fill="#e7dfd1">Reduction</text><circle class="gt-legend-runner" cx="${lx+68.5}" cy="${px(ly-3.2)}" r="2.6" fill="${RUNNER_COLOUR}"/><text x="${lx+74}" y="${ly}" fill="${RUNNER_COLOUR}">Runner</text></g>`);
+    }
     const exaggeration=geo.ky/geo.kx;
     parts.push(`<text class="gt-scale" x="${px(geo.W-8)}" y="8" text-anchor="end" font-size="9" fill="rgba(214,210,200,.6)">Vertical x${exaggeration>=10?Math.round(exaggeration):Math.round(exaggeration*10)/10}</text>`);
     parts.push('</svg>');
@@ -583,6 +690,6 @@
 
   return {
     MODEL_ID,MODEL_VERSION,FIELDS,FIELD_BY_KEY,GUIDE_LIMITS,DEFAULTS,METHOD_STEPS,ASSUMPTIONS,LIMITATIONS,DEFAULT_FMT,
-    bladeRadius,buildModel,proposeTrain,designGuideTrain,buildSideViewSvg,viewGeometry,viewXToMm,guideLabel,assignLanes,
+    bladeRadius,buildModel,planRunnerGaps,proposeTrain,designGuideTrain,buildSideViewSvg,viewGeometry,viewXToMm,guideLabel,assignLanes,
   };
 });

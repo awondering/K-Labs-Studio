@@ -341,7 +341,7 @@
                 <span>Workshop</span>
               </button>
               <h3>Guide Train Designer</h3>
-              <p>Geometric reduction train for a spinning rod. Example values &mdash; replace them with your own measurements.</p>
+              <p>Reduction train and running guides for a spinning rod. Example values &mdash; replace them with your own measurements.</p>
             </div>
 
             <div class="workshop-tool-fields workshop-tool-fields--two guide-train-inputs">
@@ -360,6 +360,15 @@
                   <button id="gtCountPlus" class="component-quantity__step" type="button" aria-label="More reduction guides">+</button>
                 </div>
               </div>
+              <div class="guide-train-count">
+                <span id="gtRunnerLabel">Running Guides</span>
+                <div class="component-quantity" role="group" aria-labelledby="gtRunnerLabel">
+                  <button id="gtRunnerMinus" class="component-quantity__step" type="button" aria-label="Fewer running guides">&minus;</button>
+                  <input id="gtRunnerCount" class="component-quantity__value" type="number" inputmode="numeric" min="0" max="12" step="1" aria-label="Number of running guides" />
+                  <button id="gtRunnerPlus" class="component-quantity__step" type="button" aria-label="More running guides">+</button>
+                </div>
+              </div>
+              <label><span>Runner Gap Ratio</span><input id="gtRunnerRatio" type="text" inputmode="decimal" autocomplete="off" title="Each runner gap is this fraction of the one before it, counting from the choke. Below 1 packs the runners closer toward the tip." aria-describedby="gtMessages" /></label>
             </div>
             <p id="gtAngleHint" class="workshop-tool-note">Heights are measured below the blank axis. Reel angle is positive when the reel axis points toward the blank on the way to the tip.</p>
 
@@ -376,6 +385,7 @@
                 <div><span>Line Cone Length</span><strong id="gtSumCone">&mdash;</strong></div>
                 <div><span>Stripper From Tip</span><strong id="gtSumStripper">&mdash;</strong></div>
                 <div><span>Ring Size Ratio</span><strong id="gtSumRatio">&mdash;</strong></div>
+                <div><span>Running Guides</span><strong id="gtSumRunners">&mdash;</strong></div>
                 <div><span>Closest Line To Blank</span><strong id="gtSumClearance">&mdash;</strong></div>
               </div>
               <div class="guide-train-guides-head">
@@ -393,6 +403,7 @@
                   <label><span>Flare Half-Angle (deg)</span><input id="gtFlareAngle" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
                   <label><span data-measurement-label="Settled Line">Settled Line</span><input id="gtSettledLine" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
                   <label><span>Ring Clearance (%)</span><input id="gtClearance" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+                  <label><span data-measurement-label="Minimum Runner Gap">Minimum Runner Gap</span><input id="gtRunnerMinGap" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
                 </div>
                 <div id="gtMethodBody" class="guide-train-method"></div>
               </div>
