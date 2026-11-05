@@ -754,10 +754,16 @@
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
-          <div id="workshopBuildSpecsBody" class="quote-grid quote-grid--two quote-section__body build-details">
-            <div class="quote-grid__full build-details__group"><h3>Build</h3></div>
+          <div id="workshopBuildSpecsBody" class="quote-grid quote-grid--two quote-section__body build-details" data-job-type="build">
+            <div class="quote-grid__full build-details__group"><h3 id="buildDetailsGroupTitle">Build</h3></div>
             <label><span>Estimated Completion</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
-            <label class="quote-grid__full"><span>Build Note &middot; Shown on Quote</span><textarea id="quoteNotes" rows="2" placeholder="Thread, trim or finish requests"></textarea></label>
+            <label class="quote-grid__full"><span id="quoteNotesLabel">Build Note &middot; Shown on Quote</span><textarea id="quoteNotes" rows="2" placeholder="Thread, trim or finish requests"></textarea></label>
+            <label id="quoteRodIdentificationField" class="quote-grid__full build-details__repair-only" hidden><span>Rod Identification &middot; Optional</span><input id="quoteSpecRodIdentification" type="text" autocomplete="off" placeholder="Make, model or serial number" /></label>
+            <button id="buildRodSpecsToggle" class="build-details__rod-specs-toggle quote-grid__full" type="button" aria-expanded="false" aria-controls="buildRodSpecsPartA buildRodSpecsPartB" hidden>
+              <span class="build-details__rod-specs-copy"><span>Rod Specifications</span><small id="buildRodSpecsSummary">Optional</small></span>
+              <b class="quote-section__chevron" aria-hidden="true">▾</b>
+            </button>
+            <div id="buildRodSpecsPartA" class="build-details__rod-specs">
             <div class="quote-grid__full build-details__group"><h3>Rod</h3></div>
             <div class="quote-grid__full build-details__finished-length">
               <label><span>Finished Rod Length <em id="quoteSpecFinishedRodLengthUnit" class="build-details__unit">mm</em></span><input id="quoteSpecFinishedRodLength" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 3962.4" aria-describedby="quoteSpecFinishedRodLengthNote" /></label>
@@ -773,7 +779,9 @@
               <label><span>Lower Grip</span><input id="quoteSpecGripBelowReelSeatLength" type="text" placeholder="e.g. 90 mm" /><small class="build-details__grip-note">Grip below reel seat</small></label>
               <label><span>Fore Grip</span><input id="quoteSpecForeGripLength" type="text" placeholder="e.g. 70 mm" /></label>
             </div>
-            <label class="quote-grid__full"><span>Workshop Notes &middot; Private</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Internal workshop notes"></textarea></label>
+            </div>
+            <label id="quoteWorkshopNotesField" class="quote-grid__full"><span>Workshop Notes &middot; Private</span><textarea id="quoteSpecBuilderNotes" rows="3" placeholder="Internal workshop notes"></textarea></label>
+            <div id="buildRodSpecsPartB" class="build-details__rod-specs">
             <div class="quote-grid__full build-details__group">
               <h3>Guide Setup</h3>
               <button id="editGuideLayoutBtn" class="guide-specification__edit" type="button">Edit Guide Layout <span aria-hidden="true">&#x203a;</span></button>
@@ -795,6 +803,7 @@
               <h3>Rod Build Layout</h3>
             </div>
             <div id="rodBuildLayout" class="quote-grid__full rod-layout" aria-label="Rod Build Layout, generated from Build Details, components and Guide Setup"></div>
+            </div>
           </div>
         </article>
 

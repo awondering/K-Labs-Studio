@@ -22,6 +22,7 @@ function harness(){
   const trigger={
     getAttribute:name=>attributes[name],
     setAttribute(name,value){attributes[name]=value;},
+    getBoundingClientRect:()=>({top:120}),
     addEventListener(name,handler){listeners[name]=handler;},
     closest:()=>section,
   };
@@ -41,7 +42,8 @@ function harness(){
   const c=vm.createContext({
     $:id=>id==='workshopComponentsBody'?body:id==='addComponentBtn'?add:null,
     document:{querySelectorAll:()=>[trigger],activeElement:input},
-    window:{setTimeout:()=>1,clearTimeout(){}},
+    window:{setTimeout:()=>1,clearTimeout(){},scrollY:0,scrollTo(){}},
+    workshopTopUiOffset:()=>0,
     workshopSectionExpandTimers:new Map(),
     scrollWorkshopSectionIntoView(){},
     quote:{components:[record]},
@@ -57,7 +59,7 @@ function harness(){
   const registry=source.match(/const WORKSHOP_COLLAPSIBLE_SECTION_IDS=\[[^\n]+;/);
   assert.ok(registry);
   vm.runInContext(registry[0],c);
-  for(const name of ['setWorkshopSectionCollapsed','animateWorkshopSectionBody','expandWorkshopCollapsibleSection','bindWorkshopCollapsibleSections']){
+  for(const name of ['scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setWorkshopSectionCollapsed','animateWorkshopSectionBody','expandWorkshopCollapsibleSection','bindWorkshopCollapsibleSections']){
     vm.runInContext(functionSource(name),c);
   }
   c.bindWorkshopCollapsibleSections();

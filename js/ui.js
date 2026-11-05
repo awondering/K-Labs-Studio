@@ -101,7 +101,9 @@ const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecGripBelowReelSeatLength',key:'gripBelowReelSeatLength',label:'Grip Below Reel Seat Length',visibility:'customer'},
   {id:'quoteSpecForeGripLength',key:'foreGripLength',label:'Fore Grip Length',visibility:'customer'},
   {id:'quoteSpecHookKeeperPosition',key:'hookKeeperPosition',label:'Hook Keeper Position',visibility:'stored'},
-  {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Workshop Notes',visibility:'workshop'}
+  {id:'quoteSpecBuilderNotes',key:'builderNotes',label:'Workshop Notes',visibility:'workshop'},
+  // Repair / Refurbishment only: the customer's own rod, shown on a repair quote and never on a new build.
+  {id:'quoteSpecRodIdentification',key:'rodIdentification',label:'Rod Identification',visibility:'customer'}
 ];
 let studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
 let businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
@@ -4491,7 +4493,8 @@ function customerRodIdentity(){
 function customerSpecificationRows(){
   const rows=[];
   appendCustomerSpecRow(rows,'Grip Feature',customerGripFeatureSummary());
-  BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer' && !['rearGripLength','gripBelowReelSeatLength','foreGripLength'].includes(field.key)).forEach((field)=>{
+  const repairJob=normalizeJobType(quote&&quote.jobType)==='repair';
+  BUILD_SPEC_FIELDS.filter((field)=>field.visibility==='customer' && !['rearGripLength','gripBelowReelSeatLength','foreGripLength'].includes(field.key) && (field.key!=='rodIdentification' || repairJob)).forEach((field)=>{
     appendCustomerSpecRow(rows,field.label,quote.buildSpecifications&&quote.buildSpecifications[field.key]);
   });
   return rows;
@@ -4550,7 +4553,8 @@ function customerBuildNotesText(){
 }
 function customerBuildNotesMarkup(){
   const notesText=customerBuildNotesText();
-  return notesText?`<div class="view-quote__notes"><span>Build Notes</span><p>${escapeHtml(notesText)}</p></div>`:'';
+  const heading=customerDocumentLabels().jobType==='repair'?'Repair Description':'Build Notes';
+  return notesText?`<div class="view-quote__notes"><span>${heading}</span><p>${escapeHtml(notesText)}</p></div>`:'';
 }
 function workshopSpecificationRows(){
   const rows=customerSpecificationRows();
@@ -8613,14 +8617,59 @@ function quoteHasMeaningfulDraft(currentQuote){
   });
   return hasIdentity || hasCountryOverride || hasBuildSpecs || hasBlank || hasCosts || hasComponentData;
 }
-function setWorkshopSectionCollapsed(sectionId,collapsed){
+// Safari has no scroll anchoring, so anything that changes height above what the user is reading (a section
+// closing, header buttons appearing) moves the page under them. These helpers keep a chosen element at the same
+// place on screen: measure it, make the change, then scroll by however far it moved. Instant, never smooth.
+function scrollWorkshopWindowTo(top){
+  window.scrollTo({top:Math.max(0,top),left:0,behavior:'auto'});
+}
+function holdWorkshopScrollAnchor(anchorEl,anchorTop){
+  if(!anchorEl || !anchorEl.isConnected || !Number.isFinite(anchorTop))return;
+  const delta=anchorEl.getBoundingClientRect().top-anchorTop;
+  if(Math.abs(delta)<0.5)return;
+  scrollWorkshopWindowTo(window.scrollY+delta);
+}
+function workshopVisibleAnchor(){
+  // The header is excluded: it is the part that changes height, so it can never be the fixed point.
+  const nodes=document.querySelectorAll('#workshopScreen #quoteJobTypeGroup, #workshopScreen .quote-section');
+  for(const node of nodes){
+    if(node.hidden)continue;
+    const rect=node.getBoundingClientRect();
+    if(rect.height>0 && rect.bottom>1)return node;
+  }
+  return null;
+}
+// Runs a layout-changing update while keeping anchorEl (default: the first builder block on screen) in place.
+function runWithWorkshopScrollAnchor(update,anchorEl){
+  const anchor=anchorEl || (window.scrollY>0?workshopVisibleAnchor():null);
+  const anchorTop=anchor?anchor.getBoundingClientRect().top:NaN;
+  const result=update();
+  holdWorkshopScrollAnchor(anchor,anchorTop);
+  return result;
+}
+function setWorkshopSectionCollapsed(sectionId,collapsed,options){
   const body=$(sectionId);
   if(!body)return;
   const section=body.closest('.quote-section--collapsible');
   if(!section)return;
+  const instant=!!(options&&options.instant);
+  if(instant){
+    // No height animation: the layout is final in the same frame, so the scroll position can be corrected exactly.
+    if(workshopSectionExpandTimers.has(body)){
+      window.clearTimeout(workshopSectionExpandTimers.get(body));
+      workshopSectionExpandTimers.delete(body);
+    }
+    body.style.maxHeight='';
+    body.style.transition='none';
+  }
   section.classList.toggle('quote-section--collapsed',!!collapsed);
   const trigger=section.querySelector('[data-collapsible-trigger]');
   if(trigger){trigger.setAttribute('aria-expanded',String(!collapsed));}
+  if(instant){
+    void body.offsetHeight;
+    window.setTimeout(()=>{body.style.transition='';},60);
+    return;
+  }
   animateWorkshopSectionBody(body,!!collapsed);
 }
 function animateWorkshopSectionBody(body,collapsed){
@@ -8649,10 +8698,10 @@ function collapseWorkshopSections(){
     setWorkshopSectionCollapsed(id,true);
   });
 }
-function expandWorkshopCollapsibleSection(bodyId){
+function expandWorkshopCollapsibleSection(bodyId,options){
   if(!WORKSHOP_COLLAPSIBLE_SECTION_IDS.includes(bodyId))return;
   WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
-    setWorkshopSectionCollapsed(id,id!==bodyId);
+    setWorkshopSectionCollapsed(id,id!==bodyId,options);
   });
 }
 function workshopHasCustomerData(){
@@ -8678,16 +8727,15 @@ function nextWorkshopSectionId(){
 }
 function focusWorkshopSection(bodyId,options){
   const targetId=WORKSHOP_COLLAPSIBLE_SECTION_IDS.includes(bodyId)?bodyId:nextWorkshopSectionId();
-  WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
-    setWorkshopSectionCollapsed(id,id!==targetId);
-  });
   const settings={scroll:true,...(options||{})};
+  // Sections settle in the same frame (no height animation), so the scroll target is measured against the final layout.
+  WORKSHOP_COLLAPSIBLE_SECTION_IDS.forEach((id)=>{
+    setWorkshopSectionCollapsed(id,id!==targetId,{instant:true});
+  });
   if(settings.scroll===false)return;
   const section=$(targetId);
   const panel=section&&section.closest('.quote-section--collapsible');
-  if(panel){
-    window.setTimeout(()=>scrollWorkshopSectionIntoView(panel),36);
-  }
+  if(panel)scrollWorkshopSectionIntoView(panel,{instant:true});
 }
 function beginFreshQuote(options){
   const settings={navigate:true,...(options||{})};
@@ -11186,6 +11234,11 @@ function persistComponentDraftCleanup(changed){
   markQuoteDirty();
 }
 function buildSpecSummaryData(){
+  if(normalizeJobType(quote&&quote.jobType)==='repair'){
+    const dueRaw=specificationValue(quote.estimatedCompletionDate);
+    const rod=specificationValue(quote.buildSpecifications&&quote.buildSpecifications.rodIdentification);
+    return ['Repair / Refurbishment',dueRaw?`Due ${formatDateDisplay(dueRaw,{includeTime:false})}`:'',rod].filter(Boolean).join(' \u00B7 ');
+  }
   const blankComponent=firstSavedComponentByCategory('blank')||firstComponentByCategory('blank');
   const blankName=specificationValue(blankComponent&&blankComponent.description)
     ||specificationValue(blankComponent&&blankComponent.blankName)
@@ -11202,6 +11255,7 @@ function buildSpecSummaryData(){
   return parts.length?parts.join(' · '):'Add build details';
 }
 function updateBuildSpecSummary(){
+  syncRodSpecsToggleSummary();
   const textEl=$('workshopBuildSpecsSummaryText');
   if(!textEl)return;
   textEl.textContent=buildSpecSummaryData();
@@ -13496,7 +13550,12 @@ function updateWorkshopBuildActionsUi(){
   }
 }
 // Compact at-a-glance strip for an existing build: who/what it is, active/complete, and due date, without opening any section.
+// The header changes height here (entry buttons, Return button, overview line) once a build is saved, which sits
+// above whatever the user is reading, so the visible content is held in place.
 function updateWorkshopBuildOverview(){
+  runWithWorkshopScrollAnchor(applyWorkshopBuildOverview);
+}
+function applyWorkshopBuildOverview(){
   const titleEl=$('quoteBuilderTitle');
   const overviewEl=$('quoteBuilderOverview');
   const customerName=specificationValue(quote&&quote.customerName);
@@ -14279,7 +14338,7 @@ function customerEmailLines(){
     lines.push('', docLabels.partsHeading, ...includedParts.map((part)=>`- ${part}`));
   }
   const buildNotes=customerBuildNotesText();
-  if(buildNotes)lines.push('', 'Build Notes', ...buildNotes.split(/\r\n|\r|\n/));
+  if(buildNotes)lines.push('', isRepair?'Repair Description':'Build Notes', ...buildNotes.split(/\r\n|\r|\n/));
   const fulfilment=customerFulfilmentSection();
   if(fulfilment){
     lines.push('', fulfilment.heading);
@@ -14656,20 +14715,62 @@ function setQuoteFulfilmentMethod(value){
   saveQuoteCurrent();
   markQuoteDirty();
 }
+// Repair / Refurbishment shows a short form; the rod measurements sit in an optional collapsed section. This is
+// presentation only: every field keeps its value whichever job type is showing, so switching never loses data.
+let workshopRodSpecsOpen=false;
+function rodSpecsEnteredCount(){
+  const specs=quote&&quote.buildSpecifications&&typeof quote.buildSpecifications==='object'?quote.buildSpecifications:{};
+  let count=['reelSeatPosition','rearGripLength','gripBelowReelSeatLength','foreGripLength'].filter((key)=>specificationValue(specs[key])).length;
+  const layout=specs.layout&&typeof specs.layout==='object'?specs.layout:null;
+  if(layout && numberOrZero(layout.rodLengthMm)>0)count+=1;
+  return count;
+}
+function syncRodSpecsToggleSummary(){
+  const summary=$('buildRodSpecsSummary');
+  if(!summary)return;
+  const count=rodSpecsEnteredCount();
+  summary.textContent=count?`${count} entered`:'Optional';
+}
 function syncJobTypeSelector(){
   const jobType=normalizeJobType(quote&&quote.jobType);
+  const repair=jobType==='repair';
   document.querySelectorAll('#quoteJobTypeGroup [data-job-type]').forEach((button)=>{
     button.setAttribute('aria-pressed',String(button.getAttribute('data-job-type')===jobType));
   });
+  const body=$('workshopBuildSpecsBody');
+  if(body){
+    body.setAttribute('data-job-type',jobType);
+    body.setAttribute('data-rod-specs-open',String(repair && workshopRodSpecsOpen));
+  }
+  const setText=(id,text)=>{const el=$(id);if(el)el.textContent=text;};
+  setText('buildDetailsGroupTitle',repair?'Repair':'Build');
+  setText('quoteNotesLabel',repair?'Repair Description \u00B7 Shown on Quote':'Build Note \u00B7 Shown on Quote');
+  const notes=$('quoteNotes');
+  if(notes)notes.setAttribute('placeholder',repair?'What needs repairing or refurbishing':'Thread, trim or finish requests');
+  const rodField=$('quoteRodIdentificationField');
+  if(rodField)rodField.hidden=!repair;
+  const toggle=$('buildRodSpecsToggle');
+  if(toggle){
+    toggle.hidden=!repair;
+    toggle.setAttribute('aria-expanded',String(repair && workshopRodSpecsOpen));
+  }
+  updateBuildSpecSummary();
 }
 function setQuoteJobType(value){
   const next=normalizeJobType(value);
   if(normalizeJobType(quote.jobType)===next && quote.jobType===next){syncJobTypeSelector();return;}
-  quote.jobType=next;
-  syncJobTypeSelector();
-  updateWorkshopBuildOverview();
-  saveQuoteCurrent();
-  markQuoteDirty();
+  // The Job Type buttons stay put on screen while the form below them changes.
+  runWithWorkshopScrollAnchor(()=>{
+    quote.jobType=next;
+    syncJobTypeSelector();
+    updateWorkshopBuildOverview();
+    saveQuoteCurrent();
+    markQuoteDirty();
+  },$('quoteJobTypeGroup'));
+}
+function toggleRodSpecsSection(){
+  workshopRodSpecsOpen=!workshopRodSpecsOpen;
+  runWithWorkshopScrollAnchor(syncJobTypeSelector,$('buildRodSpecsToggle'));
 }
 function workshopInputMap(){
   return[
@@ -14841,6 +14942,7 @@ function bindBuildSpecificationInputs(){
       saveQuoteCurrent();
       markQuoteDirty();
       renderRodBuildLayout();
+      updateBuildSpecSummary();
     };
     el.addEventListener('input',onSpecUpdate);
     el.addEventListener('change',onSpecUpdate);
@@ -15288,9 +15390,9 @@ function workshopTopUiOffset(){
   });
   return maxBottom;
 }
-function scrollWorkshopSectionIntoView(section){
+function scrollWorkshopSectionIntoView(section,options){
   if(!section)return;
-  const reduceMotion=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduceMotion=(options&&options.instant) || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const topGap=12;
   const uiOffset=workshopTopUiOffset();
   const targetTop=window.scrollY+section.getBoundingClientRect().top-uiOffset-topGap;
@@ -15380,12 +15482,15 @@ function bindWorkshopCollapsibleSections(){
       const bodyId=trigger.getAttribute('aria-controls')||'';
       const wasCollapsed=section.classList.contains('quote-section--collapsed');
       if(!bodyId)return;
-      if(wasCollapsed){
-        expandWorkshopCollapsibleSection(bodyId);
-        window.setTimeout(()=>scrollWorkshopSectionIntoView(section),36);
-        return;
-      }
-      setWorkshopSectionCollapsed(bodyId,true);
+      // The tapped header stays exactly where the finger is: sections above it closing, or this one opening,
+      // never move the page. If it would end up under the sticky UI it is brought just below it.
+      runWithWorkshopScrollAnchor(()=>{
+        if(wasCollapsed)expandWorkshopCollapsibleSection(bodyId,{instant:true});
+        else setWorkshopSectionCollapsed(bodyId,true,{instant:true});
+      },trigger);
+      const clearTop=workshopTopUiOffset()+12;
+      const headerTop=trigger.getBoundingClientRect().top;
+      if(wasCollapsed && headerTop<clearTop)scrollWorkshopWindowTo(window.scrollY+headerTop-clearTop);
     });
   });
 }
@@ -15478,6 +15583,11 @@ function bindWorkshopQuoteBuilder(){
       const button=event.target.closest('[data-fulfilment-method]');
       if(button)setQuoteFulfilmentMethod(button.getAttribute('data-fulfilment-method'));
     });
+  }
+  const rodSpecsToggle=$('buildRodSpecsToggle');
+  if(rodSpecsToggle && rodSpecsToggle.getAttribute('data-rod-specs-bound')!=='true'){
+    rodSpecsToggle.setAttribute('data-rod-specs-bound','true');
+    rodSpecsToggle.addEventListener('click',toggleRodSpecsSection);
   }
   const jobTypeGroup=$('quoteJobTypeGroup');
   if(jobTypeGroup && jobTypeGroup.getAttribute('data-job-type-bound')!=='true'){

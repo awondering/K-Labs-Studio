@@ -11964,6 +11964,36 @@ body.klabs-auth-resolving::after {
 #workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 #workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}
 
+/* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
+   For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
+#workshopScreen .build-details__rod-specs{display:contents}
+#workshopScreen .build-details__rod-specs > .build-details__group:first-child{margin-top:6px;padding-top:8px;border-top:1px solid rgba(214,210,200,.1)}
+#workshopScreen .build-details__repair-only[hidden],
+#workshopScreen .build-details__rod-specs-toggle[hidden]{display:none}
+#workshopScreen .build-details__rod-specs-toggle{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;padding:0 12px;border-radius:11px;
+  border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#d7d0c3;font:inherit;text-align:left;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;
+}
+#workshopScreen .build-details__rod-specs-copy{display:grid;gap:2px;min-width:0}
+#workshopScreen .build-details__rod-specs-copy > span{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+#workshopScreen .build-details__rod-specs-copy small{font-size:10px;color:rgba(214,210,200,.68)}
+#workshopScreen .build-details__rod-specs-toggle .quote-section__chevron{transform:rotate(-90deg)}
+#workshopScreen .build-details__rod-specs-toggle[aria-expanded="true"] .quote-section__chevron{transform:none}
+#workshopScreen .build-details[data-job-type="repair"] > *{order:1}
+#workshopScreen .build-details[data-job-type="repair"] > .build-details__group:first-child{order:0}
+#workshopScreen .build-details[data-job-type="repair"] > #quoteWorkshopNotesField{order:2}
+#workshopScreen .build-details[data-job-type="repair"] > #buildRodSpecsToggle{order:3}
+#workshopScreen .build-details[data-job-type="repair"] > #buildRodSpecsPartA{order:4}
+#workshopScreen .build-details[data-job-type="repair"] > #buildRodSpecsPartB{order:5}
+#workshopScreen .build-details[data-job-type="repair"] > .build-details__rod-specs{display:none}
+#workshopScreen .build-details[data-job-type="repair"][data-rod-specs-open="true"] > .build-details__rod-specs{
+  display:grid;grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;align-items:end;min-width:0;
+}
+@media (max-width:420px){
+  #workshopScreen .build-details[data-job-type="repair"][data-rod-specs-open="true"] > .build-details__rod-specs{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 /* Guide Train Designer (Workshop): every rule is scoped to its own card so other Workshop tools are unaffected. */
 #workshopToolGuideTrain{
   gap:12px;

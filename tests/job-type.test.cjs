@@ -37,9 +37,12 @@ function ctx(status,jobType){
     updateWorkshopBuildOverview:()=>{},
     saveQuoteCurrent:()=>{},
     document:{querySelectorAll:()=>[]},
+    $:()=>null,
+    window:{scrollY:0,scrollTo(){}},
+    updateBuildSpecSummary:()=>{},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
   return c;
 }
 
@@ -151,7 +154,7 @@ test('job type labels, legacy default, header and list display',()=>{
   assert.equal(c.jobTypeLabel('build'),'New Build');
   assert.equal(c.jobTypeLabel(undefined),'New Build');
   assert.match(fn('savedBuildRowMarkup'),/jobTypeLabel\(record\.jobType\)/);
-  assert.match(fn('updateWorkshopBuildOverview'),/jobTypeLabel\(quote&&quote\.jobType\)/);
+  assert.match(fn('applyWorkshopBuildOverview'),/jobTypeLabel\(quote&&quote\.jobType\)/);
   assert.match(html,/id="quoteBuilderOverviewJobType"/);
 });
 
