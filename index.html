@@ -710,14 +710,6 @@
           </div>
         </article>
 
-        <div id="quoteJobTypeGroup" class="quote-job-type" role="group" aria-label="Job Type">
-          <span class="quote-job-type__label">Job Type</span>
-          <div class="quote-job-type__options">
-            <button type="button" class="quote-job-type__option" data-job-type="build" aria-pressed="true">New Build</button>
-            <button type="button" class="quote-job-type__option" data-job-type="repair" aria-pressed="false">Repair / Refurbishment</button>
-          </div>
-        </div>
-
         <datalist id="quoteCountryList">
           <option value="New Zealand"></option>
           <option value="Australia"></option>
@@ -755,7 +747,14 @@
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
           <div id="workshopBuildSpecsBody" class="quote-grid quote-grid--two quote-section__body build-details" data-job-type="build">
-            <div class="quote-grid__full build-details__group"><h3 id="buildDetailsGroupTitle">Build</h3></div>
+            <div id="quoteJobTypeGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Job Type">
+              <span class="quote-job-type__label">Job Type</span>
+              <div class="quote-job-type__options">
+                <button type="button" class="quote-job-type__option" data-job-type="build" aria-pressed="true">New Build</button>
+                <button type="button" class="quote-job-type__option" data-job-type="repair" aria-pressed="false">Repair / Refurbishment</button>
+              </div>
+            </div>
+            <div id="buildDetailsGroupRow" class="quote-grid__full build-details__group"><h3 id="buildDetailsGroupTitle">Build</h3></div>
             <label><span>Estimated Completion</span><input id="quoteEstimatedCompletionDate" type="date" /></label>
             <label class="quote-grid__full"><span id="quoteNotesLabel">Build Note &middot; Shown on Quote</span><textarea id="quoteNotes" rows="2" placeholder="Thread, trim or finish requests"></textarea></label>
             <label id="quoteRodIdentificationField" class="quote-grid__full build-details__repair-only" hidden><span>Rod Identification &middot; Optional</span><input id="quoteSpecRodIdentification" type="text" autocomplete="off" placeholder="Make, model or serial number" /></label>

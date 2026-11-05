@@ -11981,7 +11981,8 @@ body.klabs-auth-resolving::after {
 #workshopScreen .build-details__rod-specs-toggle .quote-section__chevron{transform:rotate(-90deg)}
 #workshopScreen .build-details__rod-specs-toggle[aria-expanded="true"] .quote-section__chevron{transform:none}
 #workshopScreen .build-details[data-job-type="repair"] > *{order:1}
-#workshopScreen .build-details[data-job-type="repair"] > .build-details__group:first-child{order:0}
+#workshopScreen .build-details[data-job-type="repair"] > #quoteJobTypeGroup,
+#workshopScreen .build-details[data-job-type="repair"] > #buildDetailsGroupRow{order:0}
 #workshopScreen .build-details[data-job-type="repair"] > #quoteWorkshopNotesField{order:2}
 #workshopScreen .build-details[data-job-type="repair"] > #buildRodSpecsToggle{order:3}
 #workshopScreen .build-details[data-job-type="repair"] > #buildRodSpecsPartA{order:4}

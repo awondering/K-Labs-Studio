@@ -20,8 +20,8 @@ const PRIVATE='PRIVATE-workshop-only-remark';
 
 /* ---------- the form ---------- */
 
-test('markup: the job type selector stays above Build Details; Build Details keeps every existing field, in the same order',()=>{
-  assert.ok(html.indexOf('id="quoteJobTypeGroup"')<html.indexOf('id="workshopSpecsSection"'));
+test('markup: the job type selector is inside Build Details, after Customer Details; every existing field keeps its order',()=>{
+  assert.ok(html.indexOf('id="workshopSpecsSection"')<html.indexOf('id="quoteJobTypeGroup"'));
   assert.ok(html.indexOf('id="workshopCustomerSection"')<html.indexOf('id="quoteJobTypeGroup"'));
   const order=['quoteEstimatedCompletionDate','quoteNotes','quoteSpecFinishedRodLength','quoteSpecReelSeatPosition','quoteSpecReelSeatRef','quoteSpecRearGripLength','quoteSpecGripBelowReelSeatLength','quoteSpecForeGripLength','quoteSpecBuilderNotes','editGuideLayoutBtn','guideSpecCount','rodBuildLayout'];
   let at=-1;
@@ -338,4 +338,70 @@ test('only Build Details, its job type wiring and the shared scroll helpers chan
     assert.doesNotMatch(fn(name),/runWithWorkshopScrollAnchor|rodIdentification|jobType\s*=/,name);
   }
   assert.doesNotMatch(source.slice(source.indexOf('function depositMaths('),source.indexOf('function depositMaths(')+3000),/RodIdentification/);
+});
+
+/* ---------- Job Type visibility (Mac Safari regression) ---------- */
+
+test('REGRESSION: the Job Type selector is the first thing inside the Build Details body, so it opens with the section instead of sitting above its header',()=>{
+  // The failure: the selector was a separate block ABOVE the Build Details header. Opening Build Details keeps the tapped
+  // header in place on screen, so with the header near the top the selector was already scrolled out of sight above it.
+  const article=html.slice(html.indexOf('<article id="workshopSpecsSection"'),html.indexOf('<article id="workshopComponentsSection"'));
+  const header=article.indexOf('data-collapsible-trigger');
+  const body=article.indexOf('id="workshopBuildSpecsBody"');
+  const selector=article.indexOf('id="quoteJobTypeGroup"');
+  const firstField=article.indexOf('id="quoteEstimatedCompletionDate"');
+  assert.ok(header>=0 && body>header && selector>body && firstField>selector,'header, then body, then Job Type, then the fields');
+  assert.equal((html.match(/id="quoteJobTypeGroup"/g)||[]).length,1,'one selector, nothing left outside the section');
+  assert.equal(html.slice(0,html.indexOf('<article id="workshopSpecsSection"')).includes('quoteJobTypeGroup'),false,'nothing above Build Details');
+  // directly inside the grid body, as its first element
+  const afterBody=article.slice(article.indexOf('>',body)+1).trimStart();
+  assert.ok(afterBody.startsWith('<div id="quoteJobTypeGroup"'),'first element of the body');
+  assert.match(article,/data-job-type="build" aria-pressed="true">New Build<[\s\S]*data-job-type="repair" aria-pressed="false">Repair \/ Refurbishment</);
+  assert.match(article,/<div id="quoteJobTypeGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Job Type">/);
+});
+
+test('REGRESSION: the selector sits first in both layouts and never moves when the job type changes',()=>{
+  const start=css.indexOf('/* Build Details, Repair / Refurbishment:');
+  const block=css.slice(start,css.indexOf('/* Guide Train Designer (Workshop)',start));
+  assert.match(block,/\[data-job-type="repair"\] > #quoteJobTypeGroup,\s*#workshopScreen \.build-details\[data-job-type="repair"\] > #buildDetailsGroupRow\{order:0\}/,'Job Type and its heading keep the top in the repair layout');
+  assert.match(block,/\[data-job-type="repair"\] > \*\{order:1\}/);
+  // nothing hides, collapses or reorders the selector itself
+  assert.doesNotMatch(block,/#quoteJobTypeGroup\s*\{[^}]*(display:none|order:[1-9])/);
+  assert.match(css,/#workshopScreen \.quote-job-type__option\{min-height:44px/,'touch targets stay 44px');
+  // switching only ever rewrites data-job-type on the body; the selector is not rebuilt or relocated
+  const sync=fn('syncJobTypeSelector');
+  assert.doesNotMatch(sync,/quoteJobTypeGroup[^;]*(remove|append|insert|hidden)/);
+  assert.match(fn('setQuoteJobType'),/\},\$\('quoteJobTypeGroup'\)\)/,'the buttons stay at the same place on screen while the form below changes');
+});
+
+test('REGRESSION: opening Build Details with its header held at the top of the screen leaves the Job Type buttons on screen',()=>{
+  // Geometry of the failing interaction, using the real click handler. The header is held where it was tapped (59px from the
+  // top, as in the Safari report); the selector is below the header, so it can only be visible.
+  const classes=new Set(['quote-section--collapsed']);
+  const attrs={'aria-controls':'workshopBuildSpecsBody','aria-expanded':'false'};
+  const listeners={};
+  let docTop=59;           // distance of the header from the top of the screen
+  let scrollY=300;
+  const sectionBody={style:{},offsetHeight:900,closest:()=>section};
+  const trigger={getAttribute:(n)=>attrs[n],setAttribute(n,v){attrs[n]=v;},addEventListener(n,f){listeners[n]=f;},closest:()=>section,
+    getBoundingClientRect:()=>({top:docTop-(scrollY-300)})};
+  const section={classList:{contains:(n)=>classes.has(n),toggle(n,on){if(on)classes.add(n);else classes.delete(n);}},querySelector:()=>trigger};
+  const selectorOffsetBelowHeader=44;          // header height: the selector is the first row of the opened body
+  const selector={getBoundingClientRect:()=>({top:docTop-(scrollY-300)+selectorOffsetBelowHeader})};
+  const calls=[];
+  const c=vm.createContext({
+    $:(id)=>id==='workshopBuildSpecsBody'?sectionBody:null,
+    document:{querySelectorAll:()=>[trigger],activeElement:null},
+    window:{setTimeout:()=>1,clearTimeout(){},get scrollY(){return scrollY;},scrollTo(o){calls.push(o);scrollY=o.top;}},
+    workshopSectionExpandTimers:new Map(),workshopTopUiOffset:()=>0,
+  });
+  vm.runInContext(source.match(/const WORKSHOP_COLLAPSIBLE_SECTION_IDS=\[[^\n]+;/)[0],c);
+  vm.runInContext(['scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setWorkshopSectionCollapsed','animateWorkshopSectionBody','expandWorkshopCollapsibleSection','bindWorkshopCollapsibleSections'].map(fn).join('\n'),c);
+  c.bindWorkshopCollapsibleSections();
+  listeners.click();
+  assert.equal(attrs['aria-expanded'],'true');
+  assert.ok(trigger.getBoundingClientRect().top>=0,'the header is on screen');
+  assert.ok(selector.getBoundingClientRect().top>=trigger.getBoundingClientRect().top,'the Job Type buttons are below the header, never above it');
+  assert.ok(selector.getBoundingClientRect().top>=0,'and on screen');
+  assert.equal(calls.filter((o)=>o.behavior!=='auto').length,0,'no smooth scrolling');
 });
