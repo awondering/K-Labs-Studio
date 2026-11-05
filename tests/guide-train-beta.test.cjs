@@ -56,7 +56,7 @@ test('publication is limited to the Guide Train Designer: Guide Spacing, other t
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache is bumped exactly once from the production baseline (build148-v186 -> v187)',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v187';/);
+test('service worker cache is bumped exactly once from the production baseline (build148-v187 -> v188)',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v188';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });
