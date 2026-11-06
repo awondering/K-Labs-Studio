@@ -855,7 +855,7 @@
     if(!design.choke.beyondTip){
       const cx=X(design.choke.xMm),cy=Y(design.choke.yMm);
       parts.push(`<path class="gt-choke" d="M${cx} ${px(cy-6)} L${px(cx+5)} ${cy} L${cx} ${px(cy+6)} L${px(cx-5)} ${cy} Z" fill="#b42736" stroke="#f0c9c4" stroke-width="1"/>`);
-      parts.push(`<text class="gt-label" x="${cx}" y="${px(Y(-Math.max(r0,r1))-6)}" text-anchor="middle" font-size="9" fill="#f0c9c4">Choke</text>`);
+      parts.push(`<text class="gt-label" x="${cx}" y="${px(Y(-Math.max(r0,r1))-6)}" text-anchor="middle" font-size="9" fill="#f0c9c4">Reduction end</text>`);
     }
 
     // Rulers: from the butt along the top, from the tip along the bottom, with collision-free label lanes.
@@ -886,8 +886,6 @@
       const ly=px(geo.H-6);
       parts.push(`<g class="gt-legend" font-size="9"><circle class="gt-legend-reduction" cx="${lx+2.5}" cy="${px(ly-3.2)}" r="2.6" fill="#e7dfd1"/><text x="${lx+8}" y="${ly}" fill="#e7dfd1">Reduction</text><circle class="gt-legend-runner" cx="${lx+68.5}" cy="${px(ly-3.2)}" r="2.6" fill="${RUNNER_COLOUR}"/><text x="${lx+74}" y="${ly}" fill="${RUNNER_COLOUR}">Runner</text></g>`);
     }
-    const exaggeration=geo.ky/geo.kx;
-    parts.push(`<text class="gt-scale" x="${px(geo.W-8)}" y="8" text-anchor="end" font-size="9" fill="rgba(214,210,200,.6)">Vertical x${exaggeration>=10?Math.round(exaggeration):Math.round(exaggeration*10)/10}</text>`);
     parts.push('</svg>');
     return parts.join('');
   }

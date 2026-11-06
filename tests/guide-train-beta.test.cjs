@@ -20,12 +20,23 @@ test('Beta: the Workshop launcher and the tool heading are labelled',()=>{
   assert.equal((html.match(/guide-train-beta">/g)||[]).length,2,'exactly the launcher and the heading');
 });
 
-test('the provisional-positions warning is shown with the exact wording, in the tool heading',()=>{
+test('a short static-load reminder is shown in the tool heading',()=>{
   const note=head.match(/<p class="guide-train-beta-note" role="note">([\s\S]*?)<\/p>/);
   assert.ok(note,'warning note');
-  assert.equal(plain(note[1]),'Guide positions are provisional. Validate against actual guide dimensions, rod deflection and static-load testing before building.');
+  assert.equal(plain(note[1]),'Starting layout only. Check the real blank under static load before wrapping.');
   assert.equal((html.match(/guide-train-beta-note/g)||[]).length,1);
   assert.ok(head.indexOf('guide-train-beta-note')>head.indexOf('<h3>'),'warning sits under the heading, above the inputs');
+});
+
+test('the beginner view keeps setup to rod length, approximate reel size, Generate, diagram and View & Adjust',()=>{
+  const advancedAt=card.indexOf('<details class="guide-train-advanced">');
+  assert.ok(advancedAt>0);
+  const main=card.slice(0,advancedAt);
+  for(const id of ['gtRodLength','gtReelSize','gtGenerate','gtView','gtAdjust'])assert.ok(main.includes(`id="${id}"`),id);
+  assert.doesNotMatch(main,/gtSpoolLip|gtButtOd|gtTipOd|gtSpoolDiameter|gtReelHeight|gtReductionCount|gtRunnerCount|gtRunnerRatio|gtFlareAngle|gtClearance|gtSumChoke/);
+  assert.match(main,/<h4 id="gtProposalTitle">Proposed Guide Layout<\/h4>/);
+  assert.match(main,/<summary>View &amp; Adjust<\/summary>/);
+  assert.doesNotMatch(main,/\b(solver|flare angle|clearance|geometric choke)\b/i);
 });
 
 test('nothing claims the layouts are validated',()=>{
@@ -56,7 +67,7 @@ test('publication is limited to the Guide Train Designer: Guide Spacing, other t
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache is bumped exactly once from the production baseline (build148-v188 -> v189)',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v189';/);
+test('service worker cache is bumped exactly once for the simplified designer',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v190';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });

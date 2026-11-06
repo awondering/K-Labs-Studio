@@ -269,6 +269,9 @@ const workshopToolsState={
   guideTrain:{
     unit:'metric',
     imperialDisplay:'fractional',
+    reelSize:'medium',
+    spoolDiameterMeasured:false,
+    generated:false,
     rodLengthMm:2130,
     buttOdMm:14,
     tipOdMm:2.4,
@@ -290,7 +293,6 @@ const workshopToolsState={
     guideSet:[],
     selected:0,
     invalid:{},
-    notice:false,
   },
   spiral:{
     unit:'metric',
@@ -2806,12 +2808,12 @@ function guideTrainSpecMatch(entries,override){
 function guideTrainCardsMarkup(design,entries,fmt){
   const choices=entries||[];
   return design.guides.map((guide)=>{
-    const label=escapeHtml(guide.label);
+    const label=escapeHtml(guide.label.replace(/ \(choke\)$/,''));
     const fixedPosition=guide.role==='tip-top';
     const field=(key,title,disabled,aria)=>`<label><span>${title}</span><input type="text" inputmode="decimal" autocomplete="off" data-gt-field="${key}" data-guide="${guide.index}"${disabled?' disabled':''} aria-label="${label}: ${aria||title.toLowerCase()}" /></label>`;
     const options=choices.map((entry)=>`<option value="${entry.index}"${entry.valid?'':' disabled'}>${escapeHtml(entry.name)}${entry.valid && fmt?` (${fmt.number(entry.idMm)} / ${fmt.number(entry.centreHeightMm)})`:' (incomplete)'}</option>`).join('');
-    const spec=choices.length?`<label class="gt-guide__spec"><span>Guide</span><select data-gt-spec data-guide="${guide.index}" aria-label="${label}: choose a guide from your set"><option value="">Illustrative</option><option value="custom" disabled hidden>Custom values</option>${options}</select></label>`:'';
-    return `<div class="gt-guide${guide.role==='runner'?' gt-guide--runner':''}" data-guide="${guide.index}"><div class="gt-guide__head"><strong>${label}</strong><span class="gt-guide__butt" data-gt-out="butt"></span><span class="gt-guide__source" data-gt-out="source" hidden>Measured</span><span class="gt-guide__status" data-gt-out="status"></span></div>${spec}<div class="gt-guide__fields">${field('position','From tip',fixedPosition)}${field('id','Ring ID',false)}${field('height','Height',false,'centre height above the blank')}</div><div class="gt-guide__foot"><span data-gt-out="min"></span><span data-gt-out="line"></span></div></div>`;
+    const spec=choices.length?`<label class="gt-guide__spec"><span>Measured guide</span><select data-gt-spec data-guide="${guide.index}" aria-label="${label}: choose a measured guide"><option value="">Suggested size</option><option value="custom" disabled hidden>Custom values</option>${options}</select></label>`:'';
+    return `<div class="gt-guide${guide.role==='runner'?' gt-guide--runner':''}" data-guide="${guide.index}"><div class="gt-guide__head"><strong>${label}</strong></div><div class="gt-guide__fields">${field('id','Ring size',false,'ring size')}${field('position','From tip',fixedPosition)}</div><div class="gt-guide__foot"><span data-gt-out="spacing"></span><span class="gt-guide__source" data-gt-out="source" hidden>Measured</span></div>${spec}</div>`;
   }).join('');
 }
 // Writes the current values into the existing cards without rebuilding them, so a field being typed in keeps focus.
@@ -2826,8 +2828,8 @@ function updateGuideTrainCards(host,design,state,fmt,entriesIn){
     card.classList.toggle('has-warning',status.level==='warn');
     card.querySelectorAll('[data-gt-field]').forEach((input)=>{
       const key=input.getAttribute('data-gt-field');
-      const value=key==='position'?guide.fromTipMm:key==='id'?guide.idMm:guide.centreHeightMm;
-      const edited=key==='position'?guide.moved:key==='id'?guide.measured.id:guide.measured.height;
+      const value=key==='position'?guide.fromTipMm:guide.idMm;
+      const edited=key==='position'?guide.moved:guide.measured.id;
       input.classList.toggle('is-edited',!!edited);
       input.setAttribute('aria-invalid',state.invalid[`${index}.${key}`]?'true':'false');
       if(document.activeElement!==input)input.value=fmt.number(value);
@@ -2845,10 +2847,8 @@ function updateGuideTrainCards(host,design,state,fmt,entriesIn){
       const match=guideTrainSpecMatch(entries,state.guides[index]);
       select.value=match>=0?String(match):(guide.source==='measured'?'custom':'');
     });
-    setOut('butt',`${fmt.length(guide.fromButtMm)} from butt`);
-    setOut('status',status.text,status.level);
-    setOut('min',`Needs at least ${fmt.length(guide.requiredIdMm)}`);
-    setOut('line',`Line ${fmt.length(guide.envelopeMm)}`);
+    const previous=design.guides[index-1];
+    setOut('spacing',previous?`${fmt.length(guide.xMm-previous.xMm)} after ${previous.label.replace(/ \(choke\)$/,'')}`:`${fmt.length(guide.xMm-design.reel.lipXMm)} from reel`);
   });
 }
 function renderGuideTrainMethod(engine){
@@ -2863,6 +2863,10 @@ const GUIDE_TRAIN_MAIN_FIELDS=[
   ['gtSpoolDiameter','spoolDiameterMm'],['gtReelHeight','reelHeightMm'],['gtSettledLine','settledLineMm'],
   ['gtRunnerMinGap','runnerMinGapMm'],
 ];
+const GUIDE_TRAIN_REEL_ESTIMATES={small:32,medium:40,large:48};
+function guideTrainReelEstimate(size){
+  return GUIDE_TRAIN_REEL_ESTIMATES[size]||GUIDE_TRAIN_REEL_ESTIMATES.medium;
+}
 const GUIDE_TRAIN_NUMBER_FIELDS=[
   ['gtReelAngle','reelAngleDeg'],['gtFlareAngle','flareAngleDeg'],['gtClearance','clearancePct'],['gtReductionCount','reductionCount'],
   ['gtRunnerCount','runnerCount'],['gtRunnerRatio','runnerRatio'],
@@ -2928,15 +2932,9 @@ function renderGuideTrainTool(){
   const state=workshopToolsState.guideTrain;
   state.unit=activeMeasurementUnits();
   state.imperialDisplay=activeImperialDisplay();
+  if(!state.reelSize)state.reelSize='medium';
   const fmt=guideTrainFormatter(state);
-  let design=engine.designGuideTrain(guideTrainRequest(state),fmt);
-  // Guide edits that no longer fit after a main measurement changed are dropped, never left as a dead end.
-  if(!design.ok && state.guides.some(Boolean) && design.errors.some((entry)=>/^guide\d+\./.test(entry.field))){
-    state.guides=[];
-    state.invalid={};
-    state.notice=true;
-    design=engine.designGuideTrain(guideTrainRequest(state),fmt);
-  }
+  const design=engine.designGuideTrain(guideTrainRequest(state),fmt);
   state.last=design;
   renderGuideTrainMethod(engine);
   renderGuideTrainSet(state,engine,fmt);
@@ -2960,6 +2958,11 @@ function renderGuideTrainTool(){
       input.value='';
     }
   });
+  const reelSize=$('gtReelSize');
+  if(reelSize && document.activeElement!==reelSize){
+    reelSize.value=state.reelSize;
+    syncStudioCustomSelectTrigger(reelSize);
+  }
 
   const fieldToInput={};
   GUIDE_TRAIN_MAIN_FIELDS.concat(GUIDE_TRAIN_NUMBER_FIELDS).forEach(([id,key])=>{fieldToInput[key]=id;});
@@ -2976,18 +2979,18 @@ function renderGuideTrainTool(){
       ...Object.keys(state.invalid).map((key)=>({kind:'error',message:state.invalid[key]})),
       ...(design.warnings||[]).map((entry)=>({kind:'warning',message:entry.message})),
     ];
-    if(state.notice){
-      entries.push({kind:'warning',message:'Guide edits were reset because they no longer fit the rod measurements.'});
-      state.notice=false;
-    }
     messages.innerHTML=entries.map((entry)=>`<p class="guide-train-message guide-train-message--${entry.kind}">${escapeHtml(entry.message)}</p>`).join('');
   }
 
+  const reset=$('gtResetGuides');
+  if(reset)reset.hidden=!state.guides.some(Boolean);
   const view=$('gtView');
   const results=$('gtResults');
-  if(view)view.hidden=!design.ok;
-  if(results)results.hidden=!design.ok;
+  const generated=design.ok && state.generated===true;
+  if(view)view.hidden=!generated;
+  if(results)results.hidden=!generated;
   if(!design.ok)return;
+  if(!generated)return;
 
   const canvas=$('gtViewCanvas');
   if(canvas){
@@ -3005,16 +3008,16 @@ function renderGuideTrainTool(){
   setText('gtSumRunners',summary.runnerCount?`${summary.runnerCount}, last ${fmt.length(summary.lastRunnerFromTipMm)} from tip-top`:'None');
   setText('gtSumClearance',summary.minBlankClearanceMm<-1e-9?'Touches the blank':`${fmt.length(summary.minBlankClearanceMm)}, ${fmt.length(summary.minBlankClearanceFromTipMm)} from tip`);
   const modeText=summary.mode==='illustrative'
-    ?'Illustrative geometry'
-    :summary.mode==='measured'?'All guides measured':`${summary.measuredCount} of ${summary.totalGuides} measured`;
+    ?'Suggested layout'
+    :summary.mode==='measured'?'Measured guides':`${summary.measuredCount} measured`;
   setText('gtMode',modeText);
   const modeBadge=$('gtMode');
   if(modeBadge)modeBadge.setAttribute('data-mode',summary.mode);
   const modeNote=summary.mode==='illustrative'
-    ?' Illustrative geometry: ring sizes and heights are proposals, not guide specifications. Enter measured values to fix them.'
-    :' Measured values are kept as entered and the guides are positioned around them. Guides without measurements stay illustrative.';
-  setText('gtGuidesUnit',`Distances in ${workshopUnitSuffix(state.unit)}. Height is the ring centre above the blank surface.${modeNote} Edited values are highlighted; clear a field to return to the proposal.${summary.runnerCount?' Runner positions are provisional: check them against blank deflection and a static-load test.':''}`);
-  setText('gtCaption',`Drag a guide along the rod, or edit its values below. Triangles mark the proposed positions.${summary.measuredCount?' Brighter rings use your measured dimensions.':''}`);
+    ?' Ring sizes are starting suggestions, not product specifications.'
+    :' Measured guide dimensions are kept as entered.';
+  setText('gtGuidesUnit',`Distances in ${workshopUnitSuffix(state.unit)}.${modeNote}${summary.runnerCount?' Running-guide positions are provisional; check them under static load.':''}`);
+  setText('gtCaption','Schematic; vertical scale exaggerated. Drag a guide to adjust its position.');
 
   const entries=guideTrainSetEntries(state,engine,fmt);
   const host=$('gtGuides');
@@ -3026,8 +3029,6 @@ function renderGuideTrainTool(){
     }
     updateGuideTrainCards(host,design,state,fmt,entries);
   }
-  const reset=$('gtResetGuides');
-  if(reset)reset.hidden=!state.guides.some(Boolean);
 }
 // Nearest legal position for a dragged guide: snapped to 0.5 mm and kept between its neighbours. Next to a running
 // guide (or the tip-top after the last runner) it must also keep the minimum running-guide gap.
@@ -3110,9 +3111,28 @@ function bindGuideTrainControls(){
   GUIDE_TRAIN_MAIN_FIELDS.forEach(([id,key])=>{
     const input=$(id);
     bindWorkshopCalculatorInput(input,()=>{
-      state[key]=readGuideTrainMeasurement(input.value,state.unit);
+      if(key==='spoolDiameterMm'){
+        state.spoolDiameterMeasured=String(input.value||'').trim()!=='';
+        state[key]=state.spoolDiameterMeasured
+          ?readGuideTrainMeasurement(input.value,state.unit)
+          :guideTrainReelEstimate(state.reelSize);
+      }else{
+        state[key]=readGuideTrainMeasurement(input.value,state.unit);
+      }
       renderGuideTrainTool();
     });
+  });
+  const reelSize=$('gtReelSize');
+  if(reelSize)reelSize.addEventListener('change',()=>{
+    if(!Object.prototype.hasOwnProperty.call(GUIDE_TRAIN_REEL_ESTIMATES,reelSize.value))return;
+    state.reelSize=reelSize.value;
+    if(!state.spoolDiameterMeasured)state.spoolDiameterMm=guideTrainReelEstimate(state.reelSize);
+    renderGuideTrainTool();
+  });
+  const generate=$('gtGenerate');
+  if(generate)generate.addEventListener('click',()=>{
+    state.generated=true;
+    renderGuideTrainTool();
   });
   GUIDE_TRAIN_NUMBER_FIELDS.forEach(([id,key])=>{
     const input=$(id);

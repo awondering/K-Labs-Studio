@@ -24,7 +24,7 @@ const constBlock=(name)=>{
 };
 
 const ELEMENT_IDS=[
-  'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
+  'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtGenerate','gtReelSize','gtAdjust','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
   'gtSumRunners','gtSumClearance','gtGuidesUnit','gtGuides','gtResetGuides','gtMethodBody','gtRodLength','gtSpoolLip','gtButtOd',
   'gtTipOd','gtSpoolDiameter','gtReelHeight','gtSettledLine','gtRunnerMinGap','gtReelAngle','gtFlareAngle','gtClearance',
   'gtReductionCount','gtRunnerCount','gtRunnerRatio','gtMode','gtCaption','gtSetRows','gtSetAdd',
@@ -41,7 +41,7 @@ function harness({unit='metric'}={}){
   ELEMENT_IDS.forEach((id)=>elements.set(id,makeElement(id)));
   const defaults=Engine.DEFAULTS;
   const state={
-    unit,imperialDisplay:'decimal',...defaults,guides:[],guideSet:[],selected:0,invalid:{},notice:false,
+    unit,imperialDisplay:'decimal',reelSize:'medium',spoolDiameterMeasured:false,generated:true,...defaults,guides:[],guideSet:[],selected:0,invalid:{},notice:false,
   };
   const c=vm.createContext({
     document:{activeElement:null},
@@ -87,12 +87,13 @@ test('guide cards: runners are built as editable cards, labelled and styled apar
   assert.equal((markup.match(/class="gt-guide gt-guide--runner"/g)||[]).length,4);
   assert.equal((markup.match(/ disabled/g)||[]).length,1,'only the tip-top position is fixed');
   for(const n of [1,2,3,4]){
-    for(const field of ['from tip','ring id','centre height above the blank']){
+    for(const field of ['from tip','ring size']){
       assert.ok(markup.includes(`aria-label="Runner ${n}: ${field}"`),`Runner ${n} ${field}`);
     }
   }
+  assert.equal((markup.match(/data-gt-field="height"/g)||[]).length,0,'runner heights are not requested');
   assert.ok(markup.includes('aria-label="Tip-top: from tip"'));
-  assert.ok(markup.indexOf('Guide 5 (choke)')<markup.indexOf('Runner 1') && markup.indexOf('Runner 4')<markup.indexOf('Tip-top'));
+  assert.ok(markup.indexOf('Guide 5')<markup.indexOf('Runner 1') && markup.indexOf('Runner 4')<markup.indexOf('Tip-top'));
 });
 
 test('runner edits are stored from the butt, move only that runner, and clearing a field resets it',()=>{
@@ -202,7 +203,7 @@ test('rendering: summary, provisional note, diagram and cards reflect the runner
   assert.equal(e('gtView').hidden,false);
   assert.equal(e('gtSumRunners').textContent,'4, last 124.2 mm from tip-top');
   assert.equal(e('gtSumChoke').textContent,'882.7 mm from tip');
-  assert.match(e('gtGuidesUnit').textContent,/Runner positions are provisional: check them against blank deflection and a static-load test\./);
+  assert.match(e('gtGuidesUnit').textContent,/Running-guide positions are provisional; check them under static load\./);
   assert.match(e('gtGuidesUnit').textContent,/^Distances in mm\./);
   assert.match(e('gtViewCanvas').innerHTML,/gt-ring--runner/);
   assert.equal((e('gtViewCanvas').innerHTML.match(/class="gt-ring[ "]/g)||[]).length,11);
@@ -228,8 +229,8 @@ test('rendering: layout changes rebuild the cards even when the guide count is u
   state.reductionCount=6;state.runnerCount=3;
   c.renderGuideTrainTool();
   assert.equal(e('gtGuides').getAttribute('data-layout').split('#')[0],'srrrrrcrrrt');
-  assert.ok(e('gtGuides').innerHTML.includes('aria-label="Guide 6 (choke): ring id"'));
-  assert.ok(e('gtGuides').innerHTML.includes('aria-label="Runner 3: ring id"'));
+  assert.ok(e('gtGuides').innerHTML.includes('aria-label="Guide 6: ring size"'));
+  assert.ok(e('gtGuides').innerHTML.includes('aria-label="Runner 3: ring size"'));
   assert.ok(!e('gtGuides').innerHTML.includes('Runner 4'));
 });
 
@@ -274,7 +275,7 @@ test('imperial display: runner distances and the minimum gap are shown and read 
   assert.ok(Math.abs(state.guides[7].positionMm-(2130-17*25.4))<1e-9);
 });
 
-test('runner controls exist in the card, the settings live behind the existing disclosure, and nothing else moved',()=>{
+test('runner controls live in View & Adjust, while model settings stay in Advanced options',()=>{
   const card=html.slice(html.indexOf('<article id="workshopToolGuideTrain"'),html.indexOf('</article>',html.indexOf('<article id="workshopToolGuideTrain"')));
   for(const id of ['gtRunnerCount','gtRunnerMinus','gtRunnerPlus','gtRunnerRatio','gtSumRunners','gtRunnerMinGap']){
     assert.equal((card.match(new RegExp(`id="${id}"`,'g'))||[]).length,1,id);
@@ -282,8 +283,13 @@ test('runner controls exist in the card, the settings live behind the existing d
   const details=card.slice(card.indexOf('<details class="guide-train-advanced">'));
   assert.ok(details.includes('id="gtRunnerMinGap"'),'minimum gap is an advanced setting');
   for(const id of ['gtFlareAngle','gtSettledLine','gtClearance','gtMethodBody'])assert.ok(details.includes(`id="${id}"`),`${id} still in the disclosure`);
-  const main=card.slice(0,card.indexOf('<details class="guide-train-advanced">'));
-  for(const id of ['gtRodLength','gtSpoolLip','gtButtOd','gtTipOd','gtSpoolDiameter','gtReelHeight','gtReelAngle','gtReductionCount','gtCountMinus','gtCountPlus','gtRunnerCount','gtRunnerRatio'])assert.ok(main.includes(`id="${id}"`),id);
+  const adjust=card.slice(card.indexOf('<details id="gtAdjust"'),card.indexOf('</details>',card.indexOf('<details id="gtAdjust"')));
+  for(const id of ['gtReductionCount','gtCountMinus','gtCountPlus','gtRunnerCount','gtRunnerMinus','gtRunnerPlus'])assert.ok(adjust.includes(`id="${id}"`),id);
+  for(const id of ['gtRodLength','gtReelSize','gtGenerate'])assert.ok(card.includes(`id="${id}"`),id);
+  for(const id of ['gtSpoolLip','gtButtOd','gtTipOd','gtSpoolDiameter','gtReelHeight','gtReelAngle'])assert.ok(details.includes(`id="${id}"`),id);
+  assert.doesNotMatch(adjust,/data-gt-field="height"/);
+  assert.match(card,/<summary>View &amp; Adjust<\/summary>/);
+  assert.match(details,/<summary>Advanced options<\/summary>/);
   assert.match(card,/id="gtRunnerCount"[^>]*min="0" max="12"/);
   assert.match(card,/aria-label="Fewer running guides"/);
   assert.match(card,/aria-label="More running guides"/);
@@ -311,7 +317,7 @@ test('runner code is ASCII only and reads no other tool state',()=>{
   for(const forbidden of ['calcGuideLayout','workshopToolsState.spiral','guideSpecification','KLabsGuideLayout','guideCount']){
     assert.equal(code.includes(forbidden),false,forbidden);
   }
-  assert.match(code,/provisional: check them against blank deflection and a static-load test/);
+  assert.match(code,/Running-guide positions are provisional; check them under static load/);
   const cardStart=html.indexOf('<article id="workshopToolGuideTrain"');
   assert.deepEqual([...html.slice(cardStart,html.indexOf('</article>',cardStart))].filter((ch)=>ch.charCodeAt(0)>127),[]);
 });

@@ -12523,16 +12523,213 @@ body.klabs-auth-resolving::after {
   }
 
   #workshopToolGuideTrain .guide-train-inputs{
-    grid-template-columns:repeat(4,minmax(0,1fr));
+    grid-template-columns:repeat(2,minmax(0,1fr));
   }
 
   #workshopToolGuideTrain .guide-train-guides{
-    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-columns:minmax(0,1fr);
   }
 
   #workshopToolGuideTrain .guide-train-summary{
     grid-template-columns:repeat(2,minmax(0,1fr));
     column-gap:18px;
+  }
+}
+
+#workshopToolGuideTrain .guide-train-inputs select{
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:6px 10px;
+  border:1px solid rgba(214,210,200,.2);
+  border-radius:10px;
+  background:rgba(7,8,10,.94);
+  color:#f5efe5;
+  font-size:16px;
+}
+
+#workshopToolGuideTrain .guide-train-generate{
+  width:100%;
+  min-height:50px;
+  padding:0 18px;
+  border:1px solid rgba(var(--kl-red-rgb),.85);
+  border-radius:12px;
+  background:linear-gradient(180deg,rgba(var(--kl-red-rgb),.95),rgba(var(--kl-red-rgb),.72));
+  color:#fff7f2;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.04em;
+  box-shadow:0 8px 22px rgba(var(--kl-red-rgb),.18),inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+#workshopToolGuideTrain .guide-train-reset{
+  min-height:44px;
+  justify-self:start;
+  padding:0 14px;
+  border-radius:11px;
+  font-size:10px;
+}
+
+#workshopToolGuideTrain .guide-train-reset[hidden]{
+  display:none;
+}
+
+#workshopToolGuideTrain .guide-train-proposal > h4{
+  margin:2px 0 0;
+  color:#f1ece1;
+  font-size:13px;
+  letter-spacing:.08em;
+}
+
+#workshopToolGuideTrain .guide-train-adjust,
+#workshopToolGuideTrain .guide-train-calculations{
+  border:1px solid rgba(214,210,200,.14);
+  border-radius:11px;
+  background:rgba(255,255,255,.02);
+}
+
+#workshopToolGuideTrain .guide-train-adjust[hidden],
+#workshopToolGuideTrain .guide-train-calculations[hidden]{
+  display:none;
+}
+
+#workshopToolGuideTrain .guide-train-adjust summary,
+#workshopToolGuideTrain .guide-train-calculations summary{
+  display:flex;
+  align-items:center;
+  min-height:48px;
+  padding:0 12px;
+  color:#e7dfd1;
+  cursor:pointer;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+
+#workshopToolGuideTrain .guide-train-adjust__body{
+  display:grid;
+  gap:10px;
+  padding:0 10px 10px;
+}
+
+#workshopToolGuideTrain .guide-train-adjust__counts{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+
+#workshopToolGuideTrain .guide-train-guides{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:4px;
+}
+
+#workshopToolGuideTrain .gt-guide{
+  display:grid;
+  grid-template-columns:minmax(76px,.8fr) minmax(0,2fr);
+  align-items:center;
+  gap:3px 8px;
+  padding:6px 0;
+  border:0;
+  border-bottom:1px solid rgba(214,210,200,.12);
+  border-radius:0;
+  background:none;
+}
+
+#workshopToolGuideTrain .gt-guide.is-selected{
+  border-color:rgba(var(--kl-red-rgb),.45);
+  background:linear-gradient(90deg,rgba(var(--kl-red-rgb),.1),transparent 65%);
+}
+
+#workshopToolGuideTrain .gt-guide.has-warning:not(.is-selected){
+  border-color:rgba(224,123,134,.45);
+}
+
+#workshopToolGuideTrain .gt-guide__head{
+  grid-column:1;
+  grid-row:1;
+  min-width:0;
+}
+
+#workshopToolGuideTrain .gt-guide__head strong{
+  font-size:11px;
+}
+
+#workshopToolGuideTrain .gt-guide__fields{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  grid-column:2;
+  grid-row:1;
+}
+
+#workshopToolGuideTrain .gt-guide__fields label > span{
+  font-size:8px;
+  letter-spacing:.06em;
+}
+
+#workshopToolGuideTrain .gt-guide__fields input,
+#workshopToolGuideTrain .gt-guide__spec select{
+  min-height:44px;
+  padding:5px 7px;
+  font-size:16px;
+}
+
+#workshopToolGuideTrain .gt-guide__foot{
+  grid-column:1 / -1;
+  font-size:10px;
+  line-height:1.35;
+}
+
+#workshopToolGuideTrain .gt-guide__source{
+  color:#c7d2d8;
+}
+
+#workshopToolGuideTrain .gt-guide__spec{
+  grid-column:1 / -1;
+  grid-row:2;
+  grid-template-columns:90px minmax(0,1fr);
+  align-items:center;
+  gap:8px;
+}
+
+#workshopToolGuideTrain .guide-train-advanced-section{
+  display:grid;
+  gap:8px;
+  padding:8px 0;
+  border-bottom:1px solid rgba(214,210,200,.12);
+}
+
+#workshopToolGuideTrain .guide-train-advanced-section > h4,
+#workshopToolGuideTrain .guide-train-advanced-section > summary{
+  margin:0;
+  color:#d1cbbf;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+#workshopToolGuideTrain .guide-train-advanced-section > summary{
+  display:flex;
+  align-items:center;
+  min-height:44px;
+  cursor:pointer;
+}
+
+#workshopToolGuideTrain .guide-train-calculations .guide-train-summary{
+  padding:0 12px 12px;
+}
+
+@media (max-width:360px){
+  #workshopToolGuideTrain .guide-train-adjust__counts{
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  #workshopToolGuideTrain .gt-guide{
+    grid-template-columns:minmax(66px,.7fr) minmax(0,2fr);
+    gap:3px 6px;
   }
 }
 /* End Guide Train Designer */

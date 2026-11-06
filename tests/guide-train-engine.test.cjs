@@ -370,7 +370,8 @@ test('side-view SVG shows every guide, its ring height, its hit area and both me
   assert.equal(p.tags('gt-envelope').length,1);
   assert.equal(p.tags('gt-spool').length,1);
   assert.equal(p.tags('gt-choke').length,1);
-  assert.match(svg,/From butt/);assert.match(svg,/From tip/);assert.match(svg,/Vertical x\d/);
+  assert.match(svg,/From butt/);assert.match(svg,/From tip/);assert.match(svg,/Vertical scale exaggerated/);
+  assert.doesNotMatch(svg,/Vertical x\d/);
 });
 
 test('ruler labels never overlap, at any width or guide count',()=>{

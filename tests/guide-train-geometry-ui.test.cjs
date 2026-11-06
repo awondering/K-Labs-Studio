@@ -24,7 +24,7 @@ const constBlock=(name)=>{
 };
 
 const ELEMENT_IDS=[
-  'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
+  'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtGenerate','gtReelSize','gtAdjust','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
   'gtSumRunners','gtSumClearance','gtGuidesUnit','gtGuides','gtResetGuides','gtMethodBody','gtRodLength','gtSpoolLip','gtButtOd',
   'gtTipOd','gtSpoolDiameter','gtReelHeight','gtSettledLine','gtRunnerMinGap','gtReelAngle','gtFlareAngle','gtClearance',
   'gtReductionCount','gtRunnerCount','gtRunnerRatio','gtMode','gtCaption','gtSetRows','gtSetAdd','gtCountMinus','gtCountPlus',
@@ -43,7 +43,7 @@ function harness({unit='metric'}={}){
     querySelector:()=>null,
   });
   ELEMENT_IDS.forEach((id)=>elements.set(id,makeElement(id)));
-  const state={unit,imperialDisplay:'decimal',...Engine.DEFAULTS,guides:[],guideSet:[],selected:0,invalid:{},notice:false};
+  const state={unit,imperialDisplay:'decimal',reelSize:'medium',spoolDiameterMeasured:false,generated:true,...Engine.DEFAULTS,guides:[],guideSet:[],selected:0,invalid:{},notice:false};
   const c=vm.createContext({
     document:{activeElement:null},
     window:{addEventListener(){},requestAnimationFrame:(fn)=>{fn();return 1;}},
@@ -61,12 +61,12 @@ function harness({unit='metric'}={}){
     'syncWorkshopMeasurementInput','bindWorkshopCalculatorInput','escapeHtml','guideTrainEngine','guideTrainFormatter',
     'readGuideTrainMeasurement','readGuideTrainNumber','guideTrainRequest','guideTrainStatus','guideTrainSetEntries',
     'guideTrainSetSignature','guideTrainSpecMatch','guideTrainCardsMarkup','updateGuideTrainCards','renderGuideTrainMethod',
-    'resetGuideTrainOverridesForCount','guideTrainSetMarkup','renderGuideTrainSet','renderGuideTrainTool','guideTrainDragPosition',
+    'resetGuideTrainOverridesForCount','guideTrainSetMarkup','renderGuideTrainSet','guideTrainReelEstimate','renderGuideTrainTool','guideTrainDragPosition',
     'setGuideTrainOverride','guideTrainRefusal','commitGuideTrainEdit','commitGuideTrainSpec','bindGuideTrainControls',
   ]){
     vm.runInContext(extract(name),c);
   }
-  vm.runInContext(`${constBlock('GUIDE_TRAIN_MAIN_FIELDS')}\n${constBlock('GUIDE_TRAIN_NUMBER_FIELDS')}\nconst GUIDE_TRAIN_SET_MAX=8;`,c);
+  vm.runInContext(`${constBlock('GUIDE_TRAIN_MAIN_FIELDS')}\n${constBlock('GUIDE_TRAIN_NUMBER_FIELDS')}\nconst GUIDE_TRAIN_REEL_ESTIMATES={small:32,medium:40,large:48};\nconst GUIDE_TRAIN_SET_MAX=8;`,c);
   const e=(id)=>elements.get(id);
   const design=()=>Engine.designGuideTrain(c.guideTrainRequest(state),c.guideTrainFormatter(state));
   const fire=(id,type,event)=>(e(id).listeners[type]||[]).forEach((fn)=>fn(event||{}));
@@ -96,14 +96,50 @@ function harness({unit='metric'}={}){
 const xs=(d)=>d.guides.map((g)=>Math.round(g.xMm*10)/10);
 const text=(markup)=>markup.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
 
-test('a new session is in Illustrative Geometry mode and says so, without claiming the numbers are specifications',()=>{
+test('a new layout is clearly labelled as a suggestion, without claiming the numbers are specifications',()=>{
   const {e}=harness();
-  assert.equal(e('gtMode').textContent,'Illustrative geometry');
+  assert.equal(e('gtMode').textContent,'Suggested layout');
   assert.equal(e('gtMode').getAttribute('data-mode'),'illustrative');
-  assert.match(e('gtGuidesUnit').textContent,/Illustrative geometry: ring sizes and heights are proposals, not guide specifications\. Enter measured values to fix them\./);
-  assert.match(e('gtGuidesUnit').textContent,/Height is the ring centre above the blank surface\./);
+  assert.match(e('gtGuidesUnit').textContent,/Ring sizes are starting suggestions, not product specifications\./);
   assert.doesNotMatch(e('gtCaption').textContent,/measured/i);
   assert.doesNotMatch(e('gtGuidesUnit').textContent+e('gtMode').textContent,/\b(verified|certified|specified|catalogue|manufacturer)\b/i);
+});
+
+test('the first screen generates from rod length and an approximate reel size without replacing a measured spool diameter',()=>{
+  const {c,state,e,fire}=harness();
+  state.generated=false;
+  c.renderGuideTrainTool();
+  assert.equal(e('gtView').hidden,true);
+  assert.equal(e('gtResults').hidden,true);
+  e('gtReelSize').value='large';
+  fire('gtReelSize','change');
+  assert.equal(state.spoolDiameterMm,48);
+  assert.equal(e('gtView').hidden,true);
+  fire('gtGenerate','click');
+  assert.equal(state.generated,true);
+  assert.equal(e('gtView').hidden,false);
+  assert.equal(e('gtResults').hidden,false);
+  e('gtSpoolDiameter').value='43';
+  fire('gtSpoolDiameter','input');
+  assert.equal(state.spoolDiameterMeasured,true);
+  assert.equal(state.spoolDiameterMm,43);
+  e('gtReelSize').value='small';
+  fire('gtReelSize','change');
+  assert.equal(state.spoolDiameterMm,43,'a reel-size choice must not replace a physical measurement');
+  e('gtSpoolDiameter').value='';
+  fire('gtSpoolDiameter','input');
+  assert.equal(state.spoolDiameterMm,32,'clearing a measurement returns to the selected estimate');
+});
+
+test('invalid measurement changes preserve manual guide adjustments and offer an explicit reset',()=>{
+  const {c,state,e}=harness();
+  assert.equal(c.commitGuideTrainEdit(2,'position','1000'),true);
+  const saved=JSON.parse(JSON.stringify(state.guides));
+  state.rodLengthMm=500;
+  c.renderGuideTrainTool();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.guides)),saved);
+  assert.equal(e('gtResetGuides').hidden,false);
+  assert.equal(e('gtView').hidden,true);
 });
 
 test('the guide set: add, edit, validate and remove entries; units are converted once; nothing is persisted',()=>{
@@ -160,7 +196,7 @@ test('only valid set entries can be chosen on a guide card, and the choice is hi
   assert.deepEqual(entries.map((x)=>x.valid),[true,false,false]);
   const markup=c.guideTrainCardsMarkup(design(),entries,fmt);
   assert.equal((markup.match(/data-gt-spec/g)||[]).length,11,'one choice per guide card');
-  assert.match(markup,/<option value="">Illustrative<\/option>/);
+  assert.match(markup,/<option value="">Suggested size<\/option>/);
   assert.match(markup,/<option value="0">Mid 15 \(15 \/ 12\)<\/option>/);
   assert.match(markup,/<option value="1" disabled>Broken \(incomplete\)<\/option>/);
   assert.match(markup,/<option value="2" disabled>Half \(incomplete\)<\/option>/);
@@ -215,10 +251,10 @@ test('incompatible choices show clear warnings and keep the entered dimensions; 
   assert.equal(d.guides[2].proposalSolved,false);
   assert.match(e('gtMessages').innerHTML,/Guide 2: no position on the rod lets the 3 mm ring at a 10 mm centre height fit the line cone/);
   assert.match(e('gtMessages').innerHTML,/the entered values were not changed/);
-  assert.equal(e('gtMode').textContent,'1 of 11 measured');
+  assert.equal(e('gtMode').textContent,'1 measured');
   assert.equal(e('gtMode').getAttribute('data-mode'),'mixed');
-  assert.match(e('gtCaption').textContent,/Brighter rings use your measured dimensions\./);
-  assert.match(e('gtGuidesUnit').textContent,/Measured values are kept as entered and the guides are positioned around them\./);
+  assert.match(e('gtCaption').textContent,/Schematic; vertical scale exaggerated/);
+  assert.match(e('gtGuidesUnit').textContent,/Measured guide dimensions are kept as entered\./);
   // Order is always preserved.
   d.guides.slice(1).forEach((g,i)=>assert.ok(g.xMm>d.guides[i].xMm));
   state.guides=[];
@@ -229,7 +265,7 @@ test('mode label: all guides measured is reported as such',()=>{
   const d=Engine.designGuideTrain(c.guideTrainRequest(state));
   state.guides=d.guides.map((g)=>({centreHeightMm:g.centreHeightMm}));
   c.renderGuideTrainTool();
-  assert.equal(e('gtMode').textContent,'All guides measured');
+  assert.equal(e('gtMode').textContent,'Measured guides');
   assert.equal(e('gtMode').getAttribute('data-mode'),'measured');
 });
 
@@ -291,7 +327,7 @@ test('markup: guide set, mode label and caption exist once; the set sits outside
   assert.ok(results.includes('id="gtMode"'));
   const set=card.slice(card.indexOf('<details class="guide-train-set">'),card.indexOf('</details>',card.indexOf('<details class="guide-train-set">')));
   assert.match(set,/<summary>Measured guide set<\/summary>/);
-  assert.match(set,/Not saved when you leave the page\./);
+  assert.match(set,/kept for this session only/);
   assert.match(set,/ring centre height above the blank surface/);
   assert.equal((html.match(/data-workshop-tool-open="guide-train"/g)||[]).length,1,'no extra screens or launchers');
   assert.equal((html.match(/id="workshopToolGuideTrain"/g)||[]).length,1);
@@ -299,18 +335,23 @@ test('markup: guide set, mode label and caption exist once; the set sits outside
   // The advanced disclosure still holds the model settings and the method.
   const advanced=card.slice(card.indexOf('<details class="guide-train-advanced">'));
   for(const id of ['gtFlareAngle','gtSettledLine','gtClearance','gtRunnerMinGap','gtMethodBody'])assert.ok(advanced.includes(`id="${id}"`),id);
+  assert.ok(advanced.includes('id="gtSetRows"'),'measured guide dimensions are advanced');
+  assert.match(card,/<summary>View &amp; Adjust<\/summary>/);
+  assert.match(advanced,/<summary>Advanced options<\/summary>/);
 });
 
 test('styling: new controls are scoped to the tool, reuse the design tokens and keep 44px targets and 16px text',()=>{
   const start=css.indexOf('/* Guide Train Designer (Workshop)');
   const block=css.slice(start,css.indexOf('/* End Guide Train Designer */'));
-  for(const selector of ['.guide-train-mode','.gt-guide__source','.gt-guide__spec select','.guide-train-set','.guide-train-set summary','.gt-set-row input','.gt-set-row .gt-set-remove','.guide-train-set__body > .ghost-action']){
+  for(const selector of ['.guide-train-mode','.gt-guide__source','.gt-guide__spec select','.guide-train-set','.guide-train-set summary','.gt-set-row input','.gt-set-row .gt-set-remove','.guide-train-set__body > .ghost-action','.guide-train-generate','.guide-train-adjust summary']){
     assert.ok(block.includes(`#workshopToolGuideTrain ${selector}`),selector);
   }
   assert.match(block,/#workshopToolGuideTrain \.gt-guide__spec select\{[^}]*min-height:44px;[^}]*font-size:16px/);
   assert.match(block,/#workshopToolGuideTrain \.gt-set-row input\{[^}]*min-height:44px;[^}]*font-size:16px/);
   assert.match(block,/#workshopToolGuideTrain \.gt-set-row \.gt-set-remove\{\s*min-height:44px/);
   assert.match(block,/#workshopToolGuideTrain \.guide-train-set summary\{[^}]*min-height:44px/);
+  assert.match(block,/@media \(max-width:360px\)[\s\S]*\.guide-train-adjust__counts\{[\s\S]*grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(block,/@media \(min-width:761px\)[\s\S]*width:min\(100%,840px\)/);
   assert.deepEqual([...block].filter((ch)=>ch.charCodeAt(0)>127),[]);
 });
 

@@ -102,10 +102,12 @@ test('guide cards are built once per guide with labelled inputs; the tip-top pos
   const markup=c.guideTrainCardsMarkup(d);
   assert.equal((markup.match(/class="gt-guide"/g)||[]).length,d.guides.length);
   assert.equal((markup.match(/data-gt-field="position"/g)||[]).length,d.guides.length);
+  assert.equal((markup.match(/data-gt-field="id"/g)||[]).length,d.guides.length);
+  assert.equal((markup.match(/data-gt-field="height"/g)||[]).length,0,'guide heights are not part of the everyday editor');
   assert.equal((markup.match(/ disabled/g)||[]).length,1,'only the tip-top position is disabled');
-  assert.ok(/aria-label="Stripper: from tip"/.test(markup));
-  assert.ok(/aria-label="Guide 5 \(choke\): ring id"/.test(markup));
-  assert.ok(/aria-label="Tip-top: centre height above the blank"/.test(markup));
+  assert.ok(/aria-label="Stripper: ring size"/.test(markup));
+  assert.ok(/aria-label="Guide 5: from tip"/.test(markup));
+  assert.ok(/aria-label="Tip-top: from tip"/.test(markup));
 });
 
 test('dragging stays between the neighbours and snaps to 0.5 mm',()=>{
