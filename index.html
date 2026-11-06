@@ -408,7 +408,16 @@
                     <label><span data-measurement-label="Reel Axis Height">Reel Axis Height</span><input id="gtReelHeight" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
                     <label><span>Reel Axis Angle (deg)</span><input id="gtReelAngle" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages gtAngleHint" /></label>
                   </div>
-                  <p id="gtAngleHint" class="workshop-tool-note">Starting estimates (mm): small/medium/large reels use 32/40/48 mm spool diameters; spool lip 560 mm from butt; blank diameters 14 mm at butt and 2.4 mm at tip; reel-axis height 36 mm; five reduction guides and four runners. Generic assumptions only, not reel or guide specifications. Measure your setup to refine them.</p>
+                  <p id="gtAngleHint" class="workshop-tool-note">Starting estimates (mm): small/medium/large reels use 32/40/48 mm spool diameters; spool lip 560 mm from butt; blank diameters 14 mm at butt and 2.4 mm at tip; reel-axis height 36 mm; five reduction guides and four identical runners (5 mm ring, 6 mm centre height). Generic assumptions only, not reel or guide specifications. Measure your setup to refine them.</p>
+                </section>
+
+                <section class="guide-train-advanced-section">
+                  <h4>Running guides</h4>
+                  <div class="workshop-tool-fields workshop-tool-fields--two">
+                    <label><span data-measurement-label="Runner Ring Size">Runner Ring Size</span><input id="gtRunnerId" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+                    <label><span data-measurement-label="Runner Centre Height">Runner Centre Height</span><input id="gtRunnerHeight" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
+                  </div>
+                  <p class="workshop-tool-note">Every running guide uses these same dimensions. Enter the ring size and centre height of the runners you are using, measured together. Starting values are generic, not a product specification.</p>
                 </section>
 
                 <details class="guide-train-set">
@@ -429,7 +438,7 @@
                     <label><span data-measurement-label="Minimum Runner Gap">Minimum Runner Gap</span><input id="gtRunnerMinGap" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
                     <label><span>Runner spacing ratio</span><input id="gtRunnerRatio" type="text" inputmode="decimal" autocomplete="off" aria-describedby="gtMessages" /></label>
                   </div>
-                  <p class="workshop-tool-note">These are optional starting assumptions, not universal values. Running-guide spacing must be checked on the actual blank under load.</p>
+                  <p class="workshop-tool-note">These are optional starting assumptions, not universal values. Runner positions must be checked on the actual blank under load.</p>
                   <div id="gtMethodBody" class="guide-train-method"></div>
                 </details>
 

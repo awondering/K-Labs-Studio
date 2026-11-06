@@ -24,7 +24,7 @@ const constBlock=(name)=>{
 };
 
 const ELEMENT_IDS=[
-  'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtGenerate','gtReelSize','gtAdjust','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
+  'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtGenerate','gtReelSize','gtAdjust','gtRunnerId','gtRunnerHeight','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
   'gtSumRunners','gtSumClearance','gtGuidesUnit','gtGuides','gtResetGuides','gtMethodBody','gtRodLength','gtSpoolLip','gtButtOd',
   'gtTipOd','gtSpoolDiameter','gtReelHeight','gtSettledLine','gtRunnerMinGap','gtReelAngle','gtFlareAngle','gtClearance',
   'gtReductionCount','gtRunnerCount','gtRunnerRatio','gtMode','gtCaption','gtSetRows','gtSetAdd','gtCountMinus','gtCountPlus',
@@ -52,6 +52,7 @@ function harness({unit='metric'}={}){
     workshopToolsState:{activeTool:'guide-train',guideTrain:state},
     activeMeasurementUnits:()=>state.unit,
     activeImperialDisplay:()=>'decimal',
+    syncStudioCustomSelectTrigger(){},
     CORE_MEASUREMENT_FORMAT:{decimalsMetric:3,decimalsImperial:3,forceDecimal:true},
   });
   for(const name of [
@@ -200,7 +201,7 @@ test('only valid set entries can be chosen on a guide card, and the choice is hi
   assert.match(markup,/<option value="0">Mid 15 \(15 \/ 12\)<\/option>/);
   assert.match(markup,/<option value="1" disabled>Broken \(incomplete\)<\/option>/);
   assert.match(markup,/<option value="2" disabled>Half \(incomplete\)<\/option>/);
-  assert.match(markup,/aria-label="Runner 2: choose a guide from your set"/);
+  assert.match(markup,/aria-label="Runner 2: choose a measured guide"/);
   assert.equal(c.guideTrainSetSignature(entries,fmt).includes('vMid 15|15/12'),true);
 });
 
@@ -328,7 +329,7 @@ test('markup: guide set, mode label and caption exist once; the set sits outside
   const set=card.slice(card.indexOf('<details class="guide-train-set">'),card.indexOf('</details>',card.indexOf('<details class="guide-train-set">')));
   assert.match(set,/<summary>Measured guide set<\/summary>/);
   assert.match(set,/kept for this session only/);
-  assert.match(set,/ring centre height above the blank surface/);
+  assert.match(set,/centre height above the blank surface/);
   assert.equal((html.match(/data-workshop-tool-open="guide-train"/g)||[]).length,1,'no extra screens or launchers');
   assert.equal((html.match(/id="workshopToolGuideTrain"/g)||[]).length,1);
   assert.deepEqual([...card].filter((ch)=>ch.charCodeAt(0)>127),[]);

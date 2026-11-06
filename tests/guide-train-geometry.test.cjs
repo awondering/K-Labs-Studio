@@ -19,7 +19,7 @@ test('the illustrative default is unchanged: same positions, ring sizes and line
   assert.deepEqual(ref.warnings,[]);
   assert.deepEqual(ref.guides.map((g)=>Math.round(g.fromTipMm*10)/10),[1264.5,1126.5,1030.1,962.7,915.6,882.7,644.7,442.4,270.4,124.2,0]);
   assert.deepEqual(ref.guides.map((g)=>g.idMm),[30,21,15,10.5,7.5,5,5,5,5,5,5]);
-  assert.deepEqual(ref.guides.map((g)=>Math.round(g.heightMm*100)/100),[36,32.51,30.07,28.36,27.17,26.34,20.32,15.2,10.84,7.14,4]);
+  assert.deepEqual(ref.guides.map((g)=>Math.round(g.heightMm*100)/100),[36,32.51,30.07,28.36,27.17,26.34,8.96,8.4,7.94,7.54,4]);
   assert.equal(ref.summary.mode,'illustrative');
   assert.equal(ref.summary.measuredCount,0);
   assert.equal(ref.summary.totalGuides,11);
@@ -244,7 +244,7 @@ test('the reduction train mathematics is untouched when nothing is measured, wit
 
 test('uniform scaling of every length, measured values included, scales the solved positions (unit changes do not alter the geometry)',()=>{
   const k=1.1;
-  const lengths=['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','settledLineMm','runnerMinGapMm'];
+  const lengths=['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','settledLineMm','runnerMinGapMm','runnerIdMm','runnerCentreHeightMm'];
   const scaled={...base};
   lengths.forEach((key)=>{scaled[key]=base[key]*k;});
   const entries={0:{idMm:30,centreHeightMm:30},2:{idMm:15,centreHeightMm:20},7:{idMm:6,centreHeightMm:14}};

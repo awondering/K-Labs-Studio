@@ -65,7 +65,7 @@
      2. n reduction guides follow, the last one at the geometric choke. Their required ring sizes step down
         by a constant ratio: ID_k = stripperID * rho^k with rho = (chokeID / stripperID)^(1/n), where
         chokeID = settledLine * (1 + clearance). Each guide sits where the envelope equals ID_k / (1 + clearance).
-     3. Guide centre heights are proposed on the line path: on the reel-axis ray at the stripper, then on the
+     3. Reduction-guide centre heights are proposed on the line path: on the reel-axis ray at the stripper, then on the
         straight chord from the stripper to the tip-top centre.
      4. If the choke would fall beyond the tip, the chain is compressed to end 5 % of the stripper-to-tip
         distance before the tip-top, and a warning is raised.
@@ -84,8 +84,13 @@
        The default q is a starting value for the owner to adjust, not an industry value.
      - The last gap (last runner to tip-top) is never allowed below the minimum gap setting. If the progression
        would make it shorter, it is set to the minimum and the other gaps share the remaining span with the same ratio.
-     - Runners sit on the same straight line chord as the reduction guides, so the line path is unchanged by them.
-       Their proposed ring size is the computed minimum for the line envelope at that point, rounded up to 0.5 mm.
+     - Runners are physical guides, not line-path points. Every runner shares ONE ring size and ONE ring-centre
+       height above the blank surface (editable settings, default illustrative values). Mounting position changes
+       only where a runner sits; blank taper changes only its axis height (blank radius + centre height). A runner
+       differs from the others only when the builder explicitly chooses a different ring or measured guide for it.
+       The line path is then drawn through the actual ring centres, never the other way round.
+     - The reduction train ends on a ring no smaller than the runner ring, and a warning is raised when the runners
+       are taller than the choke guide or their ring would overlap the blank. Nothing is silently changed.
      - A runner edited by the user must stay at least the minimum gap from its neighbours. Tight proposals are
        reported as warnings.
    The reduction train, the choke and the line path are calculated exactly as in Phase 1; with zero runners the
@@ -132,6 +137,9 @@
     {key:'runnerCount',label:'running guide count',kind:'int',min:0,max:12},
     {key:'runnerRatio',label:'running guide spacing ratio',kind:'ratio',min:0.5,max:1.5},
     {key:'runnerMinGapMm',label:'minimum running guide gap',kind:'length',min:10,max:300},
+    // One physical specification shared by every running guide (a builder normally uses identical runners).
+    {key:'runnerIdMm',label:'running guide ring inner diameter',kind:'length',min:1,max:80},
+    {key:'runnerCentreHeightMm',label:'running guide ring centre height above the blank',kind:'length',min:0,max:200},
   ];
   const FIELD_BY_KEY=FIELDS.reduce((map,field)=>{map[field.key]=field;return map;},{});
   const GUIDE_LIMITS={idMm:{min:1,max:80},centreHeightMm:{min:0,max:200}};
@@ -160,6 +168,8 @@
     runnerCount:4,
     runnerRatio:0.85,
     runnerMinGapMm:50,
+    runnerIdMm:5,
+    runnerCentreHeightMm:6,
   };
 
   const METHOD_STEPS=[
@@ -171,8 +181,8 @@
     'Initial train: the stripper sits where the envelope just fits its ring. Required ring sizes then step down by a constant ratio to the settled-line ring, and each guide sits where the envelope equals its required size. The last reduction guide is at the choke.',
     'Guide geometry: a guide\'s ring size, its ring centre height above the blank surface and its mounting position are separate. Size and height belong to the guide; only the mounting position is chosen. The ring centre sits at the blank radius plus the centre height, so it follows the blank taper.',
     'Measured guides: a ring size or centre height you enter is treated as fixed. The guide is placed at the first point from the reel where its ring is large enough for the line cone, with the line path bending through the actual ring centres. If no position works the entered values are kept and a warning is shown.',
-    'Illustrative guides: without measurements, sizes and heights are proposals on the line path. Edit any size, height or position and everything recalculates from your values.',
-    'Running guides: the span from the choke guide to the tip-top is divided into gaps that shrink by a fixed ratio toward the tip, and the last gap is never shorter than the minimum gap. This is an adjustable starting progression, not a formula for the right positions.',
+    'Illustrative guides: without measurements, reduction-guide sizes and heights are proposals on the line path (running guides use the shared runner ring and height instead). Edit any size, height or position and everything recalculates from your values.',
+    'Running guides: all runners share one ring size and one ring-centre height above the blank, so identical guides stay identical wherever they are mounted. The span from the choke guide to the tip-top is divided into gaps that shrink by a fixed ratio toward the tip, and the last gap is never shorter than the minimum gap. This is an adjustable starting progression, not a formula for the right positions.',
   ];
   const ASSUMPTIONS=[
     'The flare half-angle, the settled line diameter and the ring clearance are modelling assumptions you can edit. They are not industry values.',
@@ -180,7 +190,7 @@
     'The blank is straight and unloaded, and all guides lie in one vertical plane.',
     'Ring wall thickness, frame shape and guide weight are ignored.',
     'Proposed ring sizes are computed minimums rounded up to 0.5 mm. They are not product specifications.',
-    'The running-guide spacing ratio and minimum gap are adjustable starting values, not industry values.',
+    'The running-guide spacing ratio, minimum gap, ring size and frame height are adjustable starting values, not industry values or product specifications.',
     'Guides without measurements are illustrative: their sizes and heights are proposals, not guide specifications.',
     'Mounting position is taken as the ring plane. Ring offset from the foot, foot length, wraps and ring wall thickness are ignored.',
   ];
@@ -329,12 +339,14 @@
     const tipCentre=measuredHeight(lastIndex)?conAt(lastIndex).centreHeightMm:v.tipTopCentreHeightMm;
     const tipY=bladeRadius(v,v.rodLengthMm)+tipCentre;
     const stripperEnvelope=stripperId/m.fit;
-    const chokeId=v.settledLineMm*m.fit;
+    // The reduction train ends on a ring no smaller than the running guides that follow it.
+    const runnerFloor=v.runnerCount>0?v.runnerIdMm:0;
+    const chokeId=Math.max(v.settledLineMm*m.fit,runnerFloor);
     if(stripperEnvelope>=v.spoolDiameterMm){
       err(stripperField,'stripper-too-big','The stripper ring is as large as the line cone at the spool, so it would have to sit on the spool. Use a smaller stripper ring.');
     }
     if(stripperId<=chokeId){
-      err(stripperField,'not-reducing',`The stripper ring must be larger than ${f.length(chokeId)}, the smallest ring the settled line needs, otherwise there is nothing to reduce.`);
+      err(stripperField,'not-reducing',`The stripper ring must be larger than ${f.length(chokeId)}, the smallest ring the line and the running guides need, otherwise there is nothing to reduce.`);
     }
     if(errors.length)return {ok:false,errors};
 
@@ -379,7 +391,7 @@
       sEnd=s1+(endLimit-x1)/cosPsi;
       chainCompressed=true;
     }
-    const endId=m.envelope(sEnd)*m.fit;
+    const endId=Math.max(m.envelope(sEnd)*m.fit,runnerFloor);
     const rho=Math.pow(endId/stripperId,1/v.reductionCount);
     const guides=[{
       role:'stripper',xMm:x1,idMm:stripperId,heightMm:y1,centreHeightMm:y1-bladeRadius(v,x1),targetIdMm:stripperId,sMm:s1,
@@ -438,19 +450,14 @@
     for(let k=0;k<v.runnerCount;k+=1){
       const index=v.reductionCount+1+k;
       runnerX+=plan.gaps[k];
-      let yk;
-      let sk;
-      if(!measuredHeight(index) && onChord){
-        sk=s1+(runnerX-x1)/cosPsi;
-        yk=chordY(runnerX);
-      }else{
-        yk=measuredHeight(index)?bladeRadius(v,runnerX)+conAt(index).centreHeightMm:chordY(runnerX);
-        sk=prevS+hypot(runnerX-prevX,yk-prevY);
-        if(measuredHeight(index))onChord=false;
-      }
-      const target=measuredId(index)?conAt(index).idMm:m.envelope(sk)*m.fit;
+      // A running guide is a physical guide: its ring and frame height come from the shared runner specification (or
+      // the builder's own measurement), never from the line path. Only the mounting position varies.
+      const target=measuredId(index)?conAt(index).idMm:v.runnerIdMm;
+      const centre=measuredHeight(index)?conAt(index).centreHeightMm:v.runnerCentreHeightMm;
+      const yk=bladeRadius(v,runnerX)+centre;
+      const sk=prevS+hypot(runnerX-prevX,yk-prevY);
       guides.push({
-        role:'runner',xMm:runnerX,idMm:measuredId(index)?target:ceilHalf(target),heightMm:yk,centreHeightMm:yk-bladeRadius(v,runnerX),
+        role:'runner',xMm:runnerX,idMm:target,heightMm:yk,centreHeightMm:centre,
         targetIdMm:target,sMm:sk,solved:true,shortfallMm:0,
       });
       prevX=runnerX;prevY=yk;prevS=sk;
@@ -644,6 +651,7 @@
     const minClear=envelope.reduce((best,p)=>p.clearanceMm<best.clearanceMm?p:best,envelope[0]);
 
     // Warnings (design problems; the design is still drawn).
+    let sharedRunnerWarned=false;
     guides.forEach((g)=>{
       const noFitPosition=!g.proposalSolved && !g.moved;
       if(noFitPosition){
@@ -651,7 +659,13 @@
       }else if(!g.fits){
         warn(`guide${g.index}.idMm`,'ring-too-small',`${g.label}: the ${f.length(g.idMm)} ring is ${f.length(-g.marginMm)} short of the ${f.length(g.requiredIdMm)} this position needs.`);
       }
-      if(g.ringTopClearanceMm!==null && g.ringTopClearanceMm<-1e-9){
+      const sharedRunner=g.role==='runner' && !g.measured.id && !g.measured.height;
+      if(sharedRunner && g.ringTopClearanceMm<-1e-9){
+        if(!sharedRunnerWarned){
+          sharedRunnerWarned=true;
+          warn('runnerCentreHeightMm','runner-ring-overlaps-blank',`The running guides' ${f.length(v.runnerIdMm)} ring needs a centre height of at least ${f.length(v.runnerIdMm/2)} above the blank, but ${f.length(v.runnerCentreHeightMm)} is set. Use a smaller ring or a taller frame; the values were not changed.`);
+        }
+      }else if(g.ringTopClearanceMm!==null && g.ringTopClearanceMm<-1e-9){
         warn(`guide${g.index}.centreHeightMm`,'ring-overlaps-blank',g.measured.id && g.measured.height
           ?`${g.label}: the measured ${f.length(g.idMm)} ring needs a centre height of at least ${f.length(g.idMm/2)} above the blank, but ${f.length(g.centreHeightMm)} was entered. Check the two measurements.`
           :`${g.label}: the ring would overlap the blank. Increase its centre height.`);
@@ -662,6 +676,12 @@
     }
     if(chokeBeyond){
       warn('flareAngleDeg','choke-beyond-tip','The line is not fully gathered before the tip-top: the geometric choke falls beyond the end of the rod. The reduction guides were compressed to fit.');
+    }
+    // The choke guide hands the line to the running guides: they should be no taller than it and no larger.
+    const chokeAtIndex=guides.find((g)=>g.role==='choke');
+    const firstRunner=guides.find((g)=>g.role==='runner');
+    if(chokeAtIndex && firstRunner && firstRunner.centreHeightMm>chokeAtIndex.centreHeightMm+1e-9){
+      warn(`guide${firstRunner.index}.centreHeightMm`,'runner-taller-than-choke',`${firstRunner.label}: its ring centre (${f.length(firstRunner.centreHeightMm)} above the blank) is higher than the choke guide's (${f.length(chokeAtIndex.centreHeightMm)}). Running guides are normally lower than the guide that gathers the line.`);
     }
     for(let i=1;i<guides.length;i+=1){
       if(guides[i].idMm>guides[i-1].idMm+1e-9){

@@ -33,7 +33,7 @@ function harness({unit='metric',runnerCount=0}={}){
   const state={
     unit,imperialDisplay:'decimal',rodLengthMm:2130,buttOdMm:14,tipOdMm:2.4,spoolLipMm:560,spoolDiameterMm:40,
     reelHeightMm:36,reelAngleDeg:0,reductionCount:5,stripperIdMm:30,tipTopIdMm:5,tipTopCentreHeightMm:2.8,
-    flareAngleDeg:1.5,settledLineMm:4,clearancePct:25,runnerCount,runnerRatio:0.85,runnerMinGapMm:50,guides:[],guideSet:[],selected:0,invalid:{},notice:'',
+    flareAngleDeg:1.5,settledLineMm:4,clearancePct:25,runnerCount,runnerRatio:0.85,runnerMinGapMm:50,runnerIdMm:5,runnerCentreHeightMm:6,guides:[],guideSet:[],selected:0,invalid:{},notice:'',
   };
   const c=vm.createContext({
     KLabsGuideTrain:Engine,
@@ -64,7 +64,7 @@ test('UI defaults equal the engine defaults, so the first render matches the doc
     assert.equal(state[key],d[key],`default ${key}`);
   }
   const block=source.slice(source.indexOf('  guideTrain:{'),source.indexOf('  guideTrain:{')+900);
-  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','reelAngleDeg','reductionCount','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','flareAngleDeg','settledLineMm','clearancePct','runnerCount','runnerRatio','runnerMinGapMm']){
+  for(const key of ['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','reelAngleDeg','reductionCount','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','flareAngleDeg','settledLineMm','clearancePct','runnerIdMm','runnerCentreHeightMm','runnerCount','runnerRatio','runnerMinGapMm']){
     const match=block.match(new RegExp(`${key}:([-\\d.]+)`));
     assert.ok(match,`state declares ${key}`);
     assert.equal(Number(match[1]),d[key],`ui.js default ${key} equals the engine`);

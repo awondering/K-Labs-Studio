@@ -33,7 +33,7 @@ test('the beginner view keeps setup to rod length, approximate reel size, Genera
   assert.ok(advancedAt>0);
   const main=card.slice(0,advancedAt);
   for(const id of ['gtRodLength','gtReelSize','gtGenerate','gtView','gtAdjust'])assert.ok(main.includes(`id="${id}"`),id);
-  assert.doesNotMatch(main,/gtSpoolLip|gtButtOd|gtTipOd|gtSpoolDiameter|gtReelHeight|gtReductionCount|gtRunnerCount|gtRunnerRatio|gtFlareAngle|gtClearance|gtSumChoke/);
+  assert.doesNotMatch(main,/gtSpoolLip|gtButtOd|gtTipOd|gtSpoolDiameter|gtReelHeight|gtRunnerId|gtRunnerHeight|gtRunnerRatio|gtFlareAngle|gtClearance|gtSumChoke/);
   assert.match(main,/<h4 id="gtProposalTitle">Proposed Guide Layout<\/h4>/);
   assert.match(main,/<summary>View &amp; Adjust<\/summary>/);
   assert.doesNotMatch(main,/\b(solver|flare angle|clearance|geometric choke)\b/i);

@@ -289,6 +289,8 @@ const workshopToolsState={
     runnerCount:4,
     runnerRatio:0.85,
     runnerMinGapMm:50,
+    runnerIdMm:5,
+    runnerCentreHeightMm:6,
     guides:[],
     guideSet:[],
     selected:0,
@@ -2778,6 +2780,8 @@ function guideTrainRequest(state){
     runnerCount:state.runnerCount,
     runnerRatio:state.runnerRatio,
     runnerMinGapMm:state.runnerMinGapMm,
+    runnerIdMm:state.runnerIdMm,
+    runnerCentreHeightMm:state.runnerCentreHeightMm,
     guides:state.guides,
   };
 }
@@ -2861,7 +2865,7 @@ function renderGuideTrainMethod(engine){
 const GUIDE_TRAIN_MAIN_FIELDS=[
   ['gtRodLength','rodLengthMm'],['gtSpoolLip','spoolLipMm'],['gtButtOd','buttOdMm'],['gtTipOd','tipOdMm'],
   ['gtSpoolDiameter','spoolDiameterMm'],['gtReelHeight','reelHeightMm'],['gtSettledLine','settledLineMm'],
-  ['gtRunnerMinGap','runnerMinGapMm'],
+  ['gtRunnerMinGap','runnerMinGapMm'],['gtRunnerId','runnerIdMm'],['gtRunnerHeight','runnerCentreHeightMm'],
 ];
 const GUIDE_TRAIN_REEL_ESTIMATES={small:32,medium:40,large:48};
 function guideTrainReelEstimate(size){

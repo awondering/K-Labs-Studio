@@ -26,7 +26,7 @@ const constBlock=(name)=>{
 const ELEMENT_IDS=[
   'workshopToolGuideTrain','gtMessages','gtView','gtResults','gtViewCanvas','gtGenerate','gtReelSize','gtAdjust','gtSumChoke','gtSumCone','gtSumStripper','gtSumRatio',
   'gtSumRunners','gtSumClearance','gtGuidesUnit','gtGuides','gtResetGuides','gtMethodBody','gtRodLength','gtSpoolLip','gtButtOd',
-  'gtTipOd','gtSpoolDiameter','gtReelHeight','gtSettledLine','gtRunnerMinGap','gtReelAngle','gtFlareAngle','gtClearance',
+  'gtTipOd','gtSpoolDiameter','gtReelHeight','gtSettledLine','gtRunnerMinGap','gtRunnerId','gtRunnerHeight','gtReelAngle','gtFlareAngle','gtClearance',
   'gtReductionCount','gtRunnerCount','gtRunnerRatio','gtMode','gtCaption','gtSetRows','gtSetAdd',
 ];
 
@@ -50,6 +50,7 @@ function harness({unit='metric'}={}){
     workshopToolsState:{activeTool:'guide-train',guideTrain:state},
     activeMeasurementUnits:()=>state.unit,
     activeImperialDisplay:()=>'decimal',
+    syncStudioCustomSelectTrigger(){},
     CORE_MEASUREMENT_FORMAT:{decimalsMetric:3,decimalsImperial:3,forceDecimal:true},
   });
   for(const name of [

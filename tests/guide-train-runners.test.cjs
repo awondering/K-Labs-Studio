@@ -72,8 +72,6 @@ test('adding runners leaves the reduction train, choke and line path exactly as 
       assert.equal(withRunners.summary.reductionRatio,without.summary.reductionRatio);
       assert.equal(withRunners.summary.coneLengthMm,without.summary.coneLengthMm);
       assert.equal(withRunners.summary.stripperFromTipMm,without.summary.stripperFromTipMm);
-      close(withRunners.summary.pathLengthMm,without.summary.pathLengthMm,1e-9,'runners lie on the line chord, so the path length is unchanged');
-      close(withRunners.summary.minBlankClearanceMm,without.summary.minBlankClearanceMm,1e-9,'closest line to blank');
       assert.equal(withRunners.guides[withRunners.guides.length-1].role,'tip-top');
       assert.equal(withRunners.guides[withRunners.guides.length-1].xMm,without.guides[without.guides.length-1].xMm);
       assert.equal(withRunners.guides[withRunners.guides.length-1].heightMm,without.guides[without.guides.length-1].heightMm);
@@ -192,14 +190,15 @@ test('runner ring sizes are the computed minimum for the line envelope, rounded 
   d.guides.filter((g)=>g.role==='runner').forEach((g)=>assert.ok(g.idMm<=choke.idMm));
 });
 
-test('runner heights follow the same straight line as the reduction guides, so the path stays straight beyond the stripper',()=>{
+test('runners are physical guides: one shared ring and centre height, never fitted to the line path',()=>{
   const d=design({});
-  const s=d.guides[0],t=d.guides[d.guides.length-1];
-  d.guides.forEach((g)=>{
-    const onChord=s.heightMm+(g.xMm-s.xMm)*(t.heightMm-s.heightMm)/(t.xMm-s.xMm);
-    close(g.heightMm,onChord,1e-9,`${g.label} height on the chord`);
+  const runners=d.guides.filter((g)=>g.role==='runner');
+  assert.equal(runners.length,4);
+  runners.forEach((g)=>{
+    assert.equal(g.idMm,base.runnerIdMm,`${g.label} ring size`);
+    assert.equal(g.centreHeightMm,base.runnerCentreHeightMm,`${g.label} centre height`);
+    close(g.heightMm,G.bladeRadius(d.input,g.xMm)+base.runnerCentreHeightMm,1e-9,`${g.label} axis height follows the taper`);
   });
-  d.segments.slice(1).forEach((seg)=>close(seg.psiDeg,d.segments[1].psiDeg,1e-9,'no bend between guides on the chord'));
 });
 
 test('edits: runner position, ring size and height recalculate and the proposal is kept for reset',()=>{
@@ -341,7 +340,7 @@ test('blank clearance is still exact with runners: reported minimum matches a br
 
 test('scaling every length uniformly scales runner positions, and messages follow the unit formatter',()=>{
   const k=1.1;
-  const lengths=['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','settledLineMm','runnerMinGapMm'];
+  const lengths=['rodLengthMm','buttOdMm','tipOdMm','spoolLipMm','spoolDiameterMm','reelHeightMm','stripperIdMm','tipTopIdMm','tipTopCentreHeightMm','settledLineMm','runnerMinGapMm','runnerIdMm','runnerCentreHeightMm'];
   const scaled={...base};
   lengths.forEach((key)=>{scaled[key]=base[key]*k;});
   const a=design({}),b=G.designGuideTrain(scaled);
