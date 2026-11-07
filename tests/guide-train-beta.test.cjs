@@ -8,13 +8,14 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const css=fs.readFileSync(path.join(root,'css','studio.css'),'utf8');
 const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
 
-const launcher=html.slice(html.indexOf('data-workshop-tool-open="guide-train"'),html.indexOf('</button>',html.indexOf('data-workshop-tool-open="guide-train"')));
+const launcher=html.match(/<button(?=[^>]*data-workshop-tool-open="guide-train")[^>]*>[\s\S]*?<\/button>/)?.[0]||'';
 const cardStart=html.indexOf('<article id="workshopToolGuideTrain"');
 const card=html.slice(cardStart,html.indexOf('</article>',cardStart));
 const head=card.slice(0,card.indexOf('guide-train-inputs'));
 const plain=(markup)=>markup.replace(/<[^>]+>/g,'').replace(/&mdash;/g,'-').replace(/\s+/g,' ').trim();
 
-test('Beta: the Workshop launcher and the tool heading are labelled',()=>{
+test('Guide Train launcher is hidden while its tool heading remains labelled Beta',()=>{
+  assert.match(launcher,/<button[^>]*\shidden(?:\s|>)/);
   assert.match(launcher,/Guide Train Designer <span class="guide-train-beta">Beta<\/span>/);
   assert.match(card,/<h3>Guide Train Designer <span class="guide-train-beta">Beta<\/span><\/h3>/);
   assert.equal((html.match(/guide-train-beta">/g)||[]).length,2,'exactly the launcher and the heading');
@@ -45,10 +46,14 @@ test('Guide Train Beta styling stays small and scoped',()=>{
   assert.equal(/#workshopToolThreadWrap \.guide-train/.test(css),false);
 });
 
-test('Guide Train remains Beta while other Workshop tools stay unchanged',()=>{
+test('Guide Train remains Beta while the other Workshop launchers stay visible',()=>{
   assert.equal((html.match(/data-workshop-tool-open="guide-train"/g)||[]).length,1,'one launcher, standalone');
   assert.equal((html.match(/id="workshopToolGuideTrain"/g)||[]).length,1);
-  for(const tool of ['diameter','grip','thread-wrap'])assert.ok(html.includes(`data-workshop-tool-open="${tool}"`),tool);
+  for(const tool of ['guide-spacing','grip','diameter','thread-wrap']){
+    const launcherTag=html.match(new RegExp(`<button(?=[^>]*data-workshop-tool-open="${tool}")[^>]*>`))?.[0];
+    assert.ok(launcherTag,`${tool} launcher remains`);
+    assert.doesNotMatch(launcherTag,/\shidden(?:\s|>)/,`${tool} launcher remains visible`);
+  }
   assert.match(html,/Guide Train Designer <span class="guide-train-beta">Beta<\/span>/);
   assert.match(html,/Thread Wrap Designer<\/span>/);
   assert.doesNotMatch(html,/thread-wrap-beta/);
@@ -56,7 +61,7 @@ test('Guide Train remains Beta while other Workshop tools stay unchanged',()=>{
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache is bumped exactly once from the production baseline (build148-v190 -> v191)',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v191';/);
+test('service worker cache is bumped exactly once from the production baseline (build148-v191 -> v192)',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v192';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });
