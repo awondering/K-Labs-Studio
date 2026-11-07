@@ -75,8 +75,9 @@ function scheduleServiceWorkerUpdateChecks(registration){
 }
 
 if('serviceWorker' in navigator){
+	let hadControllerBeforeRegistration=false;
 	window.addEventListener('load',()=>{
-		const hadControllerBeforeRegistration=!!navigator.serviceWorker.controller;
+		hadControllerBeforeRegistration=!!navigator.serviceWorker.controller;
 		if(isLocalDevelopment()){
 			navigator.serviceWorker.getRegistrations().then((registrations)=>Promise.all(registrations.map((registration)=>registration.unregister()))).catch(()=>{}).then(()=>clearLocalServiceWorkerState()).then(()=>{
 				return forceLocalDevReload();
@@ -98,9 +99,9 @@ if('serviceWorker' in navigator){
 
 	navigator.serviceWorker.addEventListener('controllerchange',()=>{
 		setOfflineStatusLabel('OFFLINE READY');
-			if(hadControllerBeforeRegistration){
-				reloadOnceForNewController();
-			}
+		if(hadControllerBeforeRegistration){
+			reloadOnceForNewController();
+		}
 	});
 }
 
