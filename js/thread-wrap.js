@@ -438,7 +438,7 @@
       lines:k===0
         ?['No accent threads were selected, so the diamonds are the single-thread centre lines only. Choose 1 to 3 threads each side to add colour.']
         :[
-          `Lay ${k} ${accentName} thread${k===1?'':'s'} tight against each side of every ${mainName} centre line, one pass at a time, in the same direction and through the same marks.`,
+          `Lay each ${accentName} accent thread snugly alongside the established threads, following the developing diamond pattern. Keep it close to the ${mainName} lines; it does not need to pass through the exact crossing marks.`,
           `That is ${k*2} accent strand${k*2===1?'':'s'} for each of the ${n} centre lines (${k*2*n} in all).`,
         ],
     });

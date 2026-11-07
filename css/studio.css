@@ -12969,38 +12969,6 @@ body.klabs-auth-resolving::after {
   padding:12px 0;
 }
 
-.thread-wrap-beta{
-  display:inline-block;
-  margin-left:6px;
-  padding:1px 7px;
-  border:1px solid rgba(var(--kl-red-rgb),.6);
-  border-radius:999px;
-  color:#f0c9c4;
-  font-size:9px;
-  font-weight:700;
-  letter-spacing:.12em;
-  line-height:1.5;
-  text-transform:uppercase;
-  vertical-align:middle;
-}
-
-#workshopToolThreadWrap .thread-wrap-beta-note{
-  padding:8px 10px;
-  border-radius:10px;
-  border:1px solid rgba(var(--kl-red-rgb),.4);
-  background:rgba(var(--kl-red-rgb),.1);
-  color:rgba(236,229,217,.92);
-  font-size:11px;
-  line-height:1.5;
-  letter-spacing:.02em;
-}
-
-#workshopToolThreadWrap .thread-wrap-beta-note strong{
-  color:#f0c9c4;
-  letter-spacing:.1em;
-  text-transform:uppercase;
-}
-
 @media (min-width:761px){
   .app-shell:has(#workshopLandingScreen.active #workshopToolThreadWrap:not([hidden])){
     width:min(100%,840px);

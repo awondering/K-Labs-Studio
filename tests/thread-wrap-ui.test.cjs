@@ -432,7 +432,7 @@ test('desktop layout: the wider shell applies only while this tool is open, insi
 
 test('every new style rule is scoped to the Thread Wrap Designer so other Workshop tools are untouched',()=>{
   const block=css.slice(css.indexOf('/* Thread Wrap Designer (Workshop)')).replace(/\/\*[\s\S]*?\*\//g,'');
-  const allowed=['#workshopToolThreadWrap','.thread-wrap-beta','.app-shell:has(#workshopLandingScreen.active #workshopToolThreadWrap'];
+  const allowed=['#workshopToolThreadWrap','.app-shell:has(#workshopLandingScreen.active #workshopToolThreadWrap'];
   let checked=0;
   for(const match of block.matchAll(/(^|[}{])\s*([^{}@][^{}]*)\{/g)){
     const selector=match[2].trim();
@@ -516,29 +516,16 @@ test('validation messages and warnings render with correct degree signs',()=>{
   assert.match(h.e('threadWrapMessages').innerHTML,/about 8\d\.\d\u00B0 from the rod/);
 });
 
-test('Beta: launcher and tool header are labelled, with a clear not-physically-validated note',()=>{
+test('Thread Wrap is a standard Workshop tool with practical starting-mark guidance',()=>{
   const launcher=html.match(/<button[^>]*data-workshop-tool-open="thread-wrap"[\s\S]*?<\/button>/)[0];
-  assert.match(launcher,/Thread Wrap Designer <span class="thread-wrap-beta">Beta<\/span>/);
+  assert.match(launcher,/<span class="workshop-tool-launch__title">Thread Wrap Designer<\/span>/);
+  assert.doesNotMatch(launcher,/Beta|thread-wrap-beta/);
   const card=html.match(/<article id="workshopToolThreadWrap"[\s\S]*?<\/article>/)[0];
-  assert.match(card,/<h3>Thread Wrap Designer <span class="thread-wrap-beta">Beta<\/span><\/h3>/);
-  const note=card.match(/<p class="thread-wrap-beta-note" role="note">([\s\S]*?)<\/p>/);
-  assert.ok(note,'beta note');
-  assert.match(note[1],/have not yet been physically validated on a real rod blank/);
-  assert.match(note[1],/approximate/);
-  assert.match(note[1],/spare section/);
-  // the tool must never claim to be validated
-  const visible=card.replace(/<[^>]+>/g,' ');
-  const claims=visible.match(/[^.]*\bvalidated\b[^.]*\./g)||[];
-  claims.forEach((sentence)=>assert.match(sentence,/not yet been physically validated|Needs checking|not the physical result/i,sentence));
-  assert.ok(!/\b(guaranteed|certified|shop-floor accurate|proven|verified on a real)\b/i.test(visible));
-  // the other Workshop launchers are not labelled
-  assert.equal((html.match(/thread-wrap-beta">/g)||[]).length,2);
+  assert.match(card,/<h3>Thread Wrap Designer<\/h3>/);
+  assert.match(card,/<p class="workshop-tool-note" role="note">Calculated positions are starting marks for laying out a basic diamond cross-wrap\.<\/p>/);
+  assert.doesNotMatch(card,/Beta|thread-wrap-beta/);
 });
 
-test('Beta badge is small and scoped to this feature',()=>{
-  const rule=css.match(/\.thread-wrap-beta\{([^}]*)\}/)[1];
-  assert.match(rule,/font-size:9px/);
-  assert.match(rule,/border-radius:999px/);
-  assert.match(rule,/rgba\(var\(--kl-red-rgb\)/);
-  assert.match(css,/#workshopToolThreadWrap \.thread-wrap-beta-note\{[^}]*font-size:11px/);
+test('Thread Wrap has no remaining Beta-only styling',()=>{
+  assert.doesNotMatch(css,/thread-wrap-beta/);
 });

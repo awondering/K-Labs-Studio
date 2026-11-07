@@ -33,30 +33,30 @@ test('nothing claims the layouts are validated',()=>{
   assert.doesNotMatch(text,/\b(proven|guaranteed|optimal|certified|physically validated)\b/i);
 });
 
-test('Beta styling reuses the established badge look and stays small and scoped',()=>{
+test('Guide Train Beta styling stays small and scoped',()=>{
   const rule=css.match(/\.guide-train-beta\{([^}]*)\}/)[1];
   assert.match(rule,/font-size:9px/);
   assert.match(rule,/border:1px solid rgba\(var\(--kl-red-rgb\),\.6\)/);
   assert.match(rule,/border-radius:999px/);
   assert.match(rule,/text-transform:uppercase/);
-  const thread=css.match(/\.thread-wrap-beta\{([^}]*)\}/)[1];
-  assert.equal(rule.replace(/\s+/g,''),thread.replace(/\s+/g,''),'identical to the existing Thread Wrap badge');
   const note=css.match(/#workshopToolGuideTrain \.guide-train-beta-note\{([^}]*)\}/)[1];
   assert.match(note,/font-size:11px/);
   assert.match(note,/rgba\(var\(--kl-red-rgb\),\.4\)/);
-  assert.equal(/#workshopToolThreadWrap \.guide-train|\.thread-wrap-beta[^{]*guide/.test(css),false);
+  assert.equal(/#workshopToolThreadWrap \.guide-train/.test(css),false);
 });
 
-test('publication is limited to the Guide Train Designer: Guide Spacing, other tools and the Thread Wrap Beta are untouched',()=>{
+test('Guide Train remains Beta while other Workshop tools stay unchanged',()=>{
   assert.equal((html.match(/data-workshop-tool-open="guide-train"/g)||[]).length,1,'one launcher, standalone');
   assert.equal((html.match(/id="workshopToolGuideTrain"/g)||[]).length,1);
   for(const tool of ['diameter','grip','thread-wrap'])assert.ok(html.includes(`data-workshop-tool-open="${tool}"`),tool);
-  assert.match(html,/Thread Wrap Designer <span class="thread-wrap-beta">Beta<\/span>/);
+  assert.match(html,/Guide Train Designer <span class="guide-train-beta">Beta<\/span>/);
+  assert.match(html,/Thread Wrap Designer<\/span>/);
+  assert.doesNotMatch(html,/thread-wrap-beta/);
   assert.doesNotMatch(card,/guide-spacing|Guide Spacing|guideSpecification|guideLayout/i);
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache is bumped exactly once from the production baseline (build148-v189 -> v190)',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v190';/);
+test('service worker cache is bumped exactly once from the production baseline (build148-v190 -> v191)',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v191';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });

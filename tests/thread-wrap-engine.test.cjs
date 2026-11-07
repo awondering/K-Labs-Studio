@@ -386,6 +386,9 @@ test('instructions describe exactly the generated design',()=>{
     });
     assert.ok(steps[4].title.includes(`${axes} red centre-line spirals`));
     assert.ok(steps[5].title.includes('2 silver threads each side'));
+    assert.match(steps[5].lines[0],/snugly alongside the established threads, following the developing diamond pattern/);
+    assert.match(steps[5].lines[0],/does not need to pass through the exact crossing marks/);
+    assert.doesNotMatch(steps[5].lines[0],/through the same marks/);
     assert.ok(steps[5].lines.join(' ').includes(`${2*2*axes} in all`));
     assert.ok(text.includes('The gaps grow from'));
     assert.ok(steps[2].lines.join(' ').includes('Row '+R));
