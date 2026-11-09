@@ -11817,6 +11817,35 @@ body.klabs-auth-resolving::after {
   }
 }
 
+@media (min-width:900px){
+  .app-shell:has(#studioComponentsPanel:not([hidden]) #studioComponentName){
+    width:min(100%,600px);
+  }
+  #studioComponentDetails:has(#studioComponentName) .studio-component-details__fields > label:has(#studioComponentName){
+    grid-row:1;
+  }
+  #studioComponentDetails:has(#studioComponentName) .studio-component-details__fields > label:has(#studioComponentDescription){
+    grid-row:2;
+  }
+  #studioComponentDetails:has(#studioComponentName) .studio-component-details__fields > label:has(#studioComponentBrand){
+    grid-column:1 / -1;
+    grid-row:3;
+  }
+  #studioComponentDetails:has(#studioComponentName) .studio-component-details__fields > label:has(#studioComponentCategory){
+    grid-column:1 / 4;
+    grid-row:4;
+  }
+  #studioComponentDetails:has(#studioComponentName) .studio-component-details__fields > label:has(#studioComponentSubcategory){
+    grid-column:4 / -1;
+    grid-row:4;
+  }
+  #studioComponentDetails:has(#studioComponentName) .studio-component-details__fields > .quote-component-field--cost{
+    grid-row:5;
+    grid-template-columns:minmax(0,1fr);
+    gap:3px;
+  }
+}
+
 /* Pricing & Tax: compact rhythm, shared dark inputs, matching pickers. */
 #settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields{
   grid-template-columns:repeat(2,minmax(0,1fr));
