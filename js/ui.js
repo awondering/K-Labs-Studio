@@ -14096,8 +14096,12 @@ function customerQuoteSummaryMarkup(){
   const confirmationText=customerDocumentConfirmationText(math.depositOutstanding);
   const totalRow=`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
   const shortfall=math.depositEnabled&&math.amountReceived>0&&math.depositOutstanding;
+  const labels=customerDocumentLabels();
+  const buildConfirmation=labels.key==='active'&&labels.jobType==='build';
+  const showDepositRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total));
+  const showDepositStillRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing));
   const pricingRows=math.amountReceived>0
-    ?`${totalRow}${shortfall?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${shortfall?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>Balance Owing</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
+    ?`${totalRow}${showDepositRequired?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${showDepositStillRequired?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>Balance Owing</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
     :math.depositEnabled
     ?`${totalRow}<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
     :totalRow;
@@ -14324,11 +14328,13 @@ function customerEmailLines(){
     if(hasCompletedDate)lines.push(`Completed: ${formatCustomerEmailLongDate(completedDate)}`);
   }else{
     if(math.amountReceived>0){
-      if(math.depositEnabled&&math.depositOutstanding)lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`);
+      const shortfall=math.depositEnabled&&math.depositOutstanding;
+      const buildConfirmation=docLabels.key==='active'&&docLabels.jobType==='build';
+      if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total)))lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`);
       lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
-      if(math.depositEnabled&&math.depositOutstanding)lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
+      if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing)))lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
       lines.push(`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
-    }else{
+    }else if(docLabels.key!=='active'||isRepair||math.depositEnabled){
       lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`,`Balance remaining: ${currencyWithCode(math.remainingBalance)}`);
     }
     const dueRaw=specificationValue(quote.estimatedCompletionDate);

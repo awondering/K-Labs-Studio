@@ -344,3 +344,103 @@ test('Customer document and email render received-payment wording and markup wir
   assert.match(source,/paid\?'Balance Owing':'Balance After Deposit'/);
   assert.match(source,/currency\(paid\?math\.balanceOwing:math\.remainingBalance\)/);
 });
+
+function confirmationHarness(saved){
+  const context=pricingHarness();
+  Object.assign(context,{
+    generateId:prefix=>`${prefix}-test`,
+    businessProfile:{businessName:'Example'},
+    currentBuildLifecycleStatus:()=>context.quote.quoteStatus,
+    quoteMaths:()=>({total:2500}),
+    currencyWithCode:value=>`$${Number(value).toFixed(2)} NZD`,
+    customerSafeText:value=>String(value||''),
+    customerSpecificationRows:()=>[],
+    customerIncludedParts:()=>[],
+    customerQuoteDeliveryMarkup:()=>'',
+    customerDocumentConfirmationText:()=>'',
+    customerQuoteBusinessLines:()=>[],
+    businessProfileHasPaymentDetails:()=>false,
+    customerIncludedPartsMarkup:()=>'',
+    customerBuildNotesMarkup:()=>'',
+    customerBuildNotesText:()=>'',
+    customerFulfilmentSection:()=>null,
+    activeEmailIncludeSignature:()=>false,
+    formatDateDisplay:value=>value,
+    formatCustomerEmailLongDate:value=>String(value),
+    escapeHtml:value=>String(value),
+  });
+  ['newQuoteTemplate','normalizeJobType','normalizeFulfilmentMethod','normalizePayments','normalizeQuote',
+    'customerDocumentLabels','customerQuoteSummaryMarkup','customerEmailLines']
+    .forEach(name=>vm.runInContext(extractFunction(name),context));
+  context.quote=context.normalizeQuote(JSON.parse(JSON.stringify(saved)));
+  return context;
+}
+
+function confirmationRows(context){
+  const markup=context.customerQuoteSummaryMarkup();
+  const pricing=markup.match(/<div class="view-quote__pricing">([\s\S]*?)<\/div>\s*<div class="view-quote__row">/);
+  assert.ok(pricing,'customer pricing is present');
+  const preview=Array.from(pricing[1].matchAll(/<span>([^<]+)<\/span><strong>([^<]+)<\/strong>/g),match=>`${match[1].toLowerCase()}: ${match[2]}`);
+  const email=Array.from(context.customerEmailLines())
+    .filter(line=>/^(Total|Deposit required|Deposit received|Deposit still required|Balance owing|Balance remaining): /.test(line))
+    .map(line=>line.toLowerCase().replace(/^total:/,'total price:'));
+  assert.deepEqual(email,preview.map(line=>line.toLowerCase()),'email and preview payment amounts agree');
+  return preview;
+}
+
+test('Build confirmation removes duplicate full-price deposit amounts after a payment',()=>{
+  const context=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:2500,
+    payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-10-18'}]});
+  assert.deepEqual(confirmationRows(context),[
+    'total price: $2500.00 NZD','deposit received: $1180.75 NZD','balance owing: $1319.25 NZD',
+  ]);
+  assert.equal(context.depositMaths().depositStillRequired,1319.25);
+  assert.equal(context.quote.payments[0].date,'2026-10-18');
+});
+
+test('Build confirmation keeps meaningful partial-deposit amounts and fully paid balance',()=>{
+  const partial=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:1000,
+    payments:[{id:'p1',type:'deposit',amount:400,date:'2026-10-18'}]});
+  assert.deepEqual(confirmationRows(partial),[
+    'total price: $2500.00 NZD','deposit required: $1000.00 NZD','deposit received: $400.00 NZD',
+    'deposit still required: $600.00 NZD','balance owing: $2100.00 NZD',
+  ]);
+  const paid=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'percent',depositValue:100,
+    payments:[{id:'p1',type:'deposit',amount:2500,date:'2026-10-18'}]});
+  assert.deepEqual(confirmationRows(paid),[
+    'total price: $2500.00 NZD','deposit received: $2500.00 NZD','balance owing: $0.00 NZD',
+  ]);
+});
+
+test('No payment and reopened legacy builds retain correct deposit information',()=>{
+  const none=confirmationHarness({quoteStatus:'active'});
+  assert.deepEqual(confirmationRows(none),['total price: $2500.00 NZD']);
+  const partial=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:500});
+  assert.deepEqual(confirmationRows(partial),[
+    'total price: $2500.00 NZD','deposit required: $500.00 NZD','balance remaining: $2000.00 NZD',
+  ]);
+  const full=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'percent',depositValue:100});
+  assert.deepEqual(confirmationRows(full),[
+    'total price: $2500.00 NZD','deposit required: $2500.00 NZD','balance remaining: $0.00 NZD',
+  ]);
+  const saved=JSON.parse(JSON.stringify({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:2500,
+    payments:[{id:'saved',type:'deposit',amount:1180.75,date:'2025-01-02'}]}));
+  assert.deepEqual(confirmationRows(confirmationHarness(saved)),[
+    'total price: $2500.00 NZD','deposit received: $1180.75 NZD','balance owing: $1319.25 NZD',
+  ]);
+});
+
+test('Quote, completed and repair documents keep their existing shortfall rows',()=>{
+  for(const [status,jobType] of [['quote','build'],['complete','build'],['active','repair']]){
+    const context=confirmationHarness({quoteStatus:status,jobType,depositEnabled:true,depositType:'fixed',depositValue:2500,
+      payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-10-18'}]});
+    const preview=context.customerQuoteSummaryMarkup();
+    assert.match(preview,/<span>Deposit Required<\/span>/);
+    assert.match(preview,/<span>Deposit Still Required<\/span>/);
+    if(status!=='complete'){
+      const email=context.customerEmailLines().join('\n');
+      assert.match(email,/Deposit required:/);
+      assert.match(email,/Deposit still required:/);
+    }
+  }
+});
