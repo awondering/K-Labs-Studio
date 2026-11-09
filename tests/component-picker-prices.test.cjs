@@ -17,6 +17,7 @@ function harness(records,components){
     quote:{components},
     records,
     expandedComponentRowIndex:-1,
+    pendingComponentDraftRows:new Set(),
     saves:0,
     specificationValue:(v)=>String(v==null?'':v).trim(),
     numberOrZero:(v)=>{const n=Number(v);return Number.isFinite(n)?n:0;},
@@ -26,7 +27,7 @@ function harness(records,components){
     componentSizePickerOptions:()=>[],
     shouldMergeDuplicateComponentCategory:()=>true,
     syncQuoteBlankFromComponents(){},
-    saveQuoteCurrent(){c.saves++;},
+    saveQuoteCurrent(){c.saves++;if(c.failSaveAt===c.saves)throw new Error('storage failed');},
     markQuoteDirty(){},
     renderQuoteComponents(){},
     updateQuoteSummary(){},
@@ -34,7 +35,7 @@ function harness(records,components){
     document:{querySelector:()=>null},
   };
   vm.createContext(c);
-  const names=['normalizeNameKey','normalizeComponent','mergeComponentRecord','normalizeUniqueComponents','enforceSingleSourceComponents','componentRowIsEffectivelyEmpty','componentRowHasMeaningfulData','findComponentLibraryRecordByName','applyComponentLibraryRecordToRow','setChoiceValue','applyChoiceSelection','defaultComponentRow'];
+  const names=['normalizeNameKey','normalizeComponent','mergeComponentRecord','normalizeUniqueComponents','enforceSingleSourceComponents','componentRowIsEffectivelyEmpty','componentRowHasMeaningfulData','findComponentLibraryRecordByName','applyComponentLibraryRecordToRow','setChoiceValue','applyChoiceSelection','applyComponentSizeSelection','prependComponentDraftRow','applyComponentSizeSelections','defaultComponentRow'];
   vm.runInContext(names.map(functionSource).join('\n'),c);
   vm.runInContext('quote.components=quote.components.map((r)=>r);',c);
   return c;
@@ -87,4 +88,72 @@ test('saved row round-trips through normalisation with prices',()=>{
   const reloaded=vm.runInContext('normalizeUniqueComponents(quote.components,{keepDraftRows:false})',c)[0];
   assert.equal(reloaded.cost,1);
   assert.equal(reloaded.unitPrice,25);
+});
+
+test('adding a draft collapses after saving and its summary can be reopened',()=>{
+  const c=harness([decal],[{category:'',quantity:1,cost:0}]);
+  c.pendingComponentDraftRows.add(c.quote.components[0]);
+  c.expandedComponentRowIndex=0;
+  pick(c,'lib-decal','Standard text decal');
+  assert.equal(c.expandedComponentRowIndex,-1);
+  assert.equal(c.quote.components[0].unitPrice,25);
+  assert.equal(c.pendingComponentDraftRows.has(c.quote.components[0]),false);
+  Object.assign(c,{
+    pruneComponentDraftRows:()=>({changed:false,indexMap:new Map()}),
+    persistComponentDraftCleanup(){},hideComponentRowMenu(){},waitForDomRender(){},
+  });
+  vm.runInContext(functionSource('toggleComponentRow'),c);
+  c.toggleComponentRow(0,{focusDescription:false});
+  assert.equal(c.expandedComponentRowIndex,0);
+  c.toggleComponentRow(0,{focusDescription:false});
+  assert.equal(c.expandedComponentRowIndex,-1);
+});
+
+test('failed save keeps a new component editor expanded',()=>{
+  for(const failSaveAt of [1,2,3]){
+    const c=harness([decal],[{category:'',quantity:1,cost:0}]);
+    c.pendingComponentDraftRows.add(c.quote.components[0]);
+    c.expandedComponentRowIndex=0;
+    c.failSaveAt=failSaveAt;
+    assert.throws(()=>pick(c,'lib-decal','Standard text decal'),/storage failed/);
+    assert.equal(c.expandedComponentRowIndex,0);
+  }
+});
+
+test('existing component re-selection remains expanded',()=>{
+  const c=harness([decal],[{category:'Standard text decal',libraryComponentId:'lib-decal',quantity:1,cost:1,unitPrice:25}]);
+  c.expandedComponentRowIndex=0;
+  pick(c,'lib-decal','Standard text decal');
+  assert.equal(c.expandedComponentRowIndex,0);
+});
+
+test('new single and multiple sized selections collapse only after saving',()=>{
+  const sized={...decal,sizeOptions:['8','10']};
+  const c=harness([sized],[{category:'',quantity:1,cost:0}]);
+  c.expandedComponentRowIndex=0;
+  c.pendingComponentDraftRows.add(c.quote.components[0]);
+  c.applyComponentSizeSelection(0,sized.name,'8',sized.id);
+  assert.equal(c.expandedComponentRowIndex,-1);
+  assert.equal(c.quote.components[0].selectedSize,'8');
+  const multi=harness([sized],[{category:'',quantity:1,cost:0}]);
+  multi.expandedComponentRowIndex=0;
+  multi.pendingComponentDraftRows.add(multi.quote.components[0]);
+  multi.applyComponentSizeSelections(0,sized.name,['8','10'],sized.id);
+  assert.equal(multi.expandedComponentRowIndex,-1);
+  assert.deepEqual(Array.from(multi.quote.components,row=>row.selectedSize).sort(),['10','8']);
+  const failed=harness([sized],[{category:'',quantity:1,cost:0}]);
+  failed.expandedComponentRowIndex=0;
+  failed.pendingComponentDraftRows.add(failed.quote.components[0]);
+  failed.failSaveAt=1;
+  assert.throws(()=>failed.applyComponentSizeSelections(0,sized.name,['8','10'],sized.id),/storage failed/);
+  assert.notEqual(failed.expandedComponentRowIndex,-1);
+});
+
+test('changing the size of an existing component keeps its editor open',()=>{
+  const c=harness([decal],[{category:decal.name,libraryComponentId:decal.id,selectedSize:'8',quantity:1,cost:4,unitPrice:40}]);
+  c.expandedComponentRowIndex=0;
+  c.applyComponentSizeSelection(0,decal.name,'10',decal.id);
+  assert.equal(c.expandedComponentRowIndex,0);
+  assert.equal(c.quote.components[0].selectedSize,'10');
+  assert.equal(c.quote.components[0].unitPrice,40);
 });

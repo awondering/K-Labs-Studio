@@ -10838,6 +10838,7 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
   if(context.index>=0){
     // Re-picking the component a line is already bound to must not reset build-level price edits.
     const priorRow=quote.components[context.index];
+    const newDraft=context.type==='category' && !!priorRow && pendingComponentDraftRows.has(priorRow);
     const alreadyBound=context.type==='category' && !!priorRow && !!selectedId && String(priorRow.libraryComponentId||'').trim()===String(selectedId).trim() && normalizeNameKey(priorRow.category)===normalizeNameKey(selectedName);
     // A master component with configured sizes must not be added until a size is chosen.
     if(context.type==='category'){
@@ -10867,6 +10868,11 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
         ?quote.components.findIndex((item)=>String(item&&item.libraryComponentId||'').trim()===String(selectedId).trim())
         :quote.components.findIndex((item)=>normalizeNameKey(item.category)===normalizeNameKey(selectedName));
       expandedComponentRowIndex=mergedIndex>=0?mergedIndex:expandedComponentRowIndex;
+      if(newDraft){
+        saveQuoteCurrent();
+        pendingComponentDraftRows.delete(priorRow);
+        expandedComponentRowIndex=-1;
+      }
       renderQuoteComponents();
       updateQuoteSummary();
       return;
@@ -10874,7 +10880,13 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
     if(context.type==='category'){
       if(!alreadyBound)applyComponentLibraryRecordToRow(context.index,selectedName,selectedId);
       syncComponentRowEditorInputs(context.index);
-      if(merged)renderQuoteComponents();
+      if(newDraft){
+        saveQuoteCurrent();
+        pendingComponentDraftRows.delete(priorRow);
+        if(quote.components[context.index])pendingComponentDraftRows.delete(quote.components[context.index]);
+        expandedComponentRowIndex=-1;
+      }
+      if(merged || newDraft)renderQuoteComponents();
     }
     const action=context.type==='supplier'?'open-supplier-sheet':'open-component-sheet';
     const trigger=document.querySelector(`#quoteComponentsList [data-component-action="${action}"][data-component-index="${context.index}"] .quote-component-picker__value`);
@@ -10886,11 +10898,12 @@ function applyChoiceSelection(selectedName,selectedId,pickerContext){
 }
 // Commits a component + chosen size onto the build line. The size is set before setChoiceValue so the
 // de-dupe key already includes it and an existing line with a different size is never merged into.
-function applyComponentSizeSelection(index,componentName,size,libraryComponentId){
+function applyComponentSizeSelection(index,componentName,size,libraryComponentId,options){
   const row=quote.components[index];
   const name=String(componentName||'').trim();
   const selectedSize=String(size||'').trim();
   if(!row || !name || !selectedSize)return;
+  const newDraft=pendingComponentDraftRows.has(row);
   // Changing the size of an already-bound line must not reset build-level edits back to library defaults.
   const existingLibraryId=String(row.libraryComponentId||'').trim();
   const libraryId=String(libraryComponentId||existingLibraryId).trim();
@@ -10904,7 +10917,13 @@ function applyComponentSizeSelection(index,componentName,size,libraryComponentId
   if(quote.components[targetIndex])quote.components[targetIndex].selectedSize=selectedSize;
   saveQuoteCurrent();
   markQuoteDirty();
-  expandedComponentRowIndex=targetIndex;
+  if(newDraft && !(options&&options.deferCollapse)){
+    pendingComponentDraftRows.delete(row);
+    if(quote.components[targetIndex])pendingComponentDraftRows.delete(quote.components[targetIndex]);
+    expandedComponentRowIndex=-1;
+  }else{
+    expandedComponentRowIndex=targetIndex;
+  }
   renderQuoteComponents();
   updateQuoteSummary();
 }
@@ -10951,11 +10970,12 @@ function applyComponentSizeSelections(index,componentName,sizes,libraryComponent
   if(index<0 || !quote.components[index] || !componentName || !selectedSizes.length)return;
   selectedSizes.slice().reverse().forEach((size,selectionIndex)=>{
     const targetIndex=selectionIndex===0?index:prependComponentDraftRow();
-    applyComponentSizeSelection(targetIndex,componentName,size,libraryComponentId);
+    applyComponentSizeSelection(targetIndex,componentName,size,libraryComponentId,{deferCollapse:true});
   });
   quote.components=normalizeUniqueComponents(quote.components,{keepDraftRows:false}).filter((item)=>componentRowHasMeaningfulData(item));
   saveQuoteCurrent();
   markQuoteDirty();
+  expandedComponentRowIndex=-1;
   renderQuoteComponents();
   updateQuoteSummary();
 }
