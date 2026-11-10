@@ -221,14 +221,13 @@
     appendDefinition(dates, "Trial expires", formatDate(builder.trial_expires_at, true));
     appendDefinition(dates, "Access expires", formatDate(builder.access_expires_at, true));
 
-    const ownerOrPaid = builder.builder_user_id === state.userId
-      || ["grandfathered", "paid"].includes(builder.access_state);
-    byId("adminComplimentaryControls").hidden = ownerOrPaid;
-    byId("adminTrialControls").hidden = builder.access_state !== "trial" || !builder.can_write;
-    byId("adminRevokeControls").hidden = builder.access_state !== "complimentary";
-    byId("adminBlockControls").hidden = ownerOrPaid || builder.blocked;
-    byId("adminUnblockControls").hidden = ownerOrPaid || !builder.blocked;
-    byId("adminDeleteControls").hidden = ownerOrPaid;
+    const protectedOwner = builder.builder_user_id === state.userId;
+    byId("adminComplimentaryControls").hidden = false;
+    byId("adminTrialControls").hidden = builder.access_state !== "trial";
+    byId("adminRevokeControls").hidden = !["trial", "complimentary", "grandfathered", "paid"].includes(builder.access_state);
+    byId("adminBlockControls").hidden = protectedOwner || builder.blocked;
+    byId("adminUnblockControls").hidden = protectedOwner || !builder.blocked;
+    byId("adminDeleteControls").hidden = protectedOwner;
     byId("adminDeleteEmailConfirm").value = "";
     setStatus("adminChangeStatus", "");
   }
@@ -422,10 +421,10 @@
   });
   byId("adminRevokeComplimentaryBtn")?.addEventListener("click", (event) => {
     const reason = byId("adminRevokeReason").value.trim();
-    return performChange(event.currentTarget, "admin_revoke_complimentary_access", (builder) => ({
+    return performChange(event.currentTarget, "admin_revoke_builder_access", (builder) => ({
       p_target_user_id: builder.builder_user_id,
       p_reason: reason
-    }), `Revoke complimentary access for ${state.selected?.email}? Their records will remain available read-only.`);
+    }), `Revoke access for ${state.selected?.email}? Their records will remain available read-only.`);
   });
   byId("adminExtendTrialBtn")?.addEventListener("click", (event) => {
     let expiresAt;

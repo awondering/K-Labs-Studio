@@ -59,7 +59,7 @@ The migration adds a single-owner allowlist with no client table grants, owner-c
 - `admin_list_builders` returns only account email, creation time, effective entitlement state, write eligibility and entitlement dates. It does not query customer, build, quote, component or business-profile data.
 - Every list, audit and mutation RPC checks the trusted owner allowlist. Direct table access is revoked. Never rely on the hidden Settings entry as authorization.
 - Mutations require a reason and transactionally record administrator, target, action, previous row state, new row state and timestamp.
-- The owner account, grandfathered access and paid access cannot be changed through this panel. Complimentary revocation sets access to expired while preserving trial dates and customer records. Trial extension only changes the expiry of a still-active trial; it does not reset trial history.
+- The designated owner account cannot be blocked, unblocked, or deleted. Access grants and revocations are owner-only operations for any account, including paid and grandfathered accounts. Revocation sets access to expired while preserving trial dates and customer records. Trial extension only changes the expiry of a still-active trial; it does not reset trial history.
 - The panel does not claim that a payment occurred or cancel a subscription. Payment and cancellation remain unavailable until Stripe is integrated.
 
 ### Safe permission checks
@@ -168,4 +168,14 @@ No separate test accounts, production Auth Admin credentials, or SQL connection 
 
 ### Release gate
 
-Do not commit/push the v204 application or deploy GitHub Pages until the migration is owner-approved and verified, the Edge Function is owner-approved and deployed, and email delivery and non-production account checks have been reviewed. The new service-worker cache is `build148-v204`. The authoritative master To-Do list was not found in this repository; do not create a replacement.
+The original v204 release gate is complete. The authoritative master To-Do list was not found in this repository; do not create a replacement.
+
+## Owner access for all builder accounts (v205 correction)
+
+The v204 UI and entitlement RPCs incorrectly hid or rejected access-management actions for paid and grandfathered accounts. The correction removes those UI restrictions, permits the owner-only entitlement RPCs to grant complimentary access for any entitlement state, adds an audited generic access-revocation RPC, and keeps trial history intact when access is changed. Only the designated owner account remains protected from block, unblock, and deletion. Email editing remains excluded.
+
+The additive migration is [`supabase/migrations/20261110000003_owner_admin_all_accounts.sql`](./supabase/migrations/20261110000003_owner_admin_all_accounts.sql). It requires owner approval and must be applied and verified before deploying the v205 frontend. It does not update any account row during migration. Owner-triggered entitlement changes take effect only when explicitly selected and confirmed in the Administration UI.
+
+After approval, apply the complete migration in Supabase SQL Editor. Verify its three management RPCs remain `SECURITY DEFINER`, are executable only by `authenticated` (with runtime owner checks), and that the new `admin_revoke_builder_access` appears in the function list. Then, using a disposable non-production project/account, verify grants and revocations for paid and grandfathered states, retained trial dates, and owner denial for block/deletion. Do not mutate production customer accounts as a test.
+
+Only after the migration is confirmed should v205 be committed, pushed and deployed. The service-worker cache is `build148-v205`.

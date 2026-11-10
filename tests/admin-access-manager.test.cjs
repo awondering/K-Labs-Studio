@@ -12,6 +12,7 @@ const entry=fs.readFileSync(path.join(root,'js','public-entry.js'),'utf8');
 const auth=fs.readFileSync(path.join(root,'js','supabase-client.js'),'utf8');
 const migration=fs.readFileSync(path.join(root,'supabase/migrations/20261110000001_owner_access_manager.sql'),'utf8');
 const administrationMigration=fs.readFileSync(path.join(root,'supabase/migrations/20261110000002_owner_administration.sql'),'utf8');
+const allAccountsMigration=fs.readFileSync(path.join(root,'supabase/migrations/20261110000003_owner_admin_all_accounts.sql'),'utf8');
 const entitlementMigrationForTests=fs.readFileSync(path.join(root,'supabase/migrations/20261110000000_account_entitlements.sql'),'utf8');
 const panel=fs.readFileSync(path.join(root,'js','admin-panel.js'),'utf8');
 
@@ -74,9 +75,9 @@ function adminHarness(isOwner, initialBuilder){
           audit.unshift({action:'grant_complimentary',created_at:'2026-11-10T00:00:00Z',reason:args.p_reason});
           return {data:{...builder},error:null};
         }
-        if(name==='admin_revoke_complimentary_access'){
+        if(name==='admin_revoke_builder_access'){
           builder={...builder,access_state:'expired',can_write:false,access_expires_at:'2026-11-10T00:00:00Z'};
-          audit.unshift({action:'revoke_complimentary',created_at:'2026-11-10T00:00:00Z',reason:args.p_reason});
+          audit.unshift({action:'revoke_access',created_at:'2026-11-10T00:00:00Z',reason:args.p_reason});
           return {data:{...builder},error:null};
         }
         if(name==='admin_extend_builder_trial'){
@@ -124,14 +125,12 @@ test('all admin RPCs enforce the server-side owner check and do not read busines
   assert.match(migration,/reason text not null/i);
 });
 
-test('admin mutations protect owner, grandfathered and paid accounts and preserve trial history',()=>{
-  assert.match(migration,/p_target_user_id = auth\.uid\(\)[\s\S]*?The owner account cannot be changed through Access Manager/i);
-  assert.match(migration,/before_row\.access_state in \('grandfathered', 'paid'\)/i);
-  assert.match(migration,/before_row\.access_state <> 'complimentary'/i);
-  assert.match(migration,/before_row\.access_state <> 'trial'[\s\S]*?before_row\.trial_expires_at <= now\(\)/i);
-  assert.match(migration,/trial_expires_at = p_trial_expires_at/i);
-  assert.doesNotMatch(migration,/set access_state\s*=\s*'trial_eligible'/i);
-  assert.match(migration,/set access_state = 'expired',\s*access_expires_at = now\(\)/i);
+test('all-account migration keeps trial extension history and permits ordinary access revocation',()=>{
+  assert.match(allAccountsMigration,/perform public\.klabs_require_owner\(\)/i);
+  assert.match(allAccountsMigration,/before_row\.access_state <> 'trial'[\s\S]*?before_row\.trial_expires_at <= now\(\)/i);
+  assert.match(allAccountsMigration,/trial_expires_at = p_trial_expires_at/i);
+  assert.doesNotMatch(allAccountsMigration,/set access_state\s*=\s*'trial_eligible'/i);
+  assert.match(allAccountsMigration,/set access_state = 'expired',\s*access_expires_at = now\(\)/i);
   assert.match(migration,/on public\.klabs_access_admins \(role\)/i);
 });
 
@@ -160,14 +159,14 @@ test('the Access Manager exposes entitlement dates and billing limitations witho
   assert.match(css,/@media \(max-width:520px\)[\s\S]*?\.admin-access-toolbar/);
   assert.match(css,/min-height:44px/);
   assert.match(css,/#adminAccessScreen\.active~#offlineReadyStatus\s*\{\s*display:none;\s*\}/);
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v204';/);
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v205';/);
 });
 
 test('browser code never uses an email or client-supplied role as administrator authority',()=>{
   assert.doesNotMatch(panel,/user\.email|auth\.user\(\)\.email|role\s*===\s*["']owner["']/i);
   assert.doesNotMatch(panel,/from\(["'](?:account_entitlements|klabs_access_admins|klabs_access_audit_log)["']\)/);
   assert.match(panel,/admin_set_complimentary_access/);
-  assert.match(panel,/admin_revoke_complimentary_access/);
+  assert.match(panel,/admin_revoke_builder_access/);
   assert.match(panel,/admin_extend_builder_trial/);
   assert.match(panel,/functions\.invoke\("owner-admin"/);
 });
@@ -204,9 +203,103 @@ test('ordinary accounts stay gated while an owner can grant, revoke, and audit c
   await h.document.getElementById('adminRevokeComplimentaryBtn').listeners.click({
     currentTarget:h.document.getElementById('adminRevokeComplimentaryBtn')
   });
-  assert.ok(h.calls.some((call)=>call.name==='admin_revoke_complimentary_access'));
+  assert.ok(h.calls.some((call)=>call.name==='admin_revoke_builder_access'));
   assert.equal(h.document.getElementById('adminBuilderStatus').textContent,'Expired');
-  assert.match(h.document.getElementById('adminAuditList').children[0].children[0].textContent,/revoke complimentary/i);
+  assert.match(h.document.getElementById('adminAuditList').children[0].children[0].textContent,/revoke access/i);
+});
+
+test('owner can manage paid and grandfathered accounts while only their own account is protected from block or deletion',async()=>{
+  for(const accessState of ['paid','grandfathered']){
+    const h=adminHarness(true,{
+      builder_user_id:`fictional-${accessState}`,
+      email:`${accessState}@example.invalid`,
+      account_created_at:'2026-10-10T00:00:00Z',
+      access_state:accessState,
+      can_write:true,
+      blocked:false,
+      trial_available:false,
+      trial_started_at:null,
+      trial_expires_at:null,
+      access_expires_at:null
+    });
+    await h.window.KLABS_ADMIN_ACCESS.onAuthStateChanged({user:{id:'owner-user'}});
+    await h.window.KLABS_ADMIN_ACCESS.open();
+    await h.document.getElementById('adminBuilderList').children[0].children[0].listeners.click();
+    for(const id of ['adminComplimentaryControls','adminRevokeControls','adminBlockControls','adminDeleteControls']){
+      assert.equal(h.document.getElementById(id).hidden,false,`${accessState} ${id} is available`);
+    }
+    h.document.getElementById('adminComplimentaryReason').value='Approved access change';
+    await h.document.getElementById('adminGrantComplimentaryBtn').listeners.click({
+      currentTarget:h.document.getElementById('adminGrantComplimentaryBtn')
+    });
+    assert.ok(h.calls.some((call)=>call.name==='admin_set_complimentary_access'));
+    h.document.getElementById('adminRevokeReason').value='Approved access revocation';
+    await h.document.getElementById('adminRevokeComplimentaryBtn').listeners.click({
+      currentTarget:h.document.getElementById('adminRevokeComplimentaryBtn')
+    });
+    assert.ok(h.calls.some((call)=>call.name==='admin_revoke_builder_access'));
+  }
+
+  const blockedPaid=adminHarness(true,{
+    builder_user_id:'fictional-blocked-paid',
+    email:'blocked-paid@example.invalid',
+    account_created_at:'2026-10-10T00:00:00Z',
+    access_state:'paid',
+    can_write:false,
+    blocked:true,
+    trial_available:false,
+    trial_started_at:null,
+    trial_expires_at:null,
+    access_expires_at:null
+  });
+  await blockedPaid.window.KLABS_ADMIN_ACCESS.onAuthStateChanged({user:{id:'owner-user'}});
+  await blockedPaid.window.KLABS_ADMIN_ACCESS.open();
+  await blockedPaid.document.getElementById('adminBuilderList').children[0].children[0].listeners.click();
+  assert.equal(blockedPaid.document.getElementById('adminBlockControls').hidden,true);
+  assert.equal(blockedPaid.document.getElementById('adminUnblockControls').hidden,false);
+  assert.equal(blockedPaid.document.getElementById('adminDeleteControls').hidden,false);
+  assert.equal(blockedPaid.document.getElementById('adminComplimentaryControls').hidden,false);
+
+  const owner=adminHarness(true,{
+    builder_user_id:'owner-user',
+    email:'owner@example.invalid',
+    account_created_at:'2026-10-10T00:00:00Z',
+    access_state:'grandfathered',
+    can_write:true,
+    blocked:false,
+    trial_available:false,
+    trial_started_at:null,
+    trial_expires_at:null,
+    access_expires_at:null
+  });
+  await owner.window.KLABS_ADMIN_ACCESS.onAuthStateChanged({user:{id:'owner-user'}});
+  await owner.window.KLABS_ADMIN_ACCESS.open();
+  await owner.document.getElementById('adminBuilderList').children[0].children[0].listeners.click();
+  assert.equal(owner.document.getElementById('adminComplimentaryControls').hidden,false);
+  assert.equal(owner.document.getElementById('adminRevokeControls').hidden,false);
+  assert.equal(owner.document.getElementById('adminBlockControls').hidden,true);
+  assert.equal(owner.document.getElementById('adminUnblockControls').hidden,true);
+  assert.equal(owner.document.getElementById('adminDeleteControls').hidden,true);
+});
+
+test('all-account migration authorizes owner RPCs and permits entitlement changes across paid and grandfathered states',()=>{
+  const grant=allAccountsMigration.match(/create or replace function public\.admin_set_complimentary_access\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  const revoke=allAccountsMigration.match(/create or replace function public\.admin_revoke_builder_access\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  const extend=allAccountsMigration.match(/create or replace function public\.admin_extend_builder_trial\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  assert.ok(grant && revoke && extend);
+  for(const fn of [grant,revoke,extend]){
+    assert.match(fn,/perform public\.klabs_require_owner\(\)/i);
+    assert.doesNotMatch(fn,/p_target_user_id\s*=\s*auth\.uid\(\)|klabs_access_admins/i);
+  }
+  assert.doesNotMatch(grant,/grandfathered.*paid|paid.*grandfathered/i);
+  assert.match(revoke,/before_row\.access_state in \('grandfathered', 'complimentary', 'paid'\)/i);
+  assert.match(revoke,/before_row\.access_state = 'trial'/i);
+  assert.match(revoke,/set access_state = 'expired',\s*access_expires_at = now\(\)/i);
+  assert.doesNotMatch(revoke,/set[\s\S]*trial_started_at\s*=|trial_expires_at\s*=/i);
+  assert.match(allAccountsMigration,/grant execute on function public\.admin_revoke_builder_access\(uuid, text\) to authenticated/i);
+  assert.match(allAccountsMigration,/'revoke_access'/i);
+  assert.match(administrationMigration,/The owner account cannot be blocked/i);
+  assert.match(administrationMigration,/The owner account cannot be unblocked through this action/i);
 });
 
 test('custom access-status picker updates the filter and closes after selection',async()=>{
