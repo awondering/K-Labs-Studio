@@ -89,6 +89,10 @@
     document.getElementById("authBackHome").addEventListener("click", showHome);
     document.getElementById("publicDiscoverBtn").addEventListener("click", () => dialog.showModal());
     document.getElementById("publicDiscoverClose").addEventListener("click", () => dialog.close());
+    document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
+      dialog.close();
+      showAuth("workshopScreen");
+    });
     document.addEventListener("click", (event) => {
       if (!document.body.classList.contains("klabs-logged-out")) return;
       const nav = event.target.closest("[data-nav]");

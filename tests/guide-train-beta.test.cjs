@@ -62,6 +62,6 @@ test('Guide Train remains Beta while the other Workshop launchers stay visible',
 });
 
 test('service worker cache is bumped exactly once from the production baseline (build148-v195 -> v196)',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v196';/);
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v197';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });

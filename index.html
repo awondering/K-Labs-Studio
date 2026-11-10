@@ -111,10 +111,12 @@
         </header>
         <button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">START NEW BUILD</button>
         <div class="home-public-entry">
-          <button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">EXPLORE STUDIO</button>
-          <p>7-day trial available</p>
-          <button id="publicDiscoverBtn" class="auth-link-button" type="button">Discover K-Labs Studio</button>
-          <button id="publicSignInBtn" class="auth-link-button" type="button">Already registered? Sign in</button>
+          <button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">
+            <span class="home-public-entry__primary-label">EXPLORE STUDIO</span>
+            <span class="home-public-entry__trial-note">7-day trial available</span>
+          </button>
+          <button id="publicDiscoverBtn" class="home-public-entry__secondary" type="button">DISCOVER K-LABS STUDIO</button>
+          <button id="publicSignInBtn" class="home-public-entry__signin" type="button">SIGN IN</button>
         </div>
       </div>
     </section>
@@ -1141,15 +1143,19 @@
     <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
   <dialog id="publicDiscoverDialog" class="public-discover-dialog" aria-labelledby="publicDiscoverTitle">
-    <h2 id="publicDiscoverTitle">Discover K-Labs Studio</h2>
-    <p>Purpose-built for custom rod builders.</p>
-    <ul>
-      <li>Build management, specifications and component pricing</li>
-      <li>Professional customer quotes and confirmations</li>
-      <li>Practical Workshop calculators</li>
-    </ul>
-    <p>Register to use Studio. Exploration and an optional seven-day trial are planned for a future release.</p>
-    <button id="publicDiscoverClose" class="ghost-action" type="button">Close</button>
+    <div class="public-discover-dialog__heading">
+      <h2 id="publicDiscoverTitle">K-Labs Studio</h2>
+    </div>
+    <dl class="public-discover-dialog__features">
+      <div><dt>DESIGN &amp; MANAGE</dt><dd>Build specifications, components and pricing.</dd></div>
+      <div><dt>PRESENT WITH CONFIDENCE</dt><dd>Professional quotes and build confirmations.</dd></div>
+      <div><dt>PRECISION WORKSHOP</dt><dd>Purpose-built tools for rod builders.</dd></div>
+    </dl>
+    <p class="public-discover-dialog__note">Discover a more considered approach to custom rod building.</p>
+    <div class="public-discover-dialog__actions">
+      <button id="publicDiscoverExploreBtn" class="public-discover-dialog__explore" type="button">EXPLORE STUDIO</button>
+      <button id="publicDiscoverClose" class="public-discover-dialog__close" type="button">CLOSE</button>
+    </div>
   </dialog>
   <script src="js/public-entry.js"></script>
   <script src="js/vendor/supabase-2.119.0.js"></script>

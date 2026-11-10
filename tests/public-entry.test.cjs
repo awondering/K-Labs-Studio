@@ -14,7 +14,7 @@ function harness(){
   let failScript='';
   const elements={};
   let session=null;
-  for(const id of ['authScreen','app','authEmail','authForm','authShowSignUp','authSignUpForm','publicDiscoverDialog','homeLivingRod','publicExploreBtn','publicSignInBtn','authBackHome','publicDiscoverBtn','publicDiscoverClose','authMessage']){
+  for(const id of ['authScreen','app','authEmail','authForm','authShowSignUp','authSignUpForm','publicDiscoverDialog','homeLivingRod','publicExploreBtn','publicSignInBtn','authBackHome','publicDiscoverBtn','publicDiscoverExploreBtn','publicDiscoverClose','authMessage']){
     elements[id]={style:{setProperty(){}},listeners:{},classList:{add(){},remove(){}},
       addEventListener(event,fn){this.listeners[event]=fn;},focus(){},showModal(){this.open=true;},close(){this.open=false;},
       querySelector(){return {appendChild(){}};}};
@@ -36,6 +36,8 @@ function harness(){
 
 test('public markup does not load private application scripts',()=>{
   assert.match(html,/<script src="js\/public-entry\.js"><\/script>/);
+  assert.match(html,/<button id="publicExploreBtn"[^>]*>[\s\S]*?<span class="home-public-entry__primary-label">EXPLORE STUDIO<\/span>[\s\S]*?<span class="home-public-entry__trial-note">7-day trial available<\/span>[\s\S]*?<\/button>/);
+  assert.doesNotMatch(html,/<p>\s*7-day trial available\s*<\/p>/);
   for(const name of ['storage','ui','navigation','component-sync','build-sync','settings-sync','app']){
     assert.doesNotMatch(html,new RegExp(`<script src="js/${name}\\.js">`));
   }
@@ -55,6 +57,25 @@ test('signed-out entry and public interactions do not initialize private scripts
   assert.deepEqual(h.scripts,[]);
   h.elements.authBackHome.listeners.click();
   assert.equal(h.elements.authScreen.style.display,'none');
+});
+
+test('Discover sheet presents accurate features and its Explore action opens sign-in',()=>{
+  assert.match(html,/DESIGN &amp; MANAGE/);
+  assert.match(html,/Build specifications, components and pricing\./);
+  assert.match(html,/PRESENT WITH CONFIDENCE/);
+  assert.match(html,/Professional quotes and build confirmations\./);
+  assert.match(html,/PRECISION WORKSHOP/);
+  assert.match(html,/Purpose-built tools for rod builders\./);
+  assert.match(html,/Discover a more considered approach to custom rod building\./);
+  assert.doesNotMatch(html,/planned for a future release|coming soon/i);
+
+  const h=harness();
+  h.elements.publicDiscoverBtn.listeners.click();
+  assert.equal(h.elements.publicDiscoverDialog.open,true);
+  h.elements.publicDiscoverExploreBtn.listeners.click();
+  assert.equal(h.elements.publicDiscoverDialog.open,false);
+  assert.equal(h.elements.authScreen.style.display,'flex');
+  assert.deepEqual(h.scripts,[]);
 });
 
 test('private scripts load only after a session and auth state applies after session recheck',async()=>{
