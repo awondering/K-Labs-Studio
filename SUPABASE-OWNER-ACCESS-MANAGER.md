@@ -66,6 +66,8 @@ The migration adds a single-owner allowlist with no client table grants, owner-c
 
 The migration has been applied to production and the owner allowlist was verified by the operator. Anonymous REST requests to each client-callable administration RPC (`klabs_is_owner`, `admin_list_builders`, `admin_list_access_audit`, `admin_set_complimentary_access`, `admin_revoke_complimentary_access`, and `admin_extend_builder_trial`) must fail with an authorization response. These calls are non-mutating: every admin RPC checks the authenticated owner before reading or changing records.
 
+On 2026-11-10, an unauthenticated production REST probe returned HTTP 401 for all six RPCs above. This confirms anonymous callers cannot invoke them; it does not establish the authenticated non-owner denial or owner access.
+
 An anonymous rejection does not prove the authenticated non-owner case or the owner's signed-in experience. Verify those with separate owner and non-owner test accounts (preferably in a non-production project):
 
 1. Sign in as the non-owner and invoke each of the five `admin_*` RPCs. Confirm each returns SQLSTATE `42501` / HTTP 403, and confirm the owner screen remains unavailable.
