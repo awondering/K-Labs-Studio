@@ -45,14 +45,16 @@ function harness(){
     head:{appendChild(script){scripts.push(script.src);queueMicrotask(()=>script.src===failScript?script.onerror():script.onload());}},
   };
   let trialStarts=0;
-  const window={scrollTo(){},dispatchEvent(){},addEventListener(){},navigator:{onLine:true},
+  const window={scrollTo(){},dispatchEvent(){},addEventListener(){},setInterval(){return 1;},navigator:{onLine:true},
     localStorage:{getItem:key=>cachedValues.get(key)||null,setItem:(key,value)=>cachedValues.set(key,value)},
+    sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},
     setTimeout(fn){window.expiryCallback=fn;return 1;},clearTimeout(){},
     location:{reload(){reloads++;}},KLABS_UI:{startNewBuildFlow(){}},
     KLABS_SUPABASE_CLIENT:{
       auth:{getSession:async()=>({data:{session},error:null}),signOut:async()=>({error:null})},
       rpc:async(name)=>{
         if(name==='get_account_entitlement')return {data:entitlement,error:rpcError};
+        if(name==='klabs_account_is_blocked')return {data:false,error:null};
         if(name==='start_account_trial'){
           trialStarts++;
           const serverTime=new Date().toISOString();

@@ -53,7 +53,8 @@
       expired: "Expired",
       grandfathered: "Grandfathered",
       complimentary: "Complimentary",
-      paid: "Paid access"
+      paid: "Paid access",
+      blocked: "Blocked"
     })[status] || "Unavailable";
   }
 
@@ -74,10 +75,13 @@
     byId("adminAuditList")?.replaceChildren();
     [
       "adminBuilderSearch", "adminComplimentaryExpiry", "adminComplimentaryReason",
-      "adminTrialExpiry", "adminTrialReason", "adminRevokeReason"
+      "adminTrialExpiry", "adminTrialReason", "adminRevokeReason",
+      "adminInviteEmail", "adminInviteReason", "adminBlockReason", "adminUnblockReason",
+      "adminDeleteEmailConfirm", "adminDeleteReason"
     ].forEach((id) => {
       if (byId(id)) byId(id).value = "";
     });
+    if (byId("adminStatusPicker")) byId("adminStatusPicker").open = false;
     ["adminAccessError", "adminBuilderListStatus", "adminAuditStatus", "adminChangeStatus"].forEach((id) => setStatus(id, ""));
     if (document.querySelector(".screen.active")?.id === "adminAccessScreen") {
       window.KLABS_NAV?.goScreen("settingsScreen");
@@ -104,6 +108,7 @@
   }
 
   function builderSummary(builder) {
+    if (builder.blocked) return `Blocked · ${statusLabel(builder.access_state)}`;
     const date = builder.access_state === "trial"
       ? `Trial ends ${formatDate(builder.trial_expires_at, true)}`
       : ["complimentary", "paid"].includes(builder.access_state) && builder.access_expires_at
@@ -132,7 +137,8 @@
       summary.className = "admin-builder-row__summary";
       summary.textContent = builderSummary(builder);
       const created = document.createElement("small");
-      created.textContent = `Registered ${formatDate(builder.account_created_at, false)}`;
+      const emailState = builder.email_confirmed ? "" : " · Email unverified";
+      created.textContent = `Registered ${formatDate(builder.account_created_at, false)}${emailState}`;
       item.append(email, summary, created);
       item.addEventListener("click", () => selectBuilder(builder));
       wrapper.append(item);
@@ -202,13 +208,14 @@
     byId("adminBuilderDetail").hidden = false;
     setText("adminBuilderEmail", builder.email || "Email unavailable");
     const badge = byId("adminBuilderStatus");
-    badge.textContent = statusLabel(builder.access_state);
-    badge.dataset.status = builder.access_state || "unknown";
+    badge.textContent = statusLabel(builder.blocked ? "blocked" : builder.access_state);
+    badge.dataset.status = builder.blocked ? "blocked" : builder.access_state || "unknown";
 
     const dates = byId("adminBuilderDates");
     dates.replaceChildren();
     appendDefinition(dates, "Registered", formatDate(builder.account_created_at, true));
-    appendDefinition(dates, "Effective access", builder.can_write ? "Can make changes" : "Read-only");
+    appendDefinition(dates, "Effective access", builder.blocked ? "Blocked" : builder.can_write ? "Can make changes" : "Read-only");
+    appendDefinition(dates, "Email verification", builder.email_confirmed ? "Verified" : "Pending verification");
     appendDefinition(dates, "Trial eligibility", builder.trial_available ? "Available; not started" : "Not available");
     appendDefinition(dates, "Trial started", formatDate(builder.trial_started_at, true));
     appendDefinition(dates, "Trial expires", formatDate(builder.trial_expires_at, true));
@@ -219,6 +226,10 @@
     byId("adminComplimentaryControls").hidden = ownerOrPaid;
     byId("adminTrialControls").hidden = builder.access_state !== "trial" || !builder.can_write;
     byId("adminRevokeControls").hidden = builder.access_state !== "complimentary";
+    byId("adminBlockControls").hidden = ownerOrPaid || builder.blocked;
+    byId("adminUnblockControls").hidden = ownerOrPaid || !builder.blocked;
+    byId("adminDeleteControls").hidden = ownerOrPaid;
+    byId("adminDeleteEmailConfirm").value = "";
     setStatus("adminChangeStatus", "");
   }
 
@@ -293,6 +304,56 @@
     }
   }
 
+  async function edgeErrorMessage(error) {
+    const response = error?.context;
+    if (response && typeof response.clone === "function") {
+      try {
+        const body = await response.clone().json();
+        if (typeof body?.error === "string" && body.error) return body.error;
+      } catch {
+        // Use the SDK error below when the response is not JSON.
+      }
+    }
+    return error?.message || "Owner administration request failed.";
+  }
+
+  async function performOwnerAction(button, body, confirmation, successMessage) {
+    const requestUserId = state.userId;
+    const builder = state.selected;
+    if (!state.owner || !requestUserId) {
+      setStatus("adminChangeStatus", "Owner authorization is required.");
+      return;
+    }
+    if (body.targetUserId && (!builder || builder.builder_user_id !== body.targetUserId)) {
+      setStatus("adminChangeStatus", "Select the builder account again and retry.");
+      return;
+    }
+    if (confirmation && !window.confirm(confirmation)) return;
+    button.disabled = true;
+    setStatus("adminChangeStatus", "Processing owner action...");
+    setStatus("adminAccessError", "");
+    try {
+      const { data, error } = await supabase().functions.invoke("owner-admin", { body });
+      if (error) throw new Error(await edgeErrorMessage(error));
+      if (data?.error) throw new Error(data.error);
+      if (!state.owner || state.userId !== requestUserId) return;
+      await loadBuilders(true);
+      if (!state.owner || state.userId !== requestUserId) return;
+      setStatus("adminChangeStatus", data?.message || successMessage);
+    } catch (error) {
+      if (!state.owner || state.userId !== requestUserId) return;
+      const message = error?.message || "Owner administration request failed.";
+      setStatus("adminChangeStatus", message);
+      console.error("[K-Labs Studio] Owner administration action failed:", error);
+      if (body.action === "block" || body.action === "unblock" || body.action === "delete") {
+        await loadBuilders(true);
+        if (state.owner && state.userId === requestUserId) setStatus("adminChangeStatus", message);
+      }
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function open() {
     if (!state.owner || !adminScreen) return;
     adminScreen.hidden = false;
@@ -308,6 +369,41 @@
   });
   byId("adminBuilderStatusFilter")?.addEventListener("change", () => loadBuilders(true));
   byId("adminLoadMoreBtn")?.addEventListener("click", () => loadBuilders(false));
+  byId("adminStatusPicker")?.querySelectorAll("[data-admin-status]").forEach((option) => {
+    option.addEventListener("click", () => {
+      const filter = byId("adminBuilderStatusFilter");
+      filter.value = option.dataset.adminStatus;
+      setText("adminBuilderStatusValue", option.textContent.trim());
+      byId("adminStatusPicker").open = false;
+      byId("adminStatusPicker").querySelectorAll("[data-admin-status]").forEach((item) => {
+        item.setAttribute("aria-pressed", String(item === option));
+      });
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  });
+
+  byId("adminInviteForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const button = byId("adminInviteBtn");
+    setStatus("adminInviteStatus", "");
+    return performOwnerAction(button, {
+      action: "invite",
+      email: byId("adminInviteEmail").value,
+      reason: byId("adminInviteReason").value.trim()
+    }, "", "Invitation sent. Trial access remains inactive until the builder explicitly starts it.")
+      .then(() => {
+        if (!state.owner) return;
+        if (/^Invitation sent\./.test(byId("adminChangeStatus").textContent)) {
+          byId("adminInviteEmail").value = "";
+          byId("adminInviteReason").value = "";
+          setStatus("adminInviteStatus", byId("adminChangeStatus").textContent);
+        } else {
+          setStatus("adminInviteStatus", byId("adminChangeStatus").textContent);
+        }
+      });
+  });
 
   byId("adminGrantComplimentaryBtn")?.addEventListener("click", (event) => {
     let expiresAt;
@@ -345,6 +441,47 @@
       p_trial_expires_at: expiresAt,
       p_reason: reason
     }), `Extend the active trial for ${state.selected?.email}?`);
+  });
+
+  byId("adminBlockBtn")?.addEventListener("click", (event) => {
+    const reason = byId("adminBlockReason").value.trim();
+    return performOwnerAction(event.currentTarget, {
+      action: "block",
+      targetUserId: state.selected?.builder_user_id,
+      reason
+    }, `Block ${state.selected?.email}? Sign-in and server access to saved Studio records will be denied. Offline copies on disconnected devices cannot be remotely revoked.`, "Builder blocked.");
+  });
+
+  byId("adminUnblockBtn")?.addEventListener("click", (event) => {
+    const reason = byId("adminUnblockReason").value.trim();
+    return performOwnerAction(event.currentTarget, {
+      action: "unblock",
+      targetUserId: state.selected?.builder_user_id,
+      reason
+    }, `Unblock ${state.selected?.email}? Only the block will be removed; the current entitlement and expiry will remain unchanged.`, "Builder unblocked.");
+  });
+
+  [["adminDeleteBtn", false], ["adminBlockDeleteBtn", true]].forEach(([buttonId, blockFirst]) => {
+    byId(buttonId)?.addEventListener("click", (event) => {
+      const builder = state.selected;
+      if (!builder) {
+        setStatus("adminChangeStatus", "Select a builder account first.");
+        return;
+      }
+      const typedEmail = byId("adminDeleteEmailConfirm").value.trim();
+      if (typedEmail.toLowerCase() !== String(builder.email || "").toLowerCase()) {
+        setStatus("adminChangeStatus", "Type the builder's exact current email address to confirm deletion.");
+        return;
+      }
+      const actionLabel = blockFirst ? "Block and permanently delete" : "Permanently delete";
+      return performOwnerAction(event.currentTarget, {
+        action: "delete",
+        targetUserId: builder.builder_user_id,
+        typedEmail,
+        blockFirst,
+        reason: byId("adminDeleteReason").value.trim()
+      }, `${actionLabel} ${builder.email}? This is irreversible. Supabase Auth-linked cloud builds, customers, quotes, components, settings, taxonomy, quote counter and entitlement will be deleted. Disconnected devices may retain offline copies.`, "Builder account and linked cloud records deleted.");
+    });
   });
 
   window.KLABS_ADMIN_ACCESS = {

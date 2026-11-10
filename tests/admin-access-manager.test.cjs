@@ -11,6 +11,8 @@ const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
 const entry=fs.readFileSync(path.join(root,'js','public-entry.js'),'utf8');
 const auth=fs.readFileSync(path.join(root,'js','supabase-client.js'),'utf8');
 const migration=fs.readFileSync(path.join(root,'supabase/migrations/20261110000001_owner_access_manager.sql'),'utf8');
+const administrationMigration=fs.readFileSync(path.join(root,'supabase/migrations/20261110000002_owner_administration.sql'),'utf8');
+const entitlementMigrationForTests=fs.readFileSync(path.join(root,'supabase/migrations/20261110000000_account_entitlements.sql'),'utf8');
 const panel=fs.readFileSync(path.join(root,'js','admin-panel.js'),'utf8');
 
 function adminHarness(isOwner, initialBuilder){
@@ -38,7 +40,9 @@ function adminHarness(isOwner, initialBuilder){
       append(...items){this.children.push(...items);},
       appendChild(item){this.children.push(item);},
       replaceChildren(...items){this.children=[...items];},
+      dispatchEvent(){},
       querySelectorAll(selector){
+        if(selector==='[data-admin-status]')return this.children;
         if(selector!=='.admin-builder-row')return [];
         return this.children.flatMap((item)=>item.children||[]).filter((item)=>item.className==='admin-builder-row');
       }
@@ -52,6 +56,10 @@ function adminHarness(isOwner, initialBuilder){
     createElement:tag=>makeElement(tag),
     querySelector:()=>null
   };
+  const statusOption=document.createElement('button');
+  statusOption.dataset.adminStatus='expired';
+  statusOption.textContent='Expired';
+  document.getElementById('adminStatusPicker').children.push(statusOption);
   const window={
     confirm:()=>true,
     KLABS_NAV:{goScreen(){}},
@@ -80,7 +88,7 @@ function adminHarness(isOwner, initialBuilder){
       }
     }
   };
-  vm.runInNewContext(panel,{window,document,Intl,Date,Promise,Error,String,Number,console});
+  vm.runInNewContext(panel,{window,document,Intl,Date,Promise,Error,String,Number,Event,console});
   return {window,document,elements,calls,setOwner(value){owner=value;},setBuilder(value){builder=value;}};
 }
 
@@ -151,7 +159,8 @@ test('the Access Manager exposes entitlement dates and billing limitations witho
   assert.match(panel,/textContent = builder\.email/);
   assert.match(css,/@media \(max-width:520px\)[\s\S]*?\.admin-access-toolbar/);
   assert.match(css,/min-height:44px/);
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v203';/);
+  assert.match(css,/#adminAccessScreen\.active~#offlineReadyStatus\s*\{\s*display:none;\s*\}/);
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v204';/);
 });
 
 test('browser code never uses an email or client-supplied role as administrator authority',()=>{
@@ -160,6 +169,7 @@ test('browser code never uses an email or client-supplied role as administrator 
   assert.match(panel,/admin_set_complimentary_access/);
   assert.match(panel,/admin_revoke_complimentary_access/);
   assert.match(panel,/admin_extend_builder_trial/);
+  assert.match(panel,/functions\.invoke\("owner-admin"/);
 });
 
 test('ordinary accounts stay gated while an owner can grant, revoke, and audit complimentary access',async()=>{
@@ -199,6 +209,18 @@ test('ordinary accounts stay gated while an owner can grant, revoke, and audit c
   assert.match(h.document.getElementById('adminAuditList').children[0].children[0].textContent,/revoke complimentary/i);
 });
 
+test('custom access-status picker updates the filter and closes after selection',async()=>{
+  const h=adminHarness(true);
+  await h.window.KLABS_ADMIN_ACCESS.onAuthStateChanged({user:{id:'owner-user'}});
+  const picker=h.document.getElementById('adminStatusPicker');
+  const option=picker.children[0];
+  await option.listeners.click();
+  assert.equal(h.document.getElementById('adminBuilderStatusFilter').value,'expired');
+  assert.equal(h.document.getElementById('adminBuilderStatusValue').textContent,'Expired');
+  assert.equal(picker.open,false);
+  assert.equal(option.attributes['aria-pressed'],'true');
+});
+
 test('active trial extension changes only the expiry and keeps existing trial history',async()=>{
   const originalStart='2026-11-03T08:30:00Z';
   const h=adminHarness(true,{
@@ -226,6 +248,117 @@ test('active trial extension changes only the expiry and keeps existing trial hi
   assert.match(extension.args.p_trial_expires_at,/^2026-11-20T/);
   assert.equal(extension.args.p_reason,'Approved trial extension');
   assert.equal(h.calls.some((call)=>call.name==='start_account_trial'),false);
-  assert.match(h.document.getElementById('adminBuilderDates').children[3].children[1].textContent,/2026/);
+  assert.match(h.document.getElementById('adminBuilderDates').children[4].children[1].textContent,/2026/);
   assert.match(h.document.getElementById('adminAuditList').children[0].children[0].textContent,/extend trial/i);
+});
+
+test('v204 migration blocks blocked accounts from reads, writes, trial activation, and quote allocation',()=>{
+  assert.match(administrationMigration,/create table if not exists public\.klabs_access_blocks/i);
+  assert.match(administrationMigration,/create or replace function public\.klabs_account_is_blocked/i);
+  const accountAccess=administrationMigration.match(/create or replace function public\.klabs_account_access\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  const canWrite=administrationMigration.match(/create or replace function public\.klabs_entitlement_can_write\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  const startTrial=administrationMigration.match(/create or replace function public\.start_account_trial\(\)[\s\S]*?\n\$\$;/i)?.[0]||'';
+  const quoteAllocator=administrationMigration.match(/create or replace function public\.allocate_quote_number\([\s\S]*?\n\$\$;/i)?.[0]||'';
+
+  assert.ok(accountAccess,'v204 replaces account access logic');
+  assert.match(accountAccess,/not exists\s*\([\s\S]*?klabs_access_blocks b where b\.user_id = p_user_id/i);
+  assert.ok(canWrite,'v204 replaces the entitlement write helper');
+  assert.match(canWrite,/p_user_id\s*=\s*auth\.uid\(\)/i);
+  assert.match(canWrite,/not public\.klabs_account_is_blocked\(p_user_id\)/i);
+  assert.match(canWrite,/a\.can_write/i);
+
+  const readGuardTables=administrationMigration.match(/target_tables text\[\] := array\[([\s\S]*?)\];/)?.[1]||'';
+  const writeGuardTables=administrationMigration.match(/write_tables text\[\] := array\[([\s\S]*?)\];/)?.[1]||'';
+  for(const table of ['account_entitlements','builds','components','component_taxonomy','studio_settings','quote_number_counters']){
+    assert.ok(readGuardTables.includes(`'${table}'`),`${table} has a block read guard`);
+  }
+  for(const table of ['builds','components','component_taxonomy','studio_settings','quote_number_counters']){
+    assert.ok(writeGuardTables.includes(`'${table}'`),`${table} has block write guards`);
+  }
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_read_guard on public.%I as restrictive for select to authenticated using (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_%s_guard on public.%I as restrictive for insert'));
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_%s_guard on public.%I as restrictive for update'));
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_%s_guard on public.%I as restrictive for delete'));
+  assert.ok(administrationMigration.includes('for insert to authenticated with check (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.ok(administrationMigration.includes('for update to authenticated using (not public.klabs_account_is_blocked(auth.uid())) with check (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.ok(administrationMigration.includes('for delete to authenticated using (not public.klabs_account_is_blocked(auth.uid()))'));
+  for(const operation of ['insert','update','delete']){
+    assert.match(entitlementMigrationForTests,new RegExp(`as restrictive for ${operation}`, 'i'));
+  }
+  assert.match(entitlementMigrationForTests,/public\.klabs_entitlement_can_write\(user_id\)/i);
+
+  assert.ok(startTrial,'v204 replaces trial activation');
+  assert.match(startTrial,/if exists \(select 1 from public\.klabs_access_blocks b where b\.user_id = caller_id\) then[\s\S]*?This account is blocked/i);
+  assert.match(startTrial,/and not exists\s*\([\s\S]*?klabs_access_blocks b where b\.user_id = caller_id/i);
+  assert.ok(quoteAllocator,'v204 replaces the quote allocator');
+  assert.match(quoteAllocator,/if public\.klabs_account_is_blocked\(caller_id\) then[\s\S]*?quote numbers cannot be allocated/i);
+  assert.match(quoteAllocator,/if not public\.klabs_entitlement_can_write\(caller_id\) then/i);
+  assert.ok(quoteAllocator.indexOf('klabs_account_is_blocked')<quoteAllocator.indexOf('insert into public.quote_number_counters'));
+  assert.match(quoteAllocator,/on conflict \(user_id\) do update/i);
+  const quoteAllocatorSql=fs.readFileSync(path.join(root,'SUPABASE-QUOTE-NUMBER-ALLOCATOR.sql'),'utf8');
+  assert.match(quoteAllocatorSql,/revoke all on public\.quote_number_counters from public, anon, authenticated/i);
+  assert.match(administrationMigration,/revoke all on public\.klabs_access_blocks from public, anon, authenticated/i);
+  assert.match(administrationMigration,/This account is blocked\. Contact K-Labs Studio\./);
+  assert.match(administrationMigration,/grant execute on function public\.admin_set_builder_block\(uuid, text, timestamptz\) to authenticated/i);
+  assert.match(administrationMigration,/perform public\.klabs_require_owner\(\)/i);
+});
+
+test('block guards apply to every statement from an already-issued authenticated session',()=>{
+  const writeGuardTables=administrationMigration.match(/write_tables text\[\] := array\[([\s\S]*?)\];/)?.[1]||'';
+  for(const table of ['builds','components','component_taxonomy','studio_settings','quote_number_counters']){
+    assert.ok(writeGuardTables.includes(`'${table}'`),`${table} is covered by block write guards`);
+  }
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_%s_guard on public.%I as restrictive for insert'));
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_%s_guard on public.%I as restrictive for update'));
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_%s_guard on public.%I as restrictive for delete'));
+  assert.ok(administrationMigration.includes('for insert to authenticated with check (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.ok(administrationMigration.includes('for update to authenticated using (not public.klabs_account_is_blocked(auth.uid())) with check (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.ok(administrationMigration.includes('for delete to authenticated using (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.ok(administrationMigration.includes('create policy klabs_account_block_read_guard on public.%I as restrictive for select to authenticated using (not public.klabs_account_is_blocked(auth.uid()))'));
+  assert.match(administrationMigration,/create or replace function public\.klabs_entitlement_can_write\(p_user_id uuid\)[\s\S]*?not public\.klabs_account_is_blocked\(p_user_id\)/i);
+  assert.match(administrationMigration,/create or replace function public\.allocate_quote_number[\s\S]*?klabs_account_is_blocked\(caller_id\)[\s\S]*?insert into public\.quote_number_counters/i);
+  assert.match(administrationMigration,/create or replace function public\.start_account_trial\(\)[\s\S]*?klabs_access_blocks b where b\.user_id = caller_id/i);
+  assert.match(administrationMigration,/create or replace function public\.get_account_entitlement\(\)[\s\S]*?klabs_access_blocks b where b\.user_id = caller_id/i);
+  assert.match(administrationMigration,/from public\.klabs_access_blocks b\s+where b\.user_id = auth\.uid\(\)/i);
+});
+
+test('the v204 block guards preserve existing entitlement rules for unblocked accounts',()=>{
+  const canWrite=administrationMigration.match(/create or replace function public\.klabs_entitlement_can_write\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  const quoteAllocator=administrationMigration.match(/create or replace function public\.allocate_quote_number\([\s\S]*?\n\$\$;/i)?.[0]||'';
+  assert.match(canWrite,/from public\.klabs_account_access\(p_user_id\) a\s+where a\.can_write/i);
+  assert.match(quoteAllocator,/if not public\.klabs_entitlement_can_write\(caller_id\) then/i);
+  assert.match(quoteAllocator,/safe_floor bigint := greatest\(coalesce\(p_minimum_next, 1\), 1\)/i);
+  assert.match(quoteAllocator,/on conflict \(user_id\) do update[\s\S]*?greatest\(counter\.next_number, safe_floor\) \+ 1/i);
+  assert.match(entitlementMigrationForTests,/access_state in \('grandfathered', 'complimentary'\)/i);
+  assert.match(entitlementMigrationForTests,/when e\.access_state = 'paid' then/i);
+  assert.match(entitlementMigrationForTests,/when e\.access_state = 'trial' then e\.trial_expires_at > now\(\)/i);
+});
+
+test('v204 administration preserves entitlement history and audits protected identity actions',()=>{
+  assert.match(administrationMigration,/create or replace function public\.admin_clear_builder_block/i);
+  assert.match(administrationMigration,/previous_auth_banned_until/);
+  assert.match(administrationMigration,/admin_record_account_action/);
+  assert.doesNotMatch(administrationMigration,/email_change_(requested|completed|failed)/);
+  assert.match(administrationMigration,/invite_builder/);
+  assert.match(administrationMigration,/delete_builder_started/);
+  assert.match(administrationMigration,/The owner account cannot be blocked/);
+  assert.match(administrationMigration,/drop function if exists public\.admin_list_builders/);
+  assert.match(administrationMigration,/email_confirmed boolean/);
+  assert.match(administrationMigration,/blocked_at timestamptz/);
+});
+
+test('owner administration keeps privileged Auth API and service-role use server-side',()=>{
+  const edge=fs.readFileSync(path.join(root,'supabase/functions/owner-admin/index.ts'),'utf8');
+  const core=fs.readFileSync(path.join(root,'supabase/functions/_shared/owner-admin-core.mjs'),'utf8');
+  assert.match(edge,/Deno\.env\.get\("SUPABASE_SERVICE_ROLE_KEY"\)/);
+  assert.match(edge,/Deno\.serve/);
+  assert.match(core,/klabs_is_owner/);
+  assert.match(core,/inviteUserByEmail/);
+  assert.match(core,/updateUserById/);
+  assert.match(core,/deleteUser/);
+  assert.doesNotMatch(core,/email_confirm: false|case "email"/);
+  assert.doesNotMatch(html,/adminEmailControls|adminBuilderEmailInput|adminEmailReason|adminUpdateEmailBtn|Edit registered email/);
+  assert.doesNotMatch(panel,/SERVICE_ROLE_KEY|service_role/i);
+  assert.match(html,/Type the current email to confirm/);
+  assert.match(html,/offline copies cannot be remotely revoked/i);
 });

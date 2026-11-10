@@ -1233,15 +1233,48 @@
       </div>
       <button id="adminBackToSettingsBtn" class="admin-access-back" type="button">BACK TO SETTINGS</button>
 
+      <form id="adminInviteForm" class="admin-invite-form">
+        <div>
+          <strong>Invite builder</strong>
+          <p>Invitations create trial-eligible accounts. Trial time starts only after the builder confirms activation.</p>
+        </div>
+        <label>
+          Builder email
+          <input id="adminInviteEmail" type="email" autocomplete="email" maxlength="254" required />
+        </label>
+        <label>
+          Invitation reason
+          <input id="adminInviteReason" type="text" maxlength="500" required placeholder="Required audit reason" />
+        </label>
+        <button id="adminInviteBtn" class="ghost-action" type="submit">INVITE BUILDER</button>
+        <p id="adminInviteStatus" class="admin-access-status" role="status" aria-live="polite"></p>
+      </form>
+
       <div class="admin-access-toolbar">
         <form id="adminBuilderSearchForm" class="admin-access-search">
           <label for="adminBuilderSearch">Search registered builders</label>
           <input id="adminBuilderSearch" type="search" autocomplete="off" placeholder="Email address" />
           <button class="ghost-action" type="submit">SEARCH</button>
         </form>
-        <label class="admin-access-filter" for="adminBuilderStatusFilter">
-          Access status
-          <select id="adminBuilderStatusFilter">
+        <div class="admin-access-filter">
+          <span id="adminBuilderStatusLabel">Access status</span>
+          <details id="adminStatusPicker" class="admin-status-picker">
+            <summary aria-haspopup="true" aria-labelledby="adminBuilderStatusLabel adminBuilderStatusValue">
+              <span id="adminBuilderStatusValue">All statuses</span>
+              <span aria-hidden="true">▾</span>
+            </summary>
+            <div class="admin-status-picker__options" role="group" aria-labelledby="adminBuilderStatusLabel">
+              <button type="button" data-admin-status="all">All statuses</button>
+              <button type="button" data-admin-status="trial_eligible">Trial eligible</button>
+              <button type="button" data-admin-status="trial">Active trial</button>
+              <button type="button" data-admin-status="expired">Expired</button>
+              <button type="button" data-admin-status="complimentary">Complimentary</button>
+              <button type="button" data-admin-status="grandfathered">Grandfathered</button>
+              <button type="button" data-admin-status="paid">Paid access</button>
+              <button type="button" data-admin-status="blocked">Blocked</button>
+            </div>
+          </details>
+          <select id="adminBuilderStatusFilter" hidden aria-hidden="true" tabindex="-1">
             <option value="all">All statuses</option>
             <option value="trial_eligible">Trial eligible</option>
             <option value="trial">Active trial</option>
@@ -1249,8 +1282,9 @@
             <option value="complimentary">Complimentary</option>
             <option value="grandfathered">Grandfathered</option>
             <option value="paid">Paid access</option>
+            <option value="blocked">Blocked</option>
           </select>
-        </label>
+        </div>
       </div>
 
       <p id="adminBuilderListStatus" class="admin-access-status" role="status" aria-live="polite"></p>
@@ -1309,11 +1343,46 @@
             </label>
             <button id="adminRevokeComplimentaryBtn" class="admin-action-danger" type="button">REVOKE COMPLIMENTARY ACCESS</button>
           </div>
+
+          <div id="adminBlockControls" class="admin-action-card" hidden>
+            <strong>Block builder</strong>
+            <p class="admin-action-note">Blocks sign-in and all server access to this account's Studio records. Existing offline copies cannot be remotely revoked until the device reconnects.</p>
+            <label>
+              Reason
+              <textarea id="adminBlockReason" rows="2" maxlength="500" placeholder="Required audit reason"></textarea>
+            </label>
+            <button id="adminBlockBtn" class="admin-action-danger" type="button">BLOCK BUILDER</button>
+          </div>
+
+          <div id="adminUnblockControls" class="admin-action-card" hidden>
+            <strong>Unblock builder</strong>
+            <p class="admin-action-note">Unblocking removes only the block. The existing entitlement and its original expiry remain unchanged.</p>
+            <label>
+              Reason
+              <textarea id="adminUnblockReason" rows="2" maxlength="500" placeholder="Required audit reason"></textarea>
+            </label>
+            <button id="adminUnblockBtn" class="ghost-action" type="button">UNBLOCK BUILDER</button>
+          </div>
+
+          <div id="adminDeleteControls" class="admin-action-card admin-action-card--delete" hidden>
+            <strong>Permanently delete builder</strong>
+            <p class="admin-action-note">Irreversible. This removes the Auth account and its linked builds, customers, quotes, components, settings, taxonomy, quote counter and entitlement. A minimal administration audit entry remains. Future billing records are not configured.</p>
+            <label>
+              Type the current email to confirm
+              <input id="adminDeleteEmailConfirm" type="email" autocomplete="off" />
+            </label>
+            <label>
+              Reason
+              <textarea id="adminDeleteReason" rows="2" maxlength="500" placeholder="Required audit reason"></textarea>
+            </label>
+            <button id="adminDeleteBtn" class="admin-action-danger" type="button">DELETE BUILDER</button>
+            <button id="adminBlockDeleteBtn" class="admin-action-danger admin-action-danger--strong" type="button">BLOCK &amp; DELETE</button>
+          </div>
           <p id="adminChangeStatus" class="admin-access-status" role="status" aria-live="polite"></p>
         </div>
 
         <div class="admin-audit-section">
-          <h3>Access history</h3>
+          <h3>Administration history</h3>
           <p id="adminAuditStatus" class="admin-access-status" role="status" aria-live="polite"></p>
           <ol id="adminAuditList" class="admin-audit-list"></ol>
         </div>

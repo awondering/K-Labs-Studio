@@ -10,6 +10,7 @@
   let currentSession = null;
   let currentEntitlement = null;
   let trialExpiryTimer = null;
+  let blockedCheckInFlight = false;
 
   function setVisible(id, visible) {
     const element = document.getElementById(id);
@@ -43,6 +44,15 @@
     document.getElementById("app").style.display = "";
     document.body.classList.add("klabs-logged-out");
     document.body.classList.remove("klabs-auth-resolving", "klabs-auth-open", "klabs-entry-choice", "klabs-explore-demo", "klabs-read-only");
+    try {
+      if (window.sessionStorage.getItem("klabs-account-blocked") === "true") {
+        window.sessionStorage.removeItem("klabs-account-blocked");
+        showAuth("");
+        document.getElementById("authMessage").textContent = "This account has been blocked. Contact K-Labs Studio for assistance.";
+      }
+    } catch (error) {
+      console.warn("[K-Labs Studio] Could not restore the blocked-account notice:", error);
+    }
   }
 
   function showAuth(destination) {
@@ -157,6 +167,41 @@
     return data;
   }
 
+  async function handleBlockedAccount() {
+    if (trialExpiryTimer) window.clearTimeout(trialExpiryTimer);
+    trialExpiryTimer = null;
+    window.KLABS_ACCESS_STATE = null;
+    try {
+      window.sessionStorage.setItem("klabs-account-blocked", "true");
+    } catch (error) {
+      console.warn("[K-Labs Studio] Could not persist the blocked-account notice:", error);
+    }
+    try {
+      const { error } = await window.KLABS_SUPABASE_CLIENT.auth.signOut({ scope: "local" });
+      if (error) console.error("[K-Labs Studio] Blocked account local sign-out failed:", error);
+    } catch (error) {
+      console.error("[K-Labs Studio] Blocked account local sign-out failed:", error);
+    }
+    currentSession = null;
+    currentEntitlement = null;
+    showAuth("");
+    document.getElementById("authMessage").textContent = "This account has been blocked. Contact K-Labs Studio for assistance.";
+  }
+
+  async function verifyCurrentAccountBlock() {
+    if (!currentSession?.user?.id || blockedCheckInFlight || window.navigator?.onLine === false) return;
+    blockedCheckInFlight = true;
+    try {
+      const { data, error } = await window.KLABS_SUPABASE_CLIENT.rpc("klabs_account_is_blocked");
+      if (error) throw error;
+      if (data === true) await handleBlockedAccount();
+    } catch (error) {
+      console.warn("[K-Labs Studio] Could not refresh account block status:", error);
+    } finally {
+      blockedCheckInFlight = false;
+    }
+  }
+
   function scheduleEntitlementExpiry(entitlement) {
     if (trialExpiryTimer) window.clearTimeout(trialExpiryTimer);
     trialExpiryTimer = null;
@@ -242,6 +287,17 @@
       }
       applyAuthState(latestData.session);
     } catch (error) {
+      if (window.KLABS_SUPABASE_CLIENT && window.navigator?.onLine !== false) {
+        try {
+          const { data: blocked, error: blockError } = await window.KLABS_SUPABASE_CLIENT.rpc("klabs_account_is_blocked");
+          if (!blockError && blocked === true) {
+            await handleBlockedAccount();
+            return;
+          }
+        } catch (blockCheckError) {
+          console.warn("[K-Labs Studio] Could not check account block status after access verification failed:", blockCheckError);
+        }
+      }
       document.body.classList.remove("klabs-auth-resolving");
       document.getElementById("app").style.display = "none";
       document.getElementById("authScreen").style.display = "flex";
@@ -261,7 +317,14 @@
   document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("online", () => {
       if (window.KLABS_ACCESS_STATE?.offline) window.location.reload();
+      else verifyCurrentAccountBlock();
     });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") verifyCurrentAccountBlock();
+    });
+    window.setInterval(() => {
+      if (document.visibilityState === "visible") verifyCurrentAccountBlock();
+    }, 15000);
     const dialog = document.getElementById("publicDiscoverDialog");
     const rod = document.getElementById("homeLivingRod");
     const leds = rod.querySelector(".home-living-rod__leds");
