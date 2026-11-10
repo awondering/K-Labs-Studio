@@ -61,7 +61,7 @@ test('Guide Train remains Beta while the other Workshop launchers stay visible',
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache identifies the homepage unification release as build148-v199',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v199';/);
+test('service worker cache identifies the primary button refinement release as build148-v200',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v200';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });

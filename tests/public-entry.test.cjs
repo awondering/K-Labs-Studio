@@ -48,7 +48,7 @@ test('visitor actions share the authenticated homepage width and preserve its co
   assert.match(html,/<button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">START NEW BUILD<\/button>/);
   assert.match(css,/body\.klabs-logged-out #homeEnterRodBtn,\s*body:not\(\.klabs-logged-out\) \.home-public-entry \{\s*display:none;/);
   assert.match(css,/\.home-public-entry \{\s*display:grid;\s*grid-template-columns:repeat\(2,minmax\(0,1fr\)\);[\s\S]*?width:min\(84%,780px\);/);
-  assert.match(css,/#homeScreen \.home-public-entry \.home-enter-rod-button \{[\s\S]*?min-height:74px;[\s\S]*?grid-column:1 \/ -1;/);
+  assert.match(css,/#homeScreen \.home-public-entry \.home-enter-rod-button \{[\s\S]*?min-height:60px;[\s\S]*?gap:3px;[\s\S]*?grid-column:1 \/ -1;/);
   assert.match(css,/\.home-public-entry__secondary,\s*\.home-public-entry__signin \{\s*width:100%;\s*min-height:48px;/);
   assert.match(css,/@media \(max-width:520px\) \{\s*\.home-public-entry \{ width:100%; \}/);
   assert.doesNotMatch(css,/body\.klabs-logged-out #homeScreen \.home-premium-shell|body\.klabs-logged-out #homeScreen \.home-premium-hero h1/);
