@@ -10180,9 +10180,6 @@ body:has(#authScreen[style*="block"]) .carbon-field {
   }
 }
 
-body.klabs-logged-out .bottom-nav {
-  display: none !important;
-}
 #authScreen {
   display: flex;
 }
@@ -10210,6 +10207,46 @@ body.klabs-auth-resolving::after {
   background: #050607;
   z-index: 10000;
 }
+
+body.klabs-logged-out #app > :not(.topbar):not(#homeScreen),
+body.klabs-auth-open .bottom-nav {
+  display:none !important;
+}
+body.klabs-logged-out #homeEnterRodBtn,
+body:not(.klabs-logged-out) .home-public-entry {
+  display:none;
+}
+.home-public-entry {
+  display:grid;
+  gap:10px;
+}
+.home-public-entry p {
+  margin:0;
+  color:#8f938c;
+  font-size:12px;
+  letter-spacing:.04em;
+}
+.home-public-entry .auth-link-button {
+  justify-self:start;
+  min-height:44px;
+  padding:0;
+  text-align:left;
+}
+.public-discover-dialog {
+  width:min(420px,calc(100% - 32px));
+  max-height:calc(100dvh - 32px);
+  box-sizing:border-box;
+  padding:24px;
+  border:1px solid rgba(214,210,200,.2);
+  border-radius:16px;
+  background:#101416;
+  color:#d7d1c5;
+}
+.public-discover-dialog::backdrop { background:rgba(0,0,0,.8); }
+.public-discover-dialog h2 { margin:0 0 16px; font-size:20px; }
+.public-discover-dialog p,.public-discover-dialog li { font-size:14px; line-height:1.55; }
+.public-discover-dialog ul { padding-left:20px; }
+.public-discover-dialog button { min-height:44px; padding:0 20px; }
 
 /* Keep desktop navigation inside the viewport; mobile retains its safe-area layout. */
 @media (min-width:1024px){

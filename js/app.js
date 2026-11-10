@@ -76,7 +76,10 @@ function scheduleServiceWorkerUpdateChecks(registration){
 
 if('serviceWorker' in navigator){
 	let hadControllerBeforeRegistration=false;
-	window.addEventListener('load',()=>{
+	let serviceWorkerStarted=false;
+	const startServiceWorker=()=>{
+		if(serviceWorkerStarted)return;
+		serviceWorkerStarted=true;
 		hadControllerBeforeRegistration=!!navigator.serviceWorker.controller;
 		if(isLocalDevelopment()){
 			navigator.serviceWorker.getRegistrations().then((registrations)=>Promise.all(registrations.map((registration)=>registration.unregister()))).catch(()=>{}).then(()=>clearLocalServiceWorkerState()).then(()=>{
@@ -95,7 +98,9 @@ if('serviceWorker' in navigator){
 		}).catch(()=>{
 			setOfflineStatusLabel('READY OFFLINE');
 		});
-	});
+	};
+	if(document.readyState==='complete')startServiceWorker();
+	else window.addEventListener('load',startServiceWorker,{once:true});
 
 	navigator.serviceWorker.addEventListener('controllerchange',()=>{
 		setOfflineStatusLabel('OFFLINE READY');

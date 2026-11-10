@@ -9,6 +9,7 @@ const source=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const css=fs.readFileSync(path.join(root,'css','studio.css'),'utf8');
 const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
+const bootstrap=fs.readFileSync(path.join(root,'js','public-entry.js'),'utf8');
 const Engine=require('../js/thread-wrap.js');
 
 function extract(name){
@@ -382,7 +383,7 @@ test('Workshop wiring: launcher, card, script order, offline cache and render ho
   assert.match(card,/id="threadWrapMessages" class="thread-wrap-messages" aria-live="polite"/);
   assert.match(card,/<table id="threadWrapTable"[\s\S]*?<th scope="col">Row<\/th>/);
   assert.match(card,/<details class="thread-wrap-method">/);
-  assert.ok(html.indexOf('js/thread-wrap.js')>html.indexOf('js/guide-layout.js') && html.indexOf('js/thread-wrap.js')<html.indexOf('js/ui.js'));
+  assert.ok(bootstrap.indexOf('js/thread-wrap.js')>bootstrap.indexOf('js/guide-layout.js') && bootstrap.indexOf('js/thread-wrap.js')<bootstrap.indexOf('js/ui.js'));
   assert.ok(worker.includes("'js/thread-wrap.js'"));
   assert.match(source,/renderGripCoveringTool\(\);\s*renderThreadWrapTool\(\);\s*renderSpiralGuideMapper\(\);/);
   assert.match(source,/bindThreadWrapControls\(\);/);

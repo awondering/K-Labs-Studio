@@ -4,8 +4,13 @@ window.KLABS_SUPABASE_CLIENT = window.supabase.createClient(
 );
 
 async function klabsCheckLogin() {
-  const { data } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
-  klabsApplyAuthState(data.session);
+  const { data, error } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
+  if (error) throw error;
+  if (window.KLABS_PUBLIC_ENTRY) {
+    await window.KLABS_PUBLIC_ENTRY.applySession(data.session, klabsApplyAuthState);
+  } else {
+    klabsApplyAuthState(data.session);
+  }
 }
 
 function klabsApplyAuthState(session) {
@@ -208,7 +213,23 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("settingsSignOut")
     ?.addEventListener("click", klabsSignOut);
 
-  klabsCheckLogin().catch(() => klabsApplyAuthState(null));
+  klabsCheckLogin().catch((error) => {
+    console.error("[K-Labs Studio] Could not restore the session:", error);
+    if (window.KLABS_PUBLIC_ENTRY && !window.KLABS_UI) {
+      window.KLABS_PUBLIC_ENTRY.showHome();
+      document.getElementById("authMessage").textContent = "Could not restore your session. Check your connection and try again.";
+    } else if (window.KLABS_PUBLIC_ENTRY) {
+      document.getElementById("authMessage").textContent = "Could not open Studio. Reload and try again.";
+    } else {
+      klabsApplyAuthState(null);
+    }
+  });
+  window.KLABS_SUPABASE_CLIENT.auth.onAuthStateChange?.((event, session) => {
+    if (!window.KLABS_UI && !window.KLABS_PUBLIC_ENTRY?.isLoading()) return;
+    if (event === "SIGNED_OUT" || (window.KLABS_ACCOUNT_ID && session?.user?.id && session.user.id !== window.KLABS_ACCOUNT_ID)) {
+      window.location.reload();
+    }
+  });
 });
 document.getElementById("authTogglePassword")
   ?.addEventListener("click", () => {
@@ -225,9 +246,18 @@ document.getElementById("authTogglePassword")
   if (button) button.setAttribute("aria-disabled", "true");
 
   try {
-    await window.KLABS_SUPABASE_CLIENT.auth.signOut();
+    const { error } = await window.KLABS_SUPABASE_CLIENT.auth.signOut();
+    if (error) throw error;
   } catch (error) {
-    // Session is cleared locally below regardless of network result.
+    console.error("[K-Labs Studio] Sign out failed:", error);
+    window.alert("Could not sign out. Please check your connection and try again.");
+    if (button) button.removeAttribute("aria-disabled");
+    return;
+  }
+
+  if (window.KLABS_PUBLIC_ENTRY) {
+    window.location.reload();
+    return;
   }
 
   const password = document.getElementById("authPassword");

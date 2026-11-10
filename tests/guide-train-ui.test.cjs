@@ -9,6 +9,7 @@ const source=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const css=fs.readFileSync(path.join(root,'css','studio.css'),'utf8');
 const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
+const bootstrap=fs.readFileSync(path.join(root,'js','public-entry.js'),'utf8');
 const Engine=require('../js/guide-train.js');
 
 function extract(name){
@@ -192,8 +193,8 @@ test('Workshop wiring: launcher, card, script order and offline asset exist; exi
   assert.equal((html.match(/data-workshop-tool-open="guide-train"/g)||[]).length,1);
   assert.equal((html.match(/id="workshopToolGuideTrain"/g)||[]).length,1);
   assert.match(html,/<article[^>]*id="workshopToolGuideTrain"[^>]*hidden/);
-  const engineAt=html.indexOf('<script src="js/guide-train.js"></script>');
-  const uiAt=html.indexOf('<script src="js/ui.js"');
+  const engineAt=bootstrap.indexOf('"js/guide-train.js"');
+  const uiAt=bootstrap.indexOf('"js/ui.js"');
   assert.ok(engineAt>0 && uiAt>engineAt,'engine loads before ui.js');
   assert.match(worker,/'js\/guide-train\.js'/);
   for(const tool of ['diameter','grip','thread-wrap']){
