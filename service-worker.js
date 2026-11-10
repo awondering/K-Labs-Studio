@@ -1,5 +1,5 @@
 // TEMPORARY DIAGNOSTIC surface: this cache id is also shown in Settings → Account → Sync diagnostics.
-const APP_SHELL_VERSION='build148-v202';
+const APP_SHELL_VERSION='build148-v203';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
 const LEGACY_CACHE_PREFIX='klabs-studio-build';
@@ -15,6 +15,7 @@ const APP_SHELL_ASSETS=[
 	'css/components.css',
 	'css/animations.css',
 	'css/studio.css',
+	'css/admin-access.css',
 	'js/public-entry.js',
 	'js/vendor/supabase-2.119.0.js',
 	'js/supabase-config.js',
@@ -30,6 +31,7 @@ const APP_SHELL_ASSETS=[
 	'js/component-sync.js',
 	'js/build-sync.js',
 	'js/settings-sync.js',
+	'js/admin-panel.js',
 	'js/quote-number-allocator.js',
 	'js/app.js',
 	'assets/logo.svg',

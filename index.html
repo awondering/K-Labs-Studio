@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/animations.css" />
   <link rel="stylesheet" href="css/studio.css" />
+  <link rel="stylesheet" href="css/admin-access.css" />
 </head>
 <body class="klabs-auth-resolving klabs-logged-out">
  <section id="authScreen" style="display:none">
@@ -1208,6 +1209,115 @@
         </div>
         </div>
       </details>
+
+      <details class="settings-card settings-preference-card settings-disclosure settings-admin-entry" id="settingsAdminEntry" hidden>
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Administration</span>
+            <span class="settings-disclosure__hint">Manage builder access.</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
+        <div class="settings-admin-entry__body">
+          <p>Access administration only. Customer builds, quotes and business records are not shown here.</p>
+          <button id="settingsOpenAdminBtn" class="ghost-action" type="button">OPEN ACCESS MANAGER</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="screen admin-access-screen" id="adminAccessScreen" hidden aria-labelledby="adminAccessTitle">
+      <div class="screen-head">
+        <p class="admin-access-eyebrow">OWNER ACCESS</p>
+        <h1 id="adminAccessTitle">Administration</h1>
+        <p class="subtle">Manage access entitlements. Builder records remain private and are not displayed.</p>
+      </div>
+      <button id="adminBackToSettingsBtn" class="admin-access-back" type="button">BACK TO SETTINGS</button>
+
+      <div class="admin-access-toolbar">
+        <form id="adminBuilderSearchForm" class="admin-access-search">
+          <label for="adminBuilderSearch">Search registered builders</label>
+          <input id="adminBuilderSearch" type="search" autocomplete="off" placeholder="Email address" />
+          <button class="ghost-action" type="submit">SEARCH</button>
+        </form>
+        <label class="admin-access-filter" for="adminBuilderStatusFilter">
+          Access status
+          <select id="adminBuilderStatusFilter">
+            <option value="all">All statuses</option>
+            <option value="trial_eligible">Trial eligible</option>
+            <option value="trial">Active trial</option>
+            <option value="expired">Expired</option>
+            <option value="complimentary">Complimentary</option>
+            <option value="grandfathered">Grandfathered</option>
+            <option value="paid">Paid access</option>
+          </select>
+        </label>
+      </div>
+
+      <p id="adminBuilderListStatus" class="admin-access-status" role="status" aria-live="polite"></p>
+      <div id="adminBuilderList" class="admin-builder-list" role="list" aria-label="Registered builders"></div>
+      <button id="adminLoadMoreBtn" class="ghost-action admin-load-more" type="button" hidden>LOAD MORE BUILDERS</button>
+      <p id="adminAccessError" class="admin-access-error" role="alert" aria-live="assertive"></p>
+
+      <section id="adminBuilderDetail" class="admin-builder-detail" aria-labelledby="adminBuilderEmail" hidden>
+        <div class="admin-builder-detail__heading">
+          <div>
+            <p class="admin-access-eyebrow">BUILDER ACCOUNT</p>
+            <h2 id="adminBuilderEmail"></h2>
+          </div>
+          <span id="adminBuilderStatus" class="admin-access-badge"></span>
+        </div>
+        <dl id="adminBuilderDates" class="admin-builder-dates"></dl>
+
+        <div class="admin-billing-note">
+          <strong>Billing</strong>
+          <p>Paid access status and expiry are shown above when present. Payment history, renewals and cancellations are not available here; billing is not connected.</p>
+        </div>
+
+        <div id="adminManageAccess" class="admin-manage-access">
+          <h3>Access changes</h3>
+          <p>Every change requires a reason and is recorded in the access audit log. Customer records are retained.</p>
+
+          <div id="adminComplimentaryControls" class="admin-action-card" hidden>
+            <label>
+              Complimentary access expiry
+              <input id="adminComplimentaryExpiry" type="date" />
+              <small>Leave blank for indefinite access.</small>
+            </label>
+            <label>
+              Reason
+              <textarea id="adminComplimentaryReason" rows="2" maxlength="500" placeholder="Required audit reason"></textarea>
+            </label>
+            <button id="adminGrantComplimentaryBtn" class="admin-action-primary" type="button">GRANT / RESTORE COMPLIMENTARY ACCESS</button>
+          </div>
+
+          <div id="adminTrialControls" class="admin-action-card" hidden>
+            <label>
+              New trial expiry
+              <input id="adminTrialExpiry" type="date" />
+            </label>
+            <label>
+              Reason
+              <textarea id="adminTrialReason" rows="2" maxlength="500" placeholder="Required audit reason"></textarea>
+            </label>
+            <button id="adminExtendTrialBtn" class="ghost-action" type="button">EXTEND ACTIVE TRIAL</button>
+          </div>
+
+          <div id="adminRevokeControls" class="admin-action-card admin-action-card--revoke" hidden>
+            <label>
+              Reason
+              <textarea id="adminRevokeReason" rows="2" maxlength="500" placeholder="Required audit reason"></textarea>
+            </label>
+            <button id="adminRevokeComplimentaryBtn" class="admin-action-danger" type="button">REVOKE COMPLIMENTARY ACCESS</button>
+          </div>
+          <p id="adminChangeStatus" class="admin-access-status" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="admin-audit-section">
+          <h3>Access history</h3>
+          <p id="adminAuditStatus" class="admin-access-status" role="status" aria-live="polite"></p>
+          <ol id="adminAuditList" class="admin-audit-list"></ol>
+        </div>
+      </section>
     </section>
 
     <p id="offlineReadyStatus" class="offline-ready-status" aria-live="polite">OFFLINE READY</p>

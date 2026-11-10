@@ -63,7 +63,7 @@ document.addEventListener('click',(event)=>{
 	}
 });
 
-window.KLABS_NAV={forgetScreenScroll};
+window.KLABS_NAV={forgetScreenScroll,goScreen:safeGoScreen};
 
 const initialActiveScreen=document.querySelector('.screen.active');
 syncHomeScreenClass(initialActiveScreen?initialActiveScreen.id:'homeScreen');

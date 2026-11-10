@@ -84,6 +84,9 @@ function klabsApplyAuthState(session) {
   }
 
   const syncOutcome = window.KLABS_SYNC?.onAuthStateChanged?.(session);
+  Promise.resolve(window.KLABS_ADMIN_ACCESS?.onAuthStateChanged?.(session)).catch((error) => {
+    console.error("[K-Labs Studio] Owner access check failed:", error);
+  });
   // Build sync is independent of Component sync above - failures/timing in one must never block the other.
   Promise.resolve(window.KLABS_BUILD_SYNC?.onAuthStateChanged?.(session)).catch((error) => {
     console.error("[K-Labs Studio] Build library sync error:", error);
