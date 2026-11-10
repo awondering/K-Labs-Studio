@@ -3,12 +3,11 @@
 // settings/profile data, but never the live quote sequence, transient drafts, calculators, builds or components.
 (function () {
   const PENDING_PATCH_PREFIX = "klabs-studio-settings-pending";
-  const ANONYMOUS_OWNER_KEY = "klabs-studio-settings-anonymous-owner";
   const SYNC_DEBOUNCE_MS = 700;
 
   let currentUserId = "";
   let uploadTimer = null;
-  let uploadInFlight = false;
+  let uploadInFlight = null;
   let uploadQueuedAgain = false;
   let authGeneration = 0;
 
@@ -98,9 +97,6 @@
   function readLocalPayload() {
     return withoutLiveQuoteCounter(window.readStudioSettingsSyncPayload ? window.readStudioSettingsSyncPayload() : {});
   }
-  function readAnonymousPayload() {
-    return withoutLiveQuoteCounter(window.readAnonymousStudioSettingsSyncPayload ? window.readAnonymousStudioSettingsSyncPayload() : {});
-  }
   function applyLocalPayload(payload) {
     const previousHydration = window.KLABS_SYNC_HYDRATION;
     if (!canWrite()) window.KLABS_SYNC_HYDRATION = true;
@@ -158,26 +154,6 @@
     }
     window.Store.set(pendingPatchKey(userId), safe);
   }
-  function settingsCacheState() {
-    const state = window.studioSettingsSyncCacheState?.();
-    return state && typeof state === "object" ? state : {};
-  }
-  function initialPayloadForEmptyCloud(userId) {
-    const local = readLocalPayload();
-    const state = settingsCacheState();
-    const owner = String(window.Store.get(ANONYMOUS_OWNER_KEY, "") || "");
-    const canClaimAnonymous = (!owner || owner === userId)
-      && (state.hasAnonymousStudioSettings || state.hasAnonymousBusinessProfile);
-    if (!canClaimAnonymous) return local;
-    const anonymous = readAnonymousPayload();
-    const claimed = normalizePayload({
-      ...anonymous,
-      studioSettings: state.hasStudioSettings ? local.studioSettings : anonymous.studioSettings,
-      businessProfile: state.hasBusinessProfile ? local.businessProfile : anonymous.businessProfile,
-    });
-    if (!owner) window.Store.set(ANONYMOUS_OWNER_KEY, userId);
-    return withoutLiveQuoteCounter(claimed);
-  }
   function supabaseErrorMessage(error, fallback) {
     if (!error) return fallback;
     const parts = [error.message, error.details, error.hint, error.code ? `code ${error.code}` : ""].filter(Boolean);
@@ -208,7 +184,7 @@
       return;
     }
     const pending = getPendingPatch(userId);
-    const base = cloudRow ? normalizePayload(cloudRow.payload) : initialPayloadForEmptyCloud(userId);
+    const base = cloudRow ? normalizePayload(cloudRow.payload) : readLocalPayload();
     const merged = mergePayload(base, pending);
     if (!cloudRow || !patchIsEmpty(pending)) {
       await upsertCloudSettings(merged, userId);
@@ -249,13 +225,14 @@
       uploadQueuedAgain = true;
       return;
     }
-    uploadInFlight = true;
-    notifySyncStatus("syncing");
     const userId = currentUserId;
     const generation = authGeneration;
+    const operation = { userId, generation };
+    uploadInFlight = operation;
+    notifySyncStatus("syncing");
     const pending = getPendingPatch(userId);
     if (patchIsEmpty(pending)) {
-      uploadInFlight = false;
+      if (uploadInFlight === operation) uploadInFlight = null;
       notifySyncStatus("synced");
       return;
     }
@@ -276,12 +253,14 @@
       notifySyncStatus("synced");
     } catch (error) {
       console.error("[K-Labs Studio] Settings cloud sync failed:", error);
-      notifySyncStatus("error", error);
+      if (generation === authGeneration && userId === currentUserId) notifySyncStatus("error", error);
     } finally {
-      uploadInFlight = false;
-      if (uploadQueuedAgain) {
-        uploadQueuedAgain = false;
-        scheduleUpload();
+      if (uploadInFlight === operation) {
+        uploadInFlight = null;
+        if (uploadQueuedAgain) {
+          uploadQueuedAgain = false;
+          scheduleUpload();
+        }
       }
     }
   }
@@ -300,11 +279,18 @@
     },
     onAuthStateChanged(session) {
       const nextUserId = session?.user?.id || "";
+      if (nextUserId && nextUserId === currentUserId) {
+        const generation = authGeneration;
+        return mergeAndSync(generation, nextUserId).catch((error) => {
+          console.error("[K-Labs Studio] Settings sync error:", error);
+          if (generation === authGeneration && nextUserId === currentUserId) notifySyncStatus("error", error);
+        });
+      }
       if (uploadTimer) {
         clearTimeout(uploadTimer);
         uploadTimer = null;
       }
-      uploadInFlight = false;
+      uploadInFlight = null;
       uploadQueuedAgain = false;
       currentUserId = nextUserId;
       authGeneration += 1;
@@ -313,7 +299,7 @@
       const userId = currentUserId;
       return mergeAndSync(generation, userId).catch((error) => {
         console.error("[K-Labs Studio] Settings sync error:", error);
-        notifySyncStatus("error", error);
+        if (generation === authGeneration && userId === currentUserId) notifySyncStatus("error", error);
       });
     },
     notifySettingsChanged(patch) {

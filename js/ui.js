@@ -74,7 +74,6 @@ const BLANK_LIBRARY_STORAGE_KEY='klabs-blank-library';
 const BLANK_LIBRARY_SEARCH_KEY='klabs-blank-library-search';
 const SETTINGS_STORAGE_KEY='klabs-studio-settings';
 const BUSINESS_PROFILE_STORAGE_PREFIX='klabs-business-profile';
-const SETTINGS_ANONYMOUS_OWNER_KEY='klabs-studio-settings-anonymous-owner';
 function studioSettingsStorageKey(){
   const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
   return accountId?`${SETTINGS_STORAGE_KEY}:${accountId}`:SETTINGS_STORAGE_KEY;
@@ -524,25 +523,8 @@ function applyStudioSettingsSyncPayload(payload){
 }
 function reloadBusinessProfileForAccount(){
   resetServerQuoteCounter();
-  const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
   const profileKey=businessProfileStorageKey();
-  let storedProfile=Store.get(profileKey,null);
-  let owner=String(Store.get(SETTINGS_ANONYMOUS_OWNER_KEY,'')||'');
-  if(accountId && !owner){
-    const hasAnonymousSettings=Store.get(SETTINGS_STORAGE_KEY,null)!==null;
-    const hasAnonymousProfile=Store.get(`${BUSINESS_PROFILE_STORAGE_PREFIX}:local`,null)!==null;
-    if(hasAnonymousSettings || hasAnonymousProfile){
-      owner=accountId;
-      Store.set(SETTINGS_ANONYMOUS_OWNER_KEY,accountId);
-    }
-  }
-  if(accountId && storedProfile===null){
-    if(!owner || owner===accountId){
-      const anonymousProfile=normalizeBusinessProfile(Store.get(`${BUSINESS_PROFILE_STORAGE_PREFIX}:local`,{}));
-      storedProfile={quoteNextNumber:anonymousProfile.quoteNextNumber};
-      Store.set(profileKey,storedProfile);
-    }
-  }
+  const storedProfile=Store.get(profileKey,null);
   studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
   businessProfile=normalizeBusinessProfile(storedProfile||{});
   syncSettingsPreferenceControls();
@@ -596,9 +578,13 @@ function historicalQuoteSequenceFloor(){
 async function assignNextQuoteNumber(){
   const accountId=String(window.KLABS_ACCOUNT_ID||'').trim();
   if(accountId){
+    const targetProfile=businessProfile;
     const allocator=window.KLABS_QUOTE_NUMBERS;
     if(!allocator || typeof allocator.allocate!=='function')throw new Error('Quote number service is unavailable.');
     const sequence=await allocator.allocate(historicalQuoteSequenceFloor());
+    if(String(window.KLABS_ACCOUNT_ID||'').trim()!==accountId || businessProfile!==targetProfile){
+      throw new Error('Account changed while allocating the quote number.');
+    }
     businessProfile.quoteNextNumber=Math.max(historicalQuoteSequenceFloor(),sequence+1);
     saveBusinessProfile();
     syncBusinessProfileControls();
@@ -4744,16 +4730,17 @@ async function ensureCurrentQuoteNumber(){
   if(specificationValue(quote.quoteNumber))return quote.quoteNumber;
   if(quoteNumberAllocationPromise)return quoteNumberAllocationPromise;
   const targetQuote=quote;
-  quoteNumberAllocationPromise=(async()=>{
+  const allocation=(async()=>{
     const allocated=await assignNextQuoteNumber();
     if(quote!==targetQuote)throw new Error('Quote changed while allocating its number.');
     if(!specificationValue(targetQuote.quoteNumber))targetQuote.quoteNumber=allocated;
     return targetQuote.quoteNumber;
   })();
+  quoteNumberAllocationPromise=allocation;
   try{
-    return await quoteNumberAllocationPromise;
+    return await allocation;
   }finally{
-    quoteNumberAllocationPromise=null;
+    if(quoteNumberAllocationPromise===allocation)quoteNumberAllocationPromise=null;
   }
 }
 async function persistCurrentQuoteRecord(){

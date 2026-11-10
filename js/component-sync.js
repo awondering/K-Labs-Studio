@@ -2,11 +2,8 @@
 // - js/ui.js keys the component library/taxonomy local storage per signed-in account: signed-out/never-
 //   migrated usage stays on the original bare "anonymous" key forever (never deleted); each authenticated
 //   account gets its own `:<uid>` suffixed key.
-// - The FIRST authenticated account ever to encounter a populated anonymous library permanently claims it
-//   via a durable owner marker (klabs-component-library-anonymous-owner) and gets a one-time, non-destructive
-//   COPY of it into their own namespace, so it stays fully visible/editable locally even if they choose NOT
-//   NOW. Ownership is never re-derived from "whoever is currently signed in" - once claimed, no other account
-//   is ever offered, shown, or able to upload that legacy data, even after the owner signs out.
+// - Anonymous legacy libraries remain untouched. Existing owner markers do not establish reliable ownership,
+//   so the library cannot be imported until a controlled recovery process is available.
 // - On every sign-in the local namespace and the cloud library are MERGED (union keyed by stable record
 //   id, then by name/brand/variant/category/subcategory identity, most-complete record wins); the merged
 //   result is stored locally and uploaded once. Seeded/default starter records are filtered out of every
@@ -21,7 +18,6 @@
   const KNOWN_IDS_PREFIX = "klabs-component-cloud-known-ids";
   const KNOWN_UPDATED_PREFIX = "klabs-component-cloud-known-updated";
   const KNOWN_TAXONOMY_PREFIX = "klabs-component-cloud-known-taxonomy";
-  const ANONYMOUS_OWNER_KEY = "klabs-component-library-anonymous-owner";
   const RECONCILE_DEBOUNCE_MS = 700;
 
   let currentUserId = "";
@@ -115,35 +111,6 @@
     suppressLocalNotify = true;
     window.saveComponentLibraryRecords(records);
   }
-  function anonymousLibraryOwner() {
-    return String(window.Store.get(ANONYMOUS_OWNER_KEY, "") || "");
-  }
-  // Runs at the top of every sign-in sync. Records the anonymous library's first-ever owner (marker only),
-  // and copies it into this account's namespace ONLY when cloud already has data (the merge below then
-  // uploads it). When cloud is empty it deliberately does NOT pre-populate the namespace - the
-  // empty-namespace+empty-cloud branch in runMigrationOrSync is the single path that dedupes, writes,
-  // uploads and verifies the import. The anonymous source is only ever read, never written/cleared.
-  // Pure seeded/default anonymous data is NOT claimed: it is reproducible and must never enter an account.
-  function claimAnonymousLibraryIfNeeded(cloudHasData) {
-    const anonymousRecords = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
-    const realRecords = anonymousRecords.filter((record) => !isSeedRecord(record));
-    if (!realRecords.length) return;
-    const owner = anonymousLibraryOwner();
-    if (!owner) {
-      window.Store.set(ANONYMOUS_OWNER_KEY, currentUserId);
-    } else if (owner !== currentUserId) {
-      return;
-    }
-    const ownNamespaceEmpty = window.componentLibraryRecords().length === 0;
-    if (!ownNamespaceEmpty) return;
-    if (!cloudHasData) return;
-    saveLocalRecordsSilently(realRecords);
-    const anonymousTaxonomy = window.KLABS_UI?.readAnonymousComponentTaxonomy?.() || { categories: [], suppliers: [] };
-    if (anonymousTaxonomy.categories.length || anonymousTaxonomy.suppliers.length) {
-      window.KLABS_UI?.applyCloudComponentTaxonomy?.(anonymousTaxonomy);
-    }
-  }
-
   function normalizeSyncText(value) {
     return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
   }
@@ -779,12 +746,7 @@
     }, RECONCILE_DEBOUNCE_MS);
   }
 
-  // What this account's own namespace currently holds - after claimAnonymousLibraryIfNeeded() has already
-  // run, this includes a copied-in legacy anonymous library for the account that owns it, and stays empty
-  // (with zero access to anyone else's legacy data) for every other account.
   async function runMigrationOrSync() {
-    // Fetch cloud first so the anonymous-claim step knows whether this is an empty-cloud import or a
-    // merge-with-existing-cloud claim.
     setState({ status: "syncing", error: "" });
     let cloudRows, cloudTaxonomyRow;
     try {
@@ -822,55 +784,13 @@
       window.KLABS_UI?.refreshComponentLibraryViews?.();
       return;
     }
-    claimAnonymousLibraryIfNeeded(cloudRows.length > 0);
     const linked = isLinked();
-
-    // One-time anonymous -> account import. Runs whenever cloud is empty AND this account's namespace is
-    // empty AND the anonymous store holds records - INDEPENDENT of the linked flag, because an earlier
-    // buggy build could have set linked=true while both stores were empty (the exact state this repairs).
-    // This is the user's existing working library, so it is taken AS-IS with NO seed filtering; only true
-    // duplicates are collapsed. Dedupe -> write namespaced -> upload -> verify -> only then link.
-    // The anonymous source is never deleted.
-    if (cloudRows.length === 0) {
-      const ownCount = window.componentLibraryRecords().length;
-      const anonymousAll = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
-      if (ownCount === 0 && anonymousAll.length > 0) {
-        try {
-          const deduped = dedupeLocalRecords(anonymousAll);
-          saveLocalRecordsSilently(deduped);
-          const withIds = window.componentLibraryRecords().filter((record) => record.id);
-          await upsertCloudComponents(withIds);
-          const verify = await verifyCloudComponents(withIds.map((record) => record.id));
-          if (!verify.ok) {
-            throw new Error(`Migration verification failed: ${verify.missing.length} of ${withIds.length} components could not be confirmed in your account.`);
-          }
-          const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
-          const finalTaxonomy = enrichTaxonomyFromRecords(localTaxonomy, withIds);
-          await publishTaxonomy(finalTaxonomy);
-          window.Store.set(migrationFlagKey(), true);
-          setKnownCloudIds(new Set(withIds.map((record) => record.id)));
-          setKnownUpdatedFromRows(verify.rows);
-          lastErrorKind = "";
-          setState({ status: "synced", error: "", count: withIds.length });
-          window.KLABS_UI?.refreshComponentLibraryViews?.();
-          return;
-        } catch (error) {
-          console.error("[K-Labs Studio] Anonymous component library migration failed:", error);
-          lastErrorKind = "push";
-          setState({ status: "error", error: "Could not move your local component library to your account. Local data is unchanged." });
-          return;
-        }
-      }
-    }
 
     if (cloudRows.length === 0 && !linked) {
       const ownRecords = window.componentLibraryRecords().filter((record) => record.id);
       const realRecords = ownRecords.filter((record) => !isSeedRecord(record));
       if (realRecords.length === 0) {
-        // Nothing anywhere but reproducible seeded/default records (or nothing at all): never upload
-        // defaults and never prompt. Pure seeds are dropped locally so a signed-in account starts from its
-        // (empty) cloud library instead of re-polluting it.
-        if (ownRecords.length) saveLocalRecordsSilently([]);
+        // Keep local records untouched; do not upload reproducible starter records.
         // Component rows may be empty while a taxonomy row still exists - never let the local seed
         // taxonomy overwrite it; restore the account's real categories/subcategories instead.
         if (cloudTaxonomyRow && cloudTaxonomyRow.taxonomy) {
@@ -984,9 +904,7 @@
         return { ok: false, error: "Could not copy your component library to your account. Your local data is unchanged." };
       }
     },
-    // Writes nothing anywhere: this account's own namespace (already populated by claimAnonymousLibraryIfNeeded
-    // if applicable) is left exactly as-is and remains fully usable/editable locally, permanently, until the
-    // user explicitly chooses to migrate it later.
+    // Leave this account's current library unchanged.
     notNow() {
       setState({ status: "local", error: "", count: window.componentLibraryRecords().length });
     },
@@ -1001,50 +919,9 @@
     getState() {
       return syncState;
     },
-    // Manual recovery action for "Settings -> Account -> IMPORT LOCAL COMPONENTS". Completely separate
-    // from the automatic runMigrationOrSync path above (not touched here): takes the complete anonymous
-    // library as-is (no seed filtering), collapses only true/exact duplicates, writes it into this
-    // account's own namespaced store, verifies that write, uploads to Supabase, verifies the cloud row
-    // count, then rebuilds taxonomy from the imported records. The anonymous source is only ever read.
     async importLocalLibrary() {
       if (!canWrite()) return { ok: false, error: "This account is read-only." };
-      if (!currentUserId) return { ok: false, error: "You need to be signed in to import your local component library." };
-      setState({ status: "syncing", error: "" });
-      try {
-        const anonymousRecords = window.KLABS_UI?.readAnonymousComponentLibraryRecords?.() || [];
-        if (!anonymousRecords.length) {
-          throw new Error("No local components were found to import.");
-        }
-        const deduped = dedupeLocalRecords(anonymousRecords);
-        saveLocalRecordsSilently(deduped);
-        const written = window.componentLibraryRecords().filter((record) => record.id);
-        if (!written.length) {
-          throw new Error("Import failed: components were not saved to your account library.");
-        }
-        await upsertCloudComponents(written);
-        const verify = await verifyCloudComponents(written.map((record) => record.id));
-        if (!verify.ok) {
-          throw new Error(`Cloud upload verification failed: ${verify.missing.length} of ${written.length} component(s) could not be confirmed in your account.`);
-        }
-        if (verify.rows.length !== written.length) {
-          throw new Error(`Cloud row count (${verify.rows.length}) does not match the ${written.length} uploaded component(s).`);
-        }
-        const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
-        const finalTaxonomy = enrichTaxonomyFromRecords(localTaxonomy, written);
-        await publishTaxonomy(finalTaxonomy);
-        window.Store.set(migrationFlagKey(), true);
-        setKnownCloudIds(new Set(written.map((record) => record.id)));
-        setKnownUpdatedFromRows(verify.rows);
-        lastErrorKind = "";
-        setState({ status: "synced", error: "", count: written.length });
-        window.KLABS_UI?.refreshComponentLibraryViews?.();
-        return { ok: true, count: written.length };
-      } catch (error) {
-        console.error("[K-Labs Studio] Manual local component import failed:", error);
-        const message = (error && error.message) || "Could not import your local component library. Local data is unchanged.";
-        setState({ status: "error", error: message });
-        return { ok: false, error: message };
-      }
+      return { ok: false, error: "Local components are preserved but cannot be imported until their ownership is verified." };
     },
     // Manual recovery action for "Settings -> Account -> SYNC COMPONENTS TO CLOUD". Distinct from
     // importLocalLibrary: this never touches the anonymous store or taxonomy, and is meant for the case
