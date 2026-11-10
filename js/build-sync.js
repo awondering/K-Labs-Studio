@@ -18,6 +18,11 @@
   function client() {
     return window.KLABS_SUPABASE_CLIENT;
   }
+  function canWrite() {
+    return typeof window.KLABS_CAN_WRITE === "function"
+      ? window.KLABS_CAN_WRITE()
+      : window.KLABS_ACCESS_STATE?.can_write !== false;
+  }
   function supabaseErrorMessage(error, fallback) {
     if (!error) return fallback;
     const parts = [error.message, error.details, error.hint, error.code ? `code ${error.code}` : ""].filter(Boolean);
@@ -53,6 +58,7 @@
     return Array.isArray(data) ? data : [];
   }
   async function upsertCloudBuilds(records) {
+    if (!canWrite()) throw new Error("This account is read-only; builds cannot be synced.");
     if (!records.length) return;
     const byId = new Map();
     records.forEach((record) => { byId.set(String(record.id || ""), record); });
@@ -62,6 +68,7 @@
     if (error) throw new Error(supabaseErrorMessage(error, "Could not upload your build to Supabase."));
   }
   async function deleteCloudBuilds(ids) {
+    if (!canWrite()) throw new Error("This account is read-only; builds cannot be deleted.");
     const list = ids.filter(Boolean);
     if (!list.length) return;
     const { error } = await client().from("builds").delete().eq("user_id", currentUserId).in("client_id", list);
@@ -96,11 +103,17 @@
       merged.push(rowToRecord(row));
     });
 
-    if (toUpsert.length) await upsertCloudBuilds(toUpsert);
+    if (canWrite() && toUpsert.length) await upsertCloudBuilds(toUpsert);
     // A save/delete may land while the sign-in merge is awaiting cloud I/O. Never replace that newer local
     // state with this merge's stale snapshot; restart against the latest local records instead.
     if (localMutationVersion !== snapshotVersion) return mergeAndSync();
-    saveLocalBuilds(merged);
+    const previousHydration = window.KLABS_SYNC_HYDRATION;
+    if (!canWrite()) window.KLABS_SYNC_HYDRATION = true;
+    try {
+      saveLocalBuilds(merged);
+    } finally {
+      window.KLABS_SYNC_HYDRATION = previousHydration;
+    }
     window.KLABS_UI?.refreshBuildViews?.();
   }
 
@@ -112,6 +125,11 @@
   // Ongoing sync: upserts/deletes only the specific records queued by notifyBuildSaved/notifyBuildDeleted -
   // never re-uploads the whole local array.
   async function flushPending() {
+    if (!canWrite()) {
+      pendingUpsertById = new Map();
+      pendingDeleteIds = new Set();
+      return;
+    }
     if (pushInFlight) { pushQueuedAgain = true; return; }
     const toUpsert = Array.from(pendingUpsertById.values());
     const toDelete = Array.from(pendingDeleteIds);
@@ -147,14 +165,14 @@
     },
     // Queues exactly the one changed record - id is that record's own stable id (see js/ui.js persistBuildRecord).
     notifyBuildSaved(record) {
-      if (!currentUserId || !record || !record.id) return;
+      if (!canWrite() || !currentUserId || !record || !record.id) return;
       localMutationVersion += 1;
       pendingDeleteIds.delete(String(record.id));
       pendingUpsertById.set(String(record.id), record);
       scheduleFlush();
     },
     notifyBuildDeleted(id) {
-      if (!currentUserId || !id) return;
+      if (!canWrite() || !currentUserId || !id) return;
       localMutationVersion += 1;
       pendingUpsertById.delete(String(id));
       pendingDeleteIds.add(String(id));

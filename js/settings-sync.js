@@ -15,6 +15,11 @@
   function client() {
     return window.KLABS_SUPABASE_CLIENT;
   }
+  function canWrite() {
+    return typeof window.KLABS_CAN_WRITE === "function"
+      ? window.KLABS_CAN_WRITE()
+      : window.KLABS_ACCESS_STATE?.can_write !== false;
+  }
   function pendingPatchKey(userId) {
     return `${PENDING_PATCH_PREFIX}:${userId || currentUserId}`;
   }
@@ -97,7 +102,13 @@
     return withoutLiveQuoteCounter(window.readAnonymousStudioSettingsSyncPayload ? window.readAnonymousStudioSettingsSyncPayload() : {});
   }
   function applyLocalPayload(payload) {
-    window.applyStudioSettingsSyncPayload?.(normalizePayload(payload));
+    const previousHydration = window.KLABS_SYNC_HYDRATION;
+    if (!canWrite()) window.KLABS_SYNC_HYDRATION = true;
+    try {
+      window.applyStudioSettingsSyncPayload?.(normalizePayload(payload));
+    } finally {
+      window.KLABS_SYNC_HYDRATION = previousHydration;
+    }
   }
   function sanitizePatch(patch) {
     const source = patch && typeof patch === "object" ? patch : {};
@@ -178,6 +189,7 @@
     return data || null;
   }
   async function upsertCloudSettings(payload, userId) {
+    if (!canWrite()) throw new Error("This account is read-only; Studio settings cannot be synced.");
     const row = {
       user_id: userId || currentUserId,
       payload: withoutLiveQuoteCounter(payload),
@@ -191,6 +203,10 @@
     notifySyncStatus("syncing");
     const cloudRow = await fetchCloudSettings(userId);
     if (generation !== authGeneration || userId !== currentUserId) return;
+    if (!canWrite()) {
+      if (cloudRow) applyLocalPayload(cloudRow.payload);
+      return;
+    }
     const pending = getPendingPatch(userId);
     const base = cloudRow ? normalizePayload(cloudRow.payload) : initialPayloadForEmptyCloud(userId);
     const merged = mergePayload(base, pending);
@@ -223,6 +239,12 @@
 
   async function flushUpload() {
     if (!currentUserId || !client()) return;
+    if (!canWrite()) {
+      if (uploadTimer) clearTimeout(uploadTimer);
+      uploadTimer = null;
+      uploadQueuedAgain = false;
+      return;
+    }
     if (uploadInFlight) {
       uploadQueuedAgain = true;
       return;
@@ -264,7 +286,7 @@
     }
   }
   function scheduleUpload() {
-    if (!currentUserId) return;
+    if (!canWrite() || !currentUserId) return;
     if (uploadTimer) clearTimeout(uploadTimer);
     uploadTimer = setTimeout(() => {
       uploadTimer = null;
@@ -295,7 +317,7 @@
       });
     },
     notifySettingsChanged(patch) {
-      if (!currentUserId) return;
+      if (!canWrite() || !currentUserId) return;
       const next = mergePatch(getPendingPatch(currentUserId), patch);
       if (patchIsEmpty(next)) return;
       setPendingPatch(currentUserId, next);

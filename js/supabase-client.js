@@ -2,6 +2,36 @@ window.KLABS_SUPABASE_CLIENT = window.supabase.createClient(
   window.KLABS_SUPABASE.url,
   window.KLABS_SUPABASE.publishableKey
 );
+let klabsReadOnlyObserver = null;
+
+function klabsApplyReadOnlyControls() {
+  const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;
+  const app = document.getElementById("app");
+  if (!app) return;
+  if (!readOnly) {
+    if (klabsReadOnlyObserver) klabsReadOnlyObserver.disconnect();
+    klabsReadOnlyObserver = null;
+    app.querySelectorAll("[data-klabs-readonly]").forEach((control) => {
+      control.removeAttribute("data-klabs-readonly");
+      control.disabled = false;
+      control.readOnly = false;
+    });
+    return;
+  }
+  app.querySelectorAll("input, textarea, select").forEach((control) => {
+    if (control.type === "search") return;
+    control.setAttribute("data-klabs-readonly", "true");
+    if (control.tagName === "INPUT" && ["text", "email", "tel", "url", "number", "date", "time", "datetime-local", "month", "week"].includes(control.type)) {
+      control.readOnly = true;
+    } else {
+      control.disabled = true;
+    }
+  });
+  if (!klabsReadOnlyObserver && typeof MutationObserver === "function") {
+    klabsReadOnlyObserver = new MutationObserver(klabsApplyReadOnlyControls);
+    klabsReadOnlyObserver.observe(app, { childList: true, subtree: true });
+  }
+}
 
 async function klabsCheckLogin() {
   const { data, error } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
@@ -30,10 +60,26 @@ function klabsApplyAuthState(session) {
     app.style.display = "";
     document.body.classList.remove("klabs-logged-out");
     if (accountEmail) accountEmail.textContent = session.user?.email || "Signed in";
+    const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;
+    document.body.classList.toggle("klabs-read-only", readOnly);
+    const notice = document.getElementById("readOnlyAccessNotice");
+    if (notice) {
+      notice.hidden = !readOnly;
+      const noticeText = notice.querySelector("span");
+      if (noticeText) {
+        noticeText.textContent = window.KLABS_ACCESS_STATE?.offline
+          ? "You are offline and account access could not be verified. Your saved records are view-only until you reconnect."
+          : "Your trial has ended. Your records remain available, but changes cannot be saved.";
+      }
+    }
+    klabsApplyReadOnlyControls();
   } else {
     authScreen.style.display = "";
     app.style.display = "none";
     document.body.classList.add("klabs-logged-out");
+    document.body.classList.remove("klabs-read-only");
+    const notice = document.getElementById("readOnlyAccessNotice");
+    if (notice) notice.hidden = true;
     if (accountEmail) accountEmail.textContent = "Signed out";
   }
 
@@ -49,15 +95,20 @@ function klabsApplyAuthState(session) {
   // never be mistaken for pre-existing local data during a sign-in merge.
   Promise.resolve(syncOutcome)
     .then(() => {
-      if (session?.user?.id) window.KLABS_UI?.migrateComponentHierarchyLabels?.();
+      if (session?.user?.id && window.KLABS_ACCESS_STATE?.can_write !== false) {
+        window.KLABS_UI?.migrateComponentHierarchyLabels?.();
+      }
     })
     .catch(() => {})
     .finally(() => {
-      window.KLABS_UI?.maybeSeedStarterComponents?.();
+      if (window.KLABS_ACCESS_STATE?.can_write !== false) {
+        window.KLABS_UI?.maybeSeedStarterComponents?.();
+      }
     });
 
   document.body.classList.remove("klabs-auth-resolving");
 }
+window.KLABS_APPLY_AUTH_STATE = klabsApplyAuthState;
 
 let klabsSignInPending = false;
 
@@ -190,6 +241,22 @@ async function klabsSignUp() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("click", (event) => {
+    if (!document.body.classList.contains("klabs-read-only")) return;
+    const control = event.target.closest("#app button, #app [role='button'], #app input[type='submit']");
+    if (!control || control.matches("[data-nav], [data-collapsible-trigger], [data-builds-status-filter]")) return;
+    const label = `${control.textContent || ""} ${control.getAttribute("aria-label") || ""} ${control.id || ""}`;
+    if (!/\b(add|new|save|delete|remove|duplicate|edit|update|confirm|complete|mark|record|send|email|print|export|import|rename|copy|reset|clear|create|quote|price)\b/i.test(label)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const notice = document.getElementById("readOnlyAccessNotice");
+    if (notice) notice.querySelector("span").textContent = "This account is read-only. You can view your records, but cannot edit, save, or create customer documents.";
+  }, true);
+  document.addEventListener("submit", (event) => {
+    if (!document.body.classList.contains("klabs-read-only") || !event.target.closest("#app")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
   document.getElementById("authShowSignUp")
     ?.addEventListener("click", () => klabsShowAuthMode("signup"));
   document.getElementById("authShowSignIn")

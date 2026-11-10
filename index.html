@@ -64,6 +64,80 @@
 
   <p id="authMessage" aria-live="polite"></p>
 </section>
+  <section id="accountAccessScreen" class="account-access-screen" hidden aria-labelledby="accountAccessTitle">
+    <div class="account-access-card">
+      <img src="assets/logo.svg" alt="" class="account-access-mark" />
+      <p class="account-access-eyebrow">K-LABS STUDIO</p>
+      <h1 id="accountAccessTitle">Your Studio, your way.</h1>
+      <p id="accountAccessMessage" class="account-access-copy" aria-live="polite"></p>
+      <div id="accountAccessChoices" class="account-access-choices">
+        <button id="startTrialBtn" class="account-access-primary" type="button">
+          START MY 7-DAY TRIAL
+        </button>
+        <p class="account-access-detail">The seven days begin when you confirm. Registration alone does not start the trial.</p>
+        <button id="enterExploreDemoBtn" class="account-access-secondary" type="button">EXPLORE WITH DEMONSTRATION DATA</button>
+        <p class="account-access-detail">Explore uses fictional examples only. Changes and customer documents are not saved or generated.</p>
+      </div>
+      <button id="verifyEmailContinueBtn" class="account-access-secondary" type="button" hidden>CHECK EMAIL VERIFICATION</button>
+      <p id="accountAccessError" class="account-access-error" role="alert" aria-live="polite"></p>
+      <button id="accessSignOutBtn" class="account-access-signout" type="button">SIGN OUT</button>
+    </div>
+  </section>
+  <section id="exploreDemoScreen" class="explore-demo-screen" hidden aria-labelledby="exploreDemoTitle">
+    <header class="explore-demo-header">
+      <div>
+        <p class="account-access-eyebrow">K-LABS STUDIO · EXPLORE MODE</p>
+        <h1 id="exploreDemoTitle">A considered view of your workshop.</h1>
+        <p>Fictional demonstration data. Nothing here changes or saves to your account.</p>
+      </div>
+      <button id="demoSignOutBtn" class="account-access-signout" type="button">SIGN OUT</button>
+    </header>
+    <p id="demoAccessError" class="account-access-error explore-demo-error" role="alert" aria-live="polite"></p>
+    <nav class="explore-demo-nav" aria-label="Demonstration sections">
+      <button type="button" data-demo-view="overview" aria-current="page">OVERVIEW</button>
+      <button type="button" data-demo-view="customers">CUSTOMERS</button>
+      <button type="button" data-demo-view="builds">BUILDS</button>
+      <button type="button" data-demo-view="quotes">QUOTES</button>
+      <button type="button" data-demo-view="components">COMPONENTS</button>
+      <button type="button" data-demo-view="workshop">WORKSHOP</button>
+    </nav>
+    <section class="explore-demo-panel" data-demo-panel="overview">
+      <p class="explore-demo-kicker">DEMONSTRATION · ALL NAMES AND DETAILS ARE FICTIONAL</p>
+      <h2>From first specification to finished rod.</h2>
+      <div class="explore-demo-summary">
+        <article><span>CUSTOMER</span><strong>Mara Te Rangi</strong><small>Fictional profile</small></article>
+        <article><span>ACTIVE BUILD</span><strong>Coastal 9' 6&quot;</strong><small>Light surf · In progress</small></article>
+        <article><span>COMPONENTS</span><strong>12 selected</strong><small>Illustrative selection</small></article>
+      </div>
+    </section>
+    <section class="explore-demo-panel" data-demo-panel="customers" hidden>
+      <p class="explore-demo-kicker">FICTIONAL CUSTOMER</p><h2>Mara Te Rangi</h2>
+      <p>Example customer record for a Coastal 9' 6&quot; light-surf rod. Contact details are intentionally not shown.</p>
+    </section>
+    <section class="explore-demo-panel" data-demo-panel="builds" hidden>
+      <p class="explore-demo-kicker">FICTIONAL BUILD</p><h2>Coastal 9' 6&quot; · Light Surf</h2>
+      <p>Status: In progress · Example specification: 9' 6&quot; blank, two-piece, 10–30 g lure rating.</p>
+      <div class="explore-demo-metric"><span>Illustrative component total</span><strong>$684.00</strong></div>
+    </section>
+    <section class="explore-demo-panel" data-demo-panel="quotes" hidden>
+      <p class="explore-demo-kicker">FICTIONAL PRICING EXAMPLE · NOT A CUSTOMER DOCUMENT</p><h2>Coastal 9' 6&quot; · Estimate</h2>
+      <p>A view of how a build's selected components and pricing can be presented. This sample is illustrative only; it cannot be printed, emailed, or saved.</p>
+      <div class="explore-demo-metric"><span>Illustrative total</span><strong>$1,240.00</strong></div>
+    </section>
+    <section class="explore-demo-panel" data-demo-panel="components" hidden>
+      <p class="explore-demo-kicker">FICTIONAL COMPONENT SELECTION</p><h2>Selected for the example build</h2>
+      <ul class="explore-demo-list"><li>Coastal graphite blank <span>$245.00</span></li><li>Low-profile reel seat <span>$48.00</span></li><li>Split-grip EVA set <span>$36.00</span></li></ul>
+    </section>
+    <section class="explore-demo-panel" data-demo-panel="workshop" hidden>
+      <p class="explore-demo-kicker">PRECISION WORKSHOP</p><h2>Practical tools for the bench</h2>
+      <p>Guide spacing, grip wrap, and diameter &amp; circumference calculators support the real measuring and layout work of custom rod building.</p>
+      <p class="explore-demo-readonly-note">Calculators are described here, not run against saved account data in Explore Mode.</p>
+    </section>
+    <footer class="explore-demo-footer">
+      <p>This demonstration is separate from your records. Start your trial only when you choose to begin working in Studio.</p>
+      <button id="demoStartTrialBtn" class="account-access-primary" type="button">START MY 7-DAY TRIAL</button>
+    </footer>
+  </section>
   <div class="carbon-field"></div>
   <main class="app-shell" id="app">
     <header class="topbar">
@@ -75,6 +149,10 @@
         </div>
       </div>
     </header>
+    <div id="readOnlyAccessNotice" class="readonly-access-notice" role="status" hidden>
+      <strong>READ-ONLY ACCESS</strong>
+      <span>Your trial has ended. Your records remain available, but changes cannot be saved.</span>
+    </div>
 
     <section class="screen active" id="homeScreen">
       <div class="home-premium-shell">

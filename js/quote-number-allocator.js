@@ -4,6 +4,12 @@
   }
 
   async function allocate(minimumNext) {
+    const canWrite = typeof window.KLABS_CAN_WRITE === "function"
+      ? window.KLABS_CAN_WRITE()
+      : window.KLABS_ACCESS_STATE?.can_write !== false;
+    if (!canWrite) {
+      throw new Error("This account is read-only; quote numbers cannot be allocated.");
+    }
     const supabase = client();
     if (!supabase) throw new Error("Quote number service is unavailable.");
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();

@@ -36,6 +36,11 @@
   function client() {
     return window.KLABS_SUPABASE_CLIENT;
   }
+  function canWrite() {
+    return typeof window.KLABS_CAN_WRITE === "function"
+      ? window.KLABS_CAN_WRITE()
+      : window.KLABS_ACCESS_STATE?.can_write !== false;
+  }
 
   function notify() {
     try {
@@ -583,6 +588,7 @@
     return data || null;
   }
   async function upsertCloudComponents(records) {
+    if (!canWrite()) throw new Error("This account is read-only; component changes cannot be synced.");
     if (!records.length) return;
     // A single upsert() call is one Postgres statement; if two rows in the SAME request share a (user_id,
     // client_id) conflict key, Postgres rejects the WHOLE batch ("ON CONFLICT DO UPDATE command cannot
@@ -598,11 +604,13 @@
     }
   }
   async function deleteCloudComponents(ids) {
+    if (!canWrite()) throw new Error("This account is read-only; components cannot be deleted.");
     if (!ids.length) return;
     const { error } = await client().from("components").delete().eq("user_id", currentUserId).in("client_id", ids);
     if (error) throw error;
   }
   async function upsertCloudTaxonomy(taxonomy) {
+    if (!canWrite()) throw new Error("This account is read-only; component categories cannot be changed.");
     const { error } = await client()
       .from("component_taxonomy")
       .upsert({ user_id: currentUserId, taxonomy: taxonomy || { categories: [], suppliers: [] }, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
@@ -622,7 +630,7 @@
   // Deletions only ever happen for explicit local deletes (ids this context previously knew in cloud) and
   // exact duplicates absorbed by dedupe - never for unknown cloud records, which are pulled in instead.
   async function reconcileNow() {
-    if (!currentUserId || !isLinked()) return;
+    if (!canWrite() || !currentUserId || !isLinked()) return;
     if (reconcileInFlight) {
       reconcileQueuedAgain = true;
       return;
@@ -738,7 +746,7 @@
       suppressLocalNotify = false;
       return;
     }
-    if (!currentUserId || !isLinked()) return;
+    if (!canWrite() || !currentUserId || !isLinked()) return;
     if (reconcileTimer) clearTimeout(reconcileTimer);
     reconcileTimer = setTimeout(() => {
       reconcileTimer = null;
@@ -746,6 +754,7 @@
     }, RECONCILE_DEBOUNCE_MS);
   }
   async function reconcileTaxonomyNow() {
+    if (!canWrite()) return;
     const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
     const cloudRow = await fetchCloudTaxonomy();
     const cloudTaxonomy = cloudRow && cloudRow.taxonomy ? cloudRow.taxonomy : null;
@@ -759,7 +768,7 @@
     setKnownTaxonomy(published);
   }
   function scheduleTaxonomyReconcile() {
-    if (!currentUserId || !isLinked()) return;
+    if (!canWrite() || !currentUserId || !isLinked()) return;
     if (taxonomyTimer) clearTimeout(taxonomyTimer);
     taxonomyTimer = setTimeout(() => {
       taxonomyTimer = null;
@@ -784,6 +793,33 @@
       console.error("[K-Labs Studio] Component library sync failed to read from Supabase:", error);
       lastErrorKind = "pull";
       setState({ status: "error", error: "Could not reach your component library. Local data is unchanged." });
+      return;
+    }
+    if (!canWrite()) {
+      const localById = new Map(window.componentLibraryRecords()
+        .filter((record) => record && record.id)
+        .map((record) => [String(record.id), record]));
+      const mergedById = new Map(localById);
+      cloudRows.map(rowToRecord).forEach((record) => {
+        const existing = mergedById.get(String(record.id));
+        if (!existing || (Date.parse(record.updatedAt || "") || 0) > (Date.parse(existing.updatedAt || "") || 0)) {
+          mergedById.set(String(record.id), record);
+        }
+      });
+      const previousHydration = window.KLABS_SYNC_HYDRATION;
+      window.KLABS_SYNC_HYDRATION = true;
+      try {
+        saveLocalRecordsSilently(Array.from(mergedById.values()));
+        if (cloudTaxonomyRow?.taxonomy) {
+          const localTaxonomy = window.ensureStudioComponentTaxonomyLoaded();
+          const mergedTaxonomy = mergeTaxonomies(localTaxonomy, cloudTaxonomyRow.taxonomy, getKnownTaxonomy());
+          window.KLABS_UI?.applyCloudComponentTaxonomy?.(mergedTaxonomy);
+        }
+      } finally {
+        window.KLABS_SYNC_HYDRATION = previousHydration;
+      }
+      setState({ status: "local", error: "", count: mergedById.size });
+      window.KLABS_UI?.refreshComponentLibraryViews?.();
       return;
     }
     claimAnonymousLibraryIfNeeded(cloudRows.length > 0);
@@ -935,6 +971,7 @@
       scheduleTaxonomyReconcile();
     },
     async copyToAccount() {
+      if (!canWrite()) return { ok: false, error: "This account is read-only." };
       if (!currentUserId) return { ok: false, error: "You need to be signed in to sync your component library." };
       setState({ status: "syncing", error: "" });
       try {
@@ -954,7 +991,7 @@
       setState({ status: "local", error: "", count: window.componentLibraryRecords().length });
     },
     retry() {
-      if (!currentUserId) return;
+      if (!canWrite() || !currentUserId) return;
       if (lastErrorKind === "push" && isLinked()) {
         reconcileNow().catch((error) => console.error("[K-Labs Studio] Component library sync retry failed:", error));
         return;
@@ -970,6 +1007,7 @@
     // account's own namespaced store, verifies that write, uploads to Supabase, verifies the cloud row
     // count, then rebuilds taxonomy from the imported records. The anonymous source is only ever read.
     async importLocalLibrary() {
+      if (!canWrite()) return { ok: false, error: "This account is read-only." };
       if (!currentUserId) return { ok: false, error: "You need to be signed in to import your local component library." };
       setState({ status: "syncing", error: "" });
       try {
@@ -1014,6 +1052,7 @@
     // Uploads the existing namespaced records as-is, re-fetches, and only reports SYNCED when the cloud
     // row count matches. RECORDS/ANON are never written here.
     async syncRecordsToCloud() {
+      if (!canWrite()) return { ok: false, error: "This account is read-only." };
       if (!currentUserId) return { ok: false, error: "You need to be signed in to sync your component library." };
       setState({ status: "syncing", error: "" });
       try {
