@@ -12,6 +12,8 @@ function harness(){
   const classes=new Set(['klabs-auth-resolving','klabs-logged-out']);
   const events={};
   const scripts=[];
+  const heldScripts=new Set();
+  const heldScriptCallbacks=new Map();
   let failScript='';
   let rpcError=null;
   let entitlement={access_state:'grandfathered',can_write:true,email_verified:true};
@@ -42,7 +44,12 @@ function harness(){
     createElement:()=>({style:{setProperty(){}}}),
     querySelector:()=>null,
     querySelectorAll(selector){return selector==='[data-demo-view]'?demoViews:selector==='[data-demo-panel]'?demoPanels:[];},
-    head:{appendChild(script){scripts.push(script.src);queueMicrotask(()=>script.src===failScript?script.onerror():script.onload());}},
+    head:{appendChild(script){
+      scripts.push(script.src);
+      const finish=()=>script.src===failScript?script.onerror():script.onload();
+      if(heldScripts.has(script.src))heldScriptCallbacks.set(script.src,finish);
+      else queueMicrotask(finish);
+    }},
   };
   let trialStarts=0;
   const window={scrollTo(){},dispatchEvent(){},addEventListener(){},setInterval(){return 1;},navigator:{onLine:true},
@@ -67,7 +74,7 @@ function harness(){
     }};
   vm.runInNewContext(source,{window,document,Promise,Error,Date,JSON,console});
   events.DOMContentLoaded();
-  return {window,document,elements,classes,scripts,demoViews,demoPanels,setSession(value){session=value;},setEntitlement(value){entitlement=value;},setRpcError(value){rpcError=value;},cache(key,value){cachedValues.set(key,JSON.stringify(value));},trialStarts:()=>trialStarts,reloads:()=>reloads,failScript(value){failScript=value;}};
+  return {window,document,elements,classes,scripts,demoViews,demoPanels,setSession(value){session=value;},setEntitlement(value){entitlement=value;},setRpcError(value){rpcError=value;},cache(key,value){cachedValues.set(key,JSON.stringify(value));},trialStarts:()=>trialStarts,reloads:()=>reloads,failScript(value){failScript=value;},holdScript(value){heldScripts.add(value);},releaseScript(value){heldScripts.delete(value);heldScriptCallbacks.get(value)?.();heldScriptCallbacks.delete(value);}};
 }
 
 test('public markup does not load private application scripts',()=>{
@@ -134,6 +141,23 @@ test('private scripts load only after a session and auth state applies after ses
   assert.ok(h.scripts.includes('js/ui.js'));
   assert.ok(h.scripts.indexOf('js/storage.js')<h.scripts.indexOf('js/ui.js'));
   assert.ok(h.scripts.indexOf('js/ui.js')<h.scripts.indexOf('js/app.js'));
+});
+
+test('admin script loads in parallel with the private app while auth still waits for both',async()=>{
+  const h=harness();
+  const session={user:{id:'synthetic-parallel-admin'}};
+  h.setSession(session);
+  h.holdScript('js/admin-panel.js');
+  let applied=false;
+  const startup=h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{applied=true;});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(h.scripts.includes('js/admin-panel.js'));
+  assert.ok(h.scripts.includes('js/config.js'));
+  assert.ok(h.scripts.includes('js/app.js'),'the serialized core scripts continue while admin download is pending');
+  assert.equal(applied,false,'authenticated UI remains gated until admin script has loaded');
+  h.releaseScript('js/admin-panel.js');
+  await startup;
+  assert.equal(applied,true);
 });
 
 test('trial-eligible accounts see the choice before any private script loads; Explore stays fictional and isolated',async()=>{

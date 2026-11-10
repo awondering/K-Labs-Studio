@@ -3,7 +3,7 @@
     "js/config.js", "js/storage.js", "js/guide-layout.js", "js/thread-wrap.js",
     "js/guide-train.js", "js/studio-visuals.js", "js/navigation.js", "js/ui.js",
     "js/component-sync.js", "js/build-sync.js", "js/settings-sync.js",
-    "js/admin-panel.js", "js/quote-number-allocator.js", "js/app.js"
+    "js/quote-number-allocator.js", "js/app.js"
   ];
   let loadPromise = null;
   let pendingDestination = "";
@@ -233,13 +233,19 @@
 
   function loadPrivateApp() {
     if (!loadPromise) {
-      loadPromise = privateScripts.reduce((previous, src) => previous.then(() => new Promise((resolve, reject) => {
+      const loadScript = (src) => new Promise((resolve, reject) => {
         const script = document.createElement("script");
         script.src = src;
         script.onload = resolve;
         script.onerror = () => reject(new Error(`Could not load ${src}. Reload and try again.`));
         document.head.appendChild(script);
-      })), Promise.resolve());
+      });
+      const adminPanelPromise = loadScript("js/admin-panel.js");
+      const privateAppPromise = privateScripts.reduce(
+        (previous, src) => previous.then(() => loadScript(src)),
+        Promise.resolve()
+      );
+      loadPromise = Promise.all([privateAppPromise, adminPanelPromise]);
     }
     return loadPromise;
   }
