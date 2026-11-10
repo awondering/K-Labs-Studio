@@ -5,6 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
 const source=fs.readFileSync(path.join(__dirname,'..','js','public-entry.js'),'utf8');
 
 function harness(){
@@ -41,6 +42,16 @@ test('public markup does not load private application scripts',()=>{
   for(const name of ['storage','ui','navigation','component-sync','build-sync','settings-sync','app']){
     assert.doesNotMatch(html,new RegExp(`<script src="js/${name}\\.js">`));
   }
+});
+
+test('visitor actions share the authenticated homepage width and preserve its composition',()=>{
+  assert.match(html,/<button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">START NEW BUILD<\/button>/);
+  assert.match(css,/body\.klabs-logged-out #homeEnterRodBtn,\s*body:not\(\.klabs-logged-out\) \.home-public-entry \{\s*display:none;/);
+  assert.match(css,/\.home-public-entry \{\s*display:grid;\s*grid-template-columns:repeat\(2,minmax\(0,1fr\)\);[\s\S]*?width:min\(84%,780px\);/);
+  assert.match(css,/#homeScreen \.home-public-entry \.home-enter-rod-button \{[\s\S]*?min-height:74px;[\s\S]*?grid-column:1 \/ -1;/);
+  assert.match(css,/\.home-public-entry__secondary,\s*\.home-public-entry__signin \{\s*width:100%;\s*min-height:48px;/);
+  assert.match(css,/@media \(max-width:520px\) \{\s*\.home-public-entry \{ width:100%; \}/);
+  assert.doesNotMatch(css,/body\.klabs-logged-out #homeScreen \.home-premium-shell|body\.klabs-logged-out #homeScreen \.home-premium-hero h1/);
 });
 
 test('signed-out entry and public interactions do not initialize private scripts',async()=>{
