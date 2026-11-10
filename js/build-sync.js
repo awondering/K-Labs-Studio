@@ -1,4 +1,4 @@
-// Supabase sync for klabs-workshop-builds ONLY. Independent from js/component-sync.js (Components/taxonomy)
+// Supabase sync for klabs-workshop-builds:<accountId> ONLY. Independent from js/component-sync.js (Components/taxonomy)
 // and does not touch the legacy klabs-workshop-quotes store. One Build record = one authoritative record,
 // identified by its own stable `id` field (NOT buildNumber, which is a per-device sequential display label
 // only - see js/ui.js nextBuildNumber()). Customer-only profiles use the same payload path with

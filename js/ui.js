@@ -39,6 +39,27 @@ const COMPONENT_LIBRARY_STORAGE_KEY='klabs-workshop-component-library';
 const COMPONENT_TAXONOMY_STORAGE_KEY='klabs-workshop-component-taxonomy';
 const CUSTOMER_ONLY_RECORD_TYPE='customer';
 const COMPONENT_HIERARCHY_CLEANUP_KEY='klabs-component-hierarchy-cleanup-v1';
+// Builds, legacy quotes and the in-progress draft are stored per account (key:<accountId>; signed-out uses
+// key:local). The bare keys below are the old shared-device namespace: they are quarantined - preserved
+// untouched, never read into the live app, never uploaded and never assigned to any account.
+const BUILDS_STORAGE_KEY='klabs-workshop-builds';
+const QUOTES_STORAGE_KEY='klabs-workshop-quotes';
+const QUOTE_CURRENT_STORAGE_KEY='klabs-workshop-quote-current';
+function accountScopedStorageKey(base){
+  return `${base}:${activeAccountKey()}`;
+}
+function buildsStorageKey(){return accountScopedStorageKey(BUILDS_STORAGE_KEY);}
+function quotesStorageKey(){return accountScopedStorageKey(QUOTES_STORAGE_KEY);}
+function quoteCurrentStorageKey(){return accountScopedStorageKey(QUOTE_CURRENT_STORAGE_KEY);}
+function readQuarantinedLegacyRecords(){
+  const read=(key)=>{const value=Store.get(key,[]);return Array.isArray(value)?value:[];};
+  return {builds:read(BUILDS_STORAGE_KEY),quotes:read(QUOTES_STORAGE_KEY),currentQuote:Store.get(QUOTE_CURRENT_STORAGE_KEY,null)};
+}
+function refreshBuildViewsSafely(){try{renderBuilds();renderCustomerFinder();}catch(e){}}
+function reloadQuoteForAccount(){
+  quote=normalizeQuote(Store.get(quoteCurrentStorageKey(),null)||newQuoteTemplate());
+  activeSavedBuildRef=null;
+}
 const GOLD_BLACK_PARENT_FIX_KEY='klabs-gold-black-parent-category-v1';
 // Signed-out/never-migrated usage keeps the original bare key (the "anonymous" namespace - preserved
 // forever, never deleted). Each signed-in account gets its own suffixed key so accounts sharing a device
@@ -106,7 +127,7 @@ const BUILD_SPEC_FIELDS=[
 ];
 let studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
 let businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
-let quote=normalizeQuote(Store.get('klabs-workshop-quote-current',null)||newQuoteTemplate());
+let quote=normalizeQuote(Store.get(quoteCurrentStorageKey(),null)||newQuoteTemplate());
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
@@ -338,7 +359,7 @@ function save(){
     workshopIndex:numberOrZero(state.workshopIndex)
   });
 }
-function saveQuoteCurrent(){Store.set('klabs-workshop-quote-current',quote)}
+function saveQuoteCurrent(){Store.set(quoteCurrentStorageKey(),quote)}
 function numberOrZero(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
 function normalizeCurrency(value){
   const next=String(value||'').trim().toUpperCase();
@@ -8575,7 +8596,7 @@ function requestDeleteCurrentBuild(){
     if(target.index<0 || target.index>=records.length)return;
     const deletedId=specificationValue(records[target.index]&&records[target.index].id);
     records.splice(target.index,1);
-    Store.set('klabs-workshop-builds',records);
+    Store.set(buildsStorageKey(),records);
     if(deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
     finalizeDeletedCurrentBuild();
   });
@@ -9201,8 +9222,8 @@ function blankMatchesSearch(blank,query){
 function blankReferenceSummary(blank){
   const blankId=String(blank&&blank.id||'');
   const blankName=normalizeNameKey(blankDisplayName(blank));
-  const savedQuotes=Array.isArray(Store.get('klabs-workshop-quotes',[]))?Store.get('klabs-workshop-quotes',[]):[];
-  const savedBuilds=Array.isArray(Store.get('klabs-workshop-builds',[]))?Store.get('klabs-workshop-builds',[]):[];
+  const savedQuotes=savedQuoteRecords();
+  const savedBuilds=savedBuildRecords();
   const inCurrent=(quote.blankId===blankId) || (!!blankName && normalizeNameKey(quote.blankName)===blankName);
   const quoteRefs=savedQuotes.filter((record)=>record && (String(record.blankId||'')===blankId || (!!blankName && normalizeNameKey(record.blankName)===blankName))).length;
   const buildRefs=savedBuilds.filter((record)=>record && (String(record.blankId||'')===blankId || (!!blankName && normalizeNameKey(record.blankName)===blankName))).length;
@@ -9592,7 +9613,9 @@ function bindSelectedBlankControls(){
   });
 }
 function persistBuildRecord(currentQuote){
-  const records=Store.get('klabs-workshop-builds',[]);
+  const storageKey=buildsStorageKey();
+  const stored=Store.get(storageKey,[]);
+  const records=Array.isArray(stored)?stored:[];
   const target=findCurrentSavedBuildTarget();
   const previousRecord=target?normalizeQuote(target.record):null;
   const persistedQuote=quoteForPersistence(currentQuote);
@@ -9608,7 +9631,7 @@ function persistBuildRecord(currentQuote){
     if(!specificationValue(updatedRecord.id))updatedRecord.id=specificationValue(target.record&&target.record.id)||studioTaxonomyId('build');
     records.splice(target.index,1);
     records.unshift(updatedRecord);
-    Store.set('klabs-workshop-builds',records);
+    Store.set(storageKey,records);
     reconcileCommittedBuildStock(previousRecord,updatedRecord);
     window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(updatedRecord);
     return {source:'build',index:0,record:updatedRecord};
@@ -9616,7 +9639,7 @@ function persistBuildRecord(currentQuote){
   const record={...persistedQuote,createdAt:nowIso,savedAt:nowIso,updatedAt:nowIso};
   if(!specificationValue(record.id))record.id=studioTaxonomyId('build');
   records.unshift(record);
-  Store.set('klabs-workshop-builds',records);
+  Store.set(storageKey,records);
   reconcileCommittedBuildStock(null,record);
   window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record);
   return {source:'build',index:0,record};
@@ -9633,7 +9656,7 @@ function ensureBuildRecordIdsBackfilled(){
     }
     return record;
   });
-  if(changed)Store.set('klabs-workshop-builds',backfilled);
+  if(changed)Store.set(buildsStorageKey(),backfilled);
 }
 function componentStockReferenceKey(component){
   // Blank lines keep their blank identity in description; every other line is keyed by its library identity.
@@ -11113,8 +11136,8 @@ function renderComponentPickerCascadeOptions(query){
 }
 function choiceReferences(type,name){
   const normalized=normalizeNameKey(name);
-  const savedQuotes=Array.isArray(Store.get('klabs-workshop-quotes',[]))?Store.get('klabs-workshop-quotes',[]):[];
-  const savedBuilds=Array.isArray(Store.get('klabs-workshop-builds',[]))?Store.get('klabs-workshop-builds',[]):[];
+  const savedQuotes=savedQuoteRecords();
+  const savedBuilds=savedBuildRecords();
   const key=type==='supplier'?'supplier':'category';
   const inCurrent=quote.components.some((item)=>normalizeNameKey(item&&item[key])===normalized);
   const inQuotes=savedQuotes.some((record)=>Array.isArray(record&&record.components) && record.components.some((item)=>normalizeNameKey(item&&item[key])===normalized));
@@ -11942,11 +11965,11 @@ function quoteForPersistence(currentQuote){
   return persistedQuote;
 }
 function savedQuoteRecords(){
-  const records=Store.get('klabs-workshop-quotes',[]);
+  const records=Store.get(quotesStorageKey(),[]);
   return Array.isArray(records)?records:[];
 }
 function savedBuildRecords(){
-  const records=Store.get('klabs-workshop-builds',[]);
+  const records=Store.get(buildsStorageKey(),[]);
   return Array.isArray(records)?records:[];
 }
 function isCustomerOnlyRecord(record){
@@ -12025,7 +12048,7 @@ function saveCustomerOnlyRecord(source,matchCustomerKey){
   const savedRecord=customerOnlyRecordFromSource(source,existingIndex>=0?records[existingIndex]:null);
   if(existingIndex>=0)records.splice(existingIndex,1);
   records.unshift(savedRecord);
-  Store.set('klabs-workshop-builds',records);
+  Store.set(buildsStorageKey(),records);
   window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(savedRecord);
   return savedRecord;
 }
@@ -12039,7 +12062,7 @@ function migrateLegacyCustomerOnlyRecordsToBuilds(){
     changedRecords.push(upgraded);
   });
   if(!changedRecords.length)return;
-  Store.set('klabs-workshop-builds',buildRecords);
+  Store.set(buildsStorageKey(),buildRecords);
   changedRecords.forEach((record)=>window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record));
 }
 function allSavedEntries(){
@@ -12488,9 +12511,9 @@ function applyCustomerRename(customerKey,nextName){
     changedBuildRecords.push(customerRecord);
     buildChanged=true;
   }
-  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
+  if(quoteChanged)Store.set(quotesStorageKey(),quoteRecords);
   if(buildChanged){
-    Store.set('klabs-workshop-builds',buildRecords);
+    Store.set(buildsStorageKey(),buildRecords);
     changedBuildRecords.forEach((record)=>window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record));
   }
   if(customerFinderMatchesKey(customerKey,quote.customerName)){
@@ -12670,9 +12693,9 @@ function applyCustomerEdit(customerKey,draft){
     changedBuildRecords.push(customerRecord);
     buildChanged=true;
   }
-  if(quoteChanged)Store.set('klabs-workshop-quotes',quoteRecords);
+  if(quoteChanged)Store.set(quotesStorageKey(),quoteRecords);
   if(buildChanged){
-    Store.set('klabs-workshop-builds',buildRecords);
+    Store.set(buildsStorageKey(),buildRecords);
     changedBuildRecords.forEach((record)=>window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(record));
   }
   if(customerFinderMatchesKey(customerKey,quote.customerName)){
@@ -13474,7 +13497,7 @@ function isBuildEntryInStatusFilter(entry){
   return buildLifecycleStatusKey(entry&&entry.record)===buildsStatusFilter;
 }
 function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
-  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const storageKey=source==='build'?buildsStorageKey():quotesStorageKey();
   const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
@@ -13491,7 +13514,7 @@ function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   }
   records[numericIndex]=nextRecord;
   Store.set(storageKey,records);
-  if(storageKey==='klabs-workshop-builds')window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(nextRecord);
+  if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(nextRecord);
   return true;
 }
 function buildLifecycleLabel(lifecycle){
@@ -13681,30 +13704,30 @@ function handleCurrentBuildAction(action){
   }
 }
 function deleteSavedEntryBySource(source,index){
-  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const storageKey=source==='build'?buildsStorageKey():quotesStorageKey();
   const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
   const deletedId=specificationValue(records[numericIndex]&&records[numericIndex].id);
   records.splice(numericIndex,1);
   Store.set(storageKey,records);
-  if(storageKey==='klabs-workshop-builds' && deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
+  if(source==='build' && deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
   return true;
 }
 // Resolves the record by its stable ID at confirm time so a shifted list can never delete a different record.
 function deleteSavedEntryById(source,recordId){
-  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const storageKey=source==='build'?buildsStorageKey():quotesStorageKey();
   const stored=Store.get(storageKey,[]);
   const records=Array.isArray(stored)?stored:[];
   const index=records.findIndex((record)=>record && specificationValue(record.id)===recordId);
   if(index<0)return -1;
   records.splice(index,1);
   Store.set(storageKey,records);
-  if(storageKey==='klabs-workshop-builds')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(recordId);
+  if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(recordId);
   return index;
 }
 function requestDeleteSavedBuildRecord(source,index,options){
-  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const storageKey=source==='build'?buildsStorageKey():quotesStorageKey();
   const stored=Store.get(storageKey,[]);
   const rawRecord=Array.isArray(stored)?stored[Number(index)]:null;
   if(!rawRecord)return;
@@ -13742,7 +13765,7 @@ function requestDeleteSavedBuildRecord(source,index,options){
   present('');
 }
 function getSavedEntryBySource(source,index){
-  const storageKey=source==='build'?'klabs-workshop-builds':'klabs-workshop-quotes';
+  const storageKey=source==='build'?buildsStorageKey():quotesStorageKey();
   const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return null;
@@ -17463,7 +17486,7 @@ window.ensureStudioComponentTaxonomyLoaded=ensureStudioComponentTaxonomyLoaded;
 // js/build-sync.js calls these as bare window.* globals the same way (see lesson above) - klabs-workshop-builds
 // stays the same plain/anonymous local cache key it always was; the sync layer only adds a cloud mirror.
 window.savedBuildRecords=savedBuildRecords;
-window.saveBuildRecords=(records)=>{Store.set('klabs-workshop-builds',Array.isArray(records)?records:[]);};
+window.saveBuildRecords=(records)=>{Store.set(buildsStorageKey(),Array.isArray(records)?records:[]);};
 window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
 window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
 window.readAnonymousStudioSettingsSyncPayload=readAnonymousStudioSettingsSyncPayload;
@@ -17473,4 +17496,4 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible')refreshServerQuoteCounter();
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();},openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};

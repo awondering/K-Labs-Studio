@@ -14,7 +14,7 @@ function functionSource(name){
 
 // Isolated mocked storage: the real Store/localStorage is never touched.
 function harness({failWrites=false}={}){
-  const data={'klabs-workshop-quotes':[
+  const data={'klabs-workshop-quotes:local':[
     {id:'q-alex-1',customerName:'Alex Mason',buildName:''},
     {id:'q-alex-2',customerName:'Alex Mason',buildName:'Second'},
     {id:'q-other',customerName:'Sam',buildName:''},
@@ -33,7 +33,8 @@ function harness({failWrites=false}={}){
     console:{error(){}},
   };
   vm.createContext(context);
-  vm.runInContext(['deleteSavedEntryBySource','deleteSavedEntryById','requestDeleteSavedBuildRecord'].map(functionSource).join('\n'),context);
+  vm.runInContext("const BUILDS_STORAGE_KEY='klabs-workshop-builds';const QUOTES_STORAGE_KEY='klabs-workshop-quotes';",context);
+  vm.runInContext(['accountScopedStorageKey','buildsStorageKey','quotesStorageKey','activeAccountKey','deleteSavedEntryBySource','deleteSavedEntryById','requestDeleteSavedBuildRecord'].map(functionSource).join('\n'),context);
   return context;
 }
 
@@ -44,7 +45,7 @@ test('Delete Quote asks first; Cancel changes nothing',()=>{
   assert.equal(c.dialogs[0].config.actions.map((a)=>a.id).join(),'cancel,delete');
   assert.equal(c.dialogs[0].config.actions[1].kind,'danger');
   c.dialogs[0].handler('cancel');
-  assert.equal(c.data['klabs-workshop-quotes'].length,3);
+  assert.equal(c.data['klabs-workshop-quotes:local'].length,3);
   assert.deepEqual(c.renders,[]);
 });
 
@@ -52,9 +53,9 @@ test('Confirm deletes only the selected record by ID, even if the list shifted',
   const c=harness();
   c.requestDeleteSavedBuildRecord('quote',1,{});
   // Another record is removed before confirmation: the stale index now points at a different row.
-  c.data['klabs-workshop-quotes'].splice(0,1);
+  c.data['klabs-workshop-quotes:local'].splice(0,1);
   c.dialogs[0].handler('delete');
-  assert.deepEqual(c.data['klabs-workshop-quotes'].map((r)=>r.id),['q-other']);
+  assert.deepEqual(c.data['klabs-workshop-quotes:local'].map((r)=>r.id),['q-other']);
   assert.deepEqual(c.renders,['builds','finder']);
 });
 
@@ -62,7 +63,7 @@ test('Confirm removes only the selected quote and keeps the others',()=>{
   const c=harness();
   c.requestDeleteSavedBuildRecord('quote',0,{});
   c.dialogs[0].handler('delete');
-  assert.deepEqual(c.data['klabs-workshop-quotes'].map((r)=>r.id),['q-alex-2','q-other']);
+  assert.deepEqual(c.data['klabs-workshop-quotes:local'].map((r)=>r.id),['q-alex-2','q-other']);
   assert.deepEqual(c.sync,[]);
 });
 
@@ -83,14 +84,14 @@ test('Failure shows an error, keeps data, and retry succeeds',()=>{
   const c=harness({failWrites:true});
   c.requestDeleteSavedBuildRecord('quote',0,{});
   c.dialogs[0].handler('delete');
-  assert.equal(c.data['klabs-workshop-quotes'].length,3);
+  assert.equal(c.data['klabs-workshop-quotes:local'].length,3);
   assert.equal(c.dialogs.length,2);
   assert.equal(c.dialogs[1].config.error,true);
   assert.equal(c.dialogs[1].config.actions[1].label,'Retry');
   assert.deepEqual(c.renders,[]);
   c.failWrites=false;
   c.dialogs[1].handler('delete');
-  assert.deepEqual(c.data['klabs-workshop-quotes'].map((r)=>r.id),['q-alex-2','q-other']);
+  assert.deepEqual(c.data['klabs-workshop-quotes:local'].map((r)=>r.id),['q-alex-2','q-other']);
   assert.deepEqual(c.renders,['builds','finder']);
 });
 
