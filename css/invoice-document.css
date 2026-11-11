@@ -80,6 +80,15 @@
 @media print {
   html, body.invoice-print { margin: 0; padding: 0; background: #fff; }
   .invoice-document { max-width: none; min-height: 0; margin: 0; padding: 0; }
+  .invoice-document__header { padding-bottom: 15px; }
+  .invoice-document__details { margin-top: 7mm; }
+  .invoice-document__description { margin-top: 7mm; padding: 10px 0 11px; }
+  .invoice-document__financial { margin-top: 6mm; }
+  .invoice-document__amount-row { padding: 3px 0; }
+  .invoice-document__balance { margin-top: 7px; padding: 9px 0; }
+  .invoice-document__payments { margin-top: 7mm; }
+  .invoice-document__payments td { padding: 6px 0; }
+  .invoice-document__footer { margin-top: 8mm; }
   .invoice-document__header, .invoice-document__description, .invoice-document__amount-row { break-inside: avoid; }
   .invoice-document__payments thead { display: table-header-group; }
 }

@@ -89,7 +89,30 @@ async function main() {
       await page.emulateMedia({ media: 'screen' });
       await page.screenshot({ path: process.env.INVOICE_SCREENSHOT, fullPage: true });
     }
-
+    const realistic = { ...invoice,
+      number: `INV-${'a'.repeat(32)}-${Buffer.from('12345678-1234-1234-1234-123456789012').toString('hex')}`,
+      businessLines: ['K-Labs Studio', '123 Example Road', 'Example Suburb', 'Example City 1234',
+        'New Zealand', 'hello@example.test', 'www.example.test'],
+      customerLines: ['Synthetic Customer', 'Synthetic Company', '123 Example Road', 'Example Suburb',
+        'Example City 1234', 'New Zealand', 'customer@example.test'],
+      payments: [
+        { type: 'deposit', amount: 25, date: '2026-11-10' },
+        { type: 'balance', amount: 20, date: '2026-11-11' },
+      ],
+    };
+    await page.emulateMedia({ media: 'screen' });
+    await show(realistic, realistic.payments, false);
+    await page.emulateMedia({ media: 'print' });
+    const realisticPdf = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+    assert.equal((realisticPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length, 1,
+      'A typical detailed invoice including its footer should fit on one A4 page');
+    if (process.env.INVOICE_REALISTIC_PDF) fs.writeFileSync(process.env.INVOICE_REALISTIC_PDF, realisticPdf);
+    await page.emulateMedia({ media: 'screen' });
+    await show({ ...realistic, number: '', issuedDate: '' }, realistic.payments, false, true);
+    await page.emulateMedia({ media: 'print' });
+    const realisticDraftPdf = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+    assert.equal((realisticDraftPdf.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length, 1,
+      'A typical detailed draft including its footer should fit on one A4 page');
     await page.emulateMedia({ media: 'screen' });
     const draft = { ...invoice, number: '', issuedDate: '' };
     await show(draft, draft.payments, false, true);
@@ -153,6 +176,12 @@ async function main() {
     assert.ok((multipage.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length > 1, 'Expected multiple A4 pages');
     if (process.env.INVOICE_MULTIPAGE_PDF) fs.writeFileSync(process.env.INVOICE_MULTIPAGE_PDF, multipage);
     assert.equal(await page.locator('tbody tr').count(), 75);
+    await page.emulateMedia({ media: 'screen' });
+    await show(long, payments, false);
+    await page.emulateMedia({ media: 'print' });
+    const longInvoice = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+    assert.ok((longInvoice.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length > 1, 'Expected a multi-page invoice');
+    if (process.env.INVOICE_MULTIPAGE_INVOICE_PDF) fs.writeFileSync(process.env.INVOICE_MULTIPAGE_INVOICE_PDF, longInvoice);
     console.log('PASS: invoice and statement render with brand assets, correct totals, responsive long content, one-page A4 and multi-page PDFs.');
   } finally { await browser.close(); }
 }
