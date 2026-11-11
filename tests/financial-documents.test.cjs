@@ -83,6 +83,7 @@ test('the preview uses the same layout without an invented invoice number or dat
   const html = context.invoiceDocumentMarkup(snapshot, snapshot.payments, false, true);
   assert.match(html, /class="invoice-document"/);
   assert.match(html, /data-invoice-issued="false"/);
+  assert.match(html, /DRAFT — NOT ISSUED/);
   assert.doesNotMatch(html, /Invoice number|Issue date|INV-/);
   assert.equal(snapshot.number, '');
   assert.equal(snapshot.issuedDate, '');

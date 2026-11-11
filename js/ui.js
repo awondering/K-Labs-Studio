@@ -14300,7 +14300,7 @@ function paymentHistoryMarkup(showCorrections=false){
 }
 function customerInvoicePreviewMarkup(){
   const invoice=buildInvoiceSnapshot(true);
-  return `<p class="invoice-preview__notice" role="status">PREVIEW ONLY — NOT AN ISSUED INVOICE</p>${invoiceDocumentMarkup(invoice,invoice.payments,false,true)}`;
+  return invoiceDocumentMarkup(invoice,invoice.payments,false,true);
 }
 function invoiceNumberForBuild(account,id){
   const bytes=new TextEncoder().encode(String(id));
@@ -14338,6 +14338,7 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
       <div class="invoice-document__brand"><img src="assets/logo.svg" alt="K-Labs" class="invoice-document__logo"><span>${escapeHtml(invoice.businessName)}</span></div>
       <div class="invoice-document__heading"><p class="invoice-document__eyebrow">K-Labs Studio</p><h3>${statement?'Payment Statement':'Invoice'}</h3></div>
     </header>
+    ${preview?'<p class="invoice-document__draft" role="status">DRAFT — NOT ISSUED</p>':''}
     <section class="invoice-document__details">
       <div><h4 class="invoice-document__label">Bill to</h4><div class="invoice-document__address">${(invoice.customerLines||[]).map((item)=>`<p>${escapeHtml(item)}</p>`).join('')||'<p>Customer details not set</p>'}</div></div>
       <dl class="invoice-document__metadata">
@@ -14394,8 +14395,6 @@ function openInvoicePreview(){
     ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
   const issue=sheet.querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=!!quote.issuedInvoice;
-  const print=sheet.querySelector('[data-invoice-preview-action="print"]');
-  if(print)print.hidden=!quote.issuedInvoice;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   sheet.querySelector('.component-sheet__body').scrollTop=0;
@@ -14434,9 +14433,12 @@ async function issueCustomerInvoice(){
 function printInvoicePreview(){
   const body=$('invoicePreviewBody');
   if(!body)return;
-  const documentNode=body.querySelector('.invoice-document[data-invoice-issued="true"]');
-  if(!quote.issuedInvoice || !documentNode || documentNode.getAttribute('data-invoice-number')!==quote.issuedInvoice.number){
-    openInfoDialog('Issue Invoice First','Issue the invoice before printing or saving it as a PDF.');
+  const documentNode=body.querySelector('.invoice-document');
+  const issued=documentNode?.getAttribute('data-invoice-issued');
+  if(!documentNode || (quote.issuedInvoice
+    ? issued!=='true' || documentNode.getAttribute('data-invoice-number')!==quote.issuedInvoice.number
+    : issued!=='false' || !documentNode.querySelector('.invoice-document__draft'))){
+    openInfoDialog('Print Unavailable','The invoice preview is out of date. Close it and open it again.');
     return;
   }
   const frame=document.createElement('iframe');

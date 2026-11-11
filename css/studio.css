@@ -12378,7 +12378,6 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 .quote-payment__error:empty{display:none}
 .quote-payment__form input{min-width:0;box-sizing:border-box;font-size:16px}
 @media (max-width:420px){.quote-payment__form{grid-template-columns:1fr}}
-.invoice-preview__notice{margin:0 auto 12px;max-width:210mm;color:#f1c0c5;font-size:12px;font-weight:700;letter-spacing:.04em}
 #invoicePreviewSheet .quote-preview-actions{position:static;background:none}
 .invoice-preview__print-frame{position:fixed;width:1px;height:1px;border:0;left:-10000px;top:0}
 

@@ -83,7 +83,7 @@ test('invoice preview is escaped, clearly unissued, and includes only customer t
   const {context,quote}=harness();
   const before=JSON.stringify(quote);
   const result=context.customerInvoicePreviewMarkup();
-  assert.match(result,/PREVIEW ONLY — NOT AN ISSUED INVOICE/);
+  assert.match(result,/DRAFT — NOT ISSUED/);
   assert.match(result,/&lt;script&gt;Customer&lt;\/script&gt;/);
   assert.match(result,/Rod &amp; reel/);
   assert.match(result,/BUILD-902/);
@@ -140,7 +140,7 @@ test('invoice preview takes focus, closes with Escape and avoids duplicate modal
   assert.equal(sheet.hidden,true);
   assert.equal(unlocks,1);
 });
-test('only an issued customer document is printed using the shared stylesheet',()=>{
+test('an issued customer document is printed using the shared stylesheet',()=>{
   const {context,quote}=harness();
   quote.issuedInvoice=context.buildInvoiceSnapshot();
   const markup=context.invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false);
@@ -149,11 +149,11 @@ test('only an issued customer document is printed using the shared stylesheet',(
   frame.contentWindow={document:{querySelector(selector){return selector.startsWith('link')?{sheet:{}}:{complete:true,naturalWidth:128};}},
     addEventListener(name,fn){afterPrint=fn;},focus(){},print(){printed=true;}};
   const sheet={hidden:false,querySelector(){return {focus(){focusRestored=true;}};}};
-  context.$=id=>id==='invoicePreviewBody'?{querySelector(){return {outerHTML:markup,getAttribute(){return quote.issuedInvoice.number;}};}}:id==='invoicePreviewSheet'?sheet:null;
+  context.$=id=>id==='invoicePreviewBody'?{querySelector(){return {outerHTML:markup,getAttribute(name){return name==='data-invoice-issued'?'true':quote.issuedInvoice.number;}};}}:id==='invoicePreviewSheet'?sheet:null;
   context.document={
     baseURI:'https://example.test/studio/',
     createElement:()=>frame,
-    body:{appendChild(element){assert.doesNotMatch(element.srcdoc,/PREVIEW ONLY/);element.onLoad();}},
+    body:{appendChild(element){assert.doesNotMatch(element.srcdoc,/DRAFT — NOT ISSUED/);element.onLoad();}},
   };
   context.window={setTimeout(fn){fn();}};
   vm.runInContext(extract('printInvoicePreview'),context);
@@ -166,14 +166,33 @@ test('only an issued customer document is printed using the shared stylesheet',(
   assert.equal(frame.removed,true);
   assert.equal(focusRestored,true);
 });
-test('unissued preview cannot be printed as an invoice',()=>{
-  const {context}=harness();
-  let message='';
-  context.$=()=>({querySelector:()=>null});
-  context.openInfoDialog=(title)=>{message=title;};
+test('printing a draft preserves the warning without issuing or writing an invoice',()=>{
+  const {context,quote}=harness();
+  const before=JSON.stringify(quote);
+  const markup=context.customerInvoicePreviewMarkup();
+  const frame={setAttribute(){},addEventListener(name,fn){this.onLoad=fn;},remove(){}};
+  let printed=false;
+  frame.contentWindow={document:{querySelector(selector){return selector.startsWith('link')?{sheet:{}}:{complete:true,naturalWidth:128};}},
+    addEventListener(){},focus(){},print(){printed=true;}};
+  context.$=()=>({querySelector:()=>({outerHTML:markup,getAttribute:()=>'false',querySelector:()=>({})})});
+  context.document={baseURI:'https://example.test/',createElement:()=>frame,body:{appendChild(){frame.onLoad();}}};
+  context.openInfoDialog=title=>{throw new Error(title);};
   vm.runInContext(extract('printInvoicePreview'),context);
   context.printInvoicePreview();
-  assert.equal(message,'Issue Invoice First');
+  assert.equal(printed,true);
+  assert.match(frame.srcdoc,/DRAFT — NOT ISSUED/);
+  assert.doesNotMatch(frame.srcdoc,/Invoice number|Issue date|INV-/);
+  assert.equal(JSON.stringify(quote),before);
+});
+test('a stale draft cannot be printed after invoice issuance',()=>{
+  const {context,quote}=harness();
+  quote.issuedInvoice=context.buildInvoiceSnapshot();
+  let title='';
+  context.$=()=>({querySelector:()=>({getAttribute:()=>'false'})});
+  context.openInfoDialog=value=>{title=value;};
+  vm.runInContext(extract('printInvoicePreview'),context);
+  context.printInvoicePreview();
+  assert.equal(title,'Print Unavailable');
 });
 test('successful issuance immediately replaces the preview and enables printing',async()=>{
   const {context,quote}=harness();
@@ -189,7 +208,7 @@ test('successful issuance immediately replaces the preview and enables printing'
   assert.equal(issue.hidden,true);
   assert.equal(print.hidden,false);
   assert.match(body.innerHTML,/data-invoice-issued="true"/);
-  assert.doesNotMatch(body.innerHTML,/PREVIEW ONLY/);
+  assert.doesNotMatch(body.innerHTML,/DRAFT — NOT ISSUED/);
 });
 test('printing stops with an explicit error if the document stylesheet or logo fails',()=>{
   const {context,quote}=harness();
@@ -198,7 +217,7 @@ test('printing stops with an explicit error if the document stylesheet or logo f
     contentWindow:{document:{querySelector(){return null;}}}};
   let title='',printed=false;
   frame.contentWindow.print=()=>{printed=true;};
-  context.$=()=>({querySelector:()=>({outerHTML:'<article></article>',getAttribute:()=>quote.issuedInvoice.number})});
+  context.$=()=>({querySelector:()=>({outerHTML:'<article></article>',getAttribute:name=>name==='data-invoice-issued'?'true':quote.issuedInvoice.number})});
   context.document={baseURI:'https://example.test/',createElement:()=>frame,body:{appendChild(){frame.onLoad();}}};
   context.openInfoDialog=value=>{title=value;};
   vm.runInContext(extract('printInvoicePreview'),context);
