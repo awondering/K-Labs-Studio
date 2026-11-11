@@ -139,21 +139,37 @@ test('partial and missing specifications omit guesses, empty labels and private 
   quote.blankNotes = 'Line: PE 1–3; Lure: unspecified; internal cost: $150';
   quote.components = [{ category: 'Guides', description: 'margin $50' }];
   const partial = context.buildInvoiceSnapshot(true);
-  assert.equal(partial.rod, 'Northstar NS702');
-  assert.deepEqual(Array.from(partial.rodDetails), ['Line PE 1–3']);
+  assert.equal(partial.rod, 'Custom Fishing Rod');
+  assert.deepEqual(Array.from(partial.rodDetails), ['Blank: Northstar NS702', 'Line PE 1–3']);
   const html = context.invoiceDocumentMarkup(partial, partial.payments, false, true);
   assert.doesNotMatch(html, /Lure|Guides:|internal|150|margin/);
   quote.blankNotes = 'Line class PE3-6; 10–30 g lure rating';
   assert.deepEqual(Array.from(context.buildInvoiceSnapshot(true).rodDetails),
-    ['Line PE3-6 · Lure 10–30 g']);
+    ['Blank: Northstar NS702', 'Line PE3-6 · Lure 10–30 g']);
   quote.blankMaker = '';
   quote.blankName = '';
   quote.blankNotes = '';
   quote.components = [];
   const empty = context.buildInvoiceSnapshot(true);
-  assert.equal(empty.rod, '');
+  assert.equal(empty.rod, 'Custom Fishing Rod');
   assert.deepEqual(Array.from(empty.rodDetails), []);
-  assert.doesNotMatch(context.invoiceDocumentMarkup(empty, [], false, true), /Description|Custom Rod Build|undefined/);
+  assert.doesNotMatch(context.invoiceDocumentMarkup(empty, [], false, true), /Custom Rod Build|undefined/);
+});
+test('a build named for its customer uses the generic rod title and saved specifications', () => {
+  const { context, quote } = harness();
+  quote.customerName = 'Leonard Wong';
+  quote.buildName = ' LEONARD   WONG ';
+  quote.blankMaker = 'Northstar';
+  quote.blankName = 'NS702';
+  quote.buildSpecifications = { layout: { rodLengthMm: 2134 } };
+  const draft = context.buildInvoiceSnapshot(true);
+  const issued = context.buildInvoiceSnapshot();
+  assert.equal(draft.rod, 'Custom Fishing Rod');
+  assert.equal(issued.rod, draft.rod);
+  assert.deepEqual(Array.from(draft.rodDetails), ['Blank: Northstar NS702', 'Finished length 2134 mm']);
+  quote.blankMaker = '';
+  quote.blankName = 'Leonard Wong';
+  assert.deepEqual(Array.from(context.buildInvoiceSnapshot(true).rodDetails), ['Finished length 2134 mm']);
 });
 test('fitted descriptions use saved component data, not a changed library label or internal amounts', () => {
   const { context, quote } = harness();

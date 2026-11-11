@@ -14313,9 +14313,13 @@ function invoiceRodDescription(){
   };
   const components=Array.isArray(quote.components)?quote.components:[];
   const blank=components.find((item)=>isBlankCategory(item&&item.category))||{};
-  const title=clean(quote.buildName);
-  const maker=clean(blank.blankMaker||blank.brand||quote.blankMaker);
-  const model=clean(blank.blankName||blank.variant||quote.blankName||blank.description||blank.blankSeries||quote.blankSeries);
+  const candidate=clean(quote.buildName);
+  const nameKey=(value)=>normalizeNameKey(value).replace(/\s+/g,' ');
+  const customer=nameKey(quote.customerName);
+  const title=customer&&nameKey(candidate)===customer?'':candidate;
+  const identity=(values)=>values.map(clean).find((value)=>value&&(!customer||nameKey(value)!==customer))||'';
+  const maker=identity([blank.blankMaker,blank.brand,quote.blankMaker]);
+  const model=identity([blank.blankName,blank.variant,quote.blankName,blank.description,blank.blankSeries,quote.blankSeries]);
   const blankIdentity=maker&&model&&normalizeNameKey(model).startsWith(normalizeNameKey(maker))?model:[maker,model].filter(Boolean).join(' ');
   const specs=quote.buildSpecifications||{};
   const length=Number(specs.layout?.rodLengthMm);
@@ -14364,8 +14368,8 @@ function invoiceRodDescription(){
     if(gripParts.length)fitted.push(`Grip: ${gripParts.join(', ')}`);
   }
   return {
-    title:title||blankIdentity,
-    details:[title&&blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
+    title:title||'Custom Fishing Rod',
+    details:[blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
       measures.join(' · '),fitted.join(' · ')].filter(Boolean),
   };
 }
@@ -14427,6 +14431,59 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
     <footer class="invoice-document__footer"><strong>${escapeHtml(invoice.businessName)}</strong><div>${(invoice.businessLines||[]).map((item)=>`<span>${escapeHtml(item)}</span>`).join('')}${invoice.tax?.registration?`<span>${escapeHtml(invoice.tax.registration)}</span>`:''}</div></footer>
   </article>`;
 }
+function refreshInvoicePreview(){
+  const sheet=$('invoicePreviewSheet');
+  const source=$('invoicePreviewBody')?.querySelector('.invoice-document');
+  const pages=sheet?.querySelector('.invoice-preview__columns');
+  if(!sheet||!source||!pages)return;
+  pages.innerHTML=source.innerHTML;
+  const table=pages.querySelector('.invoice-document__payments table');
+  if(table){
+    const list=document.createElement('div');
+    list.className='invoice-preview__payment-list';
+    list.setAttribute('role','table');
+    table.querySelectorAll('tr').forEach((row,index)=>{
+      const line=document.createElement('div');
+      line.className=`invoice-preview__payment-row${index===0?' invoice-preview__payment-row--header':''}`;
+      line.setAttribute('role','row');
+      row.querySelectorAll('th,td').forEach((cell)=>{
+        const value=document.createElement('span');
+        value.setAttribute('role',index===0?'columnheader':'cell');
+        value.textContent=cell.textContent;
+        line.appendChild(value);
+      });
+      list.appendChild(line);
+    });
+    table.replaceWith(list);
+  }
+  sheet.invoicePreviewPage=0;
+  sheet.invoicePreviewActual=false;
+  updateInvoicePreview();
+}
+function updateInvoicePreview(){
+  const sheet=$('invoicePreviewSheet');
+  if(!sheet||sheet.hidden)return;
+  const viewport=sheet.querySelector('.invoice-preview__viewport');
+  const page=sheet.querySelector('.invoice-preview__page');
+  const columns=sheet.querySelector('.invoice-preview__columns');
+  const paper=sheet.querySelector('.invoice-preview__paper');
+  const paperStyle=getComputedStyle(paper);
+  const stride=parseFloat(paperStyle.width);
+  const height=parseFloat(paperStyle.height);
+  const columnWidth=columns.clientWidth;
+  if(!stride||!height||!columnWidth||!viewport.clientWidth||!viewport.clientHeight)return;
+  const count=Math.max(1,Math.ceil((columns.scrollWidth-columnWidth-1)/stride)+1);
+  sheet.invoicePreviewPage=Math.min(sheet.invoicePreviewPage||0,count-1);
+  const scale=sheet.invoicePreviewActual?1:Math.min(1,viewport.clientWidth/stride,viewport.clientHeight/height);
+  page.style.width=`${stride*scale}px`;
+  page.style.height=`${height*scale}px`;
+  paper.style.transform=`scale(${scale})`;
+  columns.style.transform=`translateX(${-sheet.invoicePreviewPage*stride}px)`;
+  sheet.querySelector('.invoice-preview__counter').textContent=`Page ${sheet.invoicePreviewPage+1} of ${count}`;
+  sheet.querySelector('[data-invoice-preview-action="previous"]').disabled=sheet.invoicePreviewPage===0;
+  sheet.querySelector('[data-invoice-preview-action="next"]').disabled=sheet.invoicePreviewPage>=count-1;
+  sheet.querySelector('[data-invoice-preview-action="zoom"]').textContent=sheet.invoicePreviewActual?'Fit page':'Enlarge / Actual size';
+}
 function openInvoicePreview(){
   let sheet=$('invoicePreviewSheet');
   if(sheet && !sheet.hidden)return;
@@ -14437,17 +14494,25 @@ function openInvoicePreview(){
     sheet.innerHTML=`<div class="component-sheet__scrim" data-invoice-preview-action="close"></div>
       <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer invoice preview">
         <header class="component-sheet__header"><h2>Customer Invoice Preview</h2><button class="component-sheet__close" type="button" data-invoice-preview-action="close" aria-label="Close invoice preview">&#215;</button></header>
-        <div class="component-sheet__body"><div id="invoicePreviewBody"></div>
-          <div class="quote-preview-actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="primary-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
-        </div>
+        <div class="invoice-preview__toolbar"><button type="button" data-invoice-preview-action="previous" aria-label="Previous page">Previous</button><span class="invoice-preview__counter" aria-live="polite"></span><button type="button" data-invoice-preview-action="next" aria-label="Next page">Next</button><button type="button" data-invoice-preview-action="zoom">Enlarge / Actual size</button></div>
+        <div class="invoice-preview__viewport"><div class="invoice-preview__page"><div class="invoice-preview__paper"><article class="invoice-document invoice-preview__columns"></article></div></div></div>
+        <div id="invoicePreviewBody" hidden></div>
+        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="primary-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
       </section>`;
     document.body.appendChild(sheet);
     sheet.addEventListener('click',(event)=>{
       const action=event.target.closest('[data-invoice-preview-action]');
       if(!action)return;
-      if(action.getAttribute('data-invoice-preview-action')==='print')printInvoicePreview();
-      else if(action.getAttribute('data-invoice-preview-action')==='issue')issueCustomerInvoice();
-      else {sheet.hidden=true;unlockModalLayer({restoreFocus:true});}
+      const selected=action.getAttribute('data-invoice-preview-action');
+      if(selected==='print')printInvoicePreview();
+      else if(selected==='issue')issueCustomerInvoice();
+      else if(selected==='previous'||selected==='next'){
+        sheet.invoicePreviewPage=Math.max(0,(sheet.invoicePreviewPage||0)+(selected==='next'?1:-1));
+        updateInvoicePreview();
+      }else if(selected==='zoom'){
+        sheet.invoicePreviewActual=!sheet.invoicePreviewActual;
+        updateInvoicePreview();
+      }else if(selected==='close'){sheet.hidden=true;unlockModalLayer({restoreFocus:true});}
     });
     sheet.addEventListener('keydown',(event)=>{
       if(event.key!=='Escape')return;
@@ -14455,6 +14520,8 @@ function openInvoicePreview(){
       sheet.hidden=true;
       unlockModalLayer({restoreFocus:true});
     });
+    window.addEventListener('resize',updateInvoicePreview);
+    if(window.visualViewport)window.visualViewport.addEventListener('resize',updateInvoicePreview);
   }
   $('invoicePreviewBody').innerHTML=quote.issuedInvoice
     ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
@@ -14462,13 +14529,14 @@ function openInvoicePreview(){
   if(issue)issue.hidden=!!quote.issuedInvoice;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
-  sheet.querySelector('.component-sheet__body').scrollTop=0;
+  refreshInvoicePreview();
   sheet.querySelector('.component-sheet__close').focus();
 }
 function openPaymentStatement(){
   if(!quote.issuedInvoice){openInfoDialog('Payment Statement','Issue an invoice before opening its payment statement.');return;}
   openInvoicePreview();
   $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.payments||[],true);
+  refreshInvoicePreview();
   const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=true;
   const print=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="print"]');
@@ -14487,6 +14555,7 @@ async function issueCustomerInvoice(){
       await commitFinancialOperation('issue_invoice',{invoice:buildInvoiceSnapshot()});
       if(quote.issuedInvoice && $('invoicePreviewBody')){
         $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false);
+        refreshInvoicePreview();
         const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
         if(issue)issue.hidden=true;
         const print=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="print"]');

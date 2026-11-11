@@ -129,6 +129,9 @@ test('invoice preview takes focus, closes with Escape and avoids duplicate modal
   let inserted=false,locks=0,unlocks=0;
   context.$=id=>id==='invoicePreviewSheet'?(inserted?sheet:null):id==='invoicePreviewBody'?body:null;
   context.document={activeElement:{},createElement:()=>sheet,body:{appendChild(){inserted=true;}}};
+  context.window.addEventListener=()=>{};
+  context.updateInvoicePreview=()=>{};
+  context.refreshInvoicePreview=()=>{body.scrollTop=0;};
   context.lockModalLayer=()=>{locks++;};
   context.unlockModalLayer=()=>{unlocks++;};
   vm.runInContext(extract('openInvoicePreview'),context);
@@ -200,6 +203,7 @@ test('a stale draft cannot be printed after invoice issuance',()=>{
 });
 test('successful issuance immediately replaces the preview and enables printing',async()=>{
   const {context,quote}=harness();
+  context.refreshInvoicePreview=()=>{};
   const issue={hidden:false},print={hidden:true},body={innerHTML:''};
   const sheet={querySelector(selector){return selector.includes('"issue"')?issue:print;}};
   context.$=id=>id==='invoicePreviewBody'?body:sheet;
