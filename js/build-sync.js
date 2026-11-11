@@ -317,8 +317,9 @@
     const local = records().find(item => String(item.id) === operation.buildId) || null;
     const remoteRow = latest.data[0];
     const remote = rowRecord(remoteRow);
+    const alreadyReconciled = base?.revision === result.updated_at && equal(base.payload, remote) && equal(local, remote);
     if (state.pending[operation.buildId] || state.conflicts[operation.buildId] ||
-        !base || base.revision !== operation.revision || !equal(local, base.payload) ||
+        !base || (!alreadyReconciled && (base.revision !== operation.revision || !equal(local, base.payload))) ||
         remoteRow.updated_at !== result.updated_at) {
       addConflict(state, operation.buildId, local, remote, remoteRow.updated_at,
         "A financial operation was acknowledged while this build changed. Review both versions.");

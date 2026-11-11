@@ -88,6 +88,32 @@ test('lost acknowledgement is retried using the same operation without duplicati
   assert.equal(h.records[0].payments.length, 1);
 });
 
+test('a sync before retrying a lost acknowledgement does not create a false conflict', async () => {
+  const h = await setup();
+  h.lose();
+  await assert.rejects(h.sync.financialOperation('build-1', 'add_payment', payment), /unconfirmed/);
+  await h.sync.retry();
+  const result = await h.sync.retryFinancial();
+  assert.equal(result.conflict, false);
+  assert.equal(h.sync.getStatus(), 'synced');
+  assert.equal(h.cloud.payload.payments.length, 1);
+  assert.equal(h.records[0].payments.length, 1);
+  assert.equal(h.sync.pendingFinancial(), null);
+});
+
+test('a later cloud edit still creates a conflict after reconciling an unconfirmed payment', async () => {
+  const h = await setup();
+  h.lose();
+  await assert.rejects(h.sync.financialOperation('build-1', 'add_payment', payment), /unconfirmed/);
+  await h.sync.retry();
+  h.concurrent();
+  const result = await h.sync.retryFinancial();
+  assert.equal(result.conflict, true);
+  assert.equal(h.sync.getStatus(), 'error');
+  assert.equal(h.sync.getConflicts()['build-1'].cloud.payments[0].id, payment.id);
+  assert.equal(h.sync.getConflicts()['build-1'].cloud.note, 'other device');
+});
+
 test('a concurrent cloud edit creates a reviewable conflict without losing the acknowledged payment', async () => {
   const h = await setup();
   h.concurrent();

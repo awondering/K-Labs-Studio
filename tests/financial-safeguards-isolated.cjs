@@ -124,6 +124,8 @@ async function main() {
     const syncPayment = { id: 'sync-payment', type: 'balance', amount: 25, date: '2026-11-11' };
     await assert.rejects(sync.financialOperation('sync-build', 'add_payment', syncPayment), /unconfirmed/);
     assert.equal(local.find(item => item.id === 'sync-build').payments.length, 0);
+    await sync.retry();
+    assert.equal(local.find(item => item.id === 'sync-build').payments.length, 1);
     const acknowledged = await sync.retryFinancial();
     assert.equal(acknowledged.conflict, false);
     assert.equal(local.find(item => item.id === 'sync-build').payments.length, 1);
