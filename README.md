@@ -9,6 +9,12 @@ Fixes:
 
 Build 007: Adds visible Unlock/Edit button and freezes wheel scrolling while locked.
 
+## Build sync transition (development only)
+
+The candidate client uses temporary compatibility mode only when the guard-version RPC is absent. It checks revisions on its own writes, but older clients can overwrite changes without a database guard; use one device at a time during this stage. Other RPC failures stop sync, and a device that has seen the guard will not downgrade automatically. Conflicts and pending changes remain account-scoped on the device.
+
+Do not deploy the draft guard independently. Before a release, verify backups and real Safari behavior, deploy and verify the compatible client, and explicitly retire or refresh existing sessions before enabling the guard. An offline v208 session cannot be forced to update; it may report a local save as successful when the guard rejects cloud writes, and its deletion queue is not durable. Preserve and review its local data before refreshing or switching accounts. If those sessions cannot be accounted for and safely recovered, do not enable the guard.
+
 ## Shared UI Rules
 
 - Track Component Stock shares the Measurement Units and Date Format disclosure spacing and uses the summary "Track quantities as parts are used." Its heading target extends into the existing padding without adding visible space; descriptions wrap naturally and switch behavior is unchanged.

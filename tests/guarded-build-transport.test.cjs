@@ -17,6 +17,7 @@ function harness(){
       const query={
         insert(row){call.action='insert';call.row=row;return query;},
         update(row){call.action='update';call.row=row;return query;},
+        delete(){call.action='delete';return query;},
         eq(key,value){call.filters[key]=value;return query;},
         select(){return Promise.resolve(response);},
       };
@@ -75,6 +76,19 @@ test('account changes before or during a save prevent successful completion',asy
     update(){return this;},
     eq(){return this;},
     select(){return new Promise(done=>{resolve=done;});},
+  });
+
+  test('compatibility updates and deletes use exact revisions without storing guard tokens',async()=>{
+    const h=harness();
+    await h.transport.save(h.client,h.context,{id:'build-1',payments:[{amount:10}]},'2026-01-01T00:00:00.123456Z','compatibility');
+    assert.equal(h.calls[0].row.payload._expectedBuildRevision,undefined);
+    assert.ok(Date.parse(h.calls[0].row.updated_at)>Date.parse('2026-01-01T00:00:00.123456Z'));
+    h.setResponse({data:[{client_id:'build-1'}],error:null});
+    await h.transport.remove(h.client,h.context,'build-1','2026-01-01T00:00:00.123456Z','compatibility');
+    assert.equal(h.calls[1].action,'delete');
+    assert.equal(h.calls[1].filters.updated_at,'2026-01-01T00:00:00.123456Z');
+    h.setResponse({data:[],error:null});
+    await assert.rejects(h.transport.remove(h.client,h.context,'build-1','rev','compatibility'),/Review before deleting/);
   });
   const pending=h.transport.save(h.client,h.context,{id:'build-1'},'rev');
   h.setCurrent(false);

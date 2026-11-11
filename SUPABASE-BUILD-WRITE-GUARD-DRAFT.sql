@@ -1,7 +1,9 @@
--- DRAFT ONLY: do not apply. The matching client is under development; rollout is not proven safe.
+-- DRAFT ONLY: do not apply until the matching client and rollout are verified.
 -- Applying this now would block existing clients from saving build changes while they may still report a local save.
 -- Existing rows are not rewritten.
 -- Older clients cannot update builds until they load the guarded client.
+-- An already-running v208 client does not reliably warn when its cloud write fails;
+-- offline or dormant sessions cannot be forced to refresh by this migration.
 -- The matching client must use separate INSERT and UPDATE statements, not UPSERT:
 -- the INSERT trigger removes transient tokens before an ON CONFLICT UPDATE sees them.
 begin;

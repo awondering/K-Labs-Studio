@@ -5,6 +5,7 @@
   let timer = null;
   let runner = { running: null, requested: false };
   let status = "local";
+  let mode = "unknown";
   let sequence = 0;
 
   const journal = () => window.KLABS_BUILD_SYNC_JOURNAL;
@@ -42,6 +43,24 @@
     if (Object.keys(state.conflicts).length) setStatus("error");
     else if (Object.keys(state.pending).length) setStatus("pending");
     else setStatus(canWrite() ? "synced" : "local");
+  }
+  async function detectMode(ctx) {
+    const { data, error } = await client().rpc("klabs_build_guard_version");
+    if (!current(ctx)) throw new Error("The signed-in account changed.");
+    const state = journal().read(ctx.userId);
+    if (!error && data === 1) {
+      if (!state.guardSeen) {
+        state.guardSeen = true;
+        store(ctx, state);
+      }
+      mode = "guarded";
+    } else if (error?.code === "PGRST202" && !state.guardSeen) {
+      mode = "compatibility";
+    } else {
+      throw new Error("Could not verify the build protection mode. Changes remain on this device.");
+    }
+    window.KLABS_UI?.onBuildSyncMode?.(mode);
+    return mode;
   }
   function rowRecord(row) {
     const record = { ...(row.payload || {}), id: String(row.client_id) };
@@ -137,7 +156,7 @@
           delete state.pending[id];
         } else if (pending.kind === "delete" && !remote) {
           addConflict(state, id, pending.record, null, null, "The cloud build is absent. Review the deletion.");
-        } else if ((base && (!row || row.updated_at !== base.revision)) || (!base && row)) {
+        } else if ((base && (!row || row.updated_at !== base.revision || !equal(remote, base.payload))) || (!base && row)) {
           addConflict(state, id, pending.record || here, remote, row?.updated_at,
             "The cloud version changed or has no verified common baseline.");
         }
@@ -164,11 +183,8 @@
   async function flush(ctx) {
     let state = await reconcile(ctx);
     if (!canWrite()) { refreshStatus(state); return; }
-    if (Object.keys(state.pending).some((id) => !state.conflicts[id])) {
-      const { data, error } = await client().rpc("klabs_build_guard_version");
-      if (error || data !== 1) throw new Error("The matching build protection is not active. Changes remain on this device.");
-      if (!current(ctx) || !canWrite()) return;
-    }
+    const activeMode = await detectMode(ctx);
+    if (!current(ctx) || !canWrite()) return;
     for (const id of Object.keys(state.pending)) {
       if (!current(ctx) || !canWrite()) return;
       state = journal().read(ctx.userId);
@@ -178,8 +194,8 @@
       if (entry.kind === "delete" && !base) throw new Error("Deletion has no verified cloud revision.");
       try {
         let result;
-        if (entry.kind === "delete") await transport().remove(client(), ctx, id, base.revision);
-        else result = await transport().save(client(), ctx, entry.record, base?.revision || null);
+        if (entry.kind === "delete") await transport().remove(client(), ctx, id, base.revision, activeMode);
+        else result = await transport().save(client(), ctx, entry.record, base?.revision || null, activeMode);
         if (!current(ctx)) return;
         state = journal().read(ctx.userId);
         if (entry.kind === "delete") delete state.baselines[id];
@@ -271,8 +287,7 @@
     if (choice !== "local" && choice !== "cloud") throw new Error("Choose a version to keep.");
     if (window.KLABS_UI?.isBuildOpen?.(String(id))) throw new Error("Open another build before resolving this conflict.");
     const ctx = context();
-    const guard = await client().rpc("klabs_build_guard_version");
-    if (guard.error || guard.data !== 1) throw new Error("The matching build protection is not active.");
+    const activeMode = await detectMode(ctx);
     if (!current(ctx) || !canWrite()) throw new Error("The account or write permission changed.");
     const rows = await fetchRows(ctx);
     const row = rows.find((item) => String(item.client_id) === String(id));
@@ -289,10 +304,10 @@
     const pending = state.pending[id];
     if (choice === "local") {
       if (pending?.kind === "delete") {
-        if (row) await transport().remove(client(), ctx, id, row.updated_at);
+        if (row) await transport().remove(client(), ctx, id, row.updated_at, activeMode);
       } else {
         if (!conflict.local) throw new Error("There is no local version to save.");
-        const saved = await transport().save(client(), ctx, conflict.local, row?.updated_at || null);
+        const saved = await transport().save(client(), ctx, conflict.local, row?.updated_at || null, activeMode);
         row && (row.updated_at = saved.updated_at);
         if (!row) rows.push(saved);
       }
@@ -322,6 +337,8 @@
         timer = null;
         userId = next;
         generation++;
+        mode = "unknown";
+        window.KLABS_UI?.onBuildSyncMode?.(mode);
         runner = { running: null, requested: false };
       }
       if (!userId) { setStatus("local"); return Promise.resolve(); }
@@ -329,6 +346,7 @@
       return run();
     },
     getStatus: () => status,
+    getMode: () => mode,
     notifyBuildSaved: (record) => enqueue("save", record),
     notifyBuildDeleted: (record) => enqueue("delete-intent", record),
     confirmBuildDeleted: confirmDelete,

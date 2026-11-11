@@ -213,7 +213,7 @@ async function main(){
       async rpc(name,args){
         if(!online)return {data:null,error:{message:'offline'}};
         if(name==='klabs_build_guard_version'){
-          if(!guardAvailable)return {data:null,error:{message:'guard missing'}};
+          if(!guardAvailable)return {data:null,error:{code:'PGRST202',message:'guard missing'}};
           const result=await db.query('select public.klabs_build_guard_version() as version');
           return {data:result.rows[0].version,error:null};
         }

@@ -1,5 +1,6 @@
 (function () {
   const notice = document.getElementById("buildSyncNotice");
+  const compatibility = document.getElementById("buildSyncCompatibility");
   const dialog = document.getElementById("buildSyncReview");
   const list = document.getElementById("buildSyncReviewList");
   const message = document.getElementById("buildSyncReviewMessage");
@@ -7,6 +8,9 @@
   window.KLABS_UI.onBuildSyncStatus = (status) => {
     previous?.(status);
     notice.hidden = status !== "error";
+  };
+  window.KLABS_UI.onBuildSyncMode = (mode) => {
+    compatibility.hidden = mode !== "compatibility";
   };
   function render() {
     list.replaceChildren();
