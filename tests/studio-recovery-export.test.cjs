@@ -50,6 +50,8 @@ test('downloaded JSON round-trips account records, payments, draft, pending jour
     'klabs-workshop-component-library:account-a': '[{"id":"component-1"}]',
     'klabs-studio-settings-pending:account-a': '{"rate":12}',
     'klabs-build-sync-journal:account-a': '{"pending":{"build-1":{"kind":"save"}},"conflicts":{"build-1":{"cloud":{"payments":[30]}}}}',
+    'klabs-financial-operation:account-a': '{"id":"operation-1","buildId":"build-1"}',
+    'klabs-financial-operation:account-b': '{"id":"other-operation"}',
     'klabs-workshop-builds': '[{"id":"unassigned"}]',
     'klabs-workshop-quote-current:local': '{"id":"anonymous"}',
     'klabs-workshop-builds:account-b': '[{"id":"other-account"}]',
@@ -66,10 +68,12 @@ test('downloaded JSON round-trips account records, payments, draft, pending jour
   for (const [key, value] of Object.entries(file.accountLocalStorage)) assert.equal(value, values[key]);
   assert.deepEqual(JSON.parse(file.accountLocalStorage['klabs-workshop-builds:account-a']), JSON.parse(values['klabs-workshop-builds:account-a']));
   assert.equal(file.accountLocalStorage['klabs-build-sync-journal:account-a'], values['klabs-build-sync-journal:account-a']);
+  assert.equal(file.accountLocalStorage['klabs-financial-operation:account-a'], values['klabs-financial-operation:account-a']);
   assert.equal(file.unassignedSharedLocalStorage['klabs-workshop-builds'], values['klabs-workshop-builds']);
   assert.equal(file.signedOutLocalStorage['klabs-workshop-quote-current:local'], values['klabs-workshop-quote-current:local']);
   assert.equal(file.liveDraft.quote.payments[0], 25);
   assert.ok(!written.text.includes('other-account'));
+  assert.ok(!written.text.includes('other-operation'));
   assert.ok(!written.text.includes('secret'));
   assert.match(h.status.textContent, /Check Downloads or Files/);
   assert.match(file.limitations.join(' '), /pending deletion intentions/);

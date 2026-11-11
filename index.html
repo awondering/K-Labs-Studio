@@ -991,23 +991,28 @@
               <div class="quote-payment__actions">
                 <button id="quoteRecordDepositBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteDepositReceivedForm">Record Deposit Received</button>
                 <button id="quoteRecordBalanceBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Balance Received</button>
+                <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
+                <button id="viewPaymentStatementBtn" class="ghost-action" type="button">Payment Statement</button>
+                <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Confirm Pending Transaction</button>
               </div>
               <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
                 <label><span>Amount Received</span><input id="quoteDepositReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
                 <label><span>Date Received</span><input id="quoteDepositReceivedDate" type="date" /></label>
+                <label id="quoteDepositCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteDepositCorrectionReason" type="text" /></label>
                 <p id="quoteDepositReceivedError" class="quote-payment__error" role="alert"></p>
                 <div class="quote-payment__actions">
                   <button id="quoteDepositReceivedSave" class="primary-action" type="button">Save</button>
                   <button id="quoteDepositReceivedCancel" class="ghost-action" type="button">Cancel</button>
-                  <button id="quoteDepositReceivedRemove" class="ghost-action" type="button" hidden>Remove</button>
                 </div>
               </div>
               <div id="quoteBalanceReceivedForm" class="quote-payment__form" hidden>
-                <p class="quote-payment__notice">Preview only: balance payment recording is not available. Nothing entered here will be saved.</p>
                 <label><span>Amount Received</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
                 <label><span>Date Received</span><input id="quoteBalanceReceivedDate" type="date" /></label>
+                <label id="quoteBalanceCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteBalanceCorrectionReason" type="text" /></label>
+                <p id="quoteBalanceReceivedError" class="quote-payment__error" role="alert"></p>
                 <div class="quote-payment__actions">
-                  <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Close</button>
+                  <button id="quoteBalanceReceivedSave" class="primary-action" type="button">Save</button>
+                  <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Cancel</button>
                 </div>
               </div>
             </div>
@@ -1034,7 +1039,6 @@
               <button id="toggleCurrentBuildStatusBtn" class="ghost-action workshop-build-actions-status-toggle" type="button">Mark Complete</button>
               <div class="workshop-build-actions-quote-row">
                 <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
-                <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
                 <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
               </div>
               <div class="workshop-build-actions-row">

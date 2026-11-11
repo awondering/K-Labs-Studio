@@ -60,7 +60,7 @@ test('payment status displays all received payments and balance without changing
   assert.match(elements.quotePaymentHistory.innerHTML,/Balance: \$100\.00 NZD.*2026-11-12/);
   assert.equal(JSON.stringify(quote.payments),before);
 });
-test('balance form is an unsaved preview and closes without writing',()=>{
+test('balance form opens with the outstanding balance and closes without writing',()=>{
   const {context,elements,quote}=harness();
   const before=JSON.stringify(quote);
   context.openBalanceReceivedForm();
@@ -72,8 +72,8 @@ test('balance form is an unsaved preview and closes without writing',()=>{
   assert.equal(elements.quoteBalanceReceivedForm.hidden,true);
   assert.equal(elements.quoteBalanceReceivedAmount.value,'');
   assert.equal(JSON.stringify(quote),before);
-  assert.match(html,/balance payment recording is not available/i);
-  assert.doesNotMatch(html,/id="quoteBalanceReceivedSave"/);
+  assert.doesNotMatch(html,/balance payment recording is not available/i);
+  assert.match(html,/id="quoteBalanceReceivedSave"/);
 });
 test('invoice preview is escaped, clearly unissued, and includes only customer totals and payments',()=>{
   const {context,quote}=harness();

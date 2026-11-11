@@ -238,6 +238,102 @@
       schedule();
     }
   }
+  const financialKey = (account) => `klabs-financial-operation:${account}`;
+  function pendingFinancial() {
+    if (!userId) return null;
+    const raw = window.localStorage.getItem(financialKey(userId));
+    if (!raw) return null;
+    const operation = JSON.parse(raw);
+    if (!operation || operation.account !== userId || !operation.id || !operation.buildId ||
+        !operation.revision || !operation.kind || !operation.data) {
+      throw new Error("The pending financial operation is invalid. No new transaction was submitted.");
+    }
+    return operation;
+  }
+  async function financialOperation(buildId, kind, data) {
+    if (!userId || !accountMatches() || !canWrite() || window.navigator?.onLine === false ||
+        !window.crypto?.randomUUID || !client()) {
+      throw new Error("Connect and sign in to record financial transactions.");
+    }
+    const ctx = context();
+    if (!current(ctx)) throw new Error("This tab does not own the account lock.");
+    let operation = pendingFinancial();
+    if (operation) {
+      if (operation.buildId !== String(buildId)) {
+        throw new Error("A previous financial operation needs confirmation on another build.");
+      }
+      if (kind !== operation.kind || !equal(data, operation.data)) {
+        throw new Error("Retry the previous unconfirmed financial operation before starting another.");
+      }
+    } else {
+      await run();
+      if (!current(ctx) || mode !== "guarded" || status !== "synced") {
+        throw new Error("Synchronise and resolve build conflicts before recording a financial transaction.");
+      }
+      const state = journal().read(ctx.userId);
+      const id = String(buildId);
+      const base = state.baselines[id];
+      const local = records().find(item => String(item.id) === id);
+      if (!base?.revision || !local || !equal(local, base.payload) || state.pending[id] || state.conflicts[id]) {
+        throw new Error("Save and synchronise this build before recording a financial transaction.");
+      }
+      operation = { account: ctx.userId, id: window.crypto.randomUUID(), buildId: id,
+        revision: base.revision, kind, data: clone(data) };
+      window.localStorage.setItem(financialKey(ctx.userId), JSON.stringify(operation));
+    }
+    const wasUncertain = operation.uncertain === true;
+    operation.uncertain = true;
+    window.localStorage.setItem(financialKey(ctx.userId), JSON.stringify(operation));
+    let response;
+    try {
+      response = await client().rpc("klabs_financial_operation", {
+        p_build_id: operation.buildId, p_revision: operation.revision,
+        p_operation_id: operation.id, p_kind: operation.kind, p_data: operation.data,
+      });
+    } catch (error) {
+      throw new Error("The result is unconfirmed. Retry the pending financial operation before making another payment.", { cause: error });
+    }
+    const { data: result, error } = response;
+    if (error) {
+      if (!wasUncertain && /^(P0001|22[0-9A-Z]{3}|23[0-9A-Z]{3}|42501|PGRST202)$/.test(error.code || "")) {
+        window.localStorage.removeItem(financialKey(ctx.userId));
+        throw new Error(error.message || "The financial operation was rejected.");
+      }
+      throw new Error("The result is unconfirmed. Retry the pending financial operation before making another payment.");
+    }
+    if (!result || result.user_id !== ctx.userId || String(result.client_id) !== operation.buildId ||
+        !result.updated_at || !result.payload) {
+      throw new Error("The server response could not be verified. Retry the pending financial operation.");
+    }
+    if (!current(ctx)) throw new Error("The account changed. Retry the pending financial operation in the original account.");
+    const latest = await client().from("builds").select("*").eq("user_id", ctx.userId)
+      .eq("client_id", operation.buildId);
+    if (latest.error || !Array.isArray(latest.data) || latest.data.length !== 1) {
+      throw new Error("The operation was acknowledged, but the latest build could not be verified. Retry it.");
+    }
+    if (!current(ctx)) throw new Error("The account changed. Retry the pending financial operation in the original account.");
+    const state = journal().read(ctx.userId);
+    const base = state.baselines[operation.buildId];
+    const local = records().find(item => String(item.id) === operation.buildId) || null;
+    const remoteRow = latest.data[0];
+    const remote = rowRecord(remoteRow);
+    if (state.pending[operation.buildId] || state.conflicts[operation.buildId] ||
+        !base || base.revision !== operation.revision || !equal(local, base.payload) ||
+        remoteRow.updated_at !== result.updated_at) {
+      addConflict(state, operation.buildId, local, remote, remoteRow.updated_at,
+        "A financial operation was acknowledged while this build changed. Review both versions.");
+      store(ctx, state);
+      setStatus("error");
+      window.localStorage.removeItem(financialKey(ctx.userId));
+      return { operation, record: remote, conflict: true };
+    }
+    state.baselines[operation.buildId] = { revision: remoteRow.updated_at, payload: clone(remote) };
+    store(ctx, state);
+    putLocal(ctx, remote, operation.buildId);
+    window.localStorage.removeItem(financialKey(ctx.userId));
+    refreshStatus(state);
+    return { operation, record: remote, conflict: false };
+  }
   function enqueue(kind, record) {
     if (!userId || !canWrite()) return false;
     if (!accountMatches()) {
@@ -347,6 +443,13 @@
     },
     getStatus: () => status,
     getMode: () => mode,
+    pendingFinancial,
+    financialOperation,
+    retryFinancial() {
+      const operation = pendingFinancial();
+      if (!operation) throw new Error("There is no pending financial operation.");
+      return financialOperation(operation.buildId, operation.kind, operation.data);
+    },
     notifyBuildSaved: (record) => enqueue("save", record),
     notifyBuildDeleted: (record) => enqueue("delete-intent", record),
     confirmBuildDeleted: confirmDelete,

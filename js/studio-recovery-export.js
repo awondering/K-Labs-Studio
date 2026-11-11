@@ -5,7 +5,7 @@
     "klabs-business-profile", "klabs-studio-settings", "klabs-studio-settings-pending",
     "klabs-component-cloud-known-ids", "klabs-component-cloud-known-updated",
     "klabs-component-cloud-known-taxonomy", "klabs-component-cloud-linked",
-    "klabs-build-sync-journal"
+    "klabs-build-sync-journal", "klabs-financial-operation"
   ];
   const sharedKeys = [
     "klabs-workshop-builds", "klabs-workshop-quotes", "klabs-workshop-quote-current",

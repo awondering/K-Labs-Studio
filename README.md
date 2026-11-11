@@ -17,9 +17,13 @@ Do not deploy the draft guard independently. The [controlled release and recover
 
 Settings → Local Data Recovery → **Export Studio Data** downloads an unencrypted JSON copy of the signed-in account's local business keys, sync journal, and current in-memory draft, plus separately labelled shared and signed-out data. Customers are included in build records. Other accounts' scoped data and authentication tokens are excluded. Shared data is not evidence of ownership. Store the file securely; it does not contain cloud-only records, uncommitted form input, IndexedDB, service-worker data, or lost v208 in-memory deletion intentions. A download request is not proof the file was saved; verify it in Files or Downloads. The export only exists in versions containing this feature: an already-running v208 session cannot use it without upgrading, and must not be refreshed or reconnected merely to obtain it.
 
-## Payment and invoice interface (development only)
+## Payments and customer invoices
 
-Payment Status displays the current build's recorded payments and balance. The balance-payment form is an unsaved interface preview: it cannot record or synchronise payments. Customer Invoice opens a printable preview of current build values, explicitly marked as not issued; it does not allocate an invoice number or save an immutable invoice. Existing deposit recording is unchanged. Do not treat the preview as an issued invoice or rely on it as a financial record.
+Payment Status separates the configured deposit from payments received. Deposit and balance payments, and corrections with a reason, require an online server acknowledgement on a saved, synchronised build. If the connection fails during a request, use **Confirm Pending Transaction** on that build before trying another transaction; retries reuse the same operation ID. Review sync conflicts rather than overwriting either version.
+
+Customer Invoice previews the current build before issuance. Issuing it online stores an immutable customer-facing snapshot with a number derived from the account and full build ID. Reprinting uses the original snapshot; **Payment Statement** shows later payments separately. The print dialog supports saving as PDF. Builds with issued invoices cannot be deleted. Customer documents contain no internal costs or margins.
+
+The client requires `supabase/migrations/20261111000000_financial_safeguards.sql` before these operations can work. It also prevents older clients from changing payments, and an older client may misleadingly show a local save. Before any release, pause older clients, back up and test the migration, deploy the migration and matching client as a controlled change, and verify with disposable records. Do not apply it to production without separate approval. An account's pending operation and correction audit entries must be included in backup and recovery procedures.
 
 ## Shared UI Rules
 

@@ -8624,6 +8624,10 @@ function requestDeleteCurrentBuild(){
     flashWorkshopStatus('Save the build before deleting',{pending:true,duration:2000});
     return;
   }
+  if(target.record.issuedInvoice){
+    openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
+    return;
+  }
   const displayName=specificationValue(target.record&&target.record.buildName)||'this build';
   openConfirmDialog({
     title:'Delete Build',
@@ -8639,6 +8643,10 @@ function requestDeleteCurrentBuild(){
       return;
     }
     const deletedRecord=records[targetIndex];
+    if(deletedRecord.issuedInvoice){
+      openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
+      return;
+    }
     try{
       if(deletedRecord?.id)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedRecord);
       records.splice(targetIndex,1);
@@ -9109,7 +9117,7 @@ function quoteMaths(){
 // Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
 function depositMaths(){
   const math=quoteMaths();
-  const total=Math.max(0,numberOrZero(math.total));
+  const total=Math.max(0,numberOrZero(quote.issuedInvoice?.total ?? math.total));
   const enabled=!!quote.depositEnabled;
   const type=normalizeDepositType(quote.depositType);
   const rawValue=Math.max(0,numberOrZero(quote.depositValue));
@@ -9123,7 +9131,7 @@ function depositMaths(){
   const depositReceivedAmount=depositPayment?Math.max(0,numberOrZero(depositPayment.amount)):0;
   const depositOutstanding=enabled&&!(depositReceivedAmount>0&&depositReceivedAmount+0.005>=depositAmount);
   const depositStillRequired=depositOutstanding?Math.max(0,Math.round((depositAmount-depositReceivedAmount)*100)/100):0;
-  return{...math,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance,depositPayment,depositReceivedAmount,depositReceivedDate:depositPayment?String(depositPayment.date||''):'',amountReceived,balanceOwing,depositOutstanding,depositStillRequired};
+  return{...math,total,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance,depositPayment,depositReceivedAmount,depositReceivedDate:depositPayment?String(depositPayment.date||''):'',amountReceived,balanceOwing,depositOutstanding,depositStillRequired};
 }
 function depositValueValidationMessage(value,type,total){
   if((typeof value!=='number' && typeof value!=='string') || String(value).trim()==='' || !Number.isFinite(Number(value))){
@@ -13820,6 +13828,7 @@ function deleteSavedEntryBySource(source,index){
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
   const deletedRecord=records[numericIndex];
+  if(source==='build' && deletedRecord?.issuedInvoice)throw new Error('A build with an issued invoice cannot be deleted.');
   if(source==='build' && deletedRecord?.id)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedRecord);
   records.splice(numericIndex,1);
   if(Store.set(storageKey,records)===false)throw new Error('Local build deletion was blocked.');
@@ -13833,6 +13842,7 @@ function deleteSavedEntryById(source,recordId){
   const records=Array.isArray(stored)?stored:[];
   const index=records.findIndex((record)=>record && specificationValue(record.id)===recordId);
   if(index<0)return -1;
+  if(source==='build' && records[index].issuedInvoice)throw new Error('A build with an issued invoice cannot be deleted.');
   if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(records[index]);
   records.splice(index,1);
   if(Store.set(storageKey,records)===false)throw new Error('Local build deletion was blocked.');
@@ -13844,6 +13854,10 @@ function requestDeleteSavedBuildRecord(source,index,options){
   const stored=Store.get(storageKey,[]);
   const rawRecord=Array.isArray(stored)?stored[Number(index)]:null;
   if(!rawRecord)return;
+  if(source==='build' && rawRecord.issuedInvoice){
+    openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
+    return;
+  }
   const recordId=specificationValue(rawRecord.id);
   const settings={title:'Delete this build?',message:'This action cannot be undone.',confirmLabel:'Delete',...(options||{})};
   closeSavedBuildRowMenu();
@@ -14274,25 +14288,28 @@ function customerQuoteSummaryMarkup(){
     </div>
   `;
 }
-function paymentHistoryMarkup(){
+function paymentHistoryMarkup(showCorrections=false){
   const payments=Array.isArray(quote.payments)?quote.payments:[];
   if(!payments.length)return '<p>No payments recorded.</p>';
   return `<span>Payment history</span><ul>${payments.map((payment)=>{
     const type=payment&&payment.type==='balance'?'Balance':'Deposit';
     const date=payment&&payment.date?formatDateDisplay(`${payment.date}T00:00:00`):'Unknown';
-    return `<li>${type}: ${escapeHtml(currencyWithCode(numberOrZero(payment&&payment.amount)))} &mdash; ${escapeHtml(date)}</li>`;
+    const correct=showCorrections&&payment?.type==='balance'&&payment.id?` <button type="button" class="ghost-action" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button>`:'';
+    return `<li>${type}: ${escapeHtml(currencyWithCode(numberOrZero(payment&&payment.amount)))} &mdash; ${escapeHtml(date)}${correct}</li>`;
   }).join('')}</ul>`;
 }
 function customerInvoicePreviewMarkup(){
   const math=depositMaths();
   const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
-  const businessLines=customerQuoteBusinessLines();
+  const taxEnabled=quoteTaxAvailable() && quote.includeGst!==false;
+  const registration=specificationValue(businessProfile.gstNumber);
+  const businessLines=customerQuoteBusinessLines().filter((line)=>taxEnabled || !registration || !line.endsWith(`: ${registration}`));
   const customerLines=[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()]
     .map(specificationValue).filter(Boolean);
   const buildId=specificationValue(quote.id);
   const buildReference=specificationValue(quote.buildNumber);
   const rod=customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName;
-  const taxLine=quoteTaxAvailable() && quote.includeGst!==false
+  const taxLine=taxEnabled
     ?`<div><dt>${escapeHtml(activeTaxName())} included</dt><dd>${escapeHtml(currencyWithCode(math.gst))}</dd></div>`:'';
   return `<article class="invoice-preview__document">
     <p class="invoice-preview__notice">PREVIEW ONLY — NOT AN ISSUED INVOICE</p>
@@ -14313,7 +14330,54 @@ function customerInvoicePreviewMarkup(){
     </dl>
     ${math.total>0&&math.balanceOwing===0?'<p><strong>PAID IN FULL</strong></p>':''}
     <h4>Payments received</h4>${paymentHistoryMarkup()}
-    <p>This preview is not an issued invoice. Invoice numbering and issuance are not available.</p>
+    <p>This preview is not an issued invoice. Use Issue Invoice to save the original online.</p>
+  </article>`;
+}
+function invoiceNumberForBuild(account,id){
+  const bytes=new TextEncoder().encode(String(id));
+  return `INV-${String(account).replace(/-/g,'')}-${Array.from(bytes,(byte)=>byte.toString(16).padStart(2,'0')).join('')}`;
+}
+function buildInvoiceSnapshot(){
+  const math=depositMaths();
+  const taxEnabled=quoteTaxAvailable() && quote.includeGst!==false;
+  const registration=specificationValue(businessProfile.gstNumber);
+  const businessLines=customerQuoteBusinessLines().filter((line)=>!registration || line!==`${activeTaxRegistrationLabel()}: ${registration}`);
+  return {
+    number:invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
+    issuedDate:localDateInputValue(),
+    businessName:specificationValue(businessProfile.businessName)||'K-Labs',
+    businessLines,
+    customerLines:[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()].map(specificationValue).filter(Boolean),
+    buildId:String(quote.id),buildReference:specificationValue(quote.buildNumber),
+    rod:customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName,
+    currency:activeCurrencyCode(),total:roundMoney(math.total),
+    tax:taxEnabled?{name:activeTaxName(),rate:math.taxRate,amount:roundMoney(math.gst),
+      registration:registration?`${activeTaxRegistrationLabel()}: ${registration}`:''}:null,
+    payments:JSON.parse(JSON.stringify(Array.isArray(quote.payments)?quote.payments:[])),
+  };
+}
+function invoiceDocumentMarkup(invoice,payments,statement){
+  const money=(value)=>`${Number(value||0).toFixed(2)} ${invoice.currency}`;
+  const amount=roundMoney(payments.reduce((sum,payment)=>sum+numberOrZero(payment.amount),0));
+  const balance=roundMoney(Math.max(0,numberOrZero(invoice.total)-amount));
+  const tax=invoice.tax?`<div><dt>${escapeHtml(invoice.tax.name)} included (${escapeHtml(String(invoice.tax.rate))}%)</dt><dd>${escapeHtml(money(invoice.tax.amount))}</dd></div>`:'';
+  return `<article class="invoice-preview__document">
+    <h3>${statement?'Payment Statement':'Customer Invoice'}</h3>
+    ${statement?'<p>Updated payment statement; the original issued invoice remains unchanged.</p>':''}
+    <p><strong>${escapeHtml(invoice.businessName)}</strong></p>
+    ${(invoice.businessLines||[]).map((line)=>`<p>${escapeHtml(line)}</p>`).join('')}
+    ${invoice.tax?.registration?`<p>${escapeHtml(invoice.tax.registration)}</p>`:''}
+    <h4>Customer</h4>${(invoice.customerLines||[]).map((line)=>`<p>${escapeHtml(line)}</p>`).join('')}
+    <dl><div><dt>Invoice number</dt><dd>${escapeHtml(invoice.number)}</dd></div>
+    <div><dt>Invoice date</dt><dd>${escapeHtml(invoice.issuedDate)}</dd></div>
+    ${statement?`<div><dt>Statement date</dt><dd>${escapeHtml(localDateInputValue())}</dd></div>`:''}
+    <div><dt>Build reference</dt><dd>${escapeHtml(invoice.buildReference||invoice.buildId)}</dd></div>
+    <div><dt>Rod</dt><dd>${escapeHtml(invoice.rod)}</dd></div>
+    <div><dt>Customer total</dt><dd>${escapeHtml(money(invoice.total))}</dd></div>${tax}
+    <div><dt>Total received</dt><dd>${escapeHtml(money(amount))}</dd></div>
+    <div><dt>Balance owing</dt><dd>${escapeHtml(money(balance))}</dd></div></dl>
+    ${invoice.total>0&&balance===0?'<p><strong>PAID IN FULL</strong></p>':''}
+    <h4>Payments received</h4>${payments.length?`<ul>${payments.map((payment)=>`<li>${payment.type==='deposit'?'Deposit':'Balance'}: ${escapeHtml(money(payment.amount))} &mdash; ${escapeHtml(payment.date)}</li>`).join('')}</ul>`:'<p>No payments recorded.</p>'}
   </article>`;
 }
 function openInvoicePreview(){
@@ -14327,7 +14391,7 @@ function openInvoicePreview(){
       <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer invoice preview">
         <header class="component-sheet__header"><h2>Customer Invoice Preview</h2><button class="component-sheet__close" type="button" data-invoice-preview-action="close" aria-label="Close invoice preview">&#215;</button></header>
         <div class="component-sheet__body"><div id="invoicePreviewBody"></div>
-          <div class="quote-preview-actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="print">Print / Save Preview as PDF</button></div>
+          <div class="quote-preview-actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="primary-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
         </div>
       </section>`;
     document.body.appendChild(sheet);
@@ -14335,6 +14399,7 @@ function openInvoicePreview(){
       const action=event.target.closest('[data-invoice-preview-action]');
       if(!action)return;
       if(action.getAttribute('data-invoice-preview-action')==='print')printInvoicePreview();
+      else if(action.getAttribute('data-invoice-preview-action')==='issue')issueCustomerInvoice();
       else {sheet.hidden=true;unlockModalLayer({restoreFocus:true});}
     });
     sheet.addEventListener('keydown',(event)=>{
@@ -14344,11 +14409,40 @@ function openInvoicePreview(){
       unlockModalLayer({restoreFocus:true});
     });
   }
-  $('invoicePreviewBody').innerHTML=customerInvoicePreviewMarkup();
+  $('invoicePreviewBody').innerHTML=quote.issuedInvoice
+    ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
+  const issue=sheet.querySelector('[data-invoice-preview-action="issue"]');
+  if(issue)issue.hidden=!!quote.issuedInvoice;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   sheet.querySelector('.component-sheet__body').scrollTop=0;
   sheet.querySelector('.component-sheet__close').focus();
+}
+function openPaymentStatement(){
+  if(!quote.issuedInvoice){openInfoDialog('Payment Statement','Issue an invoice before opening its payment statement.');return;}
+  openInvoicePreview();
+  $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.payments||[],true);
+  const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
+  if(issue)issue.hidden=true;
+}
+async function issueCustomerInvoice(){
+  if(quote.issuedInvoice){openInfoDialog('Invoice Already Issued','The original invoice cannot be changed.');return;}
+  if(!quote.id){openInfoDialog('Save Build First','Save and synchronise this build before issuing an invoice.');return;}
+  const invoiceQuote=quote;
+  const account=window.KLABS_ACCOUNT_ID;
+  openConfirmDialog({title:'Issue Customer Invoice',message:'Issue this invoice? The original cannot be changed or deleted.',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'issue',label:'Issue Invoice',kind:'primary'}]},async(action)=>{
+    if(action!=='issue')return;
+    try{
+      if(quote!==invoiceQuote || window.KLABS_ACCOUNT_ID!==account)throw new Error('The account or build changed. Review the invoice again.');
+      await commitFinancialOperation('issue_invoice',{invoice:buildInvoiceSnapshot()});
+      if(quote.issuedInvoice && $('invoicePreviewBody')){
+        $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false);
+        const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
+        if(issue)issue.hidden=true;
+      }
+    }catch(error){openInfoDialog('Invoice Not Confirmed',error.message);}
+  });
 }
 function printInvoicePreview(){
   const body=$('invoicePreviewBody');
@@ -14367,7 +14461,7 @@ function printInvoicePreview(){
     try{target.focus();target.print();}
     catch(error){frame.remove();openInfoDialog('Print Unavailable','Could not open the system print dialog.');}
   },{once:true});
-  frame.srcdoc=`<!doctype html><html><head><title>Invoice Preview — Not Issued</title><style>body{font:14px Arial,sans-serif;color:#222;margin:30px}.invoice-preview__notice{border:2px solid #900;padding:10px;font-weight:bold}dl div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:6px 0}dd{margin:0;text-align:right}p{margin:5px 0}</style></head><body>${body.innerHTML}</body></html>`;
+  frame.srcdoc=`<!doctype html><html><head><title>Customer Invoice or Payment Statement</title><style>body{font:14px Arial,sans-serif;color:#222;margin:30px}.invoice-preview__notice{border:2px solid #900;padding:10px;font-weight:bold}dl div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:6px 0}dd{margin:0;text-align:right}p{margin:5px 0}</style></head><body>${body.innerHTML}</body></html>`;
   document.body.appendChild(frame);
 }
 function ensureViewQuoteSheet(){
@@ -15967,12 +16061,20 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteDepositReceivedRemove',removeDepositReceived],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview]].forEach(([id,handler])=>{
+  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['viewPaymentStatementBtn',openPaymentStatement],['retryFinancialBtn',retryFinancialOperation]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
     el.addEventListener('click',handler);
   });
+  const paymentHistory=$('quotePaymentHistory');
+  if(paymentHistory && paymentHistory.getAttribute('data-payment-bound')!=='true'){
+    paymentHistory.setAttribute('data-payment-bound','true');
+    paymentHistory.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-correct-payment]');
+      if(button)openBalanceCorrection(button.getAttribute('data-correct-payment'));
+    });
+  }
   bindBuildSpecificationInputs();
   const componentsList=$('quoteComponentsList');
   if(componentsList){
@@ -16363,6 +16465,8 @@ function updateQuoteSummary(){
 }
 // Deposit Received is a recorded payment (not the configured deposit) and never touches status, price or costs.
 let paymentFormBuildKey='';
+let balanceCorrectionId='';
+let financialOperationInFlight=false;
 function closeDepositReceivedForm(){
   const form=$('quoteDepositReceivedForm');
   if(form)form.hidden=true;
@@ -16380,15 +16484,37 @@ function closeBalanceReceivedForm(){
   const date=$('quoteBalanceReceivedDate');
   if(amount)amount.value='';
   if(date)date.value='';
+  balanceCorrectionId='';
+  const reason=$('quoteBalanceCorrectionReason');
+  if(reason)reason.value='';
+  const error=$('quoteBalanceReceivedError');
+  if(error)error.textContent='';
 }
 function openBalanceReceivedForm(){
+  balanceCorrectionId='';
   const math=depositMaths();
   const amount=$('quoteBalanceReceivedAmount');
   amount.max=String(math.balanceOwing);
   amount.value=math.balanceOwing>0?math.balanceOwing.toFixed(2):'';
   $('quoteBalanceReceivedDate').value=localDateInputValue();
+  const reason=$('quoteBalanceCorrectionReasonField');
+  if(reason)reason.hidden=true;
+  const error=$('quoteBalanceReceivedError');
+  if(error)error.textContent='';
   $('quoteBalanceReceivedForm').hidden=false;
   $('quoteRecordBalanceBtn').setAttribute('aria-expanded','true');
+}
+function openBalanceCorrection(id){
+  const payment=(quote.payments||[]).find((item)=>item.id===id && item.type==='balance');
+  if(!payment){openInfoDialog('Payment Not Found','Reload and review the payment history.');return;}
+  openBalanceReceivedForm();
+  balanceCorrectionId=id;
+  const amount=$('quoteBalanceReceivedAmount');
+  amount.max=String(roundMoney(depositMaths().balanceOwing+numberOrZero(payment.amount)));
+  amount.value=Number(payment.amount).toFixed(2);
+  $('quoteBalanceReceivedDate').value=payment.date;
+  $('quoteBalanceCorrectionReasonField').hidden=false;
+  $('quoteBalanceCorrectionReason').value='';
 }
 function updatePaymentBlock(){
   const status=$('quoteDepositReceivedStatus');
@@ -16408,7 +16534,12 @@ function updatePaymentBlock(){
   const history=$('quotePaymentHistory');
   if(received)received.textContent=currencyWithCode(math.amountReceived);
   if(balance)balance.textContent=math.total>0&&math.balanceOwing===0?`PAID IN FULL (${currencyWithCode(0)})`:currencyWithCode(math.balanceOwing);
-  if(history)history.innerHTML=paymentHistoryMarkup();
+  if(history)history.innerHTML=paymentHistoryMarkup(true);
+  const retry=$('retryFinancialBtn');
+  if(retry){
+    try{retry.hidden=!window.KLABS_BUILD_SYNC?.pendingFinancial?.();}
+    catch(error){retry.hidden=false;console.error('[K-Labs Studio] Financial operation could not be read:',error);}
+  }
   if(math.depositPayment){
     const partial=math.depositEnabled&&math.depositOutstanding;
     status.textContent=`Deposit received: ${currencyWithCode(math.depositReceivedAmount)} on ${formatDateDisplay(`${math.depositReceivedDate}T00:00:00`)}`
@@ -16426,40 +16557,73 @@ function openDepositReceivedForm(){
   $('quoteDepositReceivedAmount').value=suggested>0?roundMoney(suggested).toFixed(2):'';
   $('quoteDepositReceivedDate').value=existing?math.depositReceivedDate:localDateInputValue();
   $('quoteDepositReceivedError').textContent='';
-  $('quoteDepositReceivedRemove').hidden=!existing;
+  const reason=$('quoteDepositCorrectionReasonField');
+  if(reason)reason.hidden=!existing;
+  const reasonInput=$('quoteDepositCorrectionReason');
+  if(reasonInput)reasonInput.value='';
   $('quoteDepositReceivedForm').hidden=false;
   $('quoteRecordDepositBtn').setAttribute('aria-expanded','true');
 }
-function saveDepositReceived(){
-  const error=$('quoteDepositReceivedError');
-  const amount=roundMoney(numberOrZero($('quoteDepositReceivedAmount').value));
-  const date=String($('quoteDepositReceivedDate').value||'').trim();
-  const total=Math.max(0,numberOrZero(quoteMaths().total));
-  const others=(quote.payments||[]).filter((item)=>item.type!=='deposit').reduce((sum,item)=>sum+numberOrZero(item.amount),0);
-  if(!(amount>0)){error.textContent='Enter the amount received.';return;}
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00`).getTime())){error.textContent='Enter the date received.';return;}
-  if(total>0 && amount+others>total+0.005){error.textContent='Amount received cannot exceed the total price.';return;}
-  const existing=(quote.payments||[]).find((item)=>item.type==='deposit');
-  const entry={id:existing?existing.id:generateId('pay'),type:'deposit',amount,date};
-  quote.payments=existing?quote.payments.map((item)=>item===existing?entry:item):[...(quote.payments||[]),entry];
-  closeDepositReceivedForm();
-  saveQuoteCurrent();
-  markQuoteDirty();
-  updateQuoteSummary();
-}
-function removeDepositReceived(){
-  openConfirmDialog({
-    title:'Remove Deposit Received',
-    message:'Remove the recorded deposit payment from this build? The total price and build status are not changed.',
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove',kind:'danger'}]
-  },(action)=>{
-    if(action!=='remove')return;
-    quote.payments=(quote.payments||[]).filter((item)=>item.type!=='deposit');
-    closeDepositReceivedForm();
-    saveQuoteCurrent();
-    markQuoteDirty();
+async function commitFinancialOperation(kind,data,retry=false){
+  if(financialOperationInFlight)throw new Error('A financial operation is already in progress.');
+  if(window.navigator?.onLine===false)throw new Error('Connect to record payments or issue invoices.');
+  if(!window.KLABS_ACCOUNT_ID || !window.KLABS_BUILD_SYNC?.financialOperation)throw new Error('Sign in to record financial transactions.');
+  const target=findCurrentSavedBuildTarget();
+  if(!target || !quote.id || String(target.record.id)!==String(quote.id))throw new Error('Save and synchronise this build first.');
+  if(retry && window.KLABS_BUILD_SYNC.pendingFinancial()?.buildId!==String(quote.id)){
+    throw new Error('Open the build with the unconfirmed transaction before retrying.');
+  }
+  if(hasUnsavedQuoteChanges || quoteAutosaveInFlight)throw new Error('Wait for this build to finish saving before continuing.');
+  const originalQuote=quote;
+  const account=window.KLABS_ACCOUNT_ID;
+  financialOperationInFlight=true;
+  try{
+    const result=retry?await window.KLABS_BUILD_SYNC.retryFinancial():
+      await window.KLABS_BUILD_SYNC.financialOperation(String(quote.id),kind,data);
+    if(result.conflict)throw new Error('The transaction was recorded, but the build changed. Review the sync conflict before continuing.');
+    if(quote!==originalQuote || window.KLABS_ACCOUNT_ID!==account){
+      throw new Error('The transaction was recorded. Reopen the original build to see it.');
+    }
+    quote.payments=normalizePayments(result.record.payments);
+    if(result.record.issuedInvoice)quote.issuedInvoice=result.record.issuedInvoice;
+    if(Store.set(quoteCurrentStorageKey(),quote)===false){
+      throw new Error('The transaction was recorded, but the local draft could not be updated. Reopen this build.');
+    }
     updateQuoteSummary();
-  });
+    flashWorkshopStatus('Financial transaction confirmed by server');
+    return result;
+  }finally{
+    financialOperationInFlight=false;
+    updatePaymentBlock();
+  }
+}
+async function retryFinancialOperation(){
+  try{await commitFinancialOperation(null,null,true);}
+  catch(error){openInfoDialog('Transaction Confirmation',error.message);}
+}
+async function saveFinancialPayment(type,correctionId,amountId,dateId,reasonId,errorId){
+  const error=$(errorId);
+  const raw=String($(amountId).value||'').trim();
+  const date=String($(dateId).value||'').trim();
+  const reason=String($(reasonId)?.value||'').trim();
+  if(!/^\d+(\.\d{1,2})?$/.test(raw) || !(Number(raw)>0)){error.textContent='Enter a valid amount to two decimal places.';return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) ||
+     new Date(`${date}T00:00:00Z`).toISOString().slice(0,10)!==date){error.textContent='Enter a valid date received.';return;}
+  if(correctionId && reason.length<3){error.textContent='Enter a reason for the correction.';return;}
+  if(!window.crypto?.randomUUID){error.textContent='Secure transaction IDs are unavailable in this browser.';return;}
+  const entry={id:correctionId||window.crypto.randomUUID(),type,amount:Number(raw),date};
+  if(correctionId)entry.reason=reason;
+  try{
+    await commitFinancialOperation(correctionId?'correct_payment':'add_payment',entry);
+    if(type==='deposit')closeDepositReceivedForm();else closeBalanceReceivedForm();
+  }catch(failure){error.textContent=failure.message;}
+}
+async function saveDepositReceived(){
+  const existing=(quote.payments||[]).find((item)=>item.type==='deposit');
+  await saveFinancialPayment('deposit',existing?.id||'','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositCorrectionReason','quoteDepositReceivedError');
+}
+async function saveBalanceReceived(){
+  await saveFinancialPayment('balance',balanceCorrectionId,'quoteBalanceReceivedAmount','quoteBalanceReceivedDate','quoteBalanceCorrectionReason','quoteBalanceReceivedError');
 }
 // Deposit fields are optional and independent of build status; kept in sync with the live pricing math.
 function updateDepositFields(){
