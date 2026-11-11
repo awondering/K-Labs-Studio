@@ -14299,56 +14299,25 @@ function paymentHistoryMarkup(showCorrections=false){
   }).join('')}</ul>`;
 }
 function customerInvoicePreviewMarkup(){
-  const math=depositMaths();
-  const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
-  const taxEnabled=quoteTaxAvailable() && quote.includeGst!==false;
-  const registration=specificationValue(businessProfile.gstNumber);
-  const businessLines=customerQuoteBusinessLines().filter((line)=>taxEnabled || !registration || !line.endsWith(`: ${registration}`));
-  const customerLines=[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()]
-    .map(specificationValue).filter(Boolean);
-  const buildId=specificationValue(quote.id);
-  const buildReference=specificationValue(quote.buildNumber);
-  const rod=customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName;
-  const taxLine=taxEnabled
-    ?`<div><dt>${escapeHtml(activeTaxName())} included</dt><dd>${escapeHtml(currencyWithCode(math.gst))}</dd></div>`:'';
-  return `<article class="invoice-preview__document">
-    <p class="invoice-preview__notice">PREVIEW ONLY — NOT AN ISSUED INVOICE</p>
-    <h3>Customer Invoice Preview</h3>
-    <p><strong>${escapeHtml(businessName)}</strong></p>
-    ${businessLines.map((line)=>`<p>${escapeHtml(line)}</p>`).join('')}
-    <h4>Customer</h4>
-    ${customerLines.length?customerLines.map((line)=>`<p>${escapeHtml(line)}</p>`).join(''):'<p>Customer details not set</p>'}
-    <dl>
-      <div><dt>Preview date</dt><dd>${escapeHtml(formatDateDisplay(`${localDateInputValue()}T00:00:00`))}</dd></div>
-      <div><dt>Build reference</dt><dd>${escapeHtml(buildReference||'Not set')}</dd></div>
-      <div><dt>Build ID</dt><dd>${escapeHtml(buildId||'Not saved')}</dd></div>
-      <div><dt>Rod</dt><dd>${escapeHtml(rod)}</dd></div>
-      <div><dt>Customer total</dt><dd>${escapeHtml(currencyWithCode(math.total))}</dd></div>
-      ${taxLine}
-      <div><dt>Total received</dt><dd>${escapeHtml(currencyWithCode(math.amountReceived))}</dd></div>
-      <div><dt>Balance owing</dt><dd>${escapeHtml(currencyWithCode(math.balanceOwing))}</dd></div>
-    </dl>
-    ${math.total>0&&math.balanceOwing===0?'<p><strong>PAID IN FULL</strong></p>':''}
-    <h4>Payments received</h4>${paymentHistoryMarkup()}
-    <p>This preview is not an issued invoice. Use Issue Invoice to save the original online.</p>
-  </article>`;
+  const invoice=buildInvoiceSnapshot(true);
+  return `<p class="invoice-preview__notice" role="status">PREVIEW ONLY — NOT AN ISSUED INVOICE</p>${invoiceDocumentMarkup(invoice,invoice.payments,false,true)}`;
 }
 function invoiceNumberForBuild(account,id){
   const bytes=new TextEncoder().encode(String(id));
   return `INV-${String(account).replace(/-/g,'')}-${Array.from(bytes,(byte)=>byte.toString(16).padStart(2,'0')).join('')}`;
 }
-function buildInvoiceSnapshot(){
+function buildInvoiceSnapshot(preview=false){
   const math=depositMaths();
   const taxEnabled=quoteTaxAvailable() && quote.includeGst!==false;
   const registration=specificationValue(businessProfile.gstNumber);
   const businessLines=customerQuoteBusinessLines().filter((line)=>!registration || line!==`${activeTaxRegistrationLabel()}: ${registration}`);
   return {
-    number:invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
-    issuedDate:localDateInputValue(),
+    number:preview?'':invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
+    issuedDate:preview?'':localDateInputValue(),
     businessName:specificationValue(businessProfile.businessName)||'K-Labs',
     businessLines,
     customerLines:[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()].map(specificationValue).filter(Boolean),
-    buildId:String(quote.id),buildReference:specificationValue(quote.buildNumber),
+    buildId:preview?specificationValue(quote.id):String(quote.id),buildReference:specificationValue(quote.buildNumber),
     rod:customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName,
     currency:activeCurrencyCode(),total:roundMoney(math.total),
     tax:taxEnabled?{name:activeTaxName(),rate:math.taxRate,amount:roundMoney(math.gst),
@@ -14356,28 +14325,40 @@ function buildInvoiceSnapshot(){
     payments:JSON.parse(JSON.stringify(Array.isArray(quote.payments)?quote.payments:[])),
   };
 }
-function invoiceDocumentMarkup(invoice,payments,statement){
+function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
   const money=(value)=>`${Number(value||0).toFixed(2)} ${invoice.currency}`;
   const amount=roundMoney(payments.reduce((sum,payment)=>sum+numberOrZero(payment.amount),0));
   const balance=roundMoney(Math.max(0,numberOrZero(invoice.total)-amount));
-  const tax=invoice.tax?`<div><dt>${escapeHtml(invoice.tax.name)} included (${escapeHtml(String(invoice.tax.rate))}%)</dt><dd>${escapeHtml(money(invoice.tax.amount))}</dd></div>`:'';
-  return `<article class="invoice-preview__document">
-    <h3>${statement?'Payment Statement':'Customer Invoice'}</h3>
-    ${statement?'<p>Updated payment statement; the original issued invoice remains unchanged.</p>':''}
-    <p><strong>${escapeHtml(invoice.businessName)}</strong></p>
-    ${(invoice.businessLines||[]).map((line)=>`<p>${escapeHtml(line)}</p>`).join('')}
-    ${invoice.tax?.registration?`<p>${escapeHtml(invoice.tax.registration)}</p>`:''}
-    <h4>Customer</h4>${(invoice.customerLines||[]).map((line)=>`<p>${escapeHtml(line)}</p>`).join('')}
-    <dl><div><dt>Invoice number</dt><dd>${escapeHtml(invoice.number)}</dd></div>
-    <div><dt>Invoice date</dt><dd>${escapeHtml(invoice.issuedDate)}</dd></div>
-    ${statement?`<div><dt>Statement date</dt><dd>${escapeHtml(localDateInputValue())}</dd></div>`:''}
-    <div><dt>Build reference</dt><dd>${escapeHtml(invoice.buildReference||invoice.buildId)}</dd></div>
-    <div><dt>Rod</dt><dd>${escapeHtml(invoice.rod)}</dd></div>
-    <div><dt>Customer total</dt><dd>${escapeHtml(money(invoice.total))}</dd></div>${tax}
-    <div><dt>Total received</dt><dd>${escapeHtml(money(amount))}</dd></div>
-    <div><dt>Balance owing</dt><dd>${escapeHtml(money(balance))}</dd></div></dl>
-    ${invoice.total>0&&balance===0?'<p><strong>PAID IN FULL</strong></p>':''}
-    <h4>Payments received</h4>${payments.length?`<ul>${payments.map((payment)=>`<li>${payment.type==='deposit'?'Deposit':'Balance'}: ${escapeHtml(money(payment.amount))} &mdash; ${escapeHtml(payment.date)}</li>`).join('')}</ul>`:'<p>No payments recorded.</p>'}
+  const line=(label,value,extra='')=>`<div class="invoice-document__amount-row ${extra}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(money(value))}</dd></div>`;
+  const reference=invoice.buildReference||invoice.buildId;
+  const tax=invoice.tax?`${line(`Subtotal excluding ${invoice.tax.name}`,roundMoney(numberOrZero(invoice.total)-numberOrZero(invoice.tax.amount)))}
+    ${line(`${invoice.tax.name} (${invoice.tax.rate}%)`,invoice.tax.amount)}`:'';
+  return `<article class="invoice-document" data-invoice-issued="${!preview}" data-invoice-number="${escapeHtml(invoice.number||'')}">
+    <header class="invoice-document__header">
+      <div class="invoice-document__brand"><img src="assets/logo.svg" alt="K-Labs" class="invoice-document__logo"><span>${escapeHtml(invoice.businessName)}</span></div>
+      <div class="invoice-document__heading"><p class="invoice-document__eyebrow">K-Labs Studio</p><h3>${statement?'Payment Statement':'Invoice'}</h3></div>
+    </header>
+    <section class="invoice-document__details">
+      <div><h4 class="invoice-document__label">Bill to</h4><div class="invoice-document__address">${(invoice.customerLines||[]).map((item)=>`<p>${escapeHtml(item)}</p>`).join('')||'<p>Customer details not set</p>'}</div></div>
+      <dl class="invoice-document__metadata">
+        ${invoice.number?`<div><dt>Invoice number</dt><dd>${escapeHtml(invoice.number)}</dd></div>`:''}
+        ${invoice.issuedDate?`<div><dt>Issue date</dt><dd>${escapeHtml(invoice.issuedDate)}</dd></div>`:''}
+        ${statement?`<div><dt>Statement date</dt><dd>${escapeHtml(localDateInputValue())}</dd></div>`:''}
+        ${reference?`<div><dt>Build reference</dt><dd>${escapeHtml(reference)}</dd></div>`:''}
+      </dl>
+    </section>
+    <section class="invoice-document__description"><h4 class="invoice-document__label">Description</h4><p>${escapeHtml(invoice.rod)}</p></section>
+    <section class="invoice-document__financial">
+      <h4 class="invoice-document__label">Summary</h4>
+      <dl class="invoice-document__amounts">${tax}${line(invoice.tax?`Total including ${invoice.tax.name}`:'Total',invoice.total,'invoice-document__total')}
+        ${line('Total received',amount)}
+        ${line(invoice.total>0&&balance===0?'Paid in full':'Balance owing',balance,'invoice-document__balance')}
+      </dl>
+    </section>
+    <section class="invoice-document__payments"><h4 class="invoice-document__label">Payments received</h4>
+      ${payments.length?`<table><thead><tr><th scope="col">Payment</th><th scope="col">Date</th><th scope="col">Amount</th></tr></thead><tbody>${payments.map((payment)=>`<tr><td>${payment.type==='deposit'?'Deposit':'Balance payment'}</td><td>${escapeHtml(payment.date||'')}</td><td>${escapeHtml(money(payment.amount))}</td></tr>`).join('')}</tbody></table>`:'<p class="invoice-document__empty">No payments recorded.</p>'}
+    </section>
+    <footer class="invoice-document__footer"><strong>${escapeHtml(invoice.businessName)}</strong><div>${(invoice.businessLines||[]).map((item)=>`<span>${escapeHtml(item)}</span>`).join('')}${invoice.tax?.registration?`<span>${escapeHtml(invoice.tax.registration)}</span>`:''}</div></footer>
   </article>`;
 }
 function openInvoicePreview(){
@@ -14413,6 +14394,8 @@ function openInvoicePreview(){
     ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
   const issue=sheet.querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=!!quote.issuedInvoice;
+  const print=sheet.querySelector('[data-invoice-preview-action="print"]');
+  if(print)print.hidden=!quote.issuedInvoice;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   sheet.querySelector('.component-sheet__body').scrollTop=0;
@@ -14424,6 +14407,8 @@ function openPaymentStatement(){
   $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.payments||[],true);
   const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=true;
+  const print=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="print"]');
+  if(print)print.hidden=false;
 }
 async function issueCustomerInvoice(){
   if(quote.issuedInvoice){openInfoDialog('Invoice Already Issued','The original invoice cannot be changed.');return;}
@@ -14440,6 +14425,8 @@ async function issueCustomerInvoice(){
         $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false);
         const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
         if(issue)issue.hidden=true;
+        const print=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="print"]');
+        if(print)print.hidden=false;
       }
     }catch(error){openInfoDialog('Invoice Not Confirmed',error.message);}
   });
@@ -14447,12 +14434,23 @@ async function issueCustomerInvoice(){
 function printInvoicePreview(){
   const body=$('invoicePreviewBody');
   if(!body)return;
+  const documentNode=body.querySelector('.invoice-document[data-invoice-issued="true"]');
+  if(!quote.issuedInvoice || !documentNode || documentNode.getAttribute('data-invoice-number')!==quote.issuedInvoice.number){
+    openInfoDialog('Issue Invoice First','Issue the invoice before printing or saving it as a PDF.');
+    return;
+  }
   const frame=document.createElement('iframe');
   frame.className='invoice-preview__print-frame';
   frame.setAttribute('aria-hidden','true');
   frame.addEventListener('load',()=>{
     const target=frame.contentWindow;
     if(!target){frame.remove();openInfoDialog('Print Unavailable','Could not open the print preview.');return;}
+    const printDocument=target.document;
+    const stylesheet=printDocument?.querySelector('link[rel="stylesheet"]');
+    const logo=printDocument?.querySelector('.invoice-document__logo');
+    if(!stylesheet?.sheet || !logo?.complete || !logo.naturalWidth){
+      frame.remove();openInfoDialog('Print Unavailable','The invoice design or logo could not be loaded. Please try again.');return;
+    }
     target.addEventListener('afterprint',()=>window.setTimeout(()=>{
       frame.remove();
       const sheet=$('invoicePreviewSheet');
@@ -14461,7 +14459,7 @@ function printInvoicePreview(){
     try{target.focus();target.print();}
     catch(error){frame.remove();openInfoDialog('Print Unavailable','Could not open the system print dialog.');}
   },{once:true});
-  frame.srcdoc=`<!doctype html><html><head><title>Customer Invoice or Payment Statement</title><style>body{font:14px Arial,sans-serif;color:#222;margin:30px}.invoice-preview__notice{border:2px solid #900;padding:10px;font-weight:bold}dl div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:6px 0}dd{margin:0;text-align:right}p{margin:5px 0}</style></head><body>${body.innerHTML}</body></html>`;
+  frame.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><base href="${escapeHtml(document.baseURI)}"><title>Customer Invoice or Payment Statement</title><link rel="stylesheet" href="css/invoice-document.css"></head><body class="invoice-print">${documentNode.outerHTML}</body></html>`;
   document.body.appendChild(frame);
 }
 function ensureViewQuoteSheet(){

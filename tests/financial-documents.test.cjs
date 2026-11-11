@@ -50,10 +50,12 @@ test('issued invoice snapshot remains unchanged while a statement reflects later
   const statement = context.invoiceDocumentMarkup(snapshot, quote.payments, true);
   assert.equal(reprint, original);
   assert.match(original, /&lt;Customer&gt;/);
-  assert.match(original, /GST included \(15%\).*15\.00 NZD/);
+  assert.match(original, /Subtotal excluding GST<\/dt><dd>100\.00 NZD/);
+  assert.match(original, /GST \(15%\)<\/dt><dd>15\.00 NZD/);
+  assert.match(original, /Total including GST<\/dt><dd>115\.00 NZD/);
   assert.match(original, /GST Number: REG-1/);
   assert.match(original, /90\.00 NZD/);
-  assert.match(statement, /PAID IN FULL/);
+  assert.match(statement, /Paid in full/);
   assert.doesNotMatch(statement, /profit|margin|labour|purchase cost/i);
 });
 test('tax-disabled invoice omits tax breakdown and registration', () => {
@@ -62,4 +64,39 @@ test('tax-disabled invoice omits tax breakdown and registration', () => {
   const html = context.invoiceDocumentMarkup(snapshot, snapshot.payments, false);
   assert.equal(snapshot.tax, null);
   assert.doesNotMatch(html, /GST|REG-1/);
+});
+test('payment statement uses the immutable invoice total and current payment history', () => {
+  const { context } = harness();
+  const snapshot = context.buildInvoiceSnapshot();
+  const saved = JSON.stringify(snapshot);
+  const payments = [...snapshot.payments, { id: 'later', type: 'balance', amount: 20.25, date: '2026-11-12' }];
+  const statement = context.invoiceDocumentMarkup(snapshot, payments, true);
+  assert.match(statement, /Payment Statement/);
+  assert.match(statement, /Total received<\/dt><dd>45\.25 NZD/);
+  assert.match(statement, /Balance owing<\/dt><dd>69\.75 NZD/);
+  assert.match(statement, /Balance payment<\/td><td>2026-11-12<\/td><td>20\.25 NZD/);
+  assert.equal(JSON.stringify(snapshot), saved);
+});
+test('the preview uses the same layout without an invented invoice number or date', () => {
+  const { context } = harness();
+  const snapshot = context.buildInvoiceSnapshot(true);
+  const html = context.invoiceDocumentMarkup(snapshot, snapshot.payments, false, true);
+  assert.match(html, /class="invoice-document"/);
+  assert.match(html, /data-invoice-issued="false"/);
+  assert.doesNotMatch(html, /Invoice number|Issue date|INV-/);
+  assert.equal(snapshot.number, '');
+  assert.equal(snapshot.issuedDate, '');
+});
+test('customer details, tax labels, descriptions and payment data are escaped', () => {
+  const { context } = harness();
+  const snapshot = context.buildInvoiceSnapshot();
+  snapshot.customerLines = ['A <script>alert(1)</script>', 'x'.repeat(500)];
+  snapshot.rod = 'Rod <img src=x>';
+  snapshot.tax.name = '<GST>';
+  const html = context.invoiceDocumentMarkup(snapshot, [{ type: 'balance', amount: 10, date: '<date>' }], false);
+  assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /&lt;img src=x&gt;/);
+  assert.match(html, /&lt;GST&gt;/);
+  assert.match(html, /&lt;date&gt;/);
+  assert.doesNotMatch(html, /<script>|<img src=x>/);
 });
