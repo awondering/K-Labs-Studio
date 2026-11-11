@@ -15,6 +15,10 @@ The candidate client uses temporary compatibility mode only when the guard-versi
 
 Do not deploy the draft guard independently. Before a release, verify backups and real Safari behavior, deploy and verify the compatible client, and explicitly retire or refresh existing sessions before enabling the guard. An offline v208 session cannot be forced to update; it may report a local save as successful when the guard rejects cloud writes, and its deletion queue is not durable. Preserve and review its local data before refreshing or switching accounts. If those sessions cannot be accounted for and safely recovered, do not enable the guard.
 
+## Payment and invoice interface (development only)
+
+Payment Status displays the current build's recorded payments and balance. The balance-payment form is an unsaved interface preview: it cannot record or synchronise payments. Customer Invoice opens a printable preview of current build values, explicitly marked as not issued; it does not allocate an invoice number or save an immutable invoice. Existing deposit recording is unchanged. Do not treat the preview as an issued invoice or rely on it as a financial record.
+
 ## Shared UI Rules
 
 - Track Component Stock shares the Measurement Units and Date Format disclosure spacing and uses the summary "Track quantities as parts are used." Its heading target extends into the existing padding without adding visible space; descriptions wrap naturally and switch behavior is unchanged.

@@ -12358,6 +12358,15 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 
 /* Deposit Received: compact status + inline form inside Build Pricing. */
 .quote-payment{display:grid;gap:8px;min-width:0}
+.quote-payment__heading{margin:8px 0 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#ddd6ca}
+.quote-payment__summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.quote-payment__summary div{display:grid;gap:3px;min-width:0}
+.quote-payment__summary span,.quote-payment__history{font-size:12px;color:#b8b2aa}
+.quote-payment__summary strong{font-size:16px;color:#eee9e1;overflow-wrap:anywhere}
+.quote-payment__history ul{margin:4px 0 0;padding-left:18px}
+.quote-payment__history li{margin:3px 0;overflow-wrap:anywhere}
+.quote-payment__history:empty{display:none}
+.quote-payment__notice{grid-column:1/-1;margin:0;font-size:13px;color:#e4aeb4}
 .quote-payment__status{margin:0;font-size:13px;color:#ddd6ca;overflow-wrap:anywhere}
 .quote-payment__status:empty{display:none}
 .quote-payment__actions{display:flex;flex-wrap:wrap;gap:8px}
@@ -12369,6 +12378,16 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 .quote-payment__error:empty{display:none}
 .quote-payment__form input{min-width:0;box-sizing:border-box;font-size:16px}
 @media (max-width:420px){.quote-payment__form{grid-template-columns:1fr}}
+.invoice-preview__notice{padding:10px;border:1px solid #9c5258;color:#842a31;font-weight:700}
+.invoice-preview__document{background:#fff;color:#222;padding:20px;overflow-wrap:anywhere}
+.invoice-preview__document h3{margin:0 0 12px}
+.invoice-preview__document p{margin:5px 0}
+.invoice-preview__document dl{margin:16px 0}
+.invoice-preview__document dl div{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #ddd;padding:6px 0}
+.invoice-preview__document dd{margin:0;text-align:right}
+.invoice-preview__document ul{padding-left:20px}
+#invoicePreviewSheet .quote-preview-actions{position:static;background:none}
+.invoice-preview__print-frame{position:fixed;width:1px;height:1px;border:0;left:-10000px;top:0}
 
 /* Components Library: component rows put brand/stock and Buy/Sell on one line, grouped left, wrapping left-aligned. */
 .studio-components-list__row--component .studio-components-list__item{

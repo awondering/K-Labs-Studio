@@ -14251,6 +14251,102 @@ function customerQuoteSummaryMarkup(){
     </div>
   `;
 }
+function paymentHistoryMarkup(){
+  const payments=Array.isArray(quote.payments)?quote.payments:[];
+  if(!payments.length)return '<p>No payments recorded.</p>';
+  return `<span>Payment history</span><ul>${payments.map((payment)=>{
+    const type=payment&&payment.type==='balance'?'Balance':'Deposit';
+    const date=payment&&payment.date?formatDateDisplay(`${payment.date}T00:00:00`):'Unknown';
+    return `<li>${type}: ${escapeHtml(currencyWithCode(numberOrZero(payment&&payment.amount)))} &mdash; ${escapeHtml(date)}</li>`;
+  }).join('')}</ul>`;
+}
+function customerInvoicePreviewMarkup(){
+  const math=depositMaths();
+  const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
+  const businessLines=customerQuoteBusinessLines();
+  const customerLines=[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()]
+    .map(specificationValue).filter(Boolean);
+  const buildId=specificationValue(quote.id);
+  const buildReference=specificationValue(quote.buildNumber);
+  const rod=customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName;
+  const taxLine=quoteTaxAvailable() && quote.includeGst!==false
+    ?`<div><dt>${escapeHtml(activeTaxName())} included</dt><dd>${escapeHtml(currencyWithCode(math.gst))}</dd></div>`:'';
+  return `<article class="invoice-preview__document">
+    <p class="invoice-preview__notice">PREVIEW ONLY — NOT AN ISSUED INVOICE</p>
+    <h3>Customer Invoice Preview</h3>
+    <p><strong>${escapeHtml(businessName)}</strong></p>
+    ${businessLines.map((line)=>`<p>${escapeHtml(line)}</p>`).join('')}
+    <h4>Customer</h4>
+    ${customerLines.length?customerLines.map((line)=>`<p>${escapeHtml(line)}</p>`).join(''):'<p>Customer details not set</p>'}
+    <dl>
+      <div><dt>Preview date</dt><dd>${escapeHtml(formatDateDisplay(`${localDateInputValue()}T00:00:00`))}</dd></div>
+      <div><dt>Build reference</dt><dd>${escapeHtml(buildReference||'Not set')}</dd></div>
+      <div><dt>Build ID</dt><dd>${escapeHtml(buildId||'Not saved')}</dd></div>
+      <div><dt>Rod</dt><dd>${escapeHtml(rod)}</dd></div>
+      <div><dt>Customer total</dt><dd>${escapeHtml(currencyWithCode(math.total))}</dd></div>
+      ${taxLine}
+      <div><dt>Total received</dt><dd>${escapeHtml(currencyWithCode(math.amountReceived))}</dd></div>
+      <div><dt>Balance owing</dt><dd>${escapeHtml(currencyWithCode(math.balanceOwing))}</dd></div>
+    </dl>
+    ${math.total>0&&math.balanceOwing===0?'<p><strong>PAID IN FULL</strong></p>':''}
+    <h4>Payments received</h4>${paymentHistoryMarkup()}
+    <p>This preview is not an issued invoice. Invoice numbering and issuance are not available.</p>
+  </article>`;
+}
+function openInvoicePreview(){
+  let sheet=$('invoicePreviewSheet');
+  if(sheet && !sheet.hidden)return;
+  if(!sheet){
+    sheet=document.createElement('div');
+    sheet.id='invoicePreviewSheet';
+    sheet.className='component-sheet';
+    sheet.innerHTML=`<div class="component-sheet__scrim" data-invoice-preview-action="close"></div>
+      <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer invoice preview">
+        <header class="component-sheet__header"><h2>Customer Invoice Preview</h2><button class="component-sheet__close" type="button" data-invoice-preview-action="close" aria-label="Close invoice preview">&#215;</button></header>
+        <div class="component-sheet__body"><div id="invoicePreviewBody"></div>
+          <div class="quote-preview-actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="print">Print / Save Preview as PDF</button></div>
+        </div>
+      </section>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click',(event)=>{
+      const action=event.target.closest('[data-invoice-preview-action]');
+      if(!action)return;
+      if(action.getAttribute('data-invoice-preview-action')==='print')printInvoicePreview();
+      else {sheet.hidden=true;unlockModalLayer({restoreFocus:true});}
+    });
+    sheet.addEventListener('keydown',(event)=>{
+      if(event.key!=='Escape')return;
+      event.preventDefault();
+      sheet.hidden=true;
+      unlockModalLayer({restoreFocus:true});
+    });
+  }
+  $('invoicePreviewBody').innerHTML=customerInvoicePreviewMarkup();
+  sheet.hidden=false;
+  lockModalLayer(document.activeElement);
+  sheet.querySelector('.component-sheet__body').scrollTop=0;
+  sheet.querySelector('.component-sheet__close').focus();
+}
+function printInvoicePreview(){
+  const body=$('invoicePreviewBody');
+  if(!body)return;
+  const frame=document.createElement('iframe');
+  frame.className='invoice-preview__print-frame';
+  frame.setAttribute('aria-hidden','true');
+  frame.addEventListener('load',()=>{
+    const target=frame.contentWindow;
+    if(!target){frame.remove();openInfoDialog('Print Unavailable','Could not open the print preview.');return;}
+    target.addEventListener('afterprint',()=>window.setTimeout(()=>{
+      frame.remove();
+      const sheet=$('invoicePreviewSheet');
+      if(sheet && !sheet.hidden)sheet.querySelector('.component-sheet__close').focus();
+    },0),{once:true});
+    try{target.focus();target.print();}
+    catch(error){frame.remove();openInfoDialog('Print Unavailable','Could not open the system print dialog.');}
+  },{once:true});
+  frame.srcdoc=`<!doctype html><html><head><title>Invoice Preview — Not Issued</title><style>body{font:14px Arial,sans-serif;color:#222;margin:30px}.invoice-preview__notice{border:2px solid #900;padding:10px;font-weight:bold}dl div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:6px 0}dd{margin:0;text-align:right}p{margin:5px 0}</style></head><body>${body.innerHTML}</body></html>`;
+  document.body.appendChild(frame);
+}
 function ensureViewQuoteSheet(){
   if($('viewQuoteSheet'))return;
   const sheet=document.createElement('div');
@@ -15848,7 +15944,7 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteDepositReceivedRemove',removeDepositReceived]].forEach(([id,handler])=>{
+  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteDepositReceivedRemove',removeDepositReceived],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
@@ -16252,16 +16348,44 @@ function closeDepositReceivedForm(){
   const error=$('quoteDepositReceivedError');
   if(error)error.textContent='';
 }
+function closeBalanceReceivedForm(){
+  const form=$('quoteBalanceReceivedForm');
+  if(form)form.hidden=true;
+  const trigger=$('quoteRecordBalanceBtn');
+  if(trigger)trigger.setAttribute('aria-expanded','false');
+  const amount=$('quoteBalanceReceivedAmount');
+  const date=$('quoteBalanceReceivedDate');
+  if(amount)amount.value='';
+  if(date)date.value='';
+}
+function openBalanceReceivedForm(){
+  const math=depositMaths();
+  const amount=$('quoteBalanceReceivedAmount');
+  amount.max=String(math.balanceOwing);
+  amount.value=math.balanceOwing>0?math.balanceOwing.toFixed(2):'';
+  $('quoteBalanceReceivedDate').value=localDateInputValue();
+  $('quoteBalanceReceivedForm').hidden=false;
+  $('quoteRecordBalanceBtn').setAttribute('aria-expanded','true');
+}
 function updatePaymentBlock(){
   const status=$('quoteDepositReceivedStatus');
   const trigger=$('quoteRecordDepositBtn');
   if(!status || !trigger)return;
-  const buildKey=String(quote.buildNumber||'');
+  const buildKey=`${activeAccountKey()}:${String(quote.id||quote.buildNumber||'')}`;
   if(buildKey!==paymentFormBuildKey){
     paymentFormBuildKey=buildKey;
     closeDepositReceivedForm();
+    closeBalanceReceivedForm();
   }
   const math=depositMaths();
+  const balanceInput=$('quoteBalanceReceivedAmount');
+  if(balanceInput)balanceInput.max=String(math.balanceOwing);
+  const received=$('quotePaymentTotalReceived');
+  const balance=$('quotePaymentBalanceOwing');
+  const history=$('quotePaymentHistory');
+  if(received)received.textContent=currencyWithCode(math.amountReceived);
+  if(balance)balance.textContent=math.total>0&&math.balanceOwing===0?`PAID IN FULL (${currencyWithCode(0)})`:currencyWithCode(math.balanceOwing);
+  if(history)history.innerHTML=paymentHistoryMarkup();
   if(math.depositPayment){
     const partial=math.depositEnabled&&math.depositOutstanding;
     status.textContent=`Deposit received: ${currencyWithCode(math.depositReceivedAmount)} on ${formatDateDisplay(`${math.depositReceivedDate}T00:00:00`)}`

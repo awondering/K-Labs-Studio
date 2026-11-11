@@ -981,9 +981,16 @@
             <p id="quoteDepositValueError" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
             <label id="quoteBalanceRemainingField" hidden><span id="quoteBalanceRemainingLabel">Balance After Deposit</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
             <div id="quotePaymentBlock" class="quote-grid__full quote-payment">
+              <h3 class="quote-payment__heading">Payment Status</h3>
+              <div class="quote-payment__summary" aria-live="polite">
+                <div><span>Total Received</span><strong id="quotePaymentTotalReceived"></strong></div>
+                <div><span>Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
+              </div>
               <p id="quoteDepositReceivedStatus" class="quote-payment__status" aria-live="polite"></p>
+              <div id="quotePaymentHistory" class="quote-payment__history"></div>
               <div class="quote-payment__actions">
                 <button id="quoteRecordDepositBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteDepositReceivedForm">Record Deposit Received</button>
+                <button id="quoteRecordBalanceBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Balance Received</button>
               </div>
               <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
                 <label><span>Amount Received</span><input id="quoteDepositReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
@@ -993,6 +1000,14 @@
                   <button id="quoteDepositReceivedSave" class="primary-action" type="button">Save</button>
                   <button id="quoteDepositReceivedCancel" class="ghost-action" type="button">Cancel</button>
                   <button id="quoteDepositReceivedRemove" class="ghost-action" type="button" hidden>Remove</button>
+                </div>
+              </div>
+              <div id="quoteBalanceReceivedForm" class="quote-payment__form" hidden>
+                <p class="quote-payment__notice">Preview only: balance payment recording is not available. Nothing entered here will be saved.</p>
+                <label><span>Amount Received</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                <label><span>Date Received</span><input id="quoteBalanceReceivedDate" type="date" /></label>
+                <div class="quote-payment__actions">
+                  <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Close</button>
                 </div>
               </div>
             </div>
@@ -1019,6 +1034,7 @@
               <button id="toggleCurrentBuildStatusBtn" class="ghost-action workshop-build-actions-status-toggle" type="button">Mark Complete</button>
               <div class="workshop-build-actions-quote-row">
                 <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
+                <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
                 <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
               </div>
               <div class="workshop-build-actions-row">
