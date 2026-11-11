@@ -13,6 +13,14 @@ async function main() {
       const context = await browser.newContext({ viewport, serviceWorkers: 'block' });
       let writes = 0;
       try {
+        if (process.env.INVOICE_STANDALONE === '1') await context.addInitScript(() => {
+          Object.defineProperty(navigator, 'standalone', { value: true });
+          navigator.canShare = ({ files }) => files.length === 1 && files[0].type === 'application/pdf';
+          navigator.share = async ({ files }) => {
+            window.sharedPDF = { name: files[0].name, size: files[0].size,
+              header: new TextDecoder().decode((await files[0].arrayBuffer()).slice(0, 5)) };
+          };
+        });
         await context.route('**/*', route => {
           const request = route.request();
           const url = new URL(request.url());
@@ -30,7 +38,7 @@ async function main() {
         const page = await context.newPage();
         await page.goto('http://studio.test/', { waitUntil: 'load' });
         for (const file of ['config.js', 'storage.js', 'guide-layout.js', 'thread-wrap.js', 'guide-train.js',
-          'studio-visuals.js', 'navigation.js', 'ui.js']) await page.addScriptTag({ url: `/js/${file}` });
+          'studio-visuals.js', 'navigation.js', 'invoice-pdf.js', 'ui.js']) await page.addScriptTag({ url: `/js/${file}` });
         await page.evaluate(() => {
           window.KLABS_ACCOUNT_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
           quote = newQuoteTemplate();
@@ -65,6 +73,13 @@ async function main() {
         assert.ok(geometry.print[0] >= 0 && geometry.print[1] >= 0 &&
           geometry.print[2] <= viewport.width && geometry.print[3] <= viewport.height, JSON.stringify(geometry));
         assert.equal(await page.evaluate(() => !!quote.issuedInvoice), false);
+        if (process.env.INVOICE_STANDALONE === '1') {
+          await page.waitForFunction(() => !document.querySelector('[data-invoice-preview-action="print"]').disabled);
+          await sheet.locator('[data-invoice-preview-action="print"]').click();
+          await page.waitForFunction(() => window.sharedPDF);
+          assert.deepEqual(await page.evaluate(() => [window.sharedPDF.name, window.sharedPDF.header, window.sharedPDF.size > 0]),
+            ['Draft-Invoice.pdf', '%PDF-', true]);
+        }
         assert.equal(writes, 0);
       } finally { await context.close(); }
     }

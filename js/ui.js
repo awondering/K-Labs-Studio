@@ -14459,6 +14459,9 @@ function refreshInvoicePreview(){
   sheet.invoicePreviewPage=0;
   sheet.invoicePreviewActual=false;
   updateInvoicePreview();
+  if(window.KLABS_INVOICE_PDF?.isStandaloneIOS()){
+    window.KLABS_INVOICE_PDF.prepare(source,sheet.querySelector('[data-invoice-preview-action="print"]'));
+  }
 }
 function updateInvoicePreview(){
   const sheet=$('invoicePreviewSheet');
@@ -14583,6 +14586,18 @@ function printInvoicePreview(){
     ? issued!=='true' || !!draft || documentNode.getAttribute('data-invoice-number')!==quote.issuedInvoice.number
     : issued!=='false' || !draft || !!documentNode.getAttribute('data-invoice-number'))){
     openInfoDialog('Print Unavailable','The invoice preview is out of date. Close it and open it again.');
+    return;
+  }
+  if(window.KLABS_INVOICE_PDF?.isStandaloneIOS()){
+    try{
+      window.KLABS_INVOICE_PDF.share(documentNode).catch((error)=>{
+        console.error('[K-Labs Studio] PDF sharing failed:',error);
+        openInfoDialog('PDF Unavailable','Could not share or save the PDF. Please try again.');
+      });
+    }catch(error){
+      console.error('[K-Labs Studio] PDF preparation failed:',error);
+      openInfoDialog('PDF Unavailable',error.message||'Could not create the PDF. Please try again.');
+    }
     return;
   }
   const frame=document.createElement('iframe');

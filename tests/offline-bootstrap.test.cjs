@@ -24,7 +24,8 @@ test('service worker precaches all authentication and private bootstrap scripts'
   const context={URL,self:{registration:{scope:'https://example.test/'},addEventListener:(name,fn)=>{handlers[name]=fn;}}};
   vm.runInNewContext(worker+';globalThis.assets=APP_SHELL_ASSETS;',context);
   const scripts=[...entry.matchAll(/"((?:js\/)[^"]+\.js)"/g)].map(match=>match[1]);
-  const required=[library,'js/public-entry.js','js/supabase-config.js','js/supabase-client.js',...scripts];
+  const required=[library,'js/public-entry.js','js/supabase-config.js','js/supabase-client.js',
+    'js/vendor/pdfmake/pdfmake-0.2.20.min.js','js/vendor/pdfmake/vfs_fonts.js',...scripts];
   for(const asset of required){
     assert.ok(context.assets.includes(asset),`${asset} is not precached`);
     assert.ok(fs.existsSync(path.join(root,asset)),`${asset} does not exist`);

@@ -1,5 +1,5 @@
 // TEMPORARY DIAGNOSTIC surface: this cache id is also shown in Settings → Account → Sync diagnostics.
-const APP_SHELL_VERSION='build148-v218';
+const APP_SHELL_VERSION='build148-v219';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
 const LEGACY_CACHE_PREFIX='klabs-studio-build';
@@ -20,6 +20,8 @@ const APP_SHELL_ASSETS=[
 	'js/build-tab-lock.js',
 	'js/public-entry.js',
 	'js/vendor/supabase-2.119.0.js',
+	'js/vendor/pdfmake/pdfmake-0.2.20.min.js',
+	'js/vendor/pdfmake/vfs_fonts.js',
 	'js/supabase-config.js',
 	'js/supabase-client.js',
 	'js/config.js',
@@ -29,6 +31,7 @@ const APP_SHELL_ASSETS=[
 	'js/guide-train.js',
 	'js/studio-visuals.js',
 	'js/navigation.js',
+	'js/invoice-pdf.js',
 	'js/ui.js',
 	'js/component-sync.js',
 	'js/build-sync-journal.js',
