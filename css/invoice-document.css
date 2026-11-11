@@ -46,6 +46,7 @@
 .invoice-document__metadata dd { text-align: right; font-variant-numeric: tabular-nums; }
 .invoice-document__description { margin-top: 12mm; padding: 15px 0 17px; border-top: 1px solid #d6d3d0; border-bottom: 1px solid #d6d3d0; }
 .invoice-document__description p { margin-top: 8px; font-size: 12pt; font-weight: 550; }
+.invoice-document__description .invoice-document__detail { margin-top: 4px; color: #635e5b; font-size: 9.5pt; font-weight: 400; }
 .invoice-document__financial { margin-top: 9mm; }
 .invoice-document__amounts { width: 58%; margin: 8px 0 0 auto !important; }
 .invoice-document__amount-row { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; }

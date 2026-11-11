@@ -36,6 +36,10 @@ function harness(){
     roundMoney:value=>Math.round(value*100)/100,
     specificationValue:value=>String(value||'').trim(),
     customerSafeText:value=>value,
+    normalizeNameKey:value=>String(value||'').trim().toLowerCase(),
+    isBlankCategory:value=>String(value||'').toLowerCase()==='blank',
+    pendingComponentDraftRows:new Set(),customerComponentExcludedFromCopy:()=>false,
+    componentRowLibraryCategoryName:item=>item.category,savedComponentDisplayLabel:item=>item.description||item.category,
     customerAddressLines:()=>['A & B Street'],
     customerQuoteBusinessLines:()=>['GST Number: 123'],
     customerDocumentLabels:()=>({defaultRodName:'Custom Rod Build'}),
@@ -49,7 +53,7 @@ function harness(){
     },
   });
   vm.runInContext("let paymentFormBuildKey='';",context);
-  for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','buildInvoiceSnapshot','invoiceDocumentMarkup','customerInvoicePreviewMarkup','closeDepositReceivedForm',
+  for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','customerInvoicePreviewMarkup','closeDepositReceivedForm',
     'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }

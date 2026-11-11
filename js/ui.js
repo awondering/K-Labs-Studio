@@ -14306,11 +14306,75 @@ function invoiceNumberForBuild(account,id){
   const bytes=new TextEncoder().encode(String(id));
   return `INV-${String(account).replace(/-/g,'')}-${Array.from(bytes,(byte)=>byte.toString(16).padStart(2,'0')).join('')}`;
 }
+function invoiceRodDescription(){
+  const clean=(value)=>{
+    const text=customerSafeText(value);
+    return /(?:[$€£]|\b(?:nzd|usd|aud|eur|cost|price|profit|margin|markup|labou?r|supplier)\b)/i.test(text)?'':text;
+  };
+  const components=Array.isArray(quote.components)?quote.components:[];
+  const blank=components.find((item)=>isBlankCategory(item&&item.category))||{};
+  const title=clean(quote.buildName);
+  const maker=clean(blank.blankMaker||blank.brand||quote.blankMaker);
+  const model=clean(blank.blankName||blank.variant||quote.blankName||blank.description||blank.blankSeries||quote.blankSeries);
+  const blankIdentity=maker&&model&&normalizeNameKey(model).startsWith(normalizeNameKey(maker))?model:[maker,model].filter(Boolean).join(' ');
+  const specs=quote.buildSpecifications||{};
+  const length=Number(specs.layout?.rodLengthMm);
+  const measures=[];
+  if(Number.isFinite(length)&&length>0)measures.push(`Finished length ${length} mm`);
+  const source=[blank.specifications,blank.blankNotes,quote.blankNotes].filter(Boolean).join(' • ');
+  const rating=(labels,units,allowPe=false)=>{
+    const number='\\d+(?:\\.\\d+)?(?:\\s*[-–]\\s*\\d+(?:\\.\\d+)?)?';
+    const value=allowPe?`(?:PE\\s*${number}|${number}\\s*(?:${units}))`:`${number}\\s*(?:${units})`;
+    const boundaries='[\\n\\r;•|]';
+    const prefix=new RegExp(`(?:^|${boundaries})\\s*(?:${labels})(?:\\s*[:=]\\s*|\\s+)(${value})(?=\\s*(?:$|${boundaries}))`,'i');
+    const suffix=new RegExp(`(?:^|${boundaries})\\s*(${value})\\s+(?:${labels})(?=\\s*(?:$|${boundaries}))`,'i');
+    const match=source.match(prefix)||source.match(suffix);
+    return match?match[1].trim().replace(/\s+/g,' '):'';
+  };
+  const line=rating('line(?:\\s+(?:rating|weight|class))?','lbs?|kg',true);
+  const lure=rating('(?:lure|cast(?:ing)?)(?:\\s+(?:rating|weight))?','g|grams?|oz');
+  if(line)measures.push(`Line ${line}`);
+  if(lure)measures.push(`Lure ${lure}`);
+  const fitted=[];
+  for(const [name,pattern] of [['Guides',/\bguide/],['Reel seat',/\breel\s*seat/],['Grip',/\bgrip/]]){
+    const item=components.find((row)=>row&&!pendingComponentDraftRows.has(row)&&!customerComponentExcludedFromCopy(row)&&
+      pattern.test(normalizeNameKey(componentRowLibraryCategoryName(row))));
+    if(item){
+      const parts=[];
+      for(const value of [item.brand,item.variant,item.description]){
+        const part=clean(value);
+        const key=normalizeNameKey(part);
+        if(!key||parts.some((existing)=>normalizeNameKey(existing).includes(key)))continue;
+        for(let i=parts.length-1;i>=0;i-=1)if(key.includes(normalizeNameKey(parts[i])))parts.splice(i,1);
+        parts.push(part);
+      }
+      const category=clean(item.category);
+      const generic=/^(guides?|guide set|reel seats?|grips?)$/i.test(category);
+      const label=clean(item.customerLabel)||parts.join(' ')||
+        (!item.customerLabel&&!item.brand&&!item.variant&&!item.description&&!generic?category:'');
+      if(label)fitted.push(`${name}: ${label}`);
+    }
+  }
+  const grip=clean(specs.gripConfiguration||specs.gripSetup||specs.gripStyle||specs.handleConfiguration);
+  if(grip)fitted.push(`Grip: ${grip}`);
+  else {
+    const gripParts=[['Rear',specs.rearGripLength],['Lower',specs.gripBelowReelSeatLength],['Fore',specs.foreGripLength]]
+      .filter(([,value])=>/^\s*[1-9]\d*(?:\.\d+)?\s*(?:mm|cm|in|inch(?:es)?|")\s*$/i.test(String(value||'')))
+      .map(([label,value])=>`${label} ${String(value).trim()}`);
+    if(gripParts.length)fitted.push(`Grip: ${gripParts.join(', ')}`);
+  }
+  return {
+    title:title||blankIdentity,
+    details:[title&&blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
+      measures.join(' · '),fitted.join(' · ')].filter(Boolean),
+  };
+}
 function buildInvoiceSnapshot(preview=false){
   const math=depositMaths();
   const taxEnabled=quoteTaxAvailable() && quote.includeGst!==false;
   const registration=specificationValue(businessProfile.gstNumber);
   const businessLines=customerQuoteBusinessLines().filter((line)=>!registration || line!==`${activeTaxRegistrationLabel()}: ${registration}`);
+  const description=invoiceRodDescription();
   return {
     number:preview?'':invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
     issuedDate:preview?'':localDateInputValue(),
@@ -14318,7 +14382,8 @@ function buildInvoiceSnapshot(preview=false){
     businessLines,
     customerLines:[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()].map(specificationValue).filter(Boolean),
     buildId:preview?specificationValue(quote.id):String(quote.id),buildReference:specificationValue(quote.buildNumber),
-    rod:customerSafeText(specificationValue(quote.buildName))||customerDocumentLabels().defaultRodName,
+    rod:description.title,
+    rodDetails:description.details,
     currency:activeCurrencyCode(),total:roundMoney(math.total),
     tax:taxEnabled?{name:activeTaxName(),rate:math.taxRate,amount:roundMoney(math.gst),
       registration:registration?`${activeTaxRegistrationLabel()}: ${registration}`:''}:null,
@@ -14348,7 +14413,7 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
         ${reference?`<div><dt>Build reference</dt><dd>${escapeHtml(reference)}</dd></div>`:''}
       </dl>
     </section>
-    <section class="invoice-document__description"><h4 class="invoice-document__label">Description</h4><p>${escapeHtml(invoice.rod)}</p></section>
+    ${invoice.rod||(Array.isArray(invoice.rodDetails)&&invoice.rodDetails.length)?`<section class="invoice-document__description"><h4 class="invoice-document__label">Description</h4>${invoice.rod?`<p>${escapeHtml(invoice.rod)}</p>`:''}${(Array.isArray(invoice.rodDetails)?invoice.rodDetails:[]).map((detail)=>`<p class="invoice-document__detail">${escapeHtml(detail)}</p>`).join('')}</section>`:''}
     <section class="invoice-document__financial">
       <h4 class="invoice-document__label">Summary</h4>
       <dl class="invoice-document__amounts">${tax}${line(invoice.tax?`Total including ${invoice.tax.name}`:'Total',invoice.total,'invoice-document__total')}

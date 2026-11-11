@@ -23,13 +23,17 @@ function harness(tax = true) {
     quoteTaxAvailable: () => tax, activeTaxName: () => 'GST', activeTaxRegistrationLabel: () => 'GST Number',
     customerQuoteBusinessLines: () => ['Business address', 'GST Number: REG-1'],
     customerAddressLines: () => ['Address'], customerDocumentLabels: () => ({ defaultRodName: 'Rod' }),
-    customerSafeText: value => value, specificationValue: value => String(value ?? '').trim(),
+    customerSafeText: value => String(value ?? '').trim(), specificationValue: value => String(value ?? '').trim(),
+    normalizeNameKey: value => String(value || '').toLowerCase().trim(),
+    isBlankCategory: category => String(category || '').toLowerCase() === 'blank',
+    pendingComponentDraftRows: new Set(), customerComponentExcludedFromCopy: () => false,
+    componentRowLibraryCategoryName: item => item.category, savedComponentDisplayLabel: item => item.description || item.category,
     localDateInputValue: () => '2026-11-11', activeCurrencyCode: () => 'NZD',
     roundMoney: value => Math.round(value * 100) / 100, numberOrZero: value => Number(value) || 0,
     escapeHtml: value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
   });
-  for (const name of ['invoiceNumberForBuild', 'buildInvoiceSnapshot', 'invoiceDocumentMarkup']) {
+  for (const name of ['invoiceNumberForBuild', 'invoiceRodDescription', 'buildInvoiceSnapshot', 'invoiceDocumentMarkup']) {
     vm.runInContext(extract(name), context);
   }
   return { context, quote };
@@ -100,4 +104,92 @@ test('customer details, tax labels, descriptions and payment data are escaped', 
   assert.match(html, /&lt;GST&gt;/);
   assert.match(html, /&lt;date&gt;/);
   assert.doesNotMatch(html, /<script>|<img src=x>/);
+});
+test('complete saved rod specifications become a concise customer-safe description', () => {
+  const { context, quote } = harness();
+  Object.assign(quote, {
+    buildName: 'Harbour 702',
+    blankMaker: 'Northstar', blankName: 'NS702', blankNotes: 'Line rating: 10–20 lb; Lure weight: 10–30 g; cost: $100',
+    buildSpecifications: { layout: { rodLengthMm: 2134 }, rearGripLength: '280 mm', foreGripLength: '70 mm' },
+    components: [
+      { category: 'Blank', blankMaker: 'Northstar', blankName: 'NS702' },
+      { category: 'Guides', description: 'Fuji K series', cost: 450, unitPrice: 800 },
+      { category: 'Reel Seat', description: 'Fuji DPS', cost: 23 },
+      { category: 'Labour', description: 'Private labour 200' },
+    ],
+  });
+  const before = JSON.stringify(quote);
+  const draft = context.buildInvoiceSnapshot(true);
+  const issued = context.buildInvoiceSnapshot();
+  assert.equal(issued.rod, 'Harbour 702');
+  assert.deepEqual(Array.from(issued.rodDetails), [
+    'Blank: Northstar NS702', 'Finished length 2134 mm · Line 10–20 lb · Lure 10–30 g',
+    'Guides: Fuji K series · Reel seat: Fuji DPS · Grip: Rear 280 mm, Fore 70 mm',
+  ]);
+  assert.deepEqual(Array.from(draft.rodDetails), Array.from(issued.rodDetails));
+  assert.equal(JSON.stringify(quote), before);
+  const html = context.invoiceDocumentMarkup(issued, issued.payments, false);
+  assert.doesNotMatch(html, /\$100|450|800|Private labour|profit|margin/i);
+});
+test('partial and missing specifications omit guesses, empty labels and private notes', () => {
+  const { context, quote } = harness();
+  quote.buildName = '';
+  quote.blankMaker = 'Northstar';
+  quote.blankName = 'NS702';
+  quote.blankNotes = 'Line: PE 1–3; Lure: unspecified; internal cost: $150';
+  quote.components = [{ category: 'Guides', description: 'margin $50' }];
+  const partial = context.buildInvoiceSnapshot(true);
+  assert.equal(partial.rod, 'Northstar NS702');
+  assert.deepEqual(Array.from(partial.rodDetails), ['Line PE 1–3']);
+  const html = context.invoiceDocumentMarkup(partial, partial.payments, false, true);
+  assert.doesNotMatch(html, /Lure|Guides:|internal|150|margin/);
+  quote.blankNotes = 'Line class PE3-6; 10–30 g lure rating';
+  assert.deepEqual(Array.from(context.buildInvoiceSnapshot(true).rodDetails),
+    ['Line PE3-6 · Lure 10–30 g']);
+  quote.blankMaker = '';
+  quote.blankName = '';
+  quote.blankNotes = '';
+  quote.components = [];
+  const empty = context.buildInvoiceSnapshot(true);
+  assert.equal(empty.rod, '');
+  assert.deepEqual(Array.from(empty.rodDetails), []);
+  assert.doesNotMatch(context.invoiceDocumentMarkup(empty, [], false, true), /Description|Custom Rod Build|undefined/);
+});
+test('fitted descriptions use saved component data, not a changed library label or internal amounts', () => {
+  const { context, quote } = harness();
+  context.savedComponentDisplayLabel = () => 'Changed library model';
+  quote.components = [
+    { category: 'Guides', brand: 'Fuji', variant: 'K series', description: 'Fuji K series' },
+    { category: 'Reel Seat', description: 'NZD 50' },
+    { category: 'Grip', description: 'Cork rear grip' },
+  ];
+  const snapshot = context.buildInvoiceSnapshot(true);
+  assert.deepEqual(Array.from(snapshot.rodDetails), ['Guides: Fuji K series · Grip: Cork rear grip']);
+  const html = context.invoiceDocumentMarkup(snapshot, snapshot.payments, false, true);
+  assert.doesNotMatch(html, /Changed library model|NZD 50/);
+});
+test('issued descriptions are frozen for invoices and statements; legacy invoices are unchanged', () => {
+  const { context, quote } = harness();
+  quote.buildName = 'Original rod';
+  quote.blankMaker = 'Northstar';
+  quote.blankName = 'NS702';
+  quote.buildSpecifications = { layout: { rodLengthMm: 2134 } };
+  const snapshot = context.buildInvoiceSnapshot();
+  const original = JSON.stringify(snapshot);
+  quote.buildName = 'Changed rod';
+  quote.blankName = 'Different blank';
+  quote.buildSpecifications.layout.rodLengthMm = 2500;
+  for (const statement of [false, true]) {
+    const html = context.invoiceDocumentMarkup(snapshot, snapshot.payments, statement);
+    assert.match(html, /Original rod/);
+    assert.match(html, /Northstar NS702/);
+    assert.match(html, /2134 mm/);
+    assert.doesNotMatch(html, /Changed rod|Different blank|2500 mm/);
+  }
+  assert.equal(JSON.stringify(snapshot), original);
+  const legacy = { ...snapshot, rod: 'Original legacy description' };
+  delete legacy.rodDetails;
+  const html = context.invoiceDocumentMarkup(legacy, legacy.payments, true);
+  assert.match(html, /Original legacy description/);
+  assert.doesNotMatch(html, /Northstar|2134 mm|Changed rod/);
 });

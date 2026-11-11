@@ -17,7 +17,10 @@ const context = { roundMoney: n => Math.round(n * 100) / 100, numberOrZero: n =>
 vm.runInNewContext(source.slice(start, end), context);
 const invoice = { number: 'INV-synthetic-only', issuedDate: '2026-11-11', businessName: 'K-Labs',
   businessLines: ['Synthetic address', 'hello@example.test'], customerLines: ['Synthetic customer', 'Example Street'],
-  buildReference: 'TEST-001', rod: 'Custom graphite rod', currency: 'NZD', total: 115,
+  buildReference: 'TEST-001', rod: 'Custom graphite rod',
+  rodDetails: ['Blank: Northstar NS702', 'Finished length 2134 mm · Line 10–20 lb · Lure 10–30 g',
+    'Guides: Fuji K series · Reel seat: Fuji DPS · Grip: Rear 280 mm'],
+  currency: 'NZD', total: 115,
   tax: { name: 'GST', rate: 15, amount: 15, registration: 'GST Number: SYNTHETIC' },
   payments: [{ type: 'deposit', amount: 25, date: '2026-11-10' }] };
 const css = fs.readFileSync(path.join(root, 'css/invoice-document.css'));
@@ -45,6 +48,7 @@ async function main() {
     await show(invoice, invoice.payments, false);
     let text = await page.locator('article').innerText();
     for (const value of ['Invoice', '100.00 NZD', '15.00 NZD', '115.00 NZD', '25.00 NZD', '90.00 NZD', 'GST Number: SYNTHETIC']) assert.ok(text.includes(value), value);
+    for (const value of invoice.rodDetails) assert.ok(text.includes(value), value);
     assert.doesNotMatch(text, /draft — not issued|profit|margin|labour|purchase cost/i);
     await page.evaluate(number => {
       const body = document.createElement('div');
@@ -91,6 +95,7 @@ async function main() {
     await show(draft, draft.payments, false, true);
     text = await page.locator('article').innerText();
     assert.match(text, /DRAFT — NOT ISSUED/);
+    for (const value of invoice.rodDetails) assert.ok(text.includes(value), value);
     assert.doesNotMatch(text, /Invoice number|Issue date|INV-/);
     await page.evaluate(() => {
       const body = document.createElement('div');
@@ -134,6 +139,7 @@ async function main() {
     await show(long, payments, true);
     text = await page.locator('article').innerText();
     assert.match(text, /Payment Statement/);
+    for (const value of invoice.rodDetails) assert.ok(text.includes(value), value);
     assert.match(text, /40\.00 NZD/);
     assert.doesNotMatch(text, /GST|SYNTHETIC.*Number/);
     const dimensions = await page.evaluate(() => ({

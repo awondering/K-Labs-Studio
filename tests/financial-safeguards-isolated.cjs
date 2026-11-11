@@ -63,7 +63,9 @@ async function main() {
     row = (await db.query('select payload,updated_at::text from builds where client_id=$1', ['build-1'])).rows[0];
     assert.equal(row.payload.payments[0].amount, 50);
     assert.equal(row.payload.payments[1].amount, 40);
-    const invoice = { number: `INV-${account.replaceAll('-', '')}-6275696c642d31`, issuedDate: '2026-11-11', total: 200, payments: row.payload.payments };
+    const invoice = { number: `INV-${account.replaceAll('-', '')}-6275696c642d31`, issuedDate: '2026-11-11', total: 200,
+      rod: 'Synthetic rod', rodDetails: ['Blank: Northstar NS702', 'Finished length 2134 mm'],
+      payments: row.payload.payments };
     await call(row.updated_at, 4, 'issue_invoice', { invoice });
     row = (await db.query('select payload,updated_at::text from builds where client_id=$1', ['build-1'])).rows[0];
     await assert.rejects(db.query('update builds set payload=$1 where client_id=$2', [
