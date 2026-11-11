@@ -14463,6 +14463,11 @@ function refreshInvoicePreview(){
 function updateInvoicePreview(){
   const sheet=$('invoicePreviewSheet');
   if(!sheet||sheet.hidden)return;
+  const vv=window.visualViewport;
+  sheet.style.setProperty('--component-sheet-vv-left',`${vv?vv.offsetLeft:0}px`);
+  sheet.style.setProperty('--component-sheet-vv-top',`${vv?vv.offsetTop:0}px`);
+  sheet.style.setProperty('--component-sheet-vv-width',`${vv?vv.width:window.innerWidth}px`);
+  sheet.style.setProperty('--component-sheet-vv-height',`${vv?vv.height:window.innerHeight}px`);
   const viewport=sheet.querySelector('.invoice-preview__viewport');
   const page=sheet.querySelector('.invoice-preview__page');
   const columns=sheet.querySelector('.invoice-preview__columns');
@@ -14521,7 +14526,11 @@ function openInvoicePreview(){
       unlockModalLayer({restoreFocus:true});
     });
     window.addEventListener('resize',updateInvoicePreview);
-    if(window.visualViewport)window.visualViewport.addEventListener('resize',updateInvoicePreview);
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',updateInvoicePreview);
+      window.visualViewport.addEventListener('scroll',updateInvoicePreview);
+    }
+    if(window.ResizeObserver)new ResizeObserver(updateInvoicePreview).observe(sheet.querySelector('.invoice-preview__viewport'));
   }
   $('invoicePreviewBody').innerHTML=quote.issuedInvoice
     ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
@@ -14569,9 +14578,10 @@ function printInvoicePreview(){
   if(!body)return;
   const documentNode=body.querySelector('.invoice-document');
   const issued=documentNode?.getAttribute('data-invoice-issued');
+  const draft=documentNode?.querySelector('.invoice-document__draft');
   if(!documentNode || (quote.issuedInvoice
-    ? issued!=='true' || documentNode.getAttribute('data-invoice-number')!==quote.issuedInvoice.number
-    : issued!=='false' || !documentNode.querySelector('.invoice-document__draft'))){
+    ? issued!=='true' || !!draft || documentNode.getAttribute('data-invoice-number')!==quote.issuedInvoice.number
+    : issued!=='false' || !draft || !!documentNode.getAttribute('data-invoice-number'))){
     openInfoDialog('Print Unavailable','The invoice preview is out of date. Close it and open it again.');
     return;
   }

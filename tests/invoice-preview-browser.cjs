@@ -14,7 +14,7 @@ function extract(name) {
 }
 const functions = ['invoiceDocumentMarkup', 'refreshInvoicePreview', 'updateInvoicePreview', 'openInvoicePreview',
   'openPaymentStatement', 'printInvoicePreview'].map(extract).join('\n');
-const invoice = { number: 'INV-synthetic', issuedDate: '2026-11-11', businessName: 'K-Labs',
+const invoice = { number: `INV-${'a'.repeat(32)}-${Buffer.from('12345678-1234-1234-1234-123456789012').toString('hex')}`, issuedDate: '2026-11-11', businessName: 'K-Labs',
   businessLines: ['Synthetic address'], customerLines: ['Synthetic customer'], buildReference: 'TEST-001',
   rod: 'Custom Fishing Rod', rodDetails: ['Blank: Northstar NS702'], currency: 'NZD', total: 115,
   tax: { name: 'GST', rate: 15, amount: 15, registration: 'GST Number: SYNTHETIC' },
@@ -24,7 +24,7 @@ async function main() {
   const engine = process.env.INVOICE_BROWSER || 'chromium';
   const browser = await playwright[engine].launch({ headless: true });
   try {
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
       const page = await browser.newPage({ viewport });
       await page.route('http://invoice.test/**', route => {
         const pathname = new URL(route.request().url()).pathname;
@@ -55,11 +55,18 @@ async function main() {
       const paper = sheet.locator('.invoice-preview__paper');
       const stage = sheet.locator('.invoice-preview__viewport');
       await assertFits(page, paper, stage);
+      assert.equal(await page.evaluate(() => window.devicePixelRatio > 0 && window.visualViewport.scale === 1), true);
       assert.equal(await sheet.locator('.invoice-preview__counter').innerText(), 'Page 1 of 1');
       for (const label of ['Total including GST', 'Total received', 'Balance owing', 'Payments received']) {
         assert.ok((await sheet.locator('.invoice-preview__columns').innerText()).toLowerCase().includes(label.toLowerCase()), label);
       }
       for (const action of ['close', 'print']) assert.equal(await sheet.locator(`[data-invoice-preview-action="${action}"]`).last().isVisible(), true);
+      for (const selector of ['[data-invoice-preview-action="print"]', '[data-invoice-preview-action="zoom"]',
+        '.invoice-preview__counter', '.component-sheet__close']) {
+        const bounds = await sheet.locator(selector).boundingBox();
+        assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 &&
+          bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height, selector);
+      }
       assert.equal(await sheet.locator('[data-invoice-preview-action="issue"]').isHidden(), true);
       const onPage = await page.evaluate(() => {
         const bounds = document.querySelector('.invoice-preview__paper').getBoundingClientRect();
@@ -70,11 +77,39 @@ async function main() {
         });
       });
       assert.equal(onPage, true, 'Totals, payments and footer must fit on the visible page');
+      assert.doesNotMatch(await sheet.locator('.invoice-preview__columns').innerText(), /DRAFT — NOT ISSUED/);
+      await page.evaluate(() => {
+        window.openInfoDialog = (title, message) => { window.printFailure = `${title}: ${message}`; };
+        const create = document.createElement.bind(document);
+        document.createElement = function(name, ...args) {
+          const element = create(name, ...args);
+          if (name === 'iframe') element.addEventListener('load', () => {
+            element.contentWindow.print = () => { window.printCalled = true; };
+          }, { once: true });
+          return element;
+        };
+      });
+      await sheet.locator('[data-invoice-preview-action="print"]').click();
+      await page.waitForFunction(() => window.printCalled || window.printFailure);
+      assert.equal(await page.evaluate(() => window.printFailure || ''), '');
+      const issuedPrint = await page.locator('iframe.invoice-preview__print-frame').evaluate(frame => frame.contentDocument.body.innerHTML);
+      assert.doesNotMatch(issuedPrint, /DRAFT — NOT ISSUED/);
+      assert.ok(issuedPrint.includes(invoice.number));
+      await page.locator('iframe.invoice-preview__print-frame').evaluate(frame => frame.remove());
+      await page.evaluate(() => { window.printCalled = false; });
       await sheet.locator('[data-invoice-preview-action="zoom"]').click();
       assert.equal(await sheet.locator('[data-invoice-preview-action="zoom"]').innerText(), 'Fit page');
       assert.ok((await paper.boundingBox()).width > viewport.width / 2);
       await sheet.locator('[data-invoice-preview-action="zoom"]').click();
       await assertFits(page, paper, stage);
+      await page.evaluate(() => {
+        quote.issuedInvoice.payments = [{ type: 'deposit', amount: 25, date: '2026-11-10' },
+          { type: 'balance', amount: 90, date: '2026-11-11' }];
+        document.querySelector('#invoicePreviewSheet').hidden = true;
+        openInvoicePreview();
+      });
+      assert.match(await sheet.locator('.invoice-preview__columns').innerText(), /Paid in full/i);
+      assert.doesNotMatch(await sheet.locator('.invoice-preview__columns').innerText(), /DRAFT — NOT ISSUED/);
       await page.evaluate(() => {
         quote.payments = Array.from({ length: 75 }, (_, i) =>
           ({ type: i === 0 ? 'deposit' : 'balance', amount: 1, date: '2026-11-10' }));
@@ -138,17 +173,6 @@ async function main() {
       assert.equal(await sheet.locator('[data-invoice-preview-action="issue"]').isVisible(), true);
       assert.equal(await sheet.locator('[data-invoice-preview-action="print"]').isVisible(), true);
       assert.ok((await sheet.locator('.invoice-preview__columns').innerText()).includes('DRAFT — NOT ISSUED'));
-      await page.evaluate(() => {
-        window.openInfoDialog = (title, message) => { window.printFailure = `${title}: ${message}`; };
-        const create = document.createElement.bind(document);
-        document.createElement = function(name, ...args) {
-          const element = create(name, ...args);
-          if (name === 'iframe') element.addEventListener('load', () => {
-            element.contentWindow.print = () => { window.printCalled = true; };
-          }, { once: true });
-          return element;
-        };
-      });
       await sheet.locator('[data-invoice-preview-action="print"]').click();
       await page.waitForFunction(() => window.printCalled || window.printFailure);
       assert.equal(await page.evaluate(() => window.printFailure || ''), '');

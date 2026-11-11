@@ -171,6 +171,19 @@ test('a build named for its customer uses the generic rod title and saved specif
   quote.blankName = 'Leonard Wong';
   assert.deepEqual(Array.from(context.buildInvoiceSnapshot(true).rodDetails), ['Finished length 2134 mm']);
 });
+test('recorded CTS blank identity is consistent in draft and issued descriptions', () => {
+  const { context, quote } = harness();
+  quote.buildName = 'Synthetic customer';
+  quote.customerName = 'Synthetic customer';
+  quote.blankMaker = 'CTS';
+  quote.blankName = 'CTS synthetic model';
+  quote.components = [{ category: 'Blank', description: 'CTS synthetic model' }];
+  const draft = context.buildInvoiceSnapshot(true);
+  const issued = context.buildInvoiceSnapshot();
+  assert.equal(draft.rod, 'Custom Fishing Rod');
+  assert.deepEqual(Array.from(draft.rodDetails), ['Blank: CTS synthetic model']);
+  assert.deepEqual(Array.from(issued.rodDetails), Array.from(draft.rodDetails));
+});
 test('fitted descriptions use saved component data, not a changed library label or internal amounts', () => {
   const { context, quote } = harness();
   context.savedComponentDisplayLabel = () => 'Changed library model';

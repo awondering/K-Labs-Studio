@@ -156,7 +156,7 @@ test('an issued customer document is printed using the shared stylesheet',()=>{
   frame.contentWindow={document:{querySelector(selector){return selector.startsWith('link')?{sheet:{}}:{complete:true,naturalWidth:128};}},
     addEventListener(name,fn){afterPrint=fn;},focus(){},print(){printed=true;}};
   const sheet={hidden:false,querySelector(){return {focus(){focusRestored=true;}};}};
-  context.$=id=>id==='invoicePreviewBody'?{querySelector(){return {outerHTML:markup,getAttribute(name){return name==='data-invoice-issued'?'true':quote.issuedInvoice.number;}};}}:id==='invoicePreviewSheet'?sheet:null;
+  context.$=id=>id==='invoicePreviewBody'?{querySelector(){return {outerHTML:markup,querySelector(){return null;},getAttribute(name){return name==='data-invoice-issued'?'true':quote.issuedInvoice.number;}};}}:id==='invoicePreviewSheet'?sheet:null;
   context.document={
     baseURI:'https://example.test/studio/',
     createElement:()=>frame,
@@ -181,7 +181,7 @@ test('printing a draft preserves the warning without issuing or writing an invoi
   let printed=false;
   frame.contentWindow={document:{querySelector(selector){return selector.startsWith('link')?{sheet:{}}:{complete:true,naturalWidth:128};}},
     addEventListener(){},focus(){},print(){printed=true;}};
-  context.$=()=>({querySelector:()=>({outerHTML:markup,getAttribute:()=>'false',querySelector:()=>({})})});
+  context.$=()=>({querySelector:()=>({outerHTML:markup,getAttribute:name=>name==='data-invoice-issued'?'false':'',querySelector:()=>({})})});
   context.document={baseURI:'https://example.test/',createElement:()=>frame,body:{appendChild(){frame.onLoad();}}};
   context.openInfoDialog=title=>{throw new Error(title);};
   vm.runInContext(extract('printInvoicePreview'),context);
@@ -195,7 +195,20 @@ test('a stale draft cannot be printed after invoice issuance',()=>{
   const {context,quote}=harness();
   quote.issuedInvoice=context.buildInvoiceSnapshot();
   let title='';
-  context.$=()=>({querySelector:()=>({getAttribute:()=>'false'})});
+  context.$=()=>({querySelector:()=>({getAttribute:()=>'false',querySelector:()=>({})})});
+  context.openInfoDialog=value=>{title=value;};
+  vm.runInContext(extract('printInvoicePreview'),context);
+  context.printInvoicePreview();
+  assert.equal(title,'Print Unavailable');
+});
+test('printing refuses an issued document that contains a draft warning',()=>{
+  const {context,quote}=harness();
+  quote.issuedInvoice=context.buildInvoiceSnapshot();
+  let title='';
+  context.$=()=>({querySelector:()=>({
+    getAttribute:name=>name==='data-invoice-issued'?'true':quote.issuedInvoice.number,
+    querySelector:()=>({}),
+  })});
   context.openInfoDialog=value=>{title=value;};
   vm.runInContext(extract('printInvoicePreview'),context);
   context.printInvoicePreview();
@@ -225,7 +238,7 @@ test('printing stops with an explicit error if the document stylesheet or logo f
     contentWindow:{document:{querySelector(){return null;}}}};
   let title='',printed=false;
   frame.contentWindow.print=()=>{printed=true;};
-  context.$=()=>({querySelector:()=>({outerHTML:'<article></article>',getAttribute:name=>name==='data-invoice-issued'?'true':quote.issuedInvoice.number})});
+  context.$=()=>({querySelector:()=>({outerHTML:'<article></article>',querySelector:()=>null,getAttribute:name=>name==='data-invoice-issued'?'true':quote.issuedInvoice.number})});
   context.document={baseURI:'https://example.test/',createElement:()=>frame,body:{appendChild(){frame.onLoad();}}};
   context.openInfoDialog=value=>{title=value;};
   vm.runInContext(extract('printInvoicePreview'),context);
