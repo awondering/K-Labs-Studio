@@ -249,6 +249,20 @@ test('Saved legacy freight and modern delivery entry modes survive normalization
   assert.equal(breakdown.deliveryTotal,13);
 });
 
+test('normalizing saved builds preserves invalid deposit requirements for explicit review',()=>{
+  const context=pricingHarness();
+  context.generateId=prefix=>prefix+'-test';
+  ['newQuoteTemplate','normalizeJobType','normalizeFulfilmentMethod','normalizePayments','normalizeQuote']
+    .forEach(name=>vm.runInContext(extractFunction(name),context));
+  for(const depositValue of [29518.75,-1,'invalid']){
+    const saved=context.normalizeQuote({depositType:'fixed',depositValue,
+      payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-11-10'}]});
+    assert.equal(saved.depositValue,depositValue);
+    assert.equal(saved.payments[0].amount,1180.75);
+    assert.equal(saved.payments[0].date,'2026-11-10');
+  }
+});
+
 function paymentHarness(overrides){
   const context=pricingHarness({pricingDriver:'profit',depositEnabled:true,depositType:'fixed',depositValue:50,...overrides});
   context.generateId=prefix=>`${prefix}-test`;

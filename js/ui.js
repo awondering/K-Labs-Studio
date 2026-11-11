@@ -128,6 +128,7 @@ const BUILD_SPEC_FIELDS=[
 let studioSettings=normalizeStudioSettings(Store.get(studioSettingsStorageKey(),{}));
 let businessProfile=normalizeBusinessProfile(Store.get(businessProfileStorageKey(),{}));
 let quote=normalizeQuote(Store.get(quoteCurrentStorageKey(),null)||newQuoteTemplate());
+let invalidDepositInput=null;
 let blanks=normalizeBlankLibrary(Store.get(BLANK_LIBRARY_STORAGE_KEY,defaultBlankLibrary()));
 let blankLibrarySearch=String(Store.get(BLANK_LIBRARY_SEARCH_KEY,'')||'');
 let buildsSearch='';
@@ -4656,7 +4657,8 @@ function normalizeQuote(inputQuote){
   merged.quoteNumber=specificationValue(inputQuote&&inputQuote.quoteNumber);
   merged.depositEnabled=!!(inputQuote&&inputQuote.depositEnabled);
   merged.depositType=normalizeDepositType(inputQuote&&inputQuote.depositType);
-  merged.depositValue=Math.max(0,numberOrZero(inputQuote&&inputQuote.depositValue));
+  merged.depositValue=inputQuote&&Object.prototype.hasOwnProperty.call(inputQuote,'depositValue')
+    ?inputQuote.depositValue:base.depositValue;
   merged.payments=normalizePayments(inputQuote&&inputQuote.payments);
   merged.estimatedCompletionDate=String(inputQuote&&inputQuote.estimatedCompletionDate||'').trim();
   const incomingGstRate=(inputQuote&&inputQuote.gstRate);
@@ -4736,8 +4738,9 @@ function updateQuoteActionPriority(){
       statusEl.classList.toggle('is-pending',workshopStatusFlashPending);
     }else{
       const isSaving=quoteAutosaveInFlight||hasUnsavedQuoteChanges;
-      statusEl.textContent=isSaving?'Saving...':'\u2713 Saved';
-      statusEl.classList.toggle('is-pending',isSaving);
+      const depositError=depositValidationMessage();
+      statusEl.textContent=depositError?'Not saved: correct the deposit requirement':isSaving?'Saving...':'\u2713 Saved';
+      statusEl.classList.toggle('is-pending',isSaving||!!depositError);
     }
   }
 }
@@ -4765,7 +4768,17 @@ async function ensureCurrentQuoteNumber(){
   }
 }
 async function persistCurrentQuoteRecord(){
+  if(depositValidationMessage()){
+    updateDepositFields();
+    flashWorkshopStatus('Correct the deposit requirement before saving',{pending:true,duration:3200});
+    return null;
+  }
   await ensureCurrentQuoteNumber();
+  if(depositValidationMessage()){
+    updateDepositFields();
+    flashWorkshopStatus('Correct the deposit requirement before saving',{pending:true,duration:3200});
+    return null;
+  }
   if(!quote.buildNumber){quote.buildNumber=nextBuildNumber();}
   saveQuoteCurrent();
   const savedRef=persistBuildRecord(quote);
@@ -9074,8 +9087,22 @@ function depositMaths(){
   const depositStillRequired=depositOutstanding?Math.max(0,Math.round((depositAmount-depositReceivedAmount)*100)/100):0;
   return{...math,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance,depositPayment,depositReceivedAmount,depositReceivedDate:depositPayment?String(depositPayment.date||''):'',amountReceived,balanceOwing,depositOutstanding,depositStillRequired};
 }
+function depositValueValidationMessage(value,type,total){
+  if((typeof value!=='number' && typeof value!=='string') || String(value).trim()==='' || !Number.isFinite(Number(value))){
+    return 'Enter a valid deposit requirement.';
+  }
+  const amount=Number(value);
+  const limit=type==='fixed'?Math.max(0,numberOrZero(total)):100;
+  if(amount<0 || amount>limit){
+    return type==='fixed'?'Deposit amount must be between zero and the customer price.':'Deposit percentage must be between 0 and 100.';
+  }
+  return '';
+}
+function depositValidationMessage(){
+  const value=invalidDepositInput&&invalidDepositInput.quote===quote?invalidDepositInput.value:quote.depositValue;
+  return depositValueValidationMessage(value,normalizeDepositType(quote.depositType),quoteMaths().total);
+}
 // Switching deposit type converts the stored value so the resulting deposit amount stays financially equivalent.
-// Percentages keep extra decimals (beyond the 1dp display) so repeated toggling does not drift.
 function convertedDepositValueForType(nextType){
   const type=normalizeDepositType(nextType);
   const currentType=normalizeDepositType(quote.depositType);
@@ -9084,7 +9111,48 @@ function convertedDepositValueForType(nextType){
   const total=Math.max(0,numberOrZero(quoteMaths().total));
   if(type==='fixed')return roundMoney(total*currentValue/100);
   if(total<=0)return 0;
-  return Math.round((currentValue/total)*100*1e6)/1e6;
+  return (currentValue/total)*100;
+}
+function bindDepositTypeAndValue(){
+  document.querySelectorAll('[data-deposit-type]').forEach((button)=>{
+    if(button.getAttribute('data-deposit-type-bound')==='true')return;
+    button.setAttribute('data-deposit-type-bound','true');
+    button.addEventListener('click',()=>{
+      const valueInput=$('quoteDepositValue');
+      if(valueInput && document.activeElement===valueInput)valueInput.blur();
+      if(depositValidationMessage()){
+        updateDepositFields();
+        flashWorkshopStatus('Correct the deposit requirement before switching type',{pending:true,duration:3200});
+        return;
+      }
+      const nextType=normalizeDepositType(button.getAttribute('data-deposit-type'));
+      if(nextType!==normalizeDepositType(quote.depositType)){
+        quote.depositValue=convertedDepositValueForType(nextType);
+        quote.depositType=nextType;
+        saveQuoteCurrent();
+        markQuoteDirty();
+      }
+      updateQuoteSummary();
+    });
+  });
+  const input=$('quoteDepositValue');
+  if(input && input.getAttribute('data-deposit-value-bound')!=='true'){
+    input.setAttribute('data-deposit-value-bound','true');
+    const onUpdate=()=>{
+      const value=input.validity.badInput?'':input.value;
+      const error=depositValueValidationMessage(value,normalizeDepositType(quote.depositType),quoteMaths().total);
+      invalidDepositInput=error?{quote,value}:null;
+      if(!error){
+        quote.depositValue=Number(value);
+        saveQuoteCurrent();
+        markQuoteDirty();
+      }
+      updateQuoteSummary();
+      updateQuoteActionPriority();
+    };
+    input.addEventListener('input',onUpdate);
+    input.addEventListener('change',onUpdate);
+  }
 }
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -13642,6 +13710,11 @@ async function ensureCurrentBuildReference(){
   return savedRef;
 }
 async function setCurrentBuildLifecycle(nextLifecycle,options){
+  if(depositValidationMessage()){
+    updateDepositFields();
+    flashWorkshopStatus('Correct the deposit requirement before changing build status',{pending:true,duration:3200});
+    return false;
+  }
   let target;
   try{
     target=await ensureCurrentBuildReference();
@@ -13682,7 +13755,7 @@ async function confirmCurrentBuildAsActive(){
     if(action!=='confirm')return;
     if(hasUnsavedQuoteChanges){
       try{
-        await persistCurrentQuoteRecord();
+        if(!await persistCurrentQuoteRecord())return;
       }catch(error){
         console.error('[K-Labs Studio] Could not allocate or save quote before confirmation:',error);
         flashWorkshopStatus('Connect to allocate a quote number and save',{pending:true,duration:3200});
@@ -15757,34 +15830,7 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('input',onDepositToggle);
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
-  document.querySelectorAll('[data-deposit-type]').forEach((button)=>{
-    if(button.getAttribute('data-deposit-type-bound')==='true')return;
-    button.setAttribute('data-deposit-type-bound','true');
-    button.addEventListener('click',()=>{
-      const nextType=normalizeDepositType(button.getAttribute('data-deposit-type'));
-      if(nextType!==normalizeDepositType(quote.depositType)){
-        quote.depositValue=convertedDepositValueForType(nextType);
-      }
-      quote.depositType=nextType;
-      saveQuoteCurrent();
-      markQuoteDirty();
-      const valueInput=$('quoteDepositValue');
-      if(valueInput && document.activeElement===valueInput)valueInput.blur();
-      updateQuoteSummary();
-    });
-  });
-  const depositValueInput=$('quoteDepositValue');
-  if(depositValueInput && depositValueInput.getAttribute('data-deposit-value-bound')!=='true'){
-    depositValueInput.setAttribute('data-deposit-value-bound','true');
-    const onDepositValueUpdate=()=>{
-      quote.depositValue=Math.max(0,numberOrZero(depositValueInput.value));
-      saveQuoteCurrent();
-      markQuoteDirty();
-      updateQuoteSummary();
-    };
-    depositValueInput.addEventListener('input',onDepositValueUpdate);
-    depositValueInput.addEventListener('change',onDepositValueUpdate);
-  }
+  bindDepositTypeAndValue();
   [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteDepositReceivedRemove',removeDepositReceived]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
@@ -16263,13 +16309,24 @@ function updateDepositFields(){
   if(typeField)typeField.hidden=!enabled;
   if(valueField)valueField.hidden=!enabled;
   if(balanceField)balanceField.hidden=!enabled;
+  const error=depositValidationMessage();
+  const errorEl=$('quoteDepositValueError');
+  if(errorEl)errorEl.textContent=error?`${error} Existing values are preserved; correct the deposit to save.`:'';
+  const valueInput=$('quoteDepositValue');
+  if(valueInput)valueInput.setAttribute('aria-invalid',error?'true':'false');
   if(!enabled)return;
   const math=depositMaths();
   syncWorkshopToggleButtons(document,'[data-deposit-type]','data-deposit-type',math.depositType);
   const valueLabel=$('quoteDepositValueLabel');
-  const valueInput=$('quoteDepositValue');
   if(valueLabel)valueLabel.textContent=math.depositType==='fixed'?`Deposit Amount (${activeCurrencyCode()})`:'Deposit %';
-  if(valueInput && document.activeElement!==valueInput)valueInput.value=numberOrZero(math.depositValue).toFixed(math.depositType==='fixed'?2:1);
+  if(valueInput){
+    valueInput.max=String(math.depositType==='fixed'?math.total:100);
+    if(document.activeElement!==valueInput){
+      const draft=invalidDepositInput&&invalidDepositInput.quote===quote?invalidDepositInput.value:null;
+      const raw=draft!==null?draft:quote.depositValue;
+      valueInput.value=error?String(raw??''):(math.depositType==='fixed'?Number(raw).toFixed(2):String(Number(Number(raw).toPrecision(15))));
+    }
+  }
   if(balanceField){
     const balanceInput=$('quoteBalanceRemaining');
     // Balance Owing reflects money actually received; before any payment the figure is only the balance after the required deposit.
