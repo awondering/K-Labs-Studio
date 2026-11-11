@@ -154,6 +154,18 @@
       <strong>READ-ONLY ACCESS</strong>
       <span>Your trial has ended. Your records remain available, but changes cannot be saved.</span>
     </div>
+    <div id="buildSyncNotice" class="readonly-access-notice build-sync-notice" role="status" hidden>
+      <strong>NOT SYNCED — REVIEW REQUIRED</strong>
+      <button id="buildSyncReviewButton" type="button" class="ghost-action">Review</button>
+    </div>
+    <dialog id="buildSyncReview" class="build-sync-review">
+      <h2>Review build synchronisation</h2>
+      <p>Both versions are preserved. Compare them before choosing which version to keep.</p>
+      <div id="buildSyncReviewList"></div>
+      <p id="buildSyncReviewMessage" role="status"></p>
+      <button id="buildSyncRetry" type="button" class="ghost-action">Retry connection</button>
+      <button id="buildSyncClose" type="button" class="ghost-action">Close</button>
+    </dialog>
 
     <section class="screen active" id="homeScreen">
       <div class="home-premium-shell">
@@ -1415,6 +1427,7 @@
       <button id="publicDiscoverClose" class="public-discover-dialog__close" type="button">CLOSE</button>
     </div>
   </dialog>
+  <script src="js/build-tab-lock.js"></script>
   <script src="js/public-entry.js"></script>
   <script src="js/vendor/supabase-2.119.0.js"></script>
  <script src="js/supabase-config.js"></script>

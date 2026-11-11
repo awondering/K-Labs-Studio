@@ -3,8 +3,8 @@
 -- Safe to re-run (idempotent): IF NOT EXISTS / DO-block existence checks / GRANT everywhere.
 -- Never drops/recreates public.builds and never deletes any existing row.
 --
--- Mirrors the exact shape used by js/build-sync.js recordToRow()/rowToRecord() and its
--- .from()/.select()/.upsert()/.delete()/.eq()/.in()/onConflict calls.
+-- Defines the existing build table and account policies. The guarded sync candidate also requires
+-- SUPABASE-BUILD-WRITE-GUARD-DRAFT.sql; that draft must not be applied independently.
 -- One row per Build record. `payload` holds the FULL existing build object as-is (same fields
 -- newQuoteTemplate()/normalizeQuote() already produce in js/ui.js) - kept as one jsonb column
 -- deliberately, instead of one SQL column per field, to keep this table simple and future-proof
@@ -32,7 +32,7 @@ do $$ begin
   end if;
 end $$;
 
--- Matches the exact onConflict:"user_id,client_id" used by the builds .upsert() call in js/build-sync.js.
+-- Enforces stable build IDs within each account.
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'builds_user_client_unique') then
     alter table public.builds

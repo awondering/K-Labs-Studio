@@ -28,6 +28,8 @@ function harness(){
       upsert(value){action='upsert';rows=value;return query;},
       delete(){action='delete';return query;},
       eq(key,value){assert.equal(key,'user_id');userId=value;return query;},
+      order(){return query;},
+      range(){return query;},
       in(key,value){assert.equal(key,'client_id');ids=value;return query;},
       then(resolve,reject){
         if(action==='upsert')userId=rows[0].user_id;
@@ -35,7 +37,7 @@ function harness(){
         calls.push(call);
         const delayed=intercept(call);
         const result=delayed||Promise.resolve({data:cloud[userId]||[],error:null});
-        return result.then(resolve,reject);
+        return result.then(value=>resolve({...value,count:value.data?.length}),reject);
       },
     };
     return query;
@@ -46,6 +48,32 @@ function harness(){
     saveBuildRecords:(records)=>{locals[account]=records;},
     KLABS_UI:{refreshBuildViews:()=>{refreshes+=1;}},
   };
+  const journals={};
+  window.KLABS_BUILD_SYNC_JOURNAL={
+    read(id){return JSON.parse(JSON.stringify(journals[id]||{version:1,baselines:{},pending:{},conflicts:{},archive:[]}));},
+    write(id,value){journals[id]=JSON.parse(JSON.stringify(value));},
+  };
+  window.KLABS_GUARDED_BUILD_TRANSPORT={
+    async save(_client,ctx,record,revision){
+      const row={user_id:ctx.userId,client_id:record.id,build_number:record.buildNumber||'',payload:record,updated_at:'2026-01-02T00:00:00Z'};
+      const call={action:'upsert',userId:ctx.userId,rows:[row],revision};
+      calls.push(call);
+      const result=await (intercept(call)||Promise.resolve({error:null}));
+      if(result.error)throw new Error(result.error.message);
+      if(!ctx.isCurrent())throw new Error('account changed');
+      cloud[ctx.userId]=[...cloud[ctx.userId].filter(item=>item.client_id!==record.id),row];
+      return row;
+    },
+    async remove(_client,ctx,id,revision){
+      const call={action:'delete',userId:ctx.userId,ids:[id],revision};
+      calls.push(call);
+      const result=await (intercept(call)||Promise.resolve({error:null}));
+      if(result.error)throw new Error(result.error.message);
+      if(!ctx.isCurrent())throw new Error('account changed');
+      cloud[ctx.userId]=cloud[ctx.userId].filter(item=>item.client_id!==id);
+    },
+  };
+  client.rpc=async(name)=>{assert.equal(name,'klabs_build_guard_version');return {data:1,error:null};};
   vm.runInNewContext(source,{window,console,setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}});
   return {
     calls,locals,cloud,window,
@@ -93,10 +121,13 @@ test('a delayed account A upsert cannot apply a stale merge to account B',async(
 
 test('a delayed deletion cannot send or requeue account A edits under account B',async()=>{
   const h=harness();
+  h.cloud.A=[{client_id:'old-a',payload:{id:'old-a'},updated_at:'2026-01-01'}];
   await h.switchTo('A');
   const pending=deferred();
   h.setInterceptor((call)=>call.action==='delete'?pending.promise:null);
-  h.window.KLABS_BUILD_SYNC.notifyBuildDeleted('old-a');
+  h.window.KLABS_BUILD_SYNC.notifyBuildDeleted({id:'old-a'});
+  h.locals.A=h.locals.A.filter(record=>record.id!=='old-a');
+  h.window.KLABS_BUILD_SYNC.confirmBuildDeleted('old-a');
   h.window.KLABS_BUILD_SYNC.notifyBuildSaved({id:'new-a'});
   h.fireTimers();
   await settle();
@@ -115,7 +146,7 @@ test('same-account startup still merges and uploads local records',async()=>{
   h.locals.A=[{id:'local',updatedAt:'2026-01-01'}];
   h.cloud.A=[{client_id:'cloud',payload:{id:'cloud'},updated_at:'2026-01-01'}];
   await h.switchTo('A');
-  assert.deepEqual(Array.from(h.locals.A,(record)=>record.id),['local','cloud']);
+  assert.deepEqual(Array.from(h.locals.A,(record)=>record.id).sort(),['cloud','local']);
   assert.deepEqual(h.calls.filter((call)=>call.action==='upsert').map((call)=>[call.userId,call.rows[0].client_id]),[['A','local']]);
   assert.equal(h.refreshCount(),1);
 });
@@ -129,4 +160,26 @@ test('a same-account auth refresh does not discard an outstanding save',async()=
   await settle();
   const writes=h.calls.filter((call)=>call.action==='upsert');
   assert.deepEqual(writes.map((call)=>[call.userId,call.rows[0].client_id]),[['A','new-a']]);
+});
+
+test('a failed upload reports not synced and retry never replaces a newer queued edit',async()=>{
+  const h=harness();
+  await h.switchTo('A');
+  const pending=deferred();
+  h.setInterceptor((call)=>call.action==='upsert'?pending.promise:null);
+  h.window.KLABS_BUILD_SYNC.notifyBuildSaved({id:'build',value:'old'});
+  h.fireTimers();
+  await settle();
+  h.window.KLABS_BUILD_SYNC.notifyBuildSaved({id:'build',value:'new'});
+  h.fireTimers();
+  pending.resolve({error:{message:'offline'}});
+  await settle();
+  assert.equal(h.window.KLABS_BUILD_SYNC.getStatus(),'error');
+  h.setInterceptor(()=>null);
+  h.fireTimers();
+  await settle();
+  const writes=h.calls.filter((call)=>call.action==='upsert');
+  assert.equal(writes.length,2);
+  assert.equal(writes[1].rows[0].payload.value,'new');
+  assert.equal(h.window.KLABS_BUILD_SYNC.getStatus(),'synced');
 });

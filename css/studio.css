@@ -10590,6 +10590,13 @@ body:not(.klabs-logged-out) .home-public-entry {
 }
 .readonly-access-notice strong { flex:none;color:#dfc4c0;font-size:10px;letter-spacing:.12em; }
 .readonly-access-notice[hidden] { display:none !important; }
+.build-sync-notice { justify-content:space-between; }
+.build-sync-review { width:min(920px,94vw);max-height:85vh;overflow:auto;background:#17191a;color:#ddd;border:1px solid #6b5152;border-radius:8px; }
+.build-sync-review::backdrop { background:rgba(0,0,0,.75); }
+.build-sync-review__versions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+.build-sync-review pre { max-height:35vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#101112;padding:10px;font-size:12px; }
+.build-sync-review button { margin:4px; }
+@media (max-width:620px) { .build-sync-review__versions { grid-template-columns:1fr; } }
 body.klabs-entry-choice #app,
 body.klabs-entry-choice .bottom-nav,
 body.klabs-entry-choice .carbon-field,

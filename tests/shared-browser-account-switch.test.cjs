@@ -23,6 +23,7 @@ function browser({online=true}={}){
   const state={online,upsertAttempts:[]};
   const Store={get:(k,f)=>storage[k]===undefined?f:JSON.parse(storage[k]),set(k,v){storage[k]=JSON.stringify(v);}};
   const window={KLABS_ACCOUNT_ID:''};
+  window.localStorage={getItem:k=>storage[k]===undefined?null:storage[k],setItem:(k,v)=>{storage[k]=v;}};
   const client={from(){
     let action,rows,userId;
     const q={
@@ -30,6 +31,8 @@ function browser({online=true}={}){
       upsert(v){action='upsert';rows=v;return q;},
       delete(){action='delete';return q;},
       eq(k,v){userId=v;return q;},
+      order(){return q;},
+      range(){return q;},
       in(){return q;},
       then(res,rej){
         if(action==='upsert')userId=rows[0].user_id;
@@ -37,7 +40,7 @@ function browser({online=true}={}){
         if(action==='upsert'){state.upsertAttempts.push({userId,ids:rows.map((r)=>r.client_id)});
           rows.forEach((r)=>{const list=cloud[userId];const i=list.findIndex((x)=>x.client_id===r.client_id);if(i>=0)list[i]=r;else list.push(r);});
           return Promise.resolve({data:rows,error:null}).then(res,rej);}
-        return Promise.resolve({data:cloud[userId]||[],error:null}).then(res,rej);
+        return Promise.resolve({data:cloud[userId]||[],count:(cloud[userId]||[]).length,error:null}).then(res,rej);
       },
     };
     return q;
@@ -49,6 +52,19 @@ function browser({online=true}={}){
     "\nwindow.savedBuildRecords=savedBuildRecords;window.saveBuildRecords=(r)=>{Store.set(buildsStorageKey(),Array.isArray(r)?r:[]);};",ctx);
   window.KLABS_SUPABASE_CLIENT=client;
   window.KLABS_UI={refreshBuildViews(){}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','js','build-sync-journal.js'),'utf8'),{window});
+  client.rpc=async()=>({data:1,error:null});
+  window.KLABS_GUARDED_BUILD_TRANSPORT={
+    async save(_client,ctx,record){
+      if(!state.online)throw new Error('offline');
+      const row={user_id:ctx.userId,client_id:record.id,build_number:record.buildNumber||'',payload:record,updated_at:'2026-11-02T00:00:00Z'};
+      state.upsertAttempts.push({userId:ctx.userId,ids:[record.id]});
+      const list=cloud[ctx.userId], index=list.findIndex(item=>item.client_id===record.id);
+      if(index<0)list.push(row);else list[index]=row;
+      return row;
+    },
+    async remove(){throw new Error('Unexpected delete');},
+  };
   vm.runInNewContext(syncSource,{window,console,setTimeout(){return 0;},clearTimeout(){}});
   const sync=window.KLABS_BUILD_SYNC;
   return {

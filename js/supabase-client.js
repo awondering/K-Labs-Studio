@@ -285,7 +285,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   klabsCheckLogin().catch((error) => {
     console.error("[K-Labs Studio] Could not restore the session:", error);
-    if (window.KLABS_PUBLIC_ENTRY && !window.KLABS_UI) {
+    if (error.name === "StudioTabLockError") {
+      document.getElementById("authMessage").textContent = error.message;
+    } else if (window.KLABS_PUBLIC_ENTRY && !window.KLABS_UI) {
       window.KLABS_PUBLIC_ENTRY.showHome();
       document.getElementById("authMessage").textContent = "Could not restore your session. Check your connection and try again.";
     } else if (window.KLABS_PUBLIC_ENTRY) {

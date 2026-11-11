@@ -36,11 +36,12 @@ test('demo path has no private app bootstrap or persistent-store access',()=>{
   const demoEnd=entry.indexOf('async function signOutFromEntry',demoStart);
   assert.ok(demoStart>=0&&demoEnd>demoStart);
   assert.doesNotMatch(entry.slice(demoStart,demoEnd),/loadPrivateApp|Store\.|localStorage|KLABS_UI/);
-  assert.match(entry,/if \(entitlement\.access_state === "trial_eligible"\) \{\s*showAccessChoice\(entitlement\);\s*return;/);
+  assert.match(entry,/if \(entitlement\.access_state === "trial_eligible"\) \{\s*window\.KLABS_BUILD_TAB_LOCK\?\.release\(\);\s*showAccessChoice\(entitlement\);\s*return;/);
 });
 
 test('expired sync paths pull without cloud writes and local Store writes are blocked',()=>{
-  assert.match(buildSync,/if \(canWrite\(\) && toUpsert\.length\) await upsertCloudBuilds/);
+  assert.match(buildSync,/if \(!canWrite\(\)\) \{ refreshStatus\(state\); return; \}/);
+  assert.match(buildSync,/if \(!current\(ctx\) \|\| !canWrite\(\)\) return;/);
   assert.match(componentSync,/if \(!canWrite\(\)\) \{\s*const localById/);
   assert.match(settingsSync,/if \(!canWrite\(\)\) \{\s*if \(cloudRow\) applyLocalPayload/);
   assert.match(storage,/window\.KLABS_CAN_WRITE==="function"\?window\.KLABS_CAN_WRITE\(\)/);

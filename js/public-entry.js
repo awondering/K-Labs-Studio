@@ -2,7 +2,7 @@
   const privateScripts = [
     "js/config.js", "js/storage.js", "js/guide-layout.js", "js/thread-wrap.js",
     "js/guide-train.js", "js/studio-visuals.js", "js/navigation.js", "js/ui.js",
-    "js/component-sync.js", "js/build-sync.js", "js/settings-sync.js",
+    "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-review.js", "js/settings-sync.js",
     "js/quote-number-allocator.js", "js/app.js"
   ];
   let loadPromise = null;
@@ -18,6 +18,7 @@
   }
 
   function entitlementCanWrite() {
+    if (currentSession?.user?.id && !window.KLABS_BUILD_TAB_LOCK?.owns(currentSession.user.id)) return false;
     const access = window.KLABS_ACCESS_STATE;
     if (!access) return true;
     if (access.can_write !== true) return false;
@@ -252,6 +253,7 @@
 
   async function applySession(session, applyAuthState) {
     if (!session?.user?.id) {
+      window.KLABS_BUILD_TAB_LOCK?.release();
       showHome();
       return;
     }
@@ -276,9 +278,11 @@
         throw new Error("The account access service returned an unsupported entitlement.");
       }
       if (entitlement.access_state === "trial_eligible") {
+        window.KLABS_BUILD_TAB_LOCK?.release();
         showAccessChoice(entitlement);
         return;
       }
+      await window.KLABS_BUILD_TAB_LOCK.acquire(session.user.id);
       window.KLABS_ACCESS_STATE = entitlement;
       scheduleEntitlementExpiry(entitlement);
       setVisible("accountAccessScreen", false);
@@ -288,11 +292,13 @@
       const { data: latestData, error: latestError } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
       if (latestError) throw latestError;
       if (latestData?.session?.user?.id !== session.user.id) {
+        window.KLABS_BUILD_TAB_LOCK.release();
         window.location.reload();
         return;
       }
       applyAuthState(latestData.session);
     } catch (error) {
+      window.KLABS_BUILD_TAB_LOCK?.release();
       if (window.KLABS_SUPABASE_CLIENT && window.navigator?.onLine !== false) {
         try {
           const { data: blocked, error: blockError } = await window.KLABS_SUPABASE_CLIENT.rpc("klabs_account_is_blocked");

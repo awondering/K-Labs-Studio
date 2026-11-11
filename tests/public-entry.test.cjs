@@ -53,6 +53,7 @@ function harness(){
   };
   let trialStarts=0;
   const window={scrollTo(){},dispatchEvent(){},addEventListener(){},setInterval(){return 1;},navigator:{onLine:true},
+    KLABS_BUILD_TAB_LOCK:{async acquire(){},release(){},owns(){return true;}},
     localStorage:{getItem:key=>cachedValues.get(key)||null,setItem:(key,value)=>cachedValues.set(key,value)},
     sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},
     setTimeout(fn){window.expiryCallback=fn;return 1;},clearTimeout(){},

@@ -61,7 +61,7 @@ test('Guide Train remains Beta while the other Workshop launchers stay visible',
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache identifies the deposit correction release as build148-v208',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v208';/);
+test('service worker cache identifies the guarded sync candidate as build148-v209',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v209';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });

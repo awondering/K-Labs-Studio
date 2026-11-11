@@ -1,198 +1,340 @@
-// Supabase sync for klabs-workshop-builds:<accountId> ONLY. Independent from js/component-sync.js (Components/taxonomy)
-// and does not touch the legacy klabs-workshop-quotes store. One Build record = one authoritative record,
-// identified by its own stable `id` field (NOT buildNumber, which is a per-device sequential display label
-// only - see js/ui.js nextBuildNumber()). Customer-only profiles use the same payload path with
-// recordType="customer"; the UI includes them in Customer Finder identity/profile data but excludes them
-// from build and quote histories.
+// Account-scoped build synchronisation. Build IDs, not build numbers, identify records.
 (function () {
-  let currentUserId = "";
-  let authGeneration = 0;
-  let pushTimer = null;
-  let pushInFlight = false;
-  let pushQueuedAgain = false;
-  let localMutationVersion = 0;
-  // Per-record queues flushed together on the next debounced push - keeps "on save, upsert that ONE
-  // record" literal: we never re-scan/re-upload the whole local array on an ordinary edit.
-  let pendingUpsertById = new Map();
-  let pendingDeleteIds = new Set();
+  let userId = "";
+  let generation = 0;
+  let timer = null;
+  let runner = { running: null, requested: false };
+  let status = "local";
+  let sequence = 0;
 
-  function client() {
-    return window.KLABS_SUPABASE_CLIENT;
-  }
-  function canWrite() {
-    return typeof window.KLABS_CAN_WRITE === "function"
-      ? window.KLABS_CAN_WRITE()
-      : window.KLABS_ACCESS_STATE?.can_write !== false;
-  }
-  function supabaseErrorMessage(error, fallback) {
-    if (!error) return fallback;
-    const parts = [error.message, error.details, error.hint, error.code ? `code ${error.code}` : ""].filter(Boolean);
-    return parts.join(" — ") || fallback;
-  }
-  function localBuilds() {
-    const records = window.savedBuildRecords ? window.savedBuildRecords() : [];
-    return Array.isArray(records) ? records.filter((record) => record && record.id) : [];
-  }
-  function saveLocalBuilds(records) {
-    window.saveBuildRecords?.(records);
-  }
+  const journal = () => window.KLABS_BUILD_SYNC_JOURNAL;
+  const transport = () => window.KLABS_GUARDED_BUILD_TRANSPORT;
+  const client = () => window.KLABS_SUPABASE_CLIENT;
+  const canWrite = () => typeof window.KLABS_CAN_WRITE === "function"
+    ? window.KLABS_CAN_WRITE() : window.KLABS_ACCESS_STATE?.can_write !== false;
+  const accountMatches = () => window.KLABS_ACCOUNT_ID === undefined || String(window.KLABS_ACCOUNT_ID || "") === userId;
+  const current = (context) => context.userId === userId && context.generation === generation && accountMatches()
+    && (!window.KLABS_BUILD_TAB_LOCK || window.KLABS_BUILD_TAB_LOCK.owns(context.userId));
+  const context = () => ({ userId, generation, isCurrent() { return current(this); } });
+  const records = () => (window.savedBuildRecords?.() || []).filter((record) => record && record.id);
+  const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
 
-  // payload is the FULL existing build record as-is (every field newQuoteTemplate()/normalizeQuote()
-  // already produces) - keeps this mapper simple (one jsonb column) instead of hand-mapping ~40 fields.
-  function recordToRow(record, userId) {
-    return {
-      user_id: userId,
-      client_id: String(record.id || ""),
-      build_number: String(record.buildNumber || ""),
-      payload: record,
-      updated_at: record.updatedAt || record.savedAt || new Date().toISOString(),
-    };
-  }
-  function rowToRecord(row) {
-    const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
-    return { ...payload, id: String(row.client_id || payload.id || ""), buildNumber: String(payload.buildNumber || row.build_number || "") };
-  }
-
-  function isCurrent(context) {
-    return context.generation === authGeneration && context.userId === currentUserId;
-  }
-  async function fetchCloudBuilds(context) {
-    const { data, error } = await client().from("builds").select("*").eq("user_id", context.userId);
-    if (error) throw new Error(supabaseErrorMessage(error, "Could not read your builds from Supabase."));
-    return Array.isArray(data) ? data : [];
-  }
-  async function upsertCloudBuilds(records, context) {
-    if (!canWrite()) throw new Error("This account is read-only; builds cannot be synced.");
-    if (!records.length || !isCurrent(context)) return;
-    const byId = new Map();
-    records.forEach((record) => { byId.set(String(record.id || ""), record); });
-    const rows = Array.from(byId.values()).filter((record) => record.id).map((record) => recordToRow(record, context.userId));
-    if (!rows.length) return;
-    const { error } = await client().from("builds").upsert(rows, { onConflict: "user_id,client_id" });
-    if (error) throw new Error(supabaseErrorMessage(error, "Could not upload your build to Supabase."));
-  }
-  async function deleteCloudBuilds(ids, context) {
-    if (!canWrite()) throw new Error("This account is read-only; builds cannot be deleted.");
-    const list = ids.filter(Boolean);
-    if (!list.length || !isCurrent(context)) return;
-    const { error } = await client().from("builds").delete().eq("user_id", context.userId).in("client_id", list);
-    if (error) throw new Error(supabaseErrorMessage(error, "Could not delete build from Supabase."));
-  }
-
-  // Sign-in/startup merge: union of local + cloud by stable id. On a per-id conflict, whichever side's own
-  // updatedAt/updated_at is newer wins - never a silent full overwrite either way. Nothing local-only is
-  // ever dropped (satisfies "do not delete local records during first migration").
-  async function mergeAndSync(context) {
-    const cloudRows = await fetchCloudBuilds(context);
-    if (!isCurrent(context)) return;
-    const cloudById = new Map(cloudRows.map((row) => [String(row.client_id), row]));
-    const snapshotVersion = localMutationVersion;
-    const local = localBuilds();
-    const seen = new Set();
-    const merged = [];
-    const toUpsert = [];
-
-    local.forEach((record) => {
-      const id = String(record.id);
-      seen.add(id);
-      const row = cloudById.get(id);
-      if (!row) { merged.push(record); toUpsert.push(record); return; }
-      const localTs = Date.parse(record.updatedAt || record.savedAt || "") || 0;
-      const cloudTs = Date.parse(row.updated_at || "") || 0;
-      if (localTs >= cloudTs) { merged.push(record); toUpsert.push(record); }
-      else { merged.push(rowToRecord(row)); }
-    });
-    cloudRows.forEach((row) => {
-      const id = String(row.client_id);
-      if (seen.has(id)) return;
-      merged.push(rowToRecord(row));
-    });
-
-    if (canWrite() && toUpsert.length) await upsertCloudBuilds(toUpsert, context);
-    if (!isCurrent(context)) return;
-    // A save/delete may land while the sign-in merge is awaiting cloud I/O. Never replace that newer local
-    // state with this merge's stale snapshot; restart against the latest local records instead.
-    if (localMutationVersion !== snapshotVersion) return mergeAndSync(context);
-    const previousHydration = window.KLABS_SYNC_HYDRATION;
-    if (!canWrite()) window.KLABS_SYNC_HYDRATION = true;
-    try {
-      saveLocalBuilds(merged);
-    } finally {
-      window.KLABS_SYNC_HYDRATION = previousHydration;
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((result, key) => {
+        result[key] = canonical(value[key]);
+        return result;
+      }, {});
     }
+    return value;
+  }
+  const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+  function setStatus(value) {
+    status = value;
+    window.KLABS_UI?.onBuildSyncStatus?.(value);
+  }
+  function store(ctx, state) {
+    if (!current(ctx)) throw new Error("The signed-in account changed.");
+    journal().write(ctx.userId, state);
+  }
+  function refreshStatus(state) {
+    if (Object.keys(state.conflicts).length) setStatus("error");
+    else if (Object.keys(state.pending).length) setStatus("pending");
+    else setStatus(canWrite() ? "synced" : "local");
+  }
+  function rowRecord(row) {
+    const record = { ...(row.payload || {}), id: String(row.client_id) };
+    if (!record.buildNumber && row.build_number) record.buildNumber = String(row.build_number);
+    return record;
+  }
+  function putLocal(ctx, record, id) {
+    if (!current(ctx)) throw new Error("The signed-in account changed.");
+    const list = records().filter((item) => String(item.id) !== id);
+    if (record) list.unshift(record);
+    const old = window.KLABS_SYNC_HYDRATION;
+    window.KLABS_SYNC_HYDRATION = true;
+    try {
+      if (window.saveBuildRecords(list) === false) throw new Error("Could not save the local build.");
+    }
+    finally { window.KLABS_SYNC_HYDRATION = old; }
     window.KLABS_UI?.refreshBuildViews?.();
   }
-
-  function scheduleFlush() {
-    if (pushTimer) clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => { pushTimer = null; flushPending(); }, 700);
+  function addConflict(state, id, local, cloud, revision, reason) {
+    const old = state.conflicts[id];
+    const history = old?.history || [];
+    if (old && (!equal(old.local, local) || !equal(old.cloud, cloud) || old.revision !== revision)) {
+      history.push({ local: old.local, cloud: old.cloud, revision: old.revision });
+    }
+    state.conflicts[id] = { id, local: clone(local), cloud: clone(cloud), revision: revision || null,
+      operation: state.pending[id]?.kind || "save", reason, history };
   }
-
-  // Ongoing sync: upserts/deletes only the specific records queued by notifyBuildSaved/notifyBuildDeleted -
-  // never re-uploads the whole local array.
-  async function flushPending() {
-    if (!canWrite()) {
-      pendingUpsertById = new Map();
-      pendingDeleteIds = new Set();
+  async function fetchRows(ctx) {
+    const rows = [];
+    const seen = new Set();
+    let expected = null;
+    do {
+      const { data, error, count } = await client().from("builds").select("*", { count: "exact" })
+        .eq("user_id", ctx.userId).order("client_id", { ascending: true })
+        .range(rows.length, rows.length + 499);
+      if (error) throw new Error(error.message || "Could not read cloud builds.");
+      if (!current(ctx)) throw new Error("The signed-in account changed.");
+      if (!Array.isArray(data) || !Number.isInteger(count) || (expected !== null && expected !== count)) {
+        throw new Error("The cloud build list changed or is incomplete. Try again.");
+      }
+      expected = count;
+      for (const row of data) {
+        const id = String(row.client_id || "");
+        if (!id || seen.has(id)) throw new Error("The cloud build list changed or contains duplicate IDs. Try again.");
+        seen.add(id);
+        rows.push(row);
+      }
+      if ((!data.length && rows.length < expected) || rows.length > expected) {
+        throw new Error("The cloud build list is incomplete. Try again.");
+      }
+    } while (rows.length < expected);
+    return rows;
+  }
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { timer = null; run(); }, 700);
+  }
+  async function reconcile(ctx) {
+    const rows = await fetchRows(ctx);
+    let state = journal().read(ctx.userId);
+    const local = new Map(records().map((record) => [String(record.id), record]));
+    const cloud = new Map(rows.map((row) => [String(row.client_id), row]));
+    const ids = new Set([...local.keys(), ...cloud.keys(), ...Object.keys(state.pending), ...Object.keys(state.baselines)]);
+    const hydrate = [];
+    for (const id of ids) {
+      const row = cloud.get(id);
+      const remote = row ? rowRecord(row) : null;
+      const here = local.get(id) || null;
+      const base = state.baselines[id];
+      let pending = state.pending[id];
+      if (pending?.kind === "delete-intent") {
+        if (here) {
+          if (pending.previous) state.pending[id] = pending.previous;
+          else delete state.pending[id];
+          if (pending.previousConflict) state.conflicts[id] = pending.previousConflict;
+          else delete state.conflicts[id];
+          pending = state.pending[id];
+        } else {
+          pending = state.pending[id] = { kind: "delete", record: pending.record, token: pending.token };
+        }
+      }
+      if (!pending && here && (!base || !equal(here, base.payload))) {
+        pending = state.pending[id] = { kind: "save", record: clone(here), token: `${Date.now()}-${++sequence}` };
+      }
+      if (state.conflicts[id]) {
+        addConflict(state, id, pending?.record || here, remote, row?.updated_at, "Versions require review.");
+        continue;
+      }
+      if (pending) {
+        if (pending.kind === "delete" && here) putLocal(ctx, null, id);
+        if (pending.kind === "save" && remote && equal(pending.record, remote)) {
+          state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
+          delete state.pending[id];
+        } else if (pending.kind === "delete" && !remote) {
+          addConflict(state, id, pending.record, null, null, "The cloud build is absent. Review the deletion.");
+        } else if ((base && (!row || row.updated_at !== base.revision)) || (!base && row)) {
+          addConflict(state, id, pending.record || here, remote, row?.updated_at,
+            "The cloud version changed or has no verified common baseline.");
+        }
+      } else if (row) {
+        if (here && base && !equal(here, remote) && window.KLABS_UI?.isBuildOpen?.(id)) {
+          addConflict(state, id, here, remote, row.updated_at, "This build is open. Close it before reviewing the cloud version.");
+          continue;
+        }
+        if (here && base && !equal(here, remote)) {
+          state.archive.push({ id, local: clone(here), cloud: clone(remote), revision: row.updated_at,
+            reason: "Cloud update", archivedAt: new Date().toISOString() });
+        }
+        state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
+        if (!equal(here, remote)) hydrate.push([id, remote]);
+      } else if (base) {
+        if (here) addConflict(state, id, here, null, null, "The cloud build was deleted.");
+        else delete state.baselines[id];
+      }
+    }
+    store(ctx, state);
+    for (const [id, record] of hydrate) putLocal(ctx, record, id);
+    return state;
+  }
+  async function flush(ctx) {
+    let state = await reconcile(ctx);
+    if (!canWrite()) { refreshStatus(state); return; }
+    if (Object.keys(state.pending).some((id) => !state.conflicts[id])) {
+      const { data, error } = await client().rpc("klabs_build_guard_version");
+      if (error || data !== 1) throw new Error("The matching build protection is not active. Changes remain on this device.");
+      if (!current(ctx) || !canWrite()) return;
+    }
+    for (const id of Object.keys(state.pending)) {
+      if (!current(ctx) || !canWrite()) return;
+      state = journal().read(ctx.userId);
+      const entry = state.pending[id];
+      if (!entry || state.conflicts[id]) continue;
+      const base = state.baselines[id];
+      if (entry.kind === "delete" && !base) throw new Error("Deletion has no verified cloud revision.");
+      try {
+        let result;
+        if (entry.kind === "delete") await transport().remove(client(), ctx, id, base.revision);
+        else result = await transport().save(client(), ctx, entry.record, base?.revision || null);
+        if (!current(ctx)) return;
+        state = journal().read(ctx.userId);
+        if (entry.kind === "delete") delete state.baselines[id];
+        else state.baselines[id] = { revision: result.updated_at, payload: clone(rowRecord(result)) };
+        if (state.pending[id]?.token === entry.token) delete state.pending[id];
+        store(ctx, state);
+      } catch (error) {
+        if (!current(ctx)) return;
+        console.error("[K-Labs Studio] Build sync failed:", error);
+        try { await reconcile(ctx); }
+        catch (readError) { console.error("[K-Labs Studio] Could not check cloud versions:", readError); }
+        if (current(ctx)) setStatus("error");
+        return;
+      }
+    }
+    if (current(ctx)) refreshStatus(journal().read(ctx.userId));
+  }
+  async function run() {
+    if (!userId) return;
+    const active = runner;
+    if (active.running) {
+      active.requested = true;
+      await active.running;
+      if (active === runner && active.requested) return run();
       return;
     }
-    if (pushInFlight) { pushQueuedAgain = true; return; }
-    const context = { userId: currentUserId, generation: authGeneration };
-    const toUpsert = Array.from(pendingUpsertById.values());
-    const toDelete = Array.from(pendingDeleteIds);
-    pendingUpsertById = new Map();
-    pendingDeleteIds = new Set();
-    if (!toUpsert.length && !toDelete.length) return;
-    pushInFlight = true;
-    try {
-      if (toDelete.length) await deleteCloudBuilds(toDelete, context);
-      if (toUpsert.length && isCurrent(context)) await upsertCloudBuilds(toUpsert, context);
-    } catch (error) {
-      console.error("[K-Labs Studio] Build cloud sync failed:", error);
-      // Re-queue so the next successful attempt (next save, or a later retry) still carries this change.
-      if (isCurrent(context)) {
-        toUpsert.forEach((record) => pendingUpsertById.set(String(record.id), record));
-        toDelete.forEach((id) => pendingDeleteIds.add(id));
+    const ctx = context();
+    active.requested = false;
+    active.running = (async () => {
+      try { await flush(ctx); }
+      catch (error) {
+        console.error("[K-Labs Studio] Build sync failed:", error);
+        if (current(ctx)) setStatus("error");
       }
-    } finally {
-      pushInFlight = false;
-      if (pushQueuedAgain) { pushQueuedAgain = false; scheduleFlush(); }
+    })();
+    await active.running;
+    active.running = null;
+    if (active === runner && active.requested) {
+      active.requested = false;
+      schedule();
     }
   }
-
+  function enqueue(kind, record) {
+    if (!userId || !canWrite()) return false;
+    if (!accountMatches()) {
+      setStatus("error");
+      throw new Error("The signed-in account changed. The build was not synchronised.");
+    }
+    if (!record?.id) throw new Error("A stable build ID and complete record are required.");
+    const ctx = context();
+    try {
+      const state = journal().read(userId);
+      const id = String(record.id);
+      const previousPending = state.pending[id];
+      const previousConflict = state.conflicts[id];
+      state.pending[id] = { kind, record: clone(record), token: `${Date.now()}-${++sequence}` };
+      if (kind === "delete-intent") {
+        state.pending[id].previous = clone(previousPending);
+        state.pending[id].previousConflict = clone(previousConflict);
+      }
+      if (kind !== "delete-intent" && state.conflicts[id]) {
+        addConflict(state, id, record, state.conflicts[id].cloud, state.conflicts[id].revision,
+          "Local changes require review.");
+      }
+      store(ctx, state);
+      if (status !== "error") setStatus("pending");
+      if (kind !== "delete-intent") schedule();
+      return true;
+    } catch (error) {
+      console.error("[K-Labs Studio] Could not preserve pending build change:", error);
+      setStatus("error");
+      throw error;
+    }
+  }
+  function confirmDelete(id) {
+    if (!userId || !canWrite()) return;
+    const ctx = context();
+    const state = journal().read(userId);
+    const entry = state.pending[id];
+    if (!entry || entry.kind !== "delete-intent") throw new Error("The deletion was not safely prepared.");
+    state.pending[id] = { kind: "delete", record: entry.record, token: entry.token };
+    if (state.conflicts[id]) addConflict(state, id, entry.record, state.conflicts[id].cloud,
+      state.conflicts[id].revision, "Deletion requires review.");
+    store(ctx, state);
+    schedule();
+  }
+  async function resolve(id, choice, expectedRevision) {
+    if (!canWrite()) throw new Error("This account is read-only.");
+    if (choice !== "local" && choice !== "cloud") throw new Error("Choose a version to keep.");
+    if (window.KLABS_UI?.isBuildOpen?.(String(id))) throw new Error("Open another build before resolving this conflict.");
+    const ctx = context();
+    const guard = await client().rpc("klabs_build_guard_version");
+    if (guard.error || guard.data !== 1) throw new Error("The matching build protection is not active.");
+    if (!current(ctx) || !canWrite()) throw new Error("The account or write permission changed.");
+    const rows = await fetchRows(ctx);
+    const row = rows.find((item) => String(item.client_id) === String(id));
+    let state = journal().read(ctx.userId);
+    const conflict = state.conflicts[id];
+    if (!conflict) throw new Error("This conflict is no longer available.");
+    if ((row?.updated_at || null) !== expectedRevision || conflict.revision !== expectedRevision) {
+      addConflict(state, id, conflict.local, row ? rowRecord(row) : null, row?.updated_at, "Cloud version changed. Review it again.");
+      store(ctx, state);
+      throw new Error("The cloud version changed. Review both versions again.");
+    }
+    state.archive.push({ ...clone(conflict), resolvedAt: new Date().toISOString(), choice });
+    store(ctx, state);
+    const pending = state.pending[id];
+    if (choice === "local") {
+      if (pending?.kind === "delete") {
+        if (row) await transport().remove(client(), ctx, id, row.updated_at);
+      } else {
+        if (!conflict.local) throw new Error("There is no local version to save.");
+        const saved = await transport().save(client(), ctx, conflict.local, row?.updated_at || null);
+        row && (row.updated_at = saved.updated_at);
+        if (!row) rows.push(saved);
+      }
+    }
+    if (!current(ctx)) throw new Error("The signed-in account changed.");
+    if (window.KLABS_UI?.isBuildOpen?.(String(id))) throw new Error("This build was opened during review. Close it and review again.");
+    state = journal().read(ctx.userId);
+    if (!equal(state.conflicts[id], conflict) || state.pending[id]?.token !== pending?.token) {
+      throw new Error("The local version changed during review. Review it again.");
+    }
+    const kept = choice === "cloud" ? (row ? rowRecord(row) : null) :
+      (pending?.kind === "delete" ? null : conflict.local);
+    const savedRow = choice === "local" && !row ? rows[rows.length - 1] : row;
+    if (kept && savedRow) state.baselines[id] = { revision: savedRow.updated_at, payload: clone(kept) };
+    else delete state.baselines[id];
+    putLocal(ctx, kept, String(id));
+    delete state.pending[id];
+    delete state.conflicts[id];
+    store(ctx, state);
+    refreshStatus(state);
+  }
   window.KLABS_BUILD_SYNC = {
     onAuthStateChanged(session) {
-      const nextUserId = session?.user?.id || "";
-      if (nextUserId && nextUserId === currentUserId) {
-        return mergeAndSync({ userId: currentUserId, generation: authGeneration }).catch((error) => {
-          console.error("[K-Labs Studio] Build library sync error:", error);
-        });
+      const next = session?.user?.id || "";
+      if (next !== userId) {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        userId = next;
+        generation++;
+        runner = { running: null, requested: false };
       }
-      if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
-      pendingUpsertById = new Map();
-      pendingDeleteIds = new Set();
-      currentUserId = nextUserId;
-      authGeneration += 1;
-      if (!currentUserId) return Promise.resolve();
-      const context = { userId: currentUserId, generation: authGeneration };
-      return mergeAndSync(context).catch((error) => {
-        console.error("[K-Labs Studio] Build library sync error:", error);
-      });
+      if (!userId) { setStatus("local"); return Promise.resolve(); }
+      setStatus("pending");
+      return run();
     },
-    // Queues exactly the one changed record - id is that record's own stable id (see js/ui.js persistBuildRecord).
-    notifyBuildSaved(record) {
-      if (!canWrite() || !currentUserId || !record || !record.id) return;
-      localMutationVersion += 1;
-      pendingDeleteIds.delete(String(record.id));
-      pendingUpsertById.set(String(record.id), record);
-      scheduleFlush();
-    },
-    notifyBuildDeleted(id) {
-      if (!canWrite() || !currentUserId || !id) return;
-      localMutationVersion += 1;
-      pendingUpsertById.delete(String(id));
-      pendingDeleteIds.add(String(id));
-      scheduleFlush();
-    },
+    getStatus: () => status,
+    notifyBuildSaved: (record) => enqueue("save", record),
+    notifyBuildDeleted: (record) => enqueue("delete-intent", record),
+    confirmBuildDeleted: confirmDelete,
+    getConflicts() { return userId ? clone(journal().read(userId).conflicts) : {}; },
+    resolveConflict: resolve,
+    retry: run,
   };
+  window.addEventListener?.("online", () => { if (userId) run(); });
 })();

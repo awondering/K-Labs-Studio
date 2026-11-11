@@ -4732,6 +4732,17 @@ function normalizeQuote(inputQuote){
 function updateQuoteActionPriority(){
   const statusEl=$('workshopBuildActionsStatus');
   if(statusEl){
+    const syncStatus=window.KLABS_BUILD_SYNC?.getStatus?.();
+    if(syncStatus==='error'){
+      statusEl.textContent='NOT SYNCED — REVIEW REQUIRED';
+      statusEl.classList.toggle('is-pending',true);
+      return;
+    }
+    if(syncStatus==='pending'){
+      statusEl.textContent='Saved locally — syncing';
+      statusEl.classList.toggle('is-pending',true);
+      return;
+    }
     const hasFlash=workshopStatusFlashText && Date.now()<workshopStatusFlashUntil;
     if(hasFlash){
       statusEl.textContent=workshopStatusFlashText;
@@ -4739,8 +4750,8 @@ function updateQuoteActionPriority(){
     }else{
       const isSaving=quoteAutosaveInFlight||hasUnsavedQuoteChanges;
       const depositError=depositValidationMessage();
-      statusEl.textContent=depositError?'Not saved: correct the deposit requirement':isSaving?'Saving...':'\u2713 Saved';
-      statusEl.classList.toggle('is-pending',isSaving||!!depositError);
+      statusEl.textContent=depositError?'Not saved: correct the deposit requirement':isSaving?'Saving...':syncStatus==='pending'?'Saved locally — syncing':syncStatus==='synced'?'\u2713 Synced':'Saved locally';
+      statusEl.classList.toggle('is-pending',isSaving||!!depositError||syncStatus==='pending');
     }
   }
 }
@@ -8549,6 +8560,7 @@ function setActiveSavedBuildRef(source,index,record){
   activeSavedBuildRef={
     source:String(source||'build'),
     index:Number.isInteger(numericIndex)?numericIndex:-1,
+    id:specificationValue(record&&record.id),
     buildNumber:specificationValue(record&&record.buildNumber),
     savedAt:specificationValue(record&&record.savedAt),
   };
@@ -8559,24 +8571,15 @@ function clearActiveSavedBuildRef(){
 function findCurrentSavedBuildTarget(){
   const records=savedBuildRecords();
   if(!records.length)return null;
-  if(activeSavedBuildRef && activeSavedBuildRef.source==='build'){
-    const indexedRecord=records[activeSavedBuildRef.index];
-    if(indexedRecord
-      && normalizeNameKey(indexedRecord&&indexedRecord.buildNumber)===normalizeNameKey(activeSavedBuildRef.buildNumber)
-      && specificationValue(indexedRecord&&indexedRecord.savedAt)===specificationValue(activeSavedBuildRef.savedAt)){
-      return {index:activeSavedBuildRef.index,record:indexedRecord};
-    }
-    const byRef=records.findIndex((record)=>{
-      return normalizeNameKey(record&&record.buildNumber)===normalizeNameKey(activeSavedBuildRef.buildNumber)
-        && specificationValue(record&&record.savedAt)===specificationValue(activeSavedBuildRef.savedAt);
-    });
-    if(byRef>=0)return {index:byRef,record:records[byRef]};
+  const currentId=specificationValue(quote&&quote.id);
+  const refId=activeSavedBuildRef&&activeSavedBuildRef.source==='build'
+    ?specificationValue(activeSavedBuildRef.id):'';
+  const id=currentId||refId;
+  if(id){
+    const index=records.findIndex((record)=>specificationValue(record&&record.id)===id);
+    return index<0?null:{index,record:records[index]};
   }
-  const currentBuildNumber=normalizeNameKey(quote&&quote.buildNumber);
-  if(!currentBuildNumber)return null;
-  const byBuildNumber=records.findIndex((record)=>normalizeNameKey(record&&record.buildNumber)===currentBuildNumber);
-  if(byBuildNumber<0)return null;
-  return {index:byBuildNumber,record:records[byBuildNumber]};
+  return null;
 }
 function finalizeDeletedCurrentBuild(){
   clearQuoteAutosaveTimer();
@@ -8606,11 +8609,23 @@ function requestDeleteCurrentBuild(){
   },(action)=>{
     if(action!=='delete')return;
     const records=savedBuildRecords();
-    if(target.index<0 || target.index>=records.length)return;
-    const deletedId=specificationValue(records[target.index]&&records[target.index].id);
-    records.splice(target.index,1);
-    Store.set(buildsStorageKey(),records);
-    if(deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
+    const targetId=specificationValue(target.record&&target.record.id);
+    const targetIndex=records.findIndex((record)=>targetId && specificationValue(record&&record.id)===targetId);
+    if(targetIndex<0){
+      flashWorkshopStatus('Build not found — nothing deleted',{pending:true,duration:3200});
+      return;
+    }
+    const deletedRecord=records[targetIndex];
+    try{
+      if(deletedRecord?.id)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedRecord);
+      records.splice(targetIndex,1);
+      if(Store.set(buildsStorageKey(),records)===false)throw new Error('Local build deletion was blocked.');
+      if(deletedRecord?.id)window.KLABS_BUILD_SYNC?.confirmBuildDeleted?.(deletedRecord.id);
+    }catch(error){
+      console.error('[K-Labs Studio] Could not delete build:',error);
+      flashWorkshopStatus('Check the build and sync status',{pending:true,duration:3200});
+      return;
+    }
     finalizeDeletedCurrentBuild();
   });
 }
@@ -13781,10 +13796,11 @@ function deleteSavedEntryBySource(source,index){
   const records=Array.isArray(Store.get(storageKey,[]))?Store.get(storageKey,[]):[];
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
-  const deletedId=specificationValue(records[numericIndex]&&records[numericIndex].id);
+  const deletedRecord=records[numericIndex];
+  if(source==='build' && deletedRecord?.id)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedRecord);
   records.splice(numericIndex,1);
-  Store.set(storageKey,records);
-  if(source==='build' && deletedId)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedId);
+  if(Store.set(storageKey,records)===false)throw new Error('Local build deletion was blocked.');
+  if(source==='build' && deletedRecord?.id)window.KLABS_BUILD_SYNC?.confirmBuildDeleted?.(deletedRecord.id);
   return true;
 }
 // Resolves the record by its stable ID at confirm time so a shifted list can never delete a different record.
@@ -13794,9 +13810,10 @@ function deleteSavedEntryById(source,recordId){
   const records=Array.isArray(stored)?stored:[];
   const index=records.findIndex((record)=>record && specificationValue(record.id)===recordId);
   if(index<0)return -1;
+  if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(records[index]);
   records.splice(index,1);
-  Store.set(storageKey,records);
-  if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(recordId);
+  if(Store.set(storageKey,records)===false)throw new Error('Local build deletion was blocked.');
+  if(source==='build')window.KLABS_BUILD_SYNC?.confirmBuildDeleted?.(recordId);
   return index;
 }
 function requestDeleteSavedBuildRecord(source,index,options){
@@ -13820,7 +13837,7 @@ function requestDeleteSavedBuildRecord(source,index,options){
         deletedIndex=recordId?deleteSavedEntryById(source,recordId):(deleteSavedEntryBySource(source,index)?Number(index):-1);
       }catch(error){
         console.error('[K-Labs Studio] Could not delete quote:',error);
-        present('Could not delete this quote. Nothing was removed. Please try again.');
+        present('Could not complete the deletion. Check the build list and sync status before trying again.');
         return;
       }
       if(deletedIndex<0){
@@ -17543,7 +17560,7 @@ window.ensureStudioComponentTaxonomyLoaded=ensureStudioComponentTaxonomyLoaded;
 // js/build-sync.js calls these as bare window.* globals the same way (see lesson above) - klabs-workshop-builds
 // stays the same plain/anonymous local cache key it always was; the sync layer only adds a cloud mirror.
 window.savedBuildRecords=savedBuildRecords;
-window.saveBuildRecords=(records)=>{Store.set(buildsStorageKey(),Array.isArray(records)?records:[]);};
+window.saveBuildRecords=(records)=>Store.set(buildsStorageKey(),Array.isArray(records)?records:[]);
 window.readStudioSettingsSyncPayload=readStudioSettingsSyncPayload;
 window.applyStudioSettingsSyncPayload=applyStudioSettingsSyncPayload;
 window.readAnonymousStudioSettingsSyncPayload=readAnonymousStudioSettingsSyncPayload;
@@ -17554,3 +17571,6 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
+window.KLABS_UI.isBuildOpen=(id)=>String(id)===specificationValue(quote&&quote.id)
+  || !!(activeSavedBuildRef && activeSavedBuildRef.source==='build' && String(id)===specificationValue(activeSavedBuildRef.id));
