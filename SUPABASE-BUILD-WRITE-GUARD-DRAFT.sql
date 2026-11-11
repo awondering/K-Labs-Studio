@@ -13,7 +13,7 @@ returns integer
 language sql
 stable
 set search_path = public, pg_temp
-as $$ select 1 $$;
+as $$ select 2 $$;
 revoke all on function public.klabs_build_guard_version() from public, anon;
 grant execute on function public.klabs_build_guard_version() to authenticated;
 
@@ -26,7 +26,11 @@ declare
   expected_revision timestamptz;
 begin
   if tg_op = 'INSERT' then
-    new.payload := new.payload - '_expectedBuildRevision';
+    if current_user = 'authenticated' and new.payload->'_buildGuardCreate' is distinct from '1'::jsonb then
+      raise exception 'Update Studio before creating a build.'
+        using errcode = 'P0001';
+    end if;
+    new.payload := new.payload - '_expectedBuildRevision' - '_buildGuardCreate';
     return new;
   end if;
   if current_user = 'authenticated' then
@@ -45,7 +49,7 @@ begin
         using errcode = 'P0001';
     end if;
   end if;
-  new.payload := new.payload - '_expectedBuildRevision';
+  new.payload := new.payload - '_expectedBuildRevision' - '_buildGuardCreate';
   new.updated_at := greatest(clock_timestamp(), old.updated_at + interval '1 microsecond');
   return new;
 end;

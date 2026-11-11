@@ -53,7 +53,7 @@ function browser({online=true}={}){
   window.KLABS_SUPABASE_CLIENT=client;
   window.KLABS_UI={refreshBuildViews(){}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','js','build-sync-journal.js'),'utf8'),{window});
-  client.rpc=async()=>({data:1,error:null});
+  client.rpc=async()=>({data:2,error:null});
   window.KLABS_GUARDED_BUILD_TRANSPORT={
     async save(_client,ctx,record){
       if(!state.online)throw new Error('offline');

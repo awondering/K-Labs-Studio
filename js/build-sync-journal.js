@@ -1,6 +1,5 @@
 (function () {
-  // Draft only: read/modify/write is not atomic across same-account browser tabs.
-  // Do not release until local build and journal writes are coordinated across tabs.
+  // Journal writes require the account-wide tab lock held by the sync client.
   const prefix = "klabs-build-sync-journal:";
 
   function empty() {

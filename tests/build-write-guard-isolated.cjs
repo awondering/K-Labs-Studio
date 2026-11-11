@@ -35,10 +35,14 @@ async function main(){
     const accountA='aaaaaaaa-0000-0000-0000-000000000001';
     const accountB='bbbbbbbb-0000-0000-0000-000000000002';
     await db.exec(`set role authenticated; set request.jwt.claim.sub='${accountA}';`);
+    await assert.rejects(db.query(
+      'insert into builds(user_id,client_id,payload) values ($1,$2,$3)',
+      [accountA,'stale-recreate',{payments:[{amount:10}]}]),/Update Studio before creating/);
     const insert=await db.query(
       'insert into builds(user_id,client_id,payload) values ($1,$2,$3) returning updated_at::text,payload',
-      [accountA,'same-id',{payments:[{id:'p1',amount:100}],_expectedBuildRevision:'irrelevant'}]);
+      [accountA,'same-id',{payments:[{id:'p1',amount:100}],_expectedBuildRevision:'irrelevant',_buildGuardCreate:1}]);
     assert.equal(insert.rows[0].payload._expectedBuildRevision,undefined);
+    assert.equal(insert.rows[0].payload._buildGuardCreate,undefined);
     const revision=insert.rows[0].updated_at;
     const update=(payload)=>db.query(
       'update builds set payload=$1 where user_id=$2 and client_id=$3 returning updated_at::text,payload',
@@ -47,10 +51,10 @@ async function main(){
     await assert.rejects(update({payments:[]}),/Build changed on another device/);
     await assert.rejects(db.query(
       'insert into builds(user_id,client_id,payload) values ($1,$2,$3) on conflict (user_id,client_id) do update set payload=excluded.payload',
-      [accountA,'same-id',{payments:[]}]),/Build changed on another device/);
+      [accountA,'same-id',{payments:[]}]),/Update Studio before creating/);
     await assert.rejects(db.query(
       'insert into builds(user_id,client_id,payload) values ($1,$2,$3) on conflict (user_id,client_id) do update set payload=excluded.payload',
-      [accountA,'same-id',{payments:[{id:'p1',amount:100}],_expectedBuildRevision:revision}]),
+      [accountA,'same-id',{payments:[{id:'p1',amount:100}],_expectedBuildRevision:revision,_buildGuardCreate:1}]),
     /Build changed on another device/);
     const first=await update({
       payments:[{id:'p1',amount:100},{id:'p2',amount:50}],
@@ -101,9 +105,9 @@ async function main(){
     assert.equal(other.rows.length,0);
     await assert.rejects(db.query(
       'insert into builds(user_id,client_id,payload) values ($1,$2,$3)',
-      [accountA,'other-id',{}]),/row-level security/);
+      [accountA,'other-id',{_buildGuardCreate:1}]),/row-level security/);
     await db.query('insert into builds(user_id,client_id,payload) values ($1,$2,$3)',
-      [accountB,'same-id',{payments:[{id:'b1',amount:7}]}]);
+      [accountB,'same-id',{payments:[{id:'b1',amount:7}],_buildGuardCreate:1}]);
     const b=await db.query('select payload from builds where client_id=$1',['same-id']);
     assert.equal(b.rows.length,1);
     assert.equal(b.rows[0].payload.payments[0].amount,7);
@@ -322,7 +326,7 @@ async function main(){
     await db.exec(`set test.can_write='true';`);
     await db.exec(`set request.jwt.claim.sub='${accountB}';`);
     await db.query(`insert into builds(user_id,client_id,build_number,payload)
-      select $1,'page-'||g,'B-'||g,jsonb_build_object('id','page-'||g)
+      select $1,'page-'||g,'B-'||g,jsonb_build_object('id','page-'||g,'_buildGuardCreate',1)
       from generate_series(1,501) g`,[accountB]);
     const accountBDevice=device(d1.storage);
     await accountBDevice.w.KLABS_BUILD_SYNC.onAuthStateChanged({user:{id:accountB}});

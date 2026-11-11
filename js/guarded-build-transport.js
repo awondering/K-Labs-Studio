@@ -17,6 +17,7 @@
     if (mode !== "guarded" && mode !== "compatibility") throw new Error("Invalid build sync mode.");
     const payload = { ...record };
     delete payload._expectedBuildRevision;
+    delete payload._buildGuardCreate;
     const row = {
       user_id: context.userId,
       client_id: String(record.id),
@@ -35,6 +36,7 @@
         .eq("user_id", context.userId).eq("client_id", row.client_id)
         .eq("updated_at", revision).select("*");
     } else {
+      if (mode === "guarded") row.payload = { ...payload, _buildGuardCreate: 1 };
       response = await client.from("builds").insert(row).select("*");
     }
     if (response.error) throw failure(response.error, "Build synchronisation failed.");

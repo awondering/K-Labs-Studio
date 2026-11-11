@@ -57,6 +57,10 @@ function readQuarantinedLegacyRecords(){
 }
 function refreshBuildViewsSafely(){try{renderBuilds();renderCustomerFinder();}catch(e){}}
 function reloadQuoteForAccount(){
+  clearQuoteAutosaveTimer();
+  hasUnsavedQuoteChanges=false;
+  quoteAutosaveInFlight=false;
+  quoteNumberAllocationPromise=null;
   quote=normalizeQuote(Store.get(quoteCurrentStorageKey(),null)||newQuoteTemplate());
   activeSavedBuildRef=null;
 }
@@ -4738,6 +4742,12 @@ function updateQuoteActionPriority(){
       statusEl.classList.toggle('is-pending',true);
       return;
     }
+    const depositError=depositValidationMessage();
+    if(depositError || quoteAutosaveInFlight || hasUnsavedQuoteChanges){
+      statusEl.textContent=depositError?'Not saved: correct the deposit requirement':'Saving locally...';
+      statusEl.classList.toggle('is-pending',true);
+      return;
+    }
     if(syncStatus==='pending'){
       statusEl.textContent='Saved locally — syncing';
       statusEl.classList.toggle('is-pending',true);
@@ -4745,13 +4755,12 @@ function updateQuoteActionPriority(){
     }
     const hasFlash=workshopStatusFlashText && Date.now()<workshopStatusFlashUntil;
     if(hasFlash){
-      statusEl.textContent=workshopStatusFlashText;
+      statusEl.textContent=workshopStatusFlashPending?workshopStatusFlashText:
+        `${workshopStatusFlashText} — ${syncStatus==='synced'?'synced':'saved locally'}`;
       statusEl.classList.toggle('is-pending',workshopStatusFlashPending);
     }else{
-      const isSaving=quoteAutosaveInFlight||hasUnsavedQuoteChanges;
-      const depositError=depositValidationMessage();
-      statusEl.textContent=depositError?'Not saved: correct the deposit requirement':isSaving?'Saving...':syncStatus==='pending'?'Saved locally — syncing':syncStatus==='synced'?'\u2713 Synced':'Saved locally';
-      statusEl.classList.toggle('is-pending',isSaving||!!depositError||syncStatus==='pending');
+      statusEl.textContent=syncStatus==='synced'?'\u2713 Synced':'Saved locally';
+      statusEl.classList.toggle('is-pending',false);
     }
   }
 }
@@ -4779,12 +4788,17 @@ async function ensureCurrentQuoteNumber(){
   }
 }
 async function persistCurrentQuoteRecord(){
+  const account=activeAccountKey();
+  const targetQuote=quote;
   if(depositValidationMessage()){
     updateDepositFields();
     flashWorkshopStatus('Correct the deposit requirement before saving',{pending:true,duration:3200});
     return null;
   }
   await ensureCurrentQuoteNumber();
+  if(activeAccountKey()!==account || quote!==targetQuote){
+    throw new Error('The account or build changed before the local save completed.');
+  }
   if(depositValidationMessage()){
     updateDepositFields();
     flashWorkshopStatus('Correct the deposit requirement before saving',{pending:true,duration:3200});
@@ -4800,19 +4814,28 @@ async function persistCurrentQuoteRecord(){
 }
 async function runQuoteAutosave(){
   if(quoteAutosaveInFlight || !hasUnsavedQuoteChanges)return;
+  const account=activeAccountKey();
+  const targetQuote=quote;
+  const current=()=>activeAccountKey()===account && quote===targetQuote;
   quoteAutosaveInFlight=true;
   updateQuoteActionPriority();
   try{
     const savedRef=await persistCurrentQuoteRecord();
-    if(!savedRef)return;
+    if(!savedRef || !current())return;
     markQuoteSaved();
   }catch(error){
+    if(!current()){
+      console.error('[K-Labs Studio] Quote autosave was interrupted by an account or build change:',error);
+      return;
+    }
     hasUnsavedQuoteChanges=true;
     console.error('[K-Labs Studio] Quote autosave could not allocate or persist:',error);
     flashWorkshopStatus('Connect to save and allocate a quote number',{pending:true,duration:2800});
   }finally{
-    quoteAutosaveInFlight=false;
-    updateQuoteActionPriority();
+    if(current()){
+      quoteAutosaveInFlight=false;
+      updateQuoteActionPriority();
+    }
   }
 }
 function scheduleQuoteAutosave(options){

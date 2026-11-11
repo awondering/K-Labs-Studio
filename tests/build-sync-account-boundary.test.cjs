@@ -73,7 +73,7 @@ function harness(){
       cloud[ctx.userId]=cloud[ctx.userId].filter(item=>item.client_id!==id);
     },
   };
-  client.rpc=async(name)=>{assert.equal(name,'klabs_build_guard_version');return {data:1,error:null};};
+  client.rpc=async(name)=>{assert.equal(name,'klabs_build_guard_version');return {data:2,error:null};};
   vm.runInNewContext(source,{window,console,setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}});
   return {
     calls,locals,cloud,window,

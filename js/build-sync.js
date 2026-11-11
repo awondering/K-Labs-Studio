@@ -48,7 +48,7 @@
     const { data, error } = await client().rpc("klabs_build_guard_version");
     if (!current(ctx)) throw new Error("The signed-in account changed.");
     const state = journal().read(ctx.userId);
-    if (!error && data === 1) {
+    if (!error && data === 2) {
       if (!state.guardSeen) {
         state.guardSeen = true;
         store(ctx, state);

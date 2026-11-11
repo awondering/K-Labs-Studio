@@ -52,6 +52,15 @@ test('duplicate insertion, stale updates and network errors are never reported a
   h.setResponse({data:null,error:{message:'network interrupted'}});
   await assert.rejects(h.transport.save(h.client,h.context,{id:'build-1'},'rev'),/network interrupted/);
 });
+test('guarded creates send a transient protocol marker; compatibility creates do not',async()=>{
+  const h=harness();
+  const record={id:'build-1',payments:[{amount:10}]};
+  await h.transport.save(h.client,h.context,record,null,'guarded');
+  assert.equal(h.calls[0].row.payload._buildGuardCreate,1);
+  assert.equal(record._buildGuardCreate,undefined);
+  await h.transport.save(h.client,h.context,record,null,'compatibility');
+  assert.equal(h.calls[1].row.payload._buildGuardCreate,undefined);
+});
 
 test('delete requires a revision and reports conflicts or server errors',async()=>{
   const h=harness();

@@ -9,13 +9,13 @@ const start=source.indexOf('function updateQuoteActionPriority(');
 const end=source.indexOf('\nfunction ',start+1);
 const code=source.slice(start,end);
 
-function run(status,flash=''){
+function run(status,flash='',options={}){
   const element={textContent:'',classList:{toggle(name,value){element.pending=value;}}};
   const context=vm.createContext({
     window:{KLABS_BUILD_SYNC:{getStatus:()=>status}},
     $:()=>element,workshopStatusFlashText:flash,workshopStatusFlashUntil:Date.now()+10000,
-    workshopStatusFlashPending:false,quoteAutosaveInFlight:false,hasUnsavedQuoteChanges:false,
-    depositValidationMessage:()=>'',Date,
+    workshopStatusFlashPending:false,quoteAutosaveInFlight:!!options.saving,hasUnsavedQuoteChanges:!!options.dirty,
+    depositValidationMessage:()=>options.depositError||'',Date,
   });
   vm.runInContext(code,context);
   context.updateQuoteActionPriority();
@@ -27,4 +27,9 @@ test('sync errors and pending sync cannot be hidden by a local saved flash',()=>
   assert.equal(run('pending','Saved').textContent,'Saved locally — syncing');
   assert.equal(run('synced').textContent,'✓ Synced');
   assert.equal(run('local').textContent,'Saved locally');
+});
+test('unsaved draft and validation errors take precedence over a prior synced state or flash',()=>{
+  assert.equal(run('synced','Saved',{dirty:true}).textContent,'Saving locally...');
+  assert.equal(run('pending','Saved',{depositError:'invalid'}).textContent,'Not saved: correct the deposit requirement');
+  assert.equal(run('local','Saved').textContent,'Saved — saved locally');
 });

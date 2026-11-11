@@ -186,6 +186,14 @@ async function main() {
     assert.equal(cloud.issuedInvoice.reference,'original');
     await assert.rejects(db.query('update builds set payload=$1 where user_id=$2 and client_id=$3',
       [{ payments: [] },account,'transition']),/Build changed on another device/);
+    await assert.rejects(db.query(
+      'insert into builds(user_id,client_id,payload) values($1,$2,$3) on conflict (user_id,client_id) do update set payload=excluded.payload',
+      [account,'transition',{id:'transition',payments:[]}]),/Update Studio before creating/);
+    await assert.rejects(db.query(
+      'insert into builds(user_id,client_id,payload) values($1,$2,$3)',
+      [account,'legacy-recreate',{id:'legacy-recreate',payments:[]}]),/Update Studio before creating/);
+    await assert.rejects(db.query('delete from builds where user_id=$1 and client_id=$2',
+      [account,'transition']),/Update Studio before deleting/);
     failProbe = { code:'PGRST202',message:'stale schema cache' };
     record = { ...record, note:'kept locally' };
     first.builds = [record];

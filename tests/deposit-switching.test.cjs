@@ -49,7 +49,7 @@ function harness(initial={}){
     quoteMaths:()=>({total:state.total??2500}),
     saveQuoteCurrent(){},markQuoteDirty(){state.dirty++;},
     updateQuoteActionPriority(){},updatePaymentBlock(){},syncWorkshopToggleButtons(){},
-    activeCurrencyCode:()=>'NZD',currency:value=>`$${value.toFixed(2)}`,
+    activeCurrencyCode:()=>'NZD',activeAccountKey:()=>'account-a',currency:value=>`$${value.toFixed(2)}`,
     flashWorkshopStatus(message){state.message=message;},
     ensureCurrentQuoteNumber:async()=>{state.allocations++;},
     nextBuildNumber:()=>'test',
