@@ -68,6 +68,7 @@ async function main() {
           bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height, selector);
       }
       assert.equal(await sheet.locator('[data-invoice-preview-action="issue"]').isHidden(), true);
+      await assertControls(sheet, false);
       const onPage = await page.evaluate(() => {
         const bounds = document.querySelector('.invoice-preview__paper').getBoundingClientRect();
         return ['.invoice-document__financial', '.invoice-document__payments', '.invoice-document__footer'].every(selector => {
@@ -163,6 +164,12 @@ async function main() {
         return paper.bottom <= viewport.bottom + 1 && paper.right <= viewport.right + 1;
       });
       await assertFits(page, paper, stage);
+      await page.setViewportSize(viewport);
+      await page.waitForFunction(() => {
+        const paper = document.querySelector('.invoice-preview__paper').getBoundingClientRect();
+        const viewport = document.querySelector('.invoice-preview__viewport').getBoundingClientRect();
+        return paper.bottom <= viewport.bottom + 1 && paper.right <= viewport.right + 1;
+      });
       await page.evaluate(() => {
         quote.issuedInvoice = null;
         window.customerInvoicePreviewMarkup = () => invoiceDocumentMarkup(
@@ -172,6 +179,7 @@ async function main() {
       });
       assert.equal(await sheet.locator('[data-invoice-preview-action="issue"]').isVisible(), true);
       assert.equal(await sheet.locator('[data-invoice-preview-action="print"]').isVisible(), true);
+      await assertControls(sheet, true);
       assert.ok((await sheet.locator('.invoice-preview__columns').innerText()).includes('DRAFT — NOT ISSUED'));
       await sheet.locator('[data-invoice-preview-action="print"]').click();
       await page.waitForFunction(() => window.printCalled || window.printFailure);
@@ -184,6 +192,44 @@ async function main() {
     }
     console.log(`PASS: ${engine} MacBook and iPhone A4 fit, zoom, fixed actions and multi-page navigation.`);
   } finally { await browser.close(); }
+}
+async function assertControls(sheet, draft) {
+  const controls = await sheet.evaluate(root => {
+    const box = element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+        fits: element.scrollWidth <= element.clientWidth };
+    };
+    const action = name => root.querySelector(`[data-invoice-preview-action="${name}"]`);
+    return {
+      panel: box(root.querySelector('.component-sheet__panel')),
+      closeIcon: box(root.querySelector('.component-sheet__close')),
+      previous: box(action('previous')), counter: box(root.querySelector('.invoice-preview__counter')),
+      next: box(action('next')), zoom: box(action('zoom')),
+      close: box(root.querySelector('.invoice-preview__actions [data-invoice-preview-action="close"]')),
+      issue: box(action('issue')), print: box(action('print')),
+      issuePrimary: action('issue').classList.contains('primary-action'),
+      printSecondary: action('print').classList.contains('ghost-action')
+    };
+  });
+  for (const name of ['closeIcon', 'previous', 'next', 'zoom', 'close', ...(draft ? ['issue'] : []), 'print']) {
+    assert.ok(controls[name].width >= 44 && controls[name].height >= 44 && controls[name].fits,
+      `${name}: ${JSON.stringify(controls[name])}`);
+    assert.ok(controls[name].x >= controls.panel.x &&
+      controls[name].x + controls[name].width <= controls.panel.x + controls.panel.width, name);
+  }
+  assert.equal(controls.previous.y, controls.counter.y + (controls.counter.height - controls.previous.height) / 2);
+  assert.equal(controls.previous.y, controls.next.y);
+  assert.ok(controls.zoom.y >= controls.previous.y + controls.previous.height);
+  assert.equal(controls.close.y, controls.print.y);
+  if (draft) {
+    assert.equal(controls.close.y, controls.issue.y);
+    assert.ok(controls.close.x + controls.close.width <= controls.issue.x);
+    assert.ok(controls.issue.x + controls.issue.width <= controls.print.x);
+  } else {
+    assert.ok(controls.close.x + controls.close.width <= controls.print.x);
+  }
+  assert.ok(controls.issuePrimary && controls.printSecondary);
 }
 async function assertFits(page, paper, viewport) {
   const a = await paper.boundingBox();

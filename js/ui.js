@@ -14502,10 +14502,10 @@ function openInvoicePreview(){
     sheet.innerHTML=`<div class="component-sheet__scrim" data-invoice-preview-action="close"></div>
       <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Customer invoice preview">
         <header class="component-sheet__header"><h2>Customer Invoice Preview</h2><button class="component-sheet__close" type="button" data-invoice-preview-action="close" aria-label="Close invoice preview">&#215;</button></header>
-        <div class="invoice-preview__toolbar"><button type="button" data-invoice-preview-action="previous" aria-label="Previous page">Previous</button><span class="invoice-preview__counter" aria-live="polite"></span><button type="button" data-invoice-preview-action="next" aria-label="Next page">Next</button><button type="button" data-invoice-preview-action="zoom">Enlarge / Actual size</button></div>
+        <div class="invoice-preview__toolbar"><div class="invoice-preview__pagination"><button class="ghost-action" type="button" data-invoice-preview-action="previous" aria-label="Previous page">Previous</button><span class="invoice-preview__counter" aria-live="polite"></span><button class="ghost-action" type="button" data-invoice-preview-action="next" aria-label="Next page">Next</button></div><button class="ghost-action" type="button" data-invoice-preview-action="zoom">Enlarge / Actual size</button></div>
         <div class="invoice-preview__viewport"><div class="invoice-preview__page"><div class="invoice-preview__paper"><article class="invoice-document invoice-preview__columns"></article></div></div></div>
         <div id="invoicePreviewBody" hidden></div>
-        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="primary-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
+        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
       </section>`;
     document.body.appendChild(sheet);
     sheet.addEventListener('click',(event)=>{

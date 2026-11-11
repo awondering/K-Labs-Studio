@@ -159,7 +159,7 @@ test('the Access Manager exposes entitlement dates and billing limitations witho
   assert.match(css,/@media \(max-width:520px\)[\s\S]*?\.admin-access-toolbar/);
   assert.match(css,/min-height:44px/);
   assert.match(css,/#adminAccessScreen\.active~#offlineReadyStatus\s*\{\s*display:none;\s*\}/);
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v219';/);
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v220';/);
 });
 
 test('browser code never uses an email or client-supplied role as administrator authority',()=>{
