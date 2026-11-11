@@ -2,7 +2,7 @@
   const privateScripts = [
     "js/config.js", "js/storage.js", "js/guide-layout.js", "js/thread-wrap.js",
     "js/guide-train.js", "js/studio-visuals.js", "js/navigation.js", "js/ui.js",
-    "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-review.js", "js/settings-sync.js",
+    "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js",
     "js/quote-number-allocator.js", "js/app.js"
   ];
   let loadPromise = null;

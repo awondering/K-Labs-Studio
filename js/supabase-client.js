@@ -47,6 +47,8 @@ function klabsApplyAuthState(session) {
   const authScreen = document.getElementById("authScreen");
   const app = document.getElementById("app");
   const accountEmail = document.getElementById("settingsAccountEmail");
+  window.KLABS_RECOVERY_ACCOUNT = session?.user?.id && session.user.email
+    ? { id: String(session.user.id), email: String(session.user.email) } : null;
 
   // Account-scoped local settings (e.g. business profile) key off this id.
   const nextAccountId = session?.user?.id || "";

@@ -17719,5 +17719,10 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
 window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
+window.KLABS_UI.readRecoveryDraft=()=>({
+  quote:JSON.parse(JSON.stringify(quote)),
+  activeSavedBuildRef:activeSavedBuildRef?JSON.parse(JSON.stringify(activeSavedBuildRef)):null,
+  hasUnsavedQuoteChanges
+});
 window.KLABS_UI.isBuildOpen=(id)=>String(id)===specificationValue(quote&&quote.id)
   || !!(activeSavedBuildRef && activeSavedBuildRef.source==='build' && String(id)===specificationValue(activeSavedBuildRef.id));

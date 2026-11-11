@@ -1226,6 +1226,19 @@
         <div class="settings-context-actions"><button id="settingsDateFormatSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
       </details>
 
+      <details class="settings-card settings-preference-card settings-disclosure" id="settingsRecoveryCard">
+        <summary class="settings-disclosure__summary">
+          <span class="settings-disclosure__copy">
+            <span class="settings-disclosure__title">Local Data Recovery</span>
+            <span class="settings-disclosure__hint">Download a private copy of data on this device.</span>
+          </span>
+          <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
+        </summary>
+        <p class="settings-field-note">Includes this account's local records and journal, plus shared or signed-out data that may belong to another account. It is not a cloud backup and cannot recover lost deletion intentions, unsaved form input, IndexedDB or service-worker storage. The file is not encrypted; keep it private.</p>
+        <button id="studioRecoveryExportBtn" class="ghost-action" type="button">EXPORT STUDIO DATA</button>
+        <p id="studioRecoveryStatus" class="settings-field-note" role="status" aria-live="polite"></p>
+      </details>
+
       <details class="settings-card settings-preference-card settings-disclosure settings-account-card" id="settingsAccountCard" aria-label="Account">
         <summary class="settings-disclosure__summary">
           <span class="settings-disclosure__copy">
