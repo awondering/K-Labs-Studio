@@ -129,11 +129,11 @@ test('chart data: the Fuji chart values live only in src/chart-data.js (with pro
   assert.match(read('kr-guide-layout','VERIFICATION.md'),/Still unverified/);
 });
 
-test('the KR engine suite passes (calculations unchanged)',()=>{
+test('the KR engine suite passes',()=>{
   const dir=path.join(root,'kr-guide-layout','src');
   const r=spawnSync(process.execPath,[path.join(dir,'tests.js')],{encoding:'utf8',cwd:dir});
   assert.equal(r.status,0,r.stdout.split('\n').filter((l)=>/^FAIL/.test(l)).join('\n'));
-  assert.match(r.stdout,/82\/82 passed/);
+  assert.match(r.stdout,/92\/92 passed/);
 });
 
 test('every new style rule is scoped to the KR Guide Layout card so other Workshop tools are untouched',()=>{

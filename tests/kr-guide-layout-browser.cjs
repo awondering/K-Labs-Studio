@@ -77,6 +77,13 @@ async function main(){
     await f.locator('.seg button',{hasText:'Decimal in'}).first().click();
     await f.locator('button[data-rod]').first().click();
     ck('Choosing the 5\'6" chart rod loads its eight-guide row: reduction 16/8/5.5, stripper at 21.6 in, 8 guides',await f.locator('.row').count()===8&&/KL16H[\s\S]*KL8H/.test(await f.locator('.sumrow').innerText())&&(await f.locator('.row[data-i="0"] input').inputValue())==='33.600'&&(await f.locator('.row[data-i="7"] input').inputValue())==='0.000');
+    await f.locator('.seg button',{hasText:'mm'}).first().click();await f.locator('button[data-rod]').nth(3).click();
+    await f.locator('input[data-k="stem"]').fill('300');await f.locator('input[data-k="stem"]').press('Enter');await page.waitForTimeout(80);
+    const stemFix=await f.locator('.row .num input').evaluateAll((a)=>a.map((i)=>parseFloat(i.value)));
+    ck('Workshop: moving the reel stem 102 mm toward the tip recalculates automatically (8 + tip-top, all on the blank, tip-top at 0, labelled K-Labs-calculated)',stemFix.length===9&&stemFix[0]===0&&Math.min(...stemFix)>=0&&/K-Labs-calculated/.test(await f.locator('.warn').textContent())&&(await f.locator('.tag.off').count())===0,stemFix);
+    await f.locator('button[data-fit]').click();await page.waitForTimeout(80);
+    ck('Workshop: Set stem to fit returns to the published reference (10 rows, all reference)',await f.locator('.row').count()===10&&(await f.locator('.row .tag.published').count())===10);
+    await f.locator('.seg button',{hasText:'Decimal in'}).first().click();
     await f.locator('button[data-rod]').nth(3).click();
     await f.locator('#entrybox > summary').click();
     await f.locator('input[data-e=label]').fill('My 6 ft test');await f.locator('input[data-e=stripper]').fill('26.2');await f.locator('input[data-e=gaps]').fill('10 8 6.5 6 5.4 5 4.8 4.3');
@@ -106,13 +113,13 @@ async function main(){
       await context.close();
     }
     for(const [w,two] of [[390,false],[1440,true]]){({context,page,errors}=await boot(browser,base,{width:w,height:900}));await openKr(page);
-      const lay=await page.evaluate(()=>{const d=document.querySelector('#krGuideHost iframe').contentDocument,a=d.querySelector('.col-a').getBoundingClientRect(),b=d.querySelector('.col-b').getBoundingClientRect();return {sideBySide:b.left>a.right-2,wide:Math.round(d.querySelector('main').getBoundingClientRect().width)};});
+      const lay=await page.evaluate(()=>{const d=document.querySelector('#krGuideHost iframe').contentDocument,a=d.querySelector('.s-gui').getBoundingClientRect(),b=d.querySelector('.s-sum').getBoundingClientRect();return {sideBySide:b.left>a.right-2,wide:Math.round(d.querySelector('main').getBoundingClientRect().width)};});
       ck(`${w}px: ${two?'desktop uses the width (rod/reel column beside layout and guides)':'phone stays a single compact column'}`,lay.sideBySide===two&&(two?lay.wide>900:lay.wide<=410),lay);await context.close();}
     ck('The layout numbers (positions and spacings) are identical at every size',new Set(snaps).size===1);
 
     ({context,page,errors}=await boot(browser,base,{width:390,height:844},true));
     const cached=await page.evaluate(async()=>{await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;const k=(await caches.keys()).find((x)=>x.startsWith('klabs-studio-app-shell-'));const c=await caches.open(k);return {k,a:!!(await c.match(new URL('kr-guide-layout/index.html',location.href))),b:!!(await c.match(new URL('js/kr-guide-layout-host.js',location.href)))};});
-    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v225/.test(cached.k),cached);
+    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v227/.test(cached.k),cached);
     await page.reload({waitUntil:'load'});
     for(const s of SCRIPTS)await page.addScriptTag({url:`${base}/js/${s}`});
     await page.evaluate(()=>{window.KLABS_ACCOUNT_ID='aaaaaaaa-0000-0000-0000-000000000001';document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');});
