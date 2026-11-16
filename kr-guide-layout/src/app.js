@@ -64,11 +64,7 @@ ${num('g' + i, q.tipMm, K.label(L, i) + ' position from tip')}<div class="sp">${
 <div class="ac"><button type="button" data-lock="${i}" aria-pressed="${q.locked}">${q.locked ? 'Locked' : 'Lock'}</button><button type="button" data-reset="${i}"${q.refTipMm == null ? ' disabled' : ''}>Ref</button></div></div>`; };
     let rows = ''; for (let i = L.guides.length - 1; i >= 0; i--) rows += row(i);
     const ax = S.axle != null ? ` \u00b7 beyond axle tip <b>${f(K.fromStem(L, sel) - S.axle)}</b>` : '';
-    const unv = S.ref.chart ? 4 : 3;
-    $('#app').innerHTML = `<h1>KR Guide Layout</h1><p class="sub">${S.ref.chart ? 'Starting layout from Fuji\u2019s published KR Concept chart for your rod.' : 'Starting layout from your own chart measurements.'} Workshop prototype for internal testing.</p>
-<details class="notice col-all"><summary><span>${S.ref.chart ? 'Chart-based layout, not an official Fuji tool' : 'Your measurements, not verified'} \u00b7 ${unv} items unverified</span></summary>
-<p class="note">KR Guide Layout is an independent K-Labs Studio tool, not affiliated with or endorsed by Fuji. Manufacturer names are used descriptively.${S.ref.chart ? ' The reference distances are Fuji\u2019s published chart values as transcribed by K-Labs; they are not changed, and the layout, guide counts and scaling built on them are K-Labs calculations.' : ''}</p>
-<p class="note"><b>Unverified:</b> ${S.ref.chart ? 'the frame designation of the third reduction guide; ' : ''}whether the chart measures to the ring centre or the ring base (positions here are ring centres, offset assumed 0, so do not use them to mark foot placement); whether the chart\u2019s rod length is the blank or the finished rod; and the 15 mm minimum guide clearance, which is a working assumption, not a manufacturer figure.</p></details>
+    $('#app').innerHTML = `<h1>KR Guide Layout</h1><p class="sub">${S.ref.chart ? 'Stripper, reduction train, choke point and running guides for your rod, from the Fuji KR chart.' : 'Guide layout from your own chart measurements.'}</p>
 <section class="card col-a"><h2>Rod and reel</h2><div class="mut">Chart rod length</div><div class="seg wrap" role="group" aria-label="Chart rod length">${K.CHART_RODS.map(r => `<button data-rod="${esc(r.id)}" aria-pressed="${S.ref.chart && S.rod === r.id}">${r.label}</button>`).join('')}</div>
 <div class="grid" style="margin-top:10px"><label class="f">Blank length${num('blade', S.blade, 'Blank length')}</label><label class="f">Reel stem from butt${num('stem', S.stem, 'Reel stem from butt')}</label></div>
 <div class="seg" role="group" aria-label="Units"><button data-unit="mm" aria-pressed="${S.unit === 'mm'}">mm</button><button data-unit="in" aria-pressed="${S.unit === 'in'}">Decimal in</button><button data-unit="frac" aria-pressed="${S.unit === 'frac'}">Fractional in</button></div>
@@ -124,7 +120,12 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
 <div class="bar"><button class="btn sm pri" data-applyentry>Use my measurements</button>${S.ref.chart ? '' : '<button class="btn sm" data-usedemo>Back to chart rod</button>'}</div>
 <p class="note">${esc(S.ref.source)}</p>
 <details><summary>Advanced: reference as JSON</summary><textarea id="refjson" spellcheck="false" aria-label="Reference data JSON">${JSON.stringify(S.ref, null, 1).replace(/</g, '&lt;')}</textarea>
-<div class="bar"><button class="btn sm" data-applyref>Apply values</button></div></details></details></section>`;
+<div class="bar"><button class="btn sm" data-applyref>Apply values</button></div></details></details></section>
+<details class="about col-all"><summary>About this calculator</summary>
+<p class="note">KR Guide Layout is an independent K-Labs Studio tool. It is not affiliated with or endorsed by Fuji; manufacturer names are used descriptively.${S.ref.chart ? ' The reference distances are Fuji\u2019s published KR Concept chart values, transcribed by K-Labs and not changed. The layout, guide counts, fit checks and scaling built on them are K-Labs calculations, not Fuji specifications.' : ' The reference distances are the measurements you typed in.'}</p>
+<p class="note"><b>Assumptions and limits.</b> Positions are ring centres measured from the blank tip (ring offset assumed 0), so do not use them to mark foot placement. The 15 mm minimum clearance is a working assumption. Layouts are starting points and have not been bench, static-load or casting tested.</p>
+<p class="note"><b>Unverified.</b> ${S.ref.chart ? 'The frame designation of the third reduction guide. ' : ''}Whether the chart measures to the ring centre or the ring base, and whether its rod length is the blank or the finished rod.</p>
+<p class="note">Workshop prototype for internal testing.</p></details>`;
   }
   const A = document;
   A.addEventListener('click', e => {

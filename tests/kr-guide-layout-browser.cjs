@@ -51,6 +51,9 @@ async function main(){
     await page.waitForFunction(()=>document.querySelector('#krGuideHost iframe').contentDocument.querySelectorAll('.row').length>0);
     ck('Tapping the launcher opens the tool in the Workshop (card visible, list hidden, frame titled)',await page.evaluate(()=>!document.getElementById('workshopToolKrGuide').hidden&&document.getElementById('workshopToolsList').hidden&&document.querySelector('#krGuideHost iframe').title==='KR Guide Layout'));
     const f=fr(page);
+    const pres=await f.locator('body').evaluate(()=>{const app=document.querySelector('#app'),vis=(e)=>e&&e.getBoundingClientRect(),ab=app.querySelector('details.about'),kids=[...app.children];return {heading:app.firstElementChild.tagName,sub:!!app.querySelector('.sub'),notice:!!app.querySelector('.notice'),amber:app.querySelectorAll('[class*=notice],.warn-panel').length,chipsTop:Math.round(vis(app.querySelector('button[data-rod]')).top),firstCardIsRod:/rod and reel/i.test(app.querySelector('section.card').innerText),aboutLast:kids[kids.length-1]===ab,aboutOpen:ab.open,aboutText:ab.textContent,subText:app.querySelector('.sub').textContent};});
+    ck('Presentation: heading, short description and rod controls come first; no amber disclaimer panel; rod chips are on the first screen',pres.heading==='H1'&&pres.sub&&!pres.notice&&pres.amber===0&&pres.firstCardIsRod&&pres.chipsTop<260&&pres.subText.length<110,pres);
+    ck('About this calculator is last, collapsed, and holds independence/non-endorsement, Fuji attribution, provenance and unverified items',pres.aboutLast&&!pres.aboutOpen&&/not affiliated with or endorsed by Fuji/.test(pres.aboutText)&&/Fuji\u2019s published KR Concept chart/.test(pres.aboutText)&&/transcribed by K-Labs/.test(pres.aboutText)&&/Unverified/.test(pres.aboutText)&&/foot placement/.test(pres.aboutText),pres.aboutText.slice(0,80));
     ck('Tool shows its title, ten guide rows and the independence statement',(await f.locator('h1').innerText())==='KR Guide Layout'&&await f.locator('.row').count()===10&&(await f.locator('#app').textContent()).includes('not affiliated with or endorsed by Fuji'));
     const txt=await f.locator('#app').textContent();
     ck('Calculated results are labelled as such: reference start, Fuji-chart source, unverified guide, ring-centre note, prototype status',/Reference start/i.test(txt)&&/Fuji.s published KR Concept chart/i.test(txt)&&!/invented|demonstration/i.test(txt)&&/unverified/i.test(txt)&&/ring centres/i.test(txt)&&/internal testing/i.test(txt));
@@ -109,7 +112,7 @@ async function main(){
 
     ({context,page,errors}=await boot(browser,base,{width:390,height:844},true));
     const cached=await page.evaluate(async()=>{await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;const k=(await caches.keys()).find((x)=>x.startsWith('klabs-studio-app-shell-'));const c=await caches.open(k);return {k,a:!!(await c.match(new URL('kr-guide-layout/index.html',location.href))),b:!!(await c.match(new URL('js/kr-guide-layout-host.js',location.href)))};});
-    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v224/.test(cached.k),cached);
+    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v225/.test(cached.k),cached);
     await page.reload({waitUntil:'load'});
     for(const s of SCRIPTS)await page.addScriptTag({url:`${base}/js/${s}`});
     await page.evaluate(()=>{window.KLABS_ACCOUNT_ID='aaaaaaaa-0000-0000-0000-000000000001';document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');});
