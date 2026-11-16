@@ -1934,6 +1934,7 @@ function renderWorkshopToolVisibility(){
   const threadWrapCard=$('workshopToolThreadWrap');
   const guideTrainCard=$('workshopToolGuideTrain');
   const threadStudioCard=$('workshopToolThreadStudio');
+  const krGuideCard=$('workshopToolKrGuide');
   const activeTool=workshopToolsState.activeTool;
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
@@ -1941,6 +1942,7 @@ function renderWorkshopToolVisibility(){
   if(threadWrapCard)threadWrapCard.hidden=activeTool!=='thread-wrap';
   if(guideTrainCard)guideTrainCard.hidden=activeTool!=='guide-train';
   if(threadStudioCard)threadStudioCard.hidden=activeTool!=='thread-studio';
+  if(krGuideCard)krGuideCard.hidden=activeTool!=='kr-guide';
   const intro=document.querySelector('#workshopToolsPanel .workshop-landing-panel__intro');
   if(intro)intro.hidden=activeTool!=='list';
   const panel=$('workshopToolsPanel');
@@ -2059,7 +2061,7 @@ function openWorkshopTool(tool){
     goScreen('layoutScreen');
     return;
   }
-  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':tool==='guide-train'?'guide-train':tool==='thread-studio'?'thread-studio':'diameter';
+  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':tool==='guide-train'?'guide-train':tool==='thread-studio'?'thread-studio':tool==='kr-guide'?'kr-guide':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
@@ -3300,6 +3302,19 @@ function renderThreadStudioTool(){
   if(api.mountedScope(host)===scope)return;
   api.mount(host,{scope,onOpenTaperDesigner:()=>openWorkshopTool('thread-wrap')});
 }
+// KR Guide Layout: an independent document mounted only while its Workshop card is open. It holds no storage and has no
+// access to builds, customers, quotes, components, Guide Setup or sync, so nothing is passed in or read back.
+function renderKrGuideTool(){
+  const host=$('krGuideHost');
+  const api=typeof KLabsKrGuideLayoutHost!=='undefined'?KLabsKrGuideLayoutHost:null;
+  if(!host || !api)return;
+  if(workshopToolsState.activeTool!=='kr-guide'){
+    api.unmount(host);
+    return;
+  }
+  if(api.isMounted(host))return;
+  api.mount(host);
+}
 function renderWorkshopCalculator(){
   refreshWorkshopMeasurementLabels();
   renderWorkshopToolVisibility();
@@ -3309,6 +3324,7 @@ function renderWorkshopCalculator(){
   renderSpiralGuideMapper();
   renderGuideTrainTool();
   renderThreadStudioTool();
+  renderKrGuideTool();
   renderGuideSpecificationSummary();
 }
 function cancelGuideMapperReveal(){
@@ -14943,7 +14959,7 @@ function shouldAvoidMobileTextAutoFocus(){
 function dismissWorkshopToolPrimaryInputFocus(tool){
   const targetId=tool==='grip'
     ?'workshopGripDiameter'
-    :tool==='thread-studio'
+    :tool==='thread-studio' || tool==='kr-guide'
       ?''
       :tool==='thread-wrap'
       ?'workshopThreadWrapLength'
@@ -17328,6 +17344,8 @@ function onScreenChange(screenId){
     syncWorkshopToolBackControl();
     const selector=workshopLandingReturnFocusTool==='grip'
       ?'[data-workshop-tool-open="grip"]'
+      :workshopLandingReturnFocusTool==='kr-guide'
+        ?'[data-workshop-tool-open="kr-guide"]'
       :workshopLandingReturnFocusTool==='thread-studio'
         ?'[data-workshop-tool-open="thread-studio"]'
         :workshopLandingReturnFocusTool==='thread-wrap'

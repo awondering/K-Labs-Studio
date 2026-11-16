@@ -42,10 +42,10 @@ test('script order, service worker precache and cache version',()=>{
 });
 
 test('ui.js wiring: open mapping, visibility, focus return and render hook',()=>{
-  assert.match(ui,/tool==='thread-studio'\?'thread-studio':'diameter'/);
+  assert.match(ui,/tool==='thread-studio'\?'thread-studio':tool==='kr-guide'\?'kr-guide':'diameter'/);
   assert.match(ui,/threadStudioCard\.hidden=activeTool!=='thread-studio'/);
   assert.match(ui,/workshopLandingReturnFocusTool==='thread-studio'/);
-  assert.match(ui,/renderGuideTrainTool\(\);\s*renderThreadStudioTool\(\);/);
+  assert.match(ui,/renderGuideTrainTool\(\);\s*renderThreadStudioTool\(\);\s*renderKrGuideTool\(\);/);
   assert.match(ui,/onOpenTaperDesigner:\(\)=>openWorkshopTool\('thread-wrap'\)/);
 });
 

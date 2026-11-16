@@ -234,6 +234,10 @@
               <span class="workshop-tool-launch__title">Guide Setup</span>
               <span class="workshop-tool-launch__meta">Guide spacing and orientation.</span>
             </button>
+            <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="kr-guide">
+              <span class="workshop-tool-launch__title">KR Guide Layout</span>
+              <span class="workshop-tool-launch__meta">Starting guide layout for a KR Concept spinning rod.</span>
+            </button>
             <button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="grip">
               <span class="workshop-tool-launch__title">Grip Wrap</span>
               <span class="workshop-tool-launch__meta">Calculate wrap length and cut angles.</span>
@@ -335,6 +339,17 @@
             </div>
 
             <p class="workshop-tool-note">Assumes continuous spiral covering with no gap or overlap between turns.</p>
+          </article>
+
+          <article id="workshopToolKrGuide" class="layout-control-card workshop-tool-card kr-guide-card" aria-label="KR Guide Layout" hidden>
+            <div class="workshop-tool-head kr-guide-head">
+              <button class="workshop-tool-nav-back" type="button" data-workshop-tool-back aria-label="Return to Workshop landing screen">
+                <span class="workshop-tool-nav-back__arrow" aria-hidden="true">&#x2039;</span>
+                <span>Workshop</span>
+              </button>
+              <h3>KR Guide Layout</h3>
+            </div>
+            <div id="krGuideHost" class="kr-guide-host"></div>
           </article>
 
           <article id="workshopToolThreadStudio" class="layout-control-card workshop-tool-card thread-studio-card" aria-label="Thread Design Studio" hidden>
