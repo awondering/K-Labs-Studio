@@ -6,13 +6,17 @@
   const IN = 25.4, MIN_GAP = 15, FIT_TOL = 1.3; // 1.3 mm = chart precision (+/-0.05 in)
   const toMm = (v, u) => (u === 'mm' ? v : v * IN);
   const fromMm = (mm, u) => (u === 'mm' ? mm : mm / IN);
-  function frac(i) {
-    const neg = i < 0; let a = Math.abs(i), w = Math.floor(a), n = Math.round((a - w) * 16);
-    if (n === 16) { w++; n = 0; }
-    let s = ''; if (n) { let d = 16, k = n; while (k % 2 === 0) { k /= 2; d /= 2; } s = k + '/' + d; }
+  function frac(i, den) { // conventional inch fraction, reduced; 1/16 for positions, 1/32 where a limit must not be misstated
+    den = den || 16; const neg = i < 0; let a = Math.abs(i), w = Math.floor(a), n = Math.round((a - w) * den);
+    if (n === den) { w++; n = 0; }
+    let s = ''; if (n) { let d = den, k = n; while (k % 2 === 0) { k /= 2; d /= 2; } s = k + '/' + d; }
     return (neg ? '-' : '') + ((w || !s ? String(w) : '') + (w && s ? ' ' : '') + s) + '"';
   }
   const fmt = (mm, u) => (u === 'mm' ? mm.toFixed(1) : u === 'frac' ? frac(mm / IN) : (mm / IN).toFixed(2));
+  // Unit used for the engine's own wording (warnings, reasons, limits). Geometry is always millimetres; this only changes how it is written.
+  let UNIT = 'mm';
+  const setUnit = u => { UNIT = u === 'in' || u === 'frac' ? u : 'mm'; };
+  const len = mm => (UNIT === 'mm' ? mm.toFixed(1) + ' mm' : UNIT === 'frac' ? frac(mm / IN, 32) : (mm / IN).toFixed(2) + ' in');
 
   // Reference layouts come from Fuji's published KR Concept chart rows (chart-data.js, transcribed by K-Labs, see VERIFICATION.md).
   // A row gives the reel-stem-to-stripper distance and the gap between every following guide down to the tip-top; the layout is those
@@ -119,13 +123,13 @@
   function issues(L) {
     const out = [], n = L.guides.length;
     L.guides.forEach((g, i) => {
-      if (g.tipMm < -1e-6) out.push({ i, type: 'range', msg: label(L, i) + ' is ' + (-g.tipMm).toFixed(1) + ' mm beyond the blank tip' });
+      if (g.tipMm < -1e-6) out.push({ i, type: 'range', msg: label(L, i) + ' is ' + len(-g.tipMm) + ' beyond the blank tip' });
       if (g.tipMm > L.geom.bladeLenMm + 1e-6) out.push({ i, type: 'range', msg: label(L, i) + ' is beyond the butt' });
       if (i < n - 1) { const s = g.tipMm - L.guides[i + 1].tipMm;
         if (s <= 0) out.push({ i, type: 'order', msg: label(L, i) + ' is not tip-side of ' + label(L, i + 1) });
-        else if (s < MIN_GAP) out.push({ i, type: 'gap', msg: 'Spacing ' + label(L, i) + ' to ' + label(L, i + 1) + ' under ' + MIN_GAP + ' mm' }); }
+        else if (s < MIN_GAP) out.push({ i, type: 'gap', msg: 'Spacing ' + label(L, i) + ' to ' + label(L, i + 1) + ' under ' + len(MIN_GAP) }); }
     });
-    const tt = L.guides[n - 1]; if (tt.tipMm > FIT_TOL) out.push({ i: n - 1, type: 'range', msg: 'Tip-top is ' + tt.tipMm.toFixed(1) + ' mm short of the tip; it must sit at the tip' });
+    const tt = L.guides[n - 1]; if (tt.tipMm > FIT_TOL) out.push({ i: n - 1, type: 'range', msg: 'Tip-top is ' + len(tt.tipMm) + ' short of the tip; it must sit at the tip' });
     return out;
   }
   function setPosition(L, i, mm) {
@@ -134,8 +138,8 @@
     if (g.locked) return { ok: false, msg: label(L, i) + ' is locked' };
     if (mm < 0) return { ok: false, msg: 'Position can\u2019t be beyond the blank tip' };
     if (mm > L.geom.bladeLenMm) return { ok: false, msg: 'Position can\u2019t be beyond the butt' };
-    if (p && mm > p.tipMm - MIN_GAP) return { ok: false, msg: 'Keep ' + MIN_GAP + ' mm clear of ' + label(L, i - 1) };
-    if (nx && mm < nx.tipMm + MIN_GAP) return { ok: false, msg: 'Keep ' + MIN_GAP + ' mm clear of ' + label(L, i + 1) };
+    if (p && mm > p.tipMm - MIN_GAP) return { ok: false, msg: 'Keep ' + len(MIN_GAP) + ' clear of ' + label(L, i - 1) };
+    if (nx && mm < nx.tipMm + MIN_GAP) return { ok: false, msg: 'Keep ' + len(MIN_GAP) + ' clear of ' + label(L, i + 1) };
     g.tipMm = mm;
     g.basis = g.refTipMm != null && Math.abs(mm - g.refTipMm) < 1e-9 ? 'published' : (g.basis === 'added' ? 'added' : 'manual');
     return { ok: true };
@@ -250,13 +254,13 @@
     if (nRun < 1) return bad('Needs at least one running guide');
     if (free < 0) return bad('Locked/manual guides exceed this count');
     const ttFixed = tt.locked || tt.basis === 'manual';
-    if (ttFixed && Math.abs(tt.tipMm) > FIT_TOL) return bad('The tip-top is ' + (tt.locked ? 'locked' : 'adjusted') + ' ' + tt.tipMm.toFixed(1) + ' mm from the tip; it must sit at the tip. Unlock or reset it');
+    if (ttFixed && Math.abs(tt.tipMm) > FIT_TOL) return bad('The tip-top is ' + (tt.locked ? 'locked' : 'adjusted') + ' ' + len(tt.tipMm) + ' from the tip; it must sit at the tip. Unlock or reset it');
     const a = ttFixed ? tt.tipMm : 0, hi = gs[ci].tipMm, P = runnerProfile(L.ref);
     const bounds = [a, ...fixed.map(g => g.tipMm), hi];
     for (let k = 0; k < fixed.length; k++) { const q = fixed[k], nm = label(L, gs.indexOf(q)) + (q.locked ? ' (locked)' : ' (adjusted)');
-      if (q.tipMm < a + MIN_GAP) return bad(nm + ' is at ' + q.tipMm.toFixed(1) + ' mm from the tip, too close to the tip or beyond it. Move or unlock it');
-      if (q.tipMm > hi - MIN_GAP) return bad(nm + ' is at ' + q.tipMm.toFixed(1) + ' mm, too close to the choke (' + hi.toFixed(1) + ' mm) or past it. Move or unlock it'); }
-    for (let i = 1; i < bounds.length; i++) if (bounds[i] - bounds[i - 1] < MIN_GAP) return bad('Locked or adjusted guides leave under ' + MIN_GAP + ' mm clearance between them');
+      if (q.tipMm < a + MIN_GAP) return bad(nm + ' is at ' + len(q.tipMm) + ' from the tip, too close to the tip or beyond it. Move or unlock it');
+      if (q.tipMm > hi - MIN_GAP) return bad(nm + ' is at ' + len(q.tipMm) + ', too close to the choke (' + len(hi) + ') or past it. Move or unlock it'); }
+    for (let i = 1; i < bounds.length; i++) if (bounds[i] - bounds[i - 1] < MIN_GAP) return bad('Locked or adjusted guides leave under ' + len(MIN_GAP) + ' clearance between them');
     const lens = bounds.slice(1).map((b, i) => b - bounds[i]), q = lens.map(() => 0); // give each free guide to the widest current gap
     for (let k = 0; k < free; k++) { let s = 0; lens.forEach((l, i) => { if (l / (q[i] + 1) > lens[s] / (q[s] + 1)) s = i; }); q[s]++; }
     const run = []; // ascending from tip: {tipMm, guide|null}
@@ -267,7 +271,7 @@
     });
     const pos = [a, ...run.map(r => r.tipMm), hi], gaps = pos.slice(1).map((p, i) => p - pos[i]);
     const minGapMm = Math.min(...gaps), maxGapMm = Math.max(...gaps), valid = minGapMm >= MIN_GAP, mean = (hi - a) / gaps.length;
-    if (!valid) return Object.assign(bad('A gap would be under ' + MIN_GAP + ' mm'), { runners: run, gapsMm: gaps, minGapMm, maxGapMm });
+    if (!valid) return Object.assign(bad('A gap would be under ' + len(MIN_GAP)), { runners: run, gapsMm: gaps, minGapMm, maxGapMm });
     const low = g => (g < P.refMin - 1e-9 ? (P.refMin - g) / P.refMin * 100 : 0), high = g => (g > P.refMax + 1e-9 ? (g - P.refMax) / P.refMax * 100 : 0);
     const flags = gaps.map(g => (low(g) ? 'low' : high(g) ? 'high' : null)), review = reviewGaps(L.ref, gaps);
     return { n, status: 'valid', level: review.level, geometric: { valid: true, why: '' }, why: '', review,
@@ -277,7 +281,7 @@
   }
   function limitText(L) {
     const lim = limitingGeometry(L); if (!lim) return '';
-    return 'From the reel stem the chart puts the choke at ' + lim.chokeFromStemMm.toFixed(1) + ' mm, so with one running guide and the tip-top the blank must give at least ' + lim.needMm.toFixed(1) + ' mm from stem to tip (this one gives ' + lim.availableMm.toFixed(1) + ' mm, ' + (lim.shortfallMm > 0 ? lim.shortfallMm.toFixed(1) + ' mm short' : 'enough for that, so the limit is the locked or adjusted guides') + ').';
+    return 'From the reel stem the chart puts the choke at ' + len(lim.chokeFromStemMm) + ', so with one running guide and the tip-top the blank must give at least ' + len(lim.needMm) + ' from stem to tip (this one gives ' + len(lim.availableMm) + ', ' + (lim.shortfallMm > 0 ? len(lim.shortfallMm) + ' short' : 'enough for that, so the limit is the locked or adjusted guides') + ').';
   }
   function assess(L) {
     const v = validity(L), g = geometry(L);
@@ -291,7 +295,7 @@
     const reviewable = valid.filter(c => c.level === 'review').sort((x, y) => x.review.findings.length - y.review.findings.length || x.excessPct - y.excessPct || y.n - x.n);
     return { needed: true, valid: false, candidates: cands, ranked, reviewable, recommended: ranked[0] ? ranked[0].n : null,
       reason: ranked[0] ? '' : reviewable[0] ? 'Layouts that physically fit exist, but none has runner spacing the chart supports, so none is recommended. You can inspect them as manual-review layouts, or adjust the reel seat, guide count or positions by hand.'
-        : 'No guide count between ' + lo + ' and ' + (L.refBlank + COUNT_WINDOW) + ' keeps at least ' + MIN_GAP + ' mm between neighbouring guides with the fixed guides in place (' + L.refBlank + ' + tip-top: ' + (cands.find(c => c.n === L.refBlank) || cands[0]).why + '). ' + limitText(L) + ' Adjust manually or move the reel seat.' };
+        : 'No guide count between ' + lo + ' and ' + (L.refBlank + COUNT_WINDOW) + ' keeps at least ' + len(MIN_GAP) + ' between neighbouring guides with the fixed guides in place (' + L.refBlank + ' + tip-top: ' + (cands.find(c => c.n === L.refBlank) || cands[0]).why + '). ' + limitText(L) + ' Adjust manually or move the reel seat.' };
   }
   // ---- Automatic proposal after a geometry change ---------------------------------------------------------------
   // limitingGeometry: the stem-to-tip length the reduction train needs. The chart distances stripper..choke are fixed from the stem, and at least
@@ -339,6 +343,6 @@
   }
   const api = { IN, MIN_GAP, FIT_TOL, toMm, fromMm, frac, fmt, CHART_RODS, DEFAULT_ROD, referenceForRod, referenceFromEntry, trainsOf, MIN_ENTRY_GUIDES, MAX_ENTRY_GUIDES, buildReference, crossCheck, createLayout, label,
     spacing, fromStem, fromButt, geometry, issues, setPosition, toggleLock, resetGuide, resetAll, counts, addGuide,
-    removeGuide, validity, candidate, assess, applyCandidate, limitingGeometry, builderEdits, propose, settle, reconcile, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
+    removeGuide, setUnit, len, validity, candidate, assess, applyCandidate, limitingGeometry, builderEdits, propose, settle, reconcile, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.KR = api;
 })(typeof window !== 'undefined' ? window : globalThis);

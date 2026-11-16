@@ -14,7 +14,17 @@
   const build = () => { const N = K.createLayout(S.ref, geom(), S.train); S.train = N.train; finish(K.settle(N)); };
   const rebuild = () => finish(K.reconcile(L, geom()));
   const step = () => (S.unit === 'mm' ? 1 : IN / 16);
-  const inV = mm => (mm == null ? '' : S.unit === 'mm' ? mm.toFixed(1) : (mm / IN).toFixed(3));
+  // Display only: S/L hold millimetres and are never rewritten from displayed text. A field is applied only when the builder edits it.
+  const inV = mm => (mm == null ? '' : S.unit === 'mm' ? mm.toFixed(1) : S.unit === 'frac' ? K.fmt(mm, 'frac').replace(/"$/, '') : (mm / IN).toFixed(3));
+  // Typed chart entries are converted when the unit changes, without rounding them to the display precision (fractions only when exact).
+  const trim = (v, d) => String(+v.toFixed(d));
+  const entryTxt = (mm, u) => { if (u === 'mm') return trim(mm, 4); const i = mm / IN; return u === 'frac' && Math.abs(i * 16 - Math.round(i * 16)) < 1e-6 ? K.fmt(mm, 'frac').replace(/"$/, '') : trim(i, 6); };
+  const listU = v => { const raw = String(v).split(/([\s,;]+)/), out = []; // "5 1/2 6" is two gaps; a fraction joins the whole number just before it
+    for (let i = 0; i < raw.length; i += 2) { const t = raw[i]; if (!t) continue; const sep = raw[i - 1] || '', last = out[out.length - 1];
+      if (last && /^\d+\/\d+$/.test(t) && /^-?\d+$/.test(last) && /^ +$/.test(sep)) out[out.length - 1] = last + ' ' + t; else out.push(t); } return out; };
+  const convertEntry = (from, to) => { const one = t => { const v = K.parseLength(t, from); return String(t).trim() === '' || !isFinite(v) ? t : entryTxt(v, to); };
+    ['stripper', 'chokeBeyond', 'envMin', 'envMax'].forEach(k => { if (S.entry[k] != null) S.entry[k] = one(S.entry[k]); });
+    if (S.entry.gaps) S.entry.gaps = listU(S.entry.gaps).map(one).join(', '); };
   const parse = v => K.parseLength(v, S.unit);
   const f = mm => K.fmt(mm, S.unit);
   const BASIS = { published: 'reference', heuristic: 'calculated', experimental: 'calculated \u00b7 experimental', manual: 'adjusted', added: 'added' };
@@ -56,6 +66,8 @@
     return s + '</svg>';
   }
   function render() {
+    K.setUnit(S.unit);
+    $('#app').className = 'u-' + S.unit;
     const g = K.geometry(L), c = K.counts(L), x = K.crossCheck(S.ref), v = K.validity(L), is = v.issues, as = K.assess(L); if (!as.needed) S.cand = null; const cv = S.cand != null ? K.candidate(L, S.cand) : null, pv = S.prev && !g.fits && as.needed ? K.compressionPreview(L) : null;
     const sel = S.sel, t = L.guides[sel], un = unitName(), U = S.unit === 'frac' ? '' : ' ' + unitName();
     const rec = as.needed && as.recommended != null ? as.ranked[0] : null;
@@ -93,7 +105,7 @@ ${rec ? `<p><b>Suggested:</b> ${rec.n} + tip-top \u2014 starting recommendation 
 <p class="note"><b>Why ${rec.n}:</b> it fits, every runner gap is within what the chart publishes and narrows toward the tip, and it deviates least from this rod\u2019s chart row. ${sum(rec)}.${as.ranked.length > 1 ? ' Also suitable: ' + as.ranked.slice(1, 3).map(k => k.n).join(', ') + '.' : ''}${as.reviewable.length ? ' Needs manual review: ' + as.reviewable.map(k => k.n + ' (' + k.review.findings.length + ')').join(', ') + '.' : ''}</p>`
  : as.reviewable.length ? `<p><b>No recommended count.</b> ${as.reason}</p>` : `<p><b>No geometrically valid candidate.</b> ${as.reason}</p>`}
 ${as.candidates.length ? `<div class="bar" role="group" aria-label="Guide counts compared">${as.candidates.map(k => `<button class="btn sm" data-cand="${k.n}" aria-pressed="${S.cand === k.n}" title="${k.level === 'impossible' ? k.why : k.level === 'review' ? 'Manual review' : 'Suitable'}">${k.n}${k.n === as.recommended ? ' \u2605' : ''}${k.level === 'impossible' ? ' \u2717' : k.level === 'review' ? ' \u00b7 review' : ''}</button>`).join('')}</div>
-<details><summary>Counts compared</summary>${as.candidates.map(k => `<p class="note">${k.n} + tip-top \u00b7 ${k.level === 'impossible' ? 'impossible: ' + k.why : (k.level === 'suitable' ? 'suitable. ' : 'manual review (' + k.review.findings.length + ' finding' + (k.review.findings.length > 1 ? 's' : '') + '). ') + sum(k)}</p>`).join('')}<p class="note">Three separate checks. Geometry: every guide on the blank, in order, at least ${K.MIN_GAP} mm apart. Spacing: each runner gap within the smallest\u2013largest runner gap the chart publishes for any rod (${f(as.candidates.find(k => k.review) ? as.candidates.find(k => k.review).review.envelope[0] : 0)}\u2013${f(as.candidates.find(k => k.review) ? as.candidates.find(k => k.review).review.envelope[1] : 0)}${U}, \u00b1${f(K.PREC)}${U} chart rounding) and narrowing toward the tip. Only counts passing both are recommended.</p></details>` : ''}
+<details><summary>Counts compared</summary>${as.candidates.map(k => `<p class="note">${k.n} + tip-top \u00b7 ${k.level === 'impossible' ? 'impossible: ' + k.why : (k.level === 'suitable' ? 'suitable. ' : 'manual review (' + k.review.findings.length + ' finding' + (k.review.findings.length > 1 ? 's' : '') + '). ') + sum(k)}</p>`).join('')}<p class="note">Three separate checks. Geometry: every guide on the blank, in order, at least ${K.len(K.MIN_GAP)} apart. Spacing: each runner gap within the smallest\u2013largest runner gap the chart publishes for any rod (${f(as.candidates.find(k => k.review) ? as.candidates.find(k => k.review).review.envelope[0] : 0)}\u2013${f(as.candidates.find(k => k.review) ? as.candidates.find(k => k.review).review.envelope[1] : 0)}${U}, \u00b1${f(K.PREC)}${U} chart rounding) and narrowing toward the tip. Only counts passing both are recommended.</p></details>` : ''}
 ${cv && cv.runners ? `<p class="note"><b>${cv.n} + tip-top \u2014 ${cv.level === 'impossible' ? 'impossible' : cv.level === 'review' ? 'manual review, not recommended' : 'suitable'}</b>${cv.level === 'impossible' ? ': ' + cv.why : ' \u00b7 ' + sum(cv)}</p>
 ${cv.level === 'review' ? cv.review.findings.slice(0, 3).map(fd => `<p class="note">${findTxt(fd)}</p>`).join('') + (cv.review.findings.length > 3 ? `<p class="note">+${cv.review.findings.length - 3} more.</p>` : '') : ''}
 ${cv.status === 'valid' ? `<p class="note">Gaps from the tip: ${cv.gapsMm.map((g, i) => f(g) + (cv.flags[i] === 'high' ? '\u2191' : cv.flags[i] === 'low' ? '\u2193' : '')).join(' \u00b7 ')}${U}. \u2191 above, \u2193 below this row\u2019s published range. Reduction train and locked/manual guides unchanged.</p>` : ''}
@@ -112,7 +124,7 @@ ${pv ? `<p class="note">Experimental, not Fuji\u2019s method: runner gaps scaled
     + `<div class="sl"><span class="dot r-running"></span><b>Running guides</b><span>${run.length} \u00b7 spacing ${run.length ? f(Math.min(...gs.slice(ci).map((q, k, a) => (k ? a[k - 1].tipMm - q.tipMm : Infinity)))) + '\u2013' + f(Math.max(...gs.slice(ci).map((q, k, a) => (k ? a[k - 1].tipMm - q.tipMm : 0)))) + U : '\u2014'} (choke to tip-top)</span></div>`; })()}</div>
 <p class="note">Tags: <b>reference</b> = the chart\u2019s own distance, <b>calculated</b> = placed by K-Labs, <b>adjusted</b> = moved by you.</p></section>
 <section class="card s-src"><h2>Sources and limits</h2><p class="mut">Reference: ${S.ref.chart ? 'Fuji KR Concept chart row for ' + esc(S.rod) : 'the spacing between guides in your chart' + (S.ref.label ? ' (\u201c' + esc(S.ref.label) + '\u201d)' : '')}. The chart\u2019s choke-distance table is kept as a separate cross-check, never combined with the spacing${x ? ': ' + f(x.tableMm) + ' vs ' + f(x.chainMm) + ' from the stem' + (x.agrees ? ', in agreement' : ', ' + f(x.deltaMm) + ' apart. This layout uses the spacing diagram') : ''}.</p>
-<details id="entrybox"${S.entryMsg || !S.ref.chart ? ' open' : ''}><summary>Other rod: enter your own measurements</summary>
+<details id="entrybox"${S.entryMsg || !S.ref.chart || S.entryOpen ? ' open' : ''}><summary>Other rod: enter your own measurements</summary>
 <p class="note">For a rod not in the chart, type the distances from your own chart. They are not saved or sent anywhere; enter them again next time.</p>
 <div class="grid"><label class="f">Label (optional)<input class="tin" data-e="label" value="${esc(S.entry.label)}" autocomplete="off" maxlength="60"></label><label class="f">Reel stem to first guide (${un})<input class="tin" data-e="stripper" inputmode="decimal" value="${esc(S.entry.stripper)}" autocomplete="off"></label></div>
 <label class="f">Gaps from guide #1 toward the tip-top, in order (${un}), separated by spaces or commas<input class="tin" data-e="gaps" inputmode="decimal" value="${esc(S.entry.gaps)}" autocomplete="off" placeholder="one gap per guide after the first"></label>
@@ -128,7 +140,7 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
 <div class="bar"><button class="btn sm" data-applyref>Apply values</button></div></details></details></section></div>
 <details class="about col-all"><summary>About this calculator</summary>
 <p class="note">KR Guide Layout is an independent K-Labs Studio tool. It is not affiliated with or endorsed by Fuji; manufacturer names are used descriptively.${S.ref.chart ? ' The reference distances are Fuji\u2019s published KR Concept chart values, transcribed by K-Labs and not changed. The layout, guide counts, fit checks and scaling built on them are K-Labs calculations, not Fuji specifications.' : ' The reference distances are the measurements you typed in.'}</p>
-<p class="note"><b>Assumptions and limits.</b> Positions are ring centres measured from the blank tip (ring offset assumed 0), so do not use them to mark foot placement. The 15 mm minimum clearance is a working assumption. Layouts are starting points and have not been bench, static-load or casting tested.</p>
+<p class="note"><b>Assumptions and limits.</b> Positions are ring centres measured from the blank tip (ring offset assumed 0), so do not use them to mark foot placement. The ${K.len(K.MIN_GAP)} minimum clearance is a working assumption. Layouts are starting points and have not been bench, static-load or casting tested.</p>
 <p class="note"><b>Unverified.</b> ${S.ref.chart ? 'The frame designation of the third reduction guide. ' : ''}Whether the chart measures to the ring centre or the ring base, and whether its rod length is the blank or the finished rod.</p>
 <p class="note">Workshop prototype for internal testing.</p></details>`;
   }
@@ -136,7 +148,7 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
   A.addEventListener('click', e => {
     const b = e.target.closest('button,[data-i]'); if (!b) return; const d = b.dataset; if (d.resetall == null) S.confirm = false;
     if (d.st) { const k = d.k, cur = val(k) == null ? 0 : val(k); apply(k, cur + (+d.st) * step()); }
-    else if (d.unit) S.unit = d.unit;
+    else if (d.unit) { if (d.unit !== S.unit) { convertEntry(S.unit, d.unit); S.unit = d.unit; K.setUnit(S.unit); S.msg = ''; } }
     else if (d.lock != null) K.toggleLock(L, +d.lock);
     else if (d.reset != null) { const r = K.resetGuide(L, +d.reset); S.msg = r.ok ? '' : r.msg; }
     else if (d.resetall != null) { if (!S.confirm) S.confirm = true; else { L = K.resetAll(L); S.proposal = K.propose(L); S.cand = S.proposal.status === 'proposed' ? S.proposal.n : null; S.msg = ''; S.prev = false; S.confirm = false; } }
@@ -149,7 +161,7 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
     else if (d.prev != null) S.prev = !S.prev;
     else if (d.compress != null) { const r = K.applyCompression(L); S.msg = r.ok ? '' : r.msg; S.prev = false; }
     else if (d.cnt) { const r = +d.cnt > 0 ? K.addGuide(L) : K.removeGuide(L); S.msg = r.ok ? '' : r.msg; }
-    else if (d.applyentry != null) { const E = S.entry, parseU = v => { const m = K.parseLength(v, S.unit); return isFinite(m) ? m : NaN; }, list = v => String(v).split(/[\s,;]+/).filter(Boolean);
+    else if (d.applyentry != null) { const E = S.entry, parseU = v => { const m = K.parseLength(v, S.unit); return isFinite(m) ? m : NaN; }, list = listU;
       const gaps = list(E.gaps).map(parseU), one = v => (String(v).trim() === '' ? null : parseU(v));
       if (gaps.some(g => !isFinite(g)) || !isFinite(parseU(E.stripper))) S.entryMsg = 'Check the numbers: use plain decimals' + (S.unit === 'frac' ? ' or fractions such as 5 1/2' : '') + ' separated by spaces or commas.';
       else { const r = K.referenceFromEntry({ label: E.label, unit: 'mm', stripper: parseU(E.stripper), gaps, models: E.models.trim() ? E.models.split(',') : [], chokeBeyond: one(E.chokeBeyond), envelopeMin: one(E.envMin), envelopeMax: one(E.envMax) });
@@ -161,6 +173,7 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
     else if (d.i != null && !e.target.closest('input')) S.sel = +d.i; else return;
     render();
   });
+  A.addEventListener('toggle', e => { if (e.target.id === 'entrybox') S.entryOpen = e.target.open; }, true); // keep the entry form open across unit changes
   A.addEventListener('input', e => { const t = e.target; if (t.dataset && t.dataset.e) S.entry[t.dataset.e] = t.value; });
   A.addEventListener('change', e => { const t = e.target;
     if (t.dataset.done) { S.done[t.dataset.done] = t.checked; }
