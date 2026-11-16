@@ -5,6 +5,13 @@
     "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js",
     "js/quote-number-allocator.js", "js/app.js"
   ];
+  const adminScript = "js/admin-panel.js";
+  // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
+  // own long network timeout; after this the cached entitlement is used, exactly as when offline.
+  const ENTITLEMENT_TIMEOUT_MS = 8000;
+  // Visitors who are not signed in never reach any of this. These are the same static files the server already
+  // publishes; fetching them early changes when they download, not who may run them.
+  let preloadStarted = false;
   let loadPromise = null;
   let pendingDestination = "";
   let currentSession = null;
@@ -32,6 +39,36 @@
     return true;
   }
   window.KLABS_CAN_WRITE = entitlementCanWrite;
+
+  // True when this browser holds a stored Supabase session. Used only as a hint to start downloading (never running)
+  // the private application early; whether Studio opens is still decided by the verified session and entitlement.
+  function hasStoredSession() {
+    try {
+      const storage = window.localStorage;
+      if (!storage || typeof storage.key !== "function") return false;
+      for (let index = 0; index < storage.length; index += 1) {
+        if (/^sb-.+-auth-token$/.test(storage.key(index) || "")) return true;
+      }
+    } catch (error) {
+      return false;
+    }
+    return false;
+  }
+
+  // Download the private application in parallel while the account is still being verified. The scripts are only
+  // fetched here (rel=preload does not execute them); loadPrivateApp still runs them one by one, in order, only
+  // after the entitlement check passes.
+  function preloadPrivateApp() {
+    if (preloadStarted || !document.head || typeof document.createElement !== "function") return;
+    preloadStarted = true;
+    [...privateScripts, adminScript].forEach((src) => {
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "script";
+      link.href = src;
+      document.head.appendChild(link);
+    });
+  }
 
   function showHome() {
     if (trialExpiryTimer) window.clearTimeout(trialExpiryTimer);
@@ -114,13 +151,38 @@
     window.location.reload();
   }
 
+  // supabase-js reports a failed fetch as { message: "TypeError: Failed to fetch" | "TypeError: Load failed", status: 0 }
+  // with no error.name, and iOS can report navigator.onLine === true while the network is unusable. Treat all of
+  // those, and our own timeout, as "cannot reach the server" so a cached entitlement can open Studio.
+  function isNetworkFailure(error, status) {
+    if (window.navigator?.onLine === false) return true;
+    // The server answered with an HTTP status: that is a real refusal or fault, never "offline".
+    if (typeof status === "number" && status >= 100) return false;
+    return status === 0
+      || error?.name === "TypeError"
+      || error?.name === "AbortError"
+      || /network|fetch failed|failed to fetch|load failed|offline|abort|timed? ?out/i.test(error?.message || "");
+  }
+
+  async function requestEntitlement() {
+    let call = window.KLABS_SUPABASE_CLIENT.rpc("get_account_entitlement");
+    let timer = null;
+    if (typeof AbortController === "function" && typeof call?.abortSignal === "function") {
+      const controller = new AbortController();
+      call = call.abortSignal(controller.signal);
+      timer = window.setTimeout(() => controller.abort(), ENTITLEMENT_TIMEOUT_MS);
+    }
+    try {
+      return await call;
+    } finally {
+      if (timer !== null) window.clearTimeout(timer);
+    }
+  }
+
   async function refreshEntitlement() {
-    const { data, error } = await window.KLABS_SUPABASE_CLIENT.rpc("get_account_entitlement");
+    const { data, error, status } = await requestEntitlement();
     if (error) {
-      const networkFailure = window.navigator?.onLine === false
-        || error.name === "TypeError"
-        || /network|fetch failed|offline|timed? ?out/i.test(error.message || "");
-      if (!networkFailure) throw error;
+      if (!isNetworkFailure(error, status)) throw error;
       const key = `klabs-account-entitlement:${currentSession?.user?.id || ""}`;
       let cached;
       try {
@@ -241,7 +303,7 @@
         script.onerror = () => reject(new Error(`Could not load ${src}. Reload and try again.`));
         document.head.appendChild(script);
       });
-      const adminPanelPromise = loadScript("js/admin-panel.js");
+      const adminPanelPromise = loadScript(adminScript);
       const privateAppPromise = privateScripts.reduce(
         (previous, src) => previous.then(() => loadScript(src)),
         Promise.resolve()
@@ -259,6 +321,7 @@
     }
     currentSession = session;
     document.body.classList.add("klabs-auth-resolving");
+    preloadPrivateApp();
     try {
       const entitlement = await refreshEntitlement();
       const { data: sessionData, error: sessionError } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
@@ -419,6 +482,8 @@
       document.getElementById("authMessage").textContent = "Sign in is unavailable. Check your connection and reload.";
     }
   });
+
+  if (hasStoredSession()) preloadPrivateApp();
 
   window.KLABS_PUBLIC_ENTRY = { applySession, showHome, isLoading: () => !!loadPromise };
 })();
