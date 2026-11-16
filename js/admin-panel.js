@@ -98,6 +98,7 @@
       if (error) throw error;
       if (state.userId !== nextUserId) return;
       state.owner = data === true;
+      window.KLABS_UI?.refreshBusinessLogoControls?.();
       if (accessCard) accessCard.hidden = !state.owner;
       if (adminScreen) adminScreen.hidden = !state.owner;
     } catch (error) {

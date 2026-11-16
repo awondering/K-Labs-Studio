@@ -1304,9 +1304,36 @@ body.component-sheet-open .workshop-back-to-top{
   flex-wrap:wrap;
   gap:8px;
 }
-#settingsScreen #settingsBusinessProfileCard .settings-business-logo__actions button{
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__actions > *{
   flex:1 1 140px;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__actions button{
   min-height:44px;
+}
+/* The real file input sits invisibly over the button, so a tap opens the native chooser directly (no scripted click,
+   which Safari can ignore for hidden file inputs). */
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__pick{
+  position:relative;
+  display:flex;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__pick button{
+  width:100%;
+  pointer-events:none;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__pick input[type="file"]{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  padding:0;
+  opacity:0;
+  cursor:pointer;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__pick input[type="file"]:disabled{cursor:default}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__pick:focus-within button{
+  outline:2px solid rgba(214,210,200,.5);
+  outline-offset:2px;
 }
 
 @media (max-width:359px){

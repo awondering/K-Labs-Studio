@@ -1139,8 +1139,10 @@
           <div class="settings-business-logo__body">
             <div class="settings-business-logo__preview" id="settingsBusinessLogoPreview" aria-live="polite"><span class="settings-business-logo__empty">No logo</span></div>
             <div class="settings-business-logo__actions">
-              <input id="settingsBusinessLogoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-              <button id="settingsBusinessLogoChoose" class="ghost-action" type="button">Upload logo</button>
+              <span class="settings-business-logo__pick">
+                <button id="settingsBusinessLogoChoose" class="ghost-action" type="button" tabindex="-1" aria-hidden="true">Upload logo</button>
+                <input id="settingsBusinessLogoFile" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload logo" />
+              </span>
               <button id="settingsBusinessLogoKLabs" class="ghost-action" type="button" hidden>Use K-Labs logo</button>
               <button id="settingsBusinessLogoRemove" class="ghost-action" type="button" hidden>Remove logo</button>
             </div>

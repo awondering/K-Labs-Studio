@@ -24,6 +24,16 @@ test('the user picker accepts raster formats only',()=>{
   assert.match(read('index.html'),/id="settingsBusinessLogoFile"[^>]*accept="image\/png,image\/jpeg,image\/webp"/);
 });
 
+test('the upload control is Safari-safe: a rendered file input over the button, no scripted click, no hidden attribute',()=>{
+  const html=read('index.html');
+  const input=html.match(/<input id="settingsBusinessLogoFile"[^>]*>/)[0];
+  assert.doesNotMatch(input,/\bhidden\b/,'a hidden file input cannot be opened by a scripted click in Safari');
+  assert.match(html,/<span class="settings-business-logo__pick">[\s\S]*id="settingsBusinessLogoChoose"[\s\S]*id="settingsBusinessLogoFile"[\s\S]*<\/span>/);
+  assert.doesNotMatch(ui,/\bfile\.click\(\)/,'the chooser is opened by the native input, not by file.click()');
+  assert.match(read('css','studio.css'),/settings-business-logo__pick input\[type="file"\]\{[^}]*position:absolute[^}]*opacity:0/);
+  assert.doesNotMatch(read('css','studio.css'),/settings-business-logo__pick input\[type="file"\]\{[^}]*display:\s*none/);
+});
+
 test('no customer-document path falls back to K-Labs identity or fetches the shared logo',()=>{
   assert.doesNotMatch(ui,/businessProfile\.businessName\)\|\|'K-Labs'/,'no K-Labs name fallback');
   assert.doesNotMatch(pdf,/fetch\('assets\/logo\.svg'\)/,'the PDF never fetches the shared logo');

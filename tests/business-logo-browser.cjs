@@ -61,7 +61,24 @@ async function main(){
     let inv=await invoiceDoc(page);
     ck('A without a logo: invoice shows a text-only heading, no image, and no "K-Labs Studio" software attribution',inv.logos.length===0&&inv.heading==='K-Labs'&&!inv.eyebrow&&!/K-Labs Studio/.test(inv.text),inv);
     ck('Settings shows "No logo", offers Upload and hides Remove',(await page.locator('#settingsBusinessLogoPreview').textContent()).includes('No logo')&&(await page.locator('#settingsBusinessLogoChoose').textContent())==='Upload logo'&&await page.locator('#settingsBusinessLogoRemove').isHidden());
-    ck('The K-Labs logo helper is hidden for non-owner accounts',await page.locator('#settingsBusinessLogoKLabs').isHidden());
+    ck('The K-Labs logo helper is offered to a profile named K-Labs',await page.locator('#settingsBusinessLogoKLabs').isVisible());
+    // Real user path (Safari-safe): the transparent file input sits over the button, is rendered (not display:none/hidden), and a genuine
+    // mouse click on the button opens the native file chooser without any scripted click().
+    await page.evaluate(()=>document.getElementById('settingsBusinessLogoChoose').scrollIntoView({block:'center'}));
+    const geo=await page.evaluate(()=>{const b=document.getElementById('settingsBusinessLogoChoose'),f=document.getElementById('settingsBusinessLogoFile');const r=b.getBoundingClientRect();
+      const top=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);const fr=f.getBoundingClientRect();const cs=getComputedStyle(f);
+      return {topIsInput:top===f,hiddenAttr:f.hidden,display:cs.display,visibility:cs.visibility,coversButton:Math.abs(fr.width-r.width)<2&&Math.abs(fr.height-r.height)<2,cx:r.x+r.width/2,cy:r.y+r.height/2,label:f.getAttribute('aria-label'),disabled:f.disabled};});
+    ck('The file input is rendered over the Upload button (not hidden, not display:none) and receives the tap',geo.topIsInput&&!geo.hiddenAttr&&geo.display!=='none'&&geo.visibility!=='hidden'&&geo.coversButton&&geo.label==='Upload logo'&&!geo.disabled,geo);
+    // Wait until the button stops moving (smooth scrolling), then aim at its current centre and confirm the input is the hit target.
+    const aim=await page.evaluate(async()=>{const b=document.getElementById('settingsBusinessLogoChoose'),f=document.getElementById('settingsBusinessLogoFile');let last='';
+      for(let i=0;i<80;i++){const r=b.getBoundingClientRect();const k=[r.x,r.y].map((n)=>n.toFixed(1)).join();const top=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+        if(k===last&&top===f)return {x:r.x+r.width/2,y:r.y+r.height/2,stable:true};last=k;await new Promise((res)=>setTimeout(res,50));}
+      const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,stable:false};});
+    ck('The Upload button position settles and the file input is the hit target at its centre',aim.stable,aim);
+    const chooserOpened=page.waitForEvent('filechooser',{timeout:5000}).then(()=>true,()=>false);
+    await page.evaluate(()=>0);await page.waitForTimeout(250);   // let Playwright finish enabling file-chooser interception before the click
+    await page.mouse.click(aim.x,aim.y);
+    ck('A real click on Upload logo opens the native file chooser',await chooserOpened);
 
     // ---- Upload (PNG), preview, storage scoped to A ----
     const pngA=await makeImage(page,{type:'image/png',w:900,h:300,color:'#861e2a',text:'K-LABS'});
@@ -80,6 +97,7 @@ async function main(){
     // ---- Account B: another rod builder, completely separate ----
     await switchTo(page,B);
     await setProfile(page,{businessName:'Northern Rods Ltd',contactName:'Synthetic Builder',email:'hello@northern.example',phone:'09 555 0100',addressLine1:'9 Harbour Rd',cityTown:'Otherville',country:'New Zealand',gstNumber:'222-222-222'});
+    ck('The K-Labs logo helper is hidden for another business (non-owner, different name)',await page.locator('#settingsBusinessLogoKLabs').isHidden());
     q=await quoteDoc(page);inv=await invoiceDoc(page);
     const bText=q.text+' '+inv.text;
     ck('Account switch: B sees none of A\'s logo or K-Labs details anywhere (quote, invoice, settings preview)',!q.html.includes(storedA.logo)&&inv.logos.length===0&&!/k-labs/i.test(bText)&&!/klabs/i.test(bText)&&(await page.locator('#settingsBusinessLogoPreview img').count())===0,{q:q.logos,i:inv.logos});
@@ -202,8 +220,16 @@ async function main(){
     await page.locator('#settingsBusinessLogoKLabs').click();
     await page.waitForFunction((a)=>{const p=JSON.parse(localStorage.getItem('klabs-business-profile:'+a));return p&&p.logo;},A);
     ck('It saves a K-Labs logo into the owner\'s profile only',/^data:image\/png/.test((await profileOf(page,A)).logo)&&(await profileOf(page,B)).logo===s2);
+    await switchTo(page,B);await page.evaluate(()=>{window.KLABS_ADMIN_ACCESS={isOwner:()=>false};syncBusinessLogoControls();});
+    ck('Hidden for a non-owner with another business name',await page.locator('#settingsBusinessLogoKLabs').isHidden());
+    // The owner check resolves after sign-in: the control refreshes when it does, without reopening Settings.
+    await page.evaluate(()=>{window.KLABS_ADMIN_ACCESS={isOwner:()=>true};KLABS_UI.refreshBusinessLogoControls();});
+    ck('Becomes visible as soon as owner status resolves (refresh hook)',await page.locator('#settingsBusinessLogoKLabs').isVisible());
     await page.evaluate(()=>{window.KLABS_ADMIN_ACCESS={isOwner:()=>false};syncBusinessLogoControls();});
-    ck('Hidden again for non-owners',await page.locator('#settingsBusinessLogoKLabs').isHidden());
+    // Read-only accounts cannot open the chooser.
+    await page.evaluate(()=>{window.KLABS_CAN_WRITE=()=>false;syncBusinessLogoControls();});
+    ck('Read-only: the file input and buttons are disabled',await page.evaluate(()=>document.getElementById('settingsBusinessLogoFile').disabled&&document.getElementById('settingsBusinessLogoChoose').disabled));
+    await page.evaluate(()=>{delete window.KLABS_CAN_WRITE;syncBusinessLogoControls();});
 
     // ---- Print path: logo failures never block printing ----
     ck('No page errors during branding checks',errors.length===0,errors);
