@@ -1,5 +1,5 @@
 // TEMPORARY DIAGNOSTIC surface: this cache id is also shown in Settings → Account → Sync diagnostics.
-const APP_SHELL_VERSION='build148-v222';
+const APP_SHELL_VERSION='build148-v223';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
 const LEGACY_CACHE_PREFIX='klabs-studio-build';
@@ -118,32 +118,50 @@ self.addEventListener('message',(event)=>{
 	}
 });
 
+// Every app-shell file is precached by the versioned install step above, so a launch never has to wait for the network
+// to find out whether a file changed. Serve the cached copy at once and refresh it in the background
+// (stale-while-revalidate): the next launch gets the newer copy, and a new APP_SHELL_VERSION installs and activates the
+// whole new shell together. Waiting on the network first made every launch pay one round trip per file, and left the app
+// blank for as long as the platform's own network timeout when the connection was poor but not offline.
+function cachedAppShell(request,fallbackToIndex){
+	return caches.match(request,{ignoreSearch:fallbackToIndex}).then((cached)=>{
+		if(cached || !fallbackToIndex)return cached;
+		return caches.match(new URL('index.html',SCOPE_URL).toString());
+	});
+}
+
+function refreshAppShell(request,fetchCache){
+	return fetch(new Request(request,{cache:fetchCache})).then((response)=>{
+		cacheAppShellResponse(request,response.clone());
+		return response;
+	});
+}
+
+function staleWhileRevalidate(event,fetchCache,fallbackToIndex){
+	event.respondWith(
+		cachedAppShell(event.request,fallbackToIndex).then((cached)=>{
+			const refreshed=refreshAppShell(event.request,fetchCache);
+			if(cached){
+				event.waitUntil(refreshed.catch(()=>{}));
+				return cached;
+			}
+			return refreshed.catch(()=>cachedAppShell(event.request,fallbackToIndex));
+		})
+	);
+}
+
 self.addEventListener('fetch',(event)=>{
 	if(event.request.method!=='GET')return;
 	const requestUrl=new URL(event.request.url);
 	if(!inScope(requestUrl))return;
 
 	if(event.request.mode==='navigate'){
-		event.respondWith(
-			fetch(new Request(event.request,{cache:'no-store'}))
-				.then((response)=>{
-					cacheAppShellResponse(event.request,response.clone());
-					return response;
-				})
-				.catch(()=>caches.match(new URL('index.html',SCOPE_URL).toString()))
-		);
+		staleWhileRevalidate(event,'no-store',true);
 		return;
 	}
 
 	if(isDynamicAppAsset(requestUrl)){
-		event.respondWith(
-			fetch(new Request(event.request,{cache:'no-cache'}))
-				.then((response)=>{
-					cacheAppShellResponse(event.request,response.clone());
-					return response;
-				})
-				.catch(()=>caches.match(event.request))
-		);
+		staleWhileRevalidate(event,'no-cache',false);
 		return;
 	}
 

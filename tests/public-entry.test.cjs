@@ -8,10 +8,12 @@ const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
 const source=fs.readFileSync(path.join(__dirname,'..','js','public-entry.js'),'utf8');
 
-function harness(){
+function harness({storage={}}={}){
   const classes=new Set(['klabs-auth-resolving','klabs-logged-out']);
   const events={};
   const scripts=[];
+  const preloads=[];
+  let entitlementHook=null;
   const heldScripts=new Set();
   const heldScriptCallbacks=new Map();
   let failScript='';
@@ -20,7 +22,7 @@ function harness(){
   const elements={};
   let session=null;
   let reloads=0;
-  const cachedValues=new Map();
+  const cachedValues=new Map(Object.entries(storage));
   const demoViews=['overview','customers','builds','quotes','components','workshop'].map(view=>({
     dataset:{demoView:view},attributes:{},listeners:{},
     addEventListener(event,fn){this.listeners[event]=fn;},
@@ -45,6 +47,7 @@ function harness(){
     querySelector:()=>null,
     querySelectorAll(selector){return selector==='[data-demo-view]'?demoViews:selector==='[data-demo-panel]'?demoPanels:[];},
     head:{appendChild(script){
+      if(script.rel==='preload'){preloads.push({href:script.href,as:script.as});return;}
       scripts.push(script.src);
       const finish=()=>script.src===failScript?script.onerror():script.onload();
       if(heldScripts.has(script.src))heldScriptCallbacks.set(script.src,finish);
@@ -54,14 +57,14 @@ function harness(){
   let trialStarts=0;
   const window={scrollTo(){},dispatchEvent(){},addEventListener(){},setInterval(){return 1;},navigator:{onLine:true},
     KLABS_BUILD_TAB_LOCK:{async acquire(){},release(){},owns(){return true;}},
-    localStorage:{getItem:key=>cachedValues.get(key)||null,setItem:(key,value)=>cachedValues.set(key,value)},
+    localStorage:{getItem:key=>cachedValues.get(key)||null,setItem:(key,value)=>cachedValues.set(key,value),key:index=>[...cachedValues.keys()][index]??null,get length(){return cachedValues.size;}},
     sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},
     setTimeout(fn){window.expiryCallback=fn;return 1;},clearTimeout(){},
     location:{reload(){reloads++;}},KLABS_UI:{startNewBuildFlow(){}},
     KLABS_SUPABASE_CLIENT:{
       auth:{getSession:async()=>({data:{session},error:null}),signOut:async()=>({error:null})},
       rpc:async(name)=>{
-        if(name==='get_account_entitlement')return {data:entitlement,error:rpcError};
+        if(name==='get_account_entitlement')return entitlementHook?entitlementHook():{data:entitlement,error:rpcError};
         if(name==='klabs_account_is_blocked')return {data:false,error:null};
         if(name==='start_account_trial'){
           trialStarts++;
@@ -73,9 +76,9 @@ function harness(){
         throw new Error(`unexpected RPC ${name}`);
       }
     }};
-  vm.runInNewContext(source,{window,document,Promise,Error,Date,JSON,console});
+  vm.runInNewContext(source,{window,document,Promise,Error,Date,JSON,console,AbortController});
   events.DOMContentLoaded();
-  return {window,document,elements,classes,scripts,demoViews,demoPanels,setSession(value){session=value;},setEntitlement(value){entitlement=value;},setRpcError(value){rpcError=value;},cache(key,value){cachedValues.set(key,JSON.stringify(value));},trialStarts:()=>trialStarts,reloads:()=>reloads,failScript(value){failScript=value;},holdScript(value){heldScripts.add(value);},releaseScript(value){heldScripts.delete(value);heldScriptCallbacks.get(value)?.();heldScriptCallbacks.delete(value);}};
+  return {window,document,elements,classes,scripts,preloads,setEntitlementHook(fn){entitlementHook=fn;},demoViews,demoPanels,setSession(value){session=value;},setEntitlement(value){entitlement=value;},setRpcError(value){rpcError=value;},cache(key,value){cachedValues.set(key,JSON.stringify(value));},trialStarts:()=>trialStarts,reloads:()=>reloads,failScript(value){failScript=value;},holdScript(value){heldScripts.add(value);},releaseScript(value){heldScripts.delete(value);heldScriptCallbacks.get(value)?.();heldScriptCallbacks.delete(value);}};
 }
 
 test('public markup does not load private application scripts',()=>{
@@ -304,4 +307,117 @@ test('a failed private script load leaves the private app hidden and reports an 
   assert.equal(h.elements.authScreen.style.display,'flex');
   assert.equal(h.classes.has('klabs-auth-resolving'),false);
   assert.equal(h.scripts.includes('js/ui.js'),false);
+});
+
+const PRIVATE_APP_FILES=['js/config.js','js/storage.js','js/ui.js','js/app.js','js/admin-panel.js'];
+
+test('signed-out visitors never download or run the private application',async()=>{
+  const h=harness();
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(null,()=>assert.fail('must not initialize'));
+  h.elements.publicExploreBtn.listeners.click();
+  assert.deepEqual(h.preloads,[]);
+  assert.deepEqual(h.scripts,[]);
+});
+
+test('a stored session starts downloading, but does not run, the private application at once',()=>{
+  const h=harness({storage:{'sb-example-auth-token':'{}'}});
+  const hrefs=h.preloads.map(item=>item.href);
+  for(const file of PRIVATE_APP_FILES)assert.ok(hrefs.includes(file),`${file} is preloaded`);
+  assert.ok(h.preloads.every(item=>item.as==='script'));
+  assert.deepEqual(h.scripts,[],'nothing executes until the account has been verified');
+  assert.equal(new Set(hrefs).size,hrefs.length,'each file is requested once');
+});
+
+test('private scripts download while the entitlement check is in flight but run only after it passes',async()=>{
+  const h=harness();
+  const session={user:{id:'synthetic-preload'}};
+  h.setSession(session);
+  let release;
+  h.setEntitlementHook(()=>new Promise(resolve=>{release=()=>resolve({data:{access_state:'grandfathered',can_write:true,email_verified:true},error:null});}));
+  let applied=false;
+  const startup=h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{applied=true;});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(h.preloads.map(item=>item.href).includes('js/ui.js'),'download has begun');
+  assert.deepEqual(h.scripts,[],'no private script runs before the entitlement is verified');
+  release();
+  await startup;
+  assert.equal(applied,true);
+  assert.ok(h.scripts.includes('js/app.js'));
+  assert.equal(h.preloads.length,new Set(h.preloads.map(item=>item.href)).size,'preloading is not repeated');
+});
+
+test('a refused entitlement still never runs private code, even though it was downloaded',async()=>{
+  const h=harness({storage:{'sb-example-auth-token':'{}'}});
+  const session={user:{id:'synthetic-refused'}};
+  h.setSession(session);
+  h.setEntitlement({access_state:'trial_eligible',can_write:false,email_verified:true,trial_available:true});
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('must not open Studio'));
+  assert.deepEqual(h.scripts,[]);
+  assert.equal(h.elements.accountAccessScreen.hidden,false);
+});
+
+test('supabase-js fetch failures (no error.name, status 0) open Studio from the cached entitlement even when the device reports online',async()=>{
+  for(const message of ['TypeError: Failed to fetch','TypeError: Load failed','TypeError: NetworkError when attempting to fetch resource.']){
+    const now=Date.now();
+    const h=harness();
+    const session={user:{id:'weak-signal'}};
+    h.setSession(session);
+    assert.equal(h.window.navigator.onLine,true);
+    h.setEntitlementHook(()=>({data:null,error:{message,details:'',hint:'',code:''},status:0}));
+    const serverTime=new Date(now-60*1000).toISOString();
+    h.cache('klabs-account-entitlement:weak-signal',{user_id:'weak-signal',saved_at:serverTime,
+      entitlement:{access_state:'paid',can_write:true,email_verified:true,access_expires_at:new Date(now+30*24*3600*1000).toISOString(),server_time:serverTime}});
+    let state;
+    await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{state=h.window.KLABS_ACCESS_STATE;});
+    assert.equal(state.access_state,'paid',message);
+    assert.equal(state.offline,true,message);
+    assert.ok(h.scripts.includes('js/app.js'),message);
+  }
+});
+
+test('a real server refusal is never treated as offline, whatever its text says',async()=>{
+  const h=harness();
+  const session={user:{id:'server-refusal'}};
+  h.setSession(session);
+  h.setEntitlementHook(()=>({data:null,error:{message:'network access denied for this account',code:'42501'},status:403}));
+  const serverTime=new Date().toISOString();
+  h.cache('klabs-account-entitlement:server-refusal',{user_id:'server-refusal',saved_at:serverTime,
+    entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:serverTime}});
+  await assert.rejects(h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('must not open Studio')),(error)=>error.code==='42501');
+  assert.deepEqual(h.scripts,[]);
+});
+
+test('an unreachable server times out the entitlement request instead of holding the launch screen',async()=>{
+  const h=harness();
+  const session={user:{id:'lie-fi'}};
+  h.setSession(session);
+  let signal=null;
+  let timeout=null;
+  const timers=[];
+  h.window.setTimeout=(fn,ms)=>{timers.push({fn,ms});return timers.length;};
+  h.window.clearTimeout=()=>{};
+  const realRpc=h.window.KLABS_SUPABASE_CLIENT.rpc;
+  h.window.KLABS_SUPABASE_CLIENT.rpc=(name)=>{
+    if(name!=='get_account_entitlement')return realRpc(name);
+    // Like a supabase-js builder: a thenable that accepts an abort signal.
+    let settle;
+    const call=new Promise(resolve=>{settle=resolve;});
+    call.abortSignal=(value)=>{signal=value;value.addEventListener('abort',()=>settle({data:null,error:{message:'AbortError: signal is aborted without reason'},status:0}));return call;};
+    return call;
+  };
+  const serverTime=new Date().toISOString();
+  h.cache('klabs-account-entitlement:lie-fi',{user_id:'lie-fi',saved_at:serverTime,
+    entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:serverTime}});
+  let state;
+  const startup=h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{state=h.window.KLABS_ACCESS_STATE;});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(signal,'the request carries an abort signal');
+  timeout=timers.find(item=>item.ms===8000);
+  assert.ok(timeout,'bounded at 8 seconds');
+  assert.equal(signal.aborted,false);
+  timeout.fn();
+  await startup;
+  assert.equal(signal.aborted,true);
+  assert.equal(state.offline,true);
+  assert.equal(state.access_state,'paid');
 });
