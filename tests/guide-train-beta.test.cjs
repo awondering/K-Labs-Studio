@@ -49,19 +49,20 @@ test('Guide Train Beta styling stays small and scoped',()=>{
 test('Guide Train remains Beta while the other Workshop launchers stay visible',()=>{
   assert.equal((html.match(/data-workshop-tool-open="guide-train"/g)||[]).length,1,'one launcher, standalone');
   assert.equal((html.match(/id="workshopToolGuideTrain"/g)||[]).length,1);
-  for(const tool of ['guide-spacing','grip','diameter','thread-wrap']){
+  for(const tool of ['guide-spacing','grip','diameter','thread-studio']){
     const launcherTag=html.match(new RegExp(`<button(?=[^>]*data-workshop-tool-open="${tool}")[^>]*>`))?.[0];
     assert.ok(launcherTag,`${tool} launcher remains`);
     assert.doesNotMatch(launcherTag,/\shidden(?:\s|>)/,`${tool} launcher remains visible`);
   }
   assert.match(html,/Guide Train Designer <span class="guide-train-beta">Beta<\/span>/);
-  assert.match(html,/Thread Wrap Designer<\/span>/);
+  assert.match(html,/Thread Design Studio<\/span>/);
+  assert.doesNotMatch(html,/data-workshop-tool-open="thread-wrap"/,'the Thread Wrap Designer is reached from the Thread Design Studio, not a second launcher');
   assert.doesNotMatch(html,/thread-wrap-beta/);
   assert.doesNotMatch(card,/guide-spacing|Guide Spacing|guideSpecification|guideLayout/i);
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache identifies the invoice candidate as build148-v220',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v220';/);
+test('service worker cache identifies the invoice candidate as build148-v221',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v221';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });

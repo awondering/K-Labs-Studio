@@ -158,7 +158,7 @@ function functionSource(name){
 test('Thread Wrap markup, styles and UI code contain no raw non-ASCII characters (entities and escapes only)',()=>{
   const card=between(html,'<article id="workshopToolThreadWrap"','</article>');
   assert.equal(nonAscii(card).join(''),'');
-  const launcher=between(html,'data-workshop-tool-open="thread-wrap"','</button>');
+  const launcher=between(html,'data-workshop-tool-open="thread-studio"','</button>');
   assert.equal(nonAscii(launcher).join(''),'');
   assert.equal(nonAscii(fs.readFileSync(path.join(__dirname,'..','js','public-entry.js'),'utf8')).join(''),'');
   assert.equal(nonAscii(between(css,'/* Thread Wrap Designer (Workshop)')).join(''),'');
