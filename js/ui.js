@@ -17659,10 +17659,17 @@ function syncBusinessLogoControls(){
   const remove=$('settingsBusinessLogoRemove');
   const klabs=$('settingsBusinessLogoKLabs');
   const readOnly=typeof window.KLABS_CAN_WRITE==='function'&&!window.KLABS_CAN_WRITE();
+  const file=$('settingsBusinessLogoFile');
   if(choose){choose.textContent=logo?'Replace logo':'Upload logo';choose.disabled=readOnly;}
+  if(file){file.setAttribute('aria-label',logo?'Replace logo':'Upload logo');file.disabled=readOnly;}
   if(remove){remove.hidden=!logo;remove.disabled=readOnly;}
-  // Only the K-Labs owner account is offered the bundled K-Labs mark; it is saved into that account's own profile like any upload.
-  if(klabs){klabs.hidden=!(window.KLABS_ADMIN_ACCESS&&typeof window.KLABS_ADMIN_ACCESS.isOwner==='function'&&window.KLABS_ADMIN_ACCESS.isOwner());klabs.disabled=readOnly;}
+  // The bundled K-Labs mark is offered only to the K-Labs owner account, or to a profile whose business name is K-Labs. It is saved into
+  // that account's own profile like any upload, and no other account is ever given it by default.
+  if(klabs){
+    const owner=!!(window.KLABS_ADMIN_ACCESS&&typeof window.KLABS_ADMIN_ACCESS.isOwner==='function'&&window.KLABS_ADMIN_ACCESS.isOwner());
+    klabs.hidden=!(owner||normalizeNameKey(businessProfile&&businessProfile.businessName)==='k-labs');
+    klabs.disabled=readOnly;
+  }
 }
 // Applies a prepared logo (or removes it with '') to this account's profile only, and confirms it was really stored.
 function commitBusinessLogo(dataUrl,account){
@@ -17693,7 +17700,7 @@ function bindBusinessLogoControls(){
   if(!file||!choose||choose.getAttribute('data-business-logo-bound')==='true')return;
   choose.setAttribute('data-business-logo-bound','true');
   const api=()=>businessLogoApi();
-  choose.addEventListener('click',()=>{file.value='';file.click();});
+  // No click handler on the button: the transparent file input over it receives the tap and opens the chooser natively.
   file.addEventListener('change',async()=>{
     const picked=file.files&&file.files[0];
     file.value='';
@@ -18227,6 +18234,7 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
 window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
+window.KLABS_UI.refreshBusinessLogoControls=syncBusinessLogoControls;
 window.KLABS_UI.readRecoveryDraft=()=>({
   quote:JSON.parse(JSON.stringify(quote)),
   activeSavedBuildRef:activeSavedBuildRef?JSON.parse(JSON.stringify(activeSavedBuildRef)):null,
