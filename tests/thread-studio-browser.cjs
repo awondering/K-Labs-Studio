@@ -117,7 +117,7 @@ async function main(){
     const reg=await page.evaluate(async()=>{const r=await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;return !!r;});
     await page.waitForFunction(()=>navigator.serviceWorker.controller||true);
     const cached=await page.evaluate(async()=>{const keys=await caches.keys();const c=await caches.open(keys.find((k)=>k.startsWith('klabs-studio-app-shell-')));const r=await c.match(new URL('thread-studio/index.html',location.href));const h=await c.match(new URL('js/thread-studio-host.js',location.href));return !!r&&!!h&&keys.filter((k)=>k.startsWith('klabs-studio-app-shell-')).join();});
-    ck('Service worker precaches the studio document and host script',reg&&!!cached&&/build148-v227/.test(cached),cached);
+    ck('Service worker precaches the studio document and host script',reg&&!!cached&&/build148-v228/.test(cached),cached);
     await page.reload({waitUntil:'load'});
     for(const f of SCRIPTS)await page.addScriptTag({url:`${base}/js/${f}`});
     await page.evaluate((a)=>{window.KLABS_ACCOUNT_ID=a;document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');},A);

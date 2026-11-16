@@ -276,6 +276,30 @@
     A(mkr(a) === mkr(b) && mkr(b) === mkr(c), 'layout differs by unit');
     const L = K.reconcile(setup("7'", 0).L, { bladeLenMm: 2133.6, stemFromButtMm: fr }).L; A(!indProblem(L, 2133.6));
     L.guides.forEach(g => { A(near(K.parseLength(K.fmt(g.tipMm, 'mm'), 'mm'), g.tipMm, 0.051)); A(near(K.parseLength(K.fmt(g.tipMm, 'in'), 'in'), g.tipMm, 0.128)); A(near(K.parseLength(K.fmt(g.tipMm, 'frac'), 'frac'), g.tipMm, MM / 32 + 0.01)); }); });
+
+  // ---- Units: wording follows the selected unit; geometry never changes (independent conversions below) ----------------------------------
+  const f16 = mm => { const i = mm / 25.4, w = Math.floor(Math.abs(i)); let n = Math.round((Math.abs(i) - w) * 32), W = w; if (n === 32) { W++; n = 0; } let d = 32; while (n && n % 2 === 0) { n /= 2; d /= 2; } return (i < 0 ? '-' : '') + (n ? (W ? W + ' ' : '') + n + '/' + d : String(W)) + '"'; };
+  const unitScenes = () => { const out = [], S1 = setup("7'", -100), L1 = S1.L;                       // reference run past the tip: issue wording
+    K.issues(L1).forEach(x => out.push(x.msg)); out.push(K.status(L1));
+    const L2 = setup("7'", 0).L; out.push(K.setPosition(L2, 4, 560).ok ? '' : ''); out.push(K.setPosition(L2, 4, L2.guides[3].tipMm - 5).msg);   // clearance message
+    K.toggleLock(L2, 5); const r = K.reconcile(L2, { bladeLenMm: 2133.6, stemFromButtMm: 2133.6 - (1244.6 + 300) }); out.push(r.proposal.reason);        // locked-guide conflict
+    const r2 = K.reconcile(setup("7'", 0).L, { bladeLenMm: 2133.6, stemFromButtMm: 2133.6 - (1274.6 - 20) }); out.push(r2.proposal.reason);              // limiting geometry
+    const L3 = setup("7'", -40).L; const as = K.assess(L3); as.candidates.forEach(c => out.push(c.why || '')); out.push(as.reason || '');
+    return out.filter(Boolean); };
+  T('engine wording follows the selected unit: no "mm" in inch modes, and every length is the independent conversion', () => {
+    try { K.setUnit('mm'); const m = unitScenes().join(' | '); A(/ mm/.test(m) && !/ in\b/.test(m.replace(/ in the | in order| in place/g, '')), 'mm wording');
+      A(/100\.0 mm beyond the blank tip/.test(m), 'mm: 100.0 mm'); A(/under 15\.0 mm/.test(m) || /15\.0 mm/.test(m), 'mm: clearance shown');
+      K.setUnit('in'); const d = unitScenes().join(' | '); A(!/\bmm\b/.test(d), 'decimal inch text still says mm: ' + d.match(/.{30}\bmm\b.{10}/));
+      A(d.includes((100 / 25.4).toFixed(2) + ' in beyond the blank tip'), 'in: ' + (100 / 25.4).toFixed(2)); A(d.includes((15 / 25.4).toFixed(2) + ' in'), 'in: clearance 0.59 in');
+      K.setUnit('frac'); const q = unitScenes().join(' | '); A(!/\bmm\b/.test(q), 'fractional inch text still says mm: ' + q.match(/.{30}\bmm\b.{10}/));
+      A(q.includes(f16(100) + ' beyond the blank tip'), 'frac beyond tip ' + f16(100)); A(q.includes(f16(15)), 'frac clearance ' + f16(15));
+      A(q.includes(f16(1244.6)) && q.includes(f16(1274.6)), 'frac limiting geometry ' + f16(1244.6)); A(f16(15) === '19/32"' && f16(1274.6) === '50 3/16"', 'independent fractions');
+    } finally { K.setUnit('mm'); } });
+  T('fractional display is conventional and reduced; 1/16 for positions', () => { A(K.fmt(0, 'frac') === '0"' && K.fmt(25.4, 'frac') === '1"' && K.fmt(1236.98, 'frac') === '48 11/16"' && K.fmt(190.5, 'frac') === '7 1/2"' && K.fmt(2133.6, 'frac') === '84"' && K.fmt(-101.88, 'frac') === '-4"');
+    for (const x of [0.3, 11.1, 99.06, 431.8, 1008.38, 1236.98]) { const i = x / 25.4, e = Math.round(i * 16) / 16; A(near(K.parseLength(K.fmt(x, 'frac'), 'frac'), e * 25.4, 1e-9), String(x)); A(Math.abs(K.parseLength(K.fmt(x, 'frac'), 'frac') - x) <= 25.4 / 32 + 1e-9, 'precision ' + x); } });
+  T('unit changes touch no geometry: layout object identical before and after switching units and formatting', () => { const L = setup("7'", -100).L, snap = JSON.stringify(L.guides), g = JSON.stringify(L.geom);
+    ['in', 'frac', 'mm', 'frac', 'in', 'mm'].forEach(u => { K.setUnit(u); K.issues(L); K.status(L); K.assess(L); L.guides.forEach(x => { K.fmt(x.tipMm, u); K.len(x.tipMm); }); });
+    A(JSON.stringify(L.guides) === snap && JSON.stringify(L.geom) === g, 'geometry mutated by a unit change'); K.setUnit('mm'); });
   const failed = results.filter(r => !r.ok);
   if (typeof module !== 'undefined' && typeof require !== 'undefined' && require.main === module) {
     if (results.sweep) console.log('sweep:', JSON.stringify(results.sweep)); results.forEach(r => console.log((r.ok ? 'PASS ' : 'FAIL ') + r.name + (r.msg ? ' :: ' + r.msg : '')));

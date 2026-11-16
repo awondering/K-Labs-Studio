@@ -117,3 +117,6 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
   .row .sp{font-size:13px}
 }
 @media(min-width:1280px){main{max-width:1200px}}
+
+.row .sp{white-space:nowrap}
+@media(max-width:400px){.u-frac .hd,.u-frac .row{grid-template-columns:60px 1fr 48px 44px}.u-frac .row .num input{font-size:13px}.u-frac .row .sp{font-size:10.5px}}

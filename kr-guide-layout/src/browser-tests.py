@@ -60,7 +60,7 @@ with sync_playwright() as p:
     L('button[data-st="1"][data-k="stem"]').click(); ck('manual edit survives a stem change', val(4) == '560.0')
     L('button[data-resetall]').click(); L('button[data-resetall]').click()
     L('button[data-unit="in"]').click(); ck('decimal inch display', val(3) == '27.200', val(3))
-    L('button[data-unit="frac"]').click(); L('.row[data-i="4"] input').fill('22 1/16'); L('.row[data-i="4"] input').press('Enter'); ck('fractional entry accepted', val(4) == '22.063', val(4))
+    L('button[data-unit="frac"]').click(); L('.row[data-i="4"] input').fill('22 1/16'); L('.row[data-i="4"] input').press('Enter'); ck('fractional entry accepted', val(4) == '22 1/16', val(4))
     L('button[data-unit="mm"]').click(); L('button[data-resetall]').click(); L('button[data-resetall]').click()
     L('button[data-cnt="1"]').click(); ck('add guide: 10 blank, flagged +1', L('.row').count() == 11 and '+1 vs reference' in L('#app').inner_text())
     L('button[data-cnt="-1"]').click(); ck('remove guide returns to 9', L('.row').count() == 10 and 'Matches reference' in L('#app').inner_text())
@@ -95,6 +95,70 @@ with sync_playwright() as p:
             if invalid and L('.row .tag.off').count() == 0 and min(v) >= 0 and v[0] == 0: bad.append((rod, unit, d, 'invalid with no flagged cause'))
             if ri == 0 and False: pass
     ck('interface sweep: 8 rods x 7 stem moves (mm, decimal in, fractional in): nothing invalid is shown as valid and every valid layout is on the blank, ordered, 15 mm apart, tip-top at 0', not bad and shown == 56, bad[:2])
+    # ---- Units audit: every measurement follows the selected unit; physical positions never change; round trip is exact ----
+    from fractions import Fraction
+    def f16(mm):
+        i = Fraction(mm) / Fraction(254, 10); n = round(abs(i) * 32); w, r = divmod(n, 32)
+        while r and r % 2 == 0: r //= 2
+        return n
+    def parse_frac(t):
+        t = t.replace('"', '').strip(); neg = t.startswith('-'); t = t.lstrip('-'); parts = t.split()
+        v = sum(Fraction(x) for x in parts); return -v if neg else v
+    REF7 = [1236.98, 1008.38, 840.74, 690.88, 556.26, 431.8, 317.5, 208.28, 99.06, 0.0]   # chart row 7 ft, from the raw chart arithmetic (tip distances)
+    def snap(page): return page.evaluate("[...document.querySelectorAll('.row')].map(r => [r.querySelector('.num input').value, r.querySelector('.sp').textContent])")
+    for w, hh in [(390, 844), (1440, 900)]:
+        up = b.new_page(viewport={'width': w, 'height': hh}); up.goto(URL); up.wait_for_timeout(120)
+        U = lambda sel: up.locator(sel)
+        mm0 = snap(up); stem_mm0 = U('input[data-k="stem"]').input_value(); blade_mm0 = U('input[data-k="blade"]').input_value()
+        modes = {}
+        for unit in ('in', 'frac', 'mm'):
+            U('button[data-unit="%s"]' % unit).click(); up.wait_for_timeout(40); modes[unit] = snap(up)
+            txt = up.evaluate("document.querySelector('#app').textContent.replace(/Advanced: reference as JSON[\\s\\S]*?Apply values/, '')")
+            txt = txt.replace('mm', '') if unit == 'mm' else txt
+            if unit != 'mm':
+                import re as _re
+                stray = _re.findall(r'.{25}\bmm\b.{10}', _re.sub(r'(Optional|Choke|Stripper)', '', up.evaluate("[...document.querySelectorAll('#app')].map(e=>{const c=e.cloneNode(true);c.querySelectorAll('button[data-unit=mm],textarea').forEach(x=>x.remove());return c.textContent}).join(' ')")))
+                ck('units audit %dpx %s: no "mm" label or value anywhere in the interface (rod, stem, rows, spacing, summary, warnings, About)' % (w, unit), not stray, stray[:2])
+            exp_in = [('%.3f' % (v / 25.4)) for v in REF7]
+            if unit == 'in': ck('decimal inch %dpx: all 10 guide positions equal the independent conversion of the chart row' % w, [r[0] for r in modes[unit]] == exp_in[::-1] and U('input[data-k="blade"]').input_value() == '84.000' and U('input[data-k="stem"]').input_value() == '7.800', ([r[0] for r in modes[unit]], exp_in))
+            if unit == 'frac':
+                got = [parse_frac(r[0]) for r in modes[unit]]; exp = [Fraction(round(Fraction(v).limit_denominator(10**9) / Fraction(254, 10) * 16), 16) for v in REF7[::-1]] if False else None
+                okf = all(abs(float(g) * 25.4 - v) <= 25.4 / 32 + 1e-6 for g, v in zip(got, REF7[::-1])) and all('/' in r[0] or r[0].replace('"', '').replace('-', '').isdigit() for r in modes[unit])
+                ck('fractional inch %dpx: positions are inch fractions within 1/32 in of the true value; blank and stem shown as fractions' % w, okf and U('input[data-k="blade"]').input_value() == '84' and U('input[data-k="stem"]').input_value() == '7 13/16', [r[0] for r in modes[unit]])
+        ck('round trip mm -> decimal in -> fractional in -> mm returns the original values exactly (%dpx)' % w, snap(up) == mm0 and U('input[data-k="stem"]').input_value() == stem_mm0 and U('input[data-k="blade"]').input_value() == blade_mm0)
+        # physical positions untouched by display: odd stem, cycle units, compare at 3 inch decimals before and after, plus focus/blur without edit
+        U('input[data-k="stem"]').fill('198.37'); U('input[data-k="stem"]').press('Enter'); up.wait_for_timeout(40); U('button[data-unit="in"]').click(); up.wait_for_timeout(30); before = snap(up); st_before = U('input[data-k="stem"]').input_value()
+        for unit in ('frac', 'mm', 'frac', 'in'):
+            U('button[data-unit="%s"]' % unit).click(); up.wait_for_timeout(20)
+            for i in (0, 4, 9): U('.row[data-i="%d"] input' % i).focus(); U('.row[data-i="%d"] input' % i).blur()
+            U('input[data-k="stem"]').focus(); U('input[data-k="stem"]').blur()
+        ck('unit cycling and focus/blur without editing never move a guide or the stem (%dpx; compared at 0.001 in)' % w, snap(up) == before and U('input[data-k="stem"]').input_value() == st_before and st_before == '7.810', (st_before, U('input[data-k="stem"]').input_value()))
+        # entry in each unit: stem typed in frac and decimal inch give the same physical stem
+        U('button[data-unit="frac"]').click(); U('input[data-k="stem"]').fill('7 3/4'); U('input[data-k="stem"]').press('Enter'); up.wait_for_timeout(40); U('button[data-unit="mm"]').click(); a = snap(up); U('button[data-unit="in"]').click()
+        U('button[data-unit="in"]').click(); U('input[data-k="stem"]').fill('7.75'); U('input[data-k="stem"]').press('Enter'); up.wait_for_timeout(40); U('button[data-unit="mm"]').click(); b2 = snap(up)
+        U('button[data-unit="mm"]').click(); mmv = U('input[data-k="stem"]').input_value()
+        ck('stem typed as 7 3/4" or 7.75 in gives the identical layout (196.85 mm, shown 196.8) (%dpx)' % w, a == b2 and mmv == '196.8', (mmv,))
+        U('button[data-unit="frac"]').click(); U('.row[data-i="3"] input').fill('27 1/4'); U('.row[data-i="3"] input').press('Enter'); up.wait_for_timeout(40)
+        U('button[data-unit="in"]').click(); r3 = U('.row[data-i="3"] input').input_value(); U('button[data-unit="mm"]').click(); r3m = U('.row[data-i="3"] input').input_value()
+        ck('guide position typed as a fraction is stored exactly (27 1/4 in = 692.2 mm, shown 27.250 in) (%dpx)' % w, r3 == '27.250' and r3m == '692.2', (r3, r3m))
+        up.close()
+    for w, hh in [(360, 800), (390, 844), (768, 1024), (1440, 900)]:
+        fp = b.new_page(viewport={'width': w, 'height': hh}); fp.goto(URL); fp.wait_for_timeout(100)
+        fp.click('button[data-unit="frac"]'); fp.fill('input[data-k="stem"]', '11 3/4'); fp.press('input[data-k="stem"]', 'Enter'); fp.wait_for_timeout(80)
+        r = fp.evaluate('''() => ({ over: document.documentElement.scrollWidth > innerWidth,
+          clip: [...document.querySelectorAll('.num input, .seg button, .row .ac button, .btn')].filter(e => e.offsetParent && e.scrollWidth > e.clientWidth + 1).length,
+          wrap: [...document.querySelectorAll('.row .sp')].filter(e => e.getBoundingClientRect().height > 22).length, n: document.querySelectorAll('.row').length })''')
+        ck('fractional inch with an automatically recalculated layout at %dpx: no overflow, clipping or wrapped spacing' % w, not r['over'] and r['clip'] == 0 and r['wrap'] == 0 and r['n'] == 9, r)
+        fp.close()
+    ep = b.new_page(viewport={'width': 390, 'height': 844}); ep.goto(URL); ep.wait_for_timeout(100); ep.click('button[data-unit="in"]'); ep.click('#entrybox > summary')
+    ep.fill('input[data-e="stripper"]', '26.2'); ep.fill('input[data-e="gaps"]', '10 8 6.5 6 5.5 5 4.75 4.25')
+    ep.click('button[data-unit="mm"]'); mmv = (ep.input_value('input[data-e="stripper"]'), ep.input_value('input[data-e="gaps"]'))
+    ep.click('button[data-unit="frac"]'); fv = (ep.input_value('input[data-e="stripper"]'), ep.input_value('input[data-e="gaps"]'))
+    ep.click('button[data-unit="in"]'); iv = (ep.input_value('input[data-e="stripper"]'), ep.input_value('input[data-e="gaps"]'))
+    ck('typed chart entries convert with the unit and return exactly (in -> mm -> fractional -> in)', mmv == ('665.48', '254, 203.2, 165.1, 152.4, 139.7, 127, 120.65, 107.95') and fv == ('26.2', '10, 8, 6 1/2, 6, 5 1/2, 5, 4 3/4, 4 1/4') and iv == ('26.2', '10, 8, 6.5, 6, 5.5, 5, 4.75, 4.25'), (mmv, fv, iv))
+    ep.click('button[data-unit="frac"]'); ep.fill('input[data-e="gaps"]', '10 8 6 1/2 6 5 1/2 5 4 3/4 4 1/4'); ep.click('button[data-applyentry]'); ep.wait_for_timeout(80)
+    ck('fractional gaps typed with spaces ("6 1/2") are read as 8 gaps, giving 9 guides', ep.locator('.row').count() == 9, ep.locator('.row').count())
+    ep.close()
     # Responsive layout at the five widths: no overflow or clipping; one clean column below 900; rod/reel bar over two balanced columns from 900.
     for w, hh in [(360, 800), (390, 844), (768, 1024), (1024, 800), (1440, 900)]:
         rp = b.new_page(viewport={'width': w, 'height': hh}); rp.goto(URL); rp.wait_for_timeout(120)

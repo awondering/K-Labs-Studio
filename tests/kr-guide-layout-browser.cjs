@@ -85,6 +85,12 @@ async function main(){
     ck('Workshop: Set stem to fit returns to the published reference (10 rows, all reference)',await f.locator('.row').count()===10&&(await f.locator('.row .tag.published').count())===10);
     await f.locator('.seg button',{hasText:'Decimal in'}).first().click();
     await f.locator('button[data-rod]').nth(3).click();
+    for(const [u,label] of [['frac','Fractional in'],['in','Decimal in']]){await f.locator('.seg button',{hasText:label}).first().click();await page.waitForTimeout(60);
+      const info=await f.locator('body').evaluate(()=>{const c=document.querySelector('#app').cloneNode(true);c.querySelectorAll('button[data-unit=mm],textarea').forEach((x)=>x.remove());return {mm:(c.textContent.match(/.{20}\bmm\b.{6}/g)||[]).slice(0,2),stem:document.querySelector('input[data-k=stem]').value,blade:document.querySelector('input[data-k=blade]').value,first:document.querySelector('.row[data-i="0"] input').value};});
+      ck('Workshop '+label+': no mm anywhere in the tool; blank, stem and stripper position converted',info.mm.length===0&&(u==='frac'?info.blade==='84'&&info.stem==='7 13/16'&&info.first==='48 11/16':info.blade==='84.000'&&info.stem==='7.800'&&info.first==='48.700'),info);}
+    await f.locator('.seg button',{hasText:'mm'}).first().click();await page.waitForTimeout(60);
+    ck('Workshop: back to mm restores the original values (2133.6 / 198.1 / 1237.0)',(await f.locator('input[data-k="blade"]').inputValue())==='2133.6'&&(await f.locator('input[data-k="stem"]').inputValue())==='198.1'&&(await f.locator('.row[data-i="0"] input').inputValue())==='1237.0');
+    await f.locator('.seg button',{hasText:'Decimal in'}).first().click();
     await f.locator('#entrybox > summary').click();
     await f.locator('input[data-e=label]').fill('My 6 ft test');await f.locator('input[data-e=stripper]').fill('26.2');await f.locator('input[data-e=gaps]').fill('10 8 6.5 6 5.4 5 4.8 4.3');
     await f.locator('button[data-applyentry]').click();
@@ -119,7 +125,7 @@ async function main(){
 
     ({context,page,errors}=await boot(browser,base,{width:390,height:844},true));
     const cached=await page.evaluate(async()=>{await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;const k=(await caches.keys()).find((x)=>x.startsWith('klabs-studio-app-shell-'));const c=await caches.open(k);return {k,a:!!(await c.match(new URL('kr-guide-layout/index.html',location.href))),b:!!(await c.match(new URL('js/kr-guide-layout-host.js',location.href)))};});
-    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v227/.test(cached.k),cached);
+    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v228/.test(cached.k),cached);
     await page.reload({waitUntil:'load'});
     for(const s of SCRIPTS)await page.addScriptTag({url:`${base}/js/${s}`});
     await page.evaluate(()=>{window.KLABS_ACCOUNT_ID='aaaaaaaa-0000-0000-0000-000000000001';document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');});
