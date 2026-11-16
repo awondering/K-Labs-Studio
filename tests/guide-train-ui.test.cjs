@@ -197,10 +197,10 @@ test('Workshop wiring: launcher, card, script order and offline asset exist; exi
   const uiAt=bootstrap.indexOf('"js/ui.js"');
   assert.ok(engineAt>0 && uiAt>engineAt,'engine loads before ui.js');
   assert.match(worker,/'js\/guide-train\.js'/);
-  for(const tool of ['diameter','grip','thread-wrap']){
+  for(const tool of ['diameter','grip','thread-studio']){
     assert.ok(html.includes(`data-workshop-tool-open="${tool}"`),`${tool} launcher kept`);
   }
-  assert.ok(/tool==='guide-train'\?'guide-train':'diameter'/.test(source),'open mapping falls back to diameter');
+  assert.ok(/tool==='guide-train'\?'guide-train':tool==='thread-studio'\?'thread-studio':'diameter'/.test(source),'open mapping falls back to diameter');
   assert.ok(/activeTool!=='guide-train'/.test(extract('renderWorkshopToolVisibility')));
   for(const id of ['workshopToolDiameter','workshopToolGrip','workshopToolThreadWrap']){
     assert.ok(extract('renderWorkshopToolVisibility').includes(`$('${id}')`),`${id} visibility kept`);

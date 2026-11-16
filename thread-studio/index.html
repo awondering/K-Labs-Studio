@@ -1,0 +1,1377 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Thread Design Studio · K-Labs Studio</title>
+<style>/* K-Labs Thread Design Studio. Studio tokens (same values as the KR Guide Layout tool), 410px mobile shell. */
+:root{--bg:#060708;--card:#0d1012;--card2:#12161a;--line:#242a2d;--ti:#ddd6c9;--ti2:#ada99d;--mut:#6f736d;--red:#b42736;--red2:#e14a58;--warn:#c9a24a;
+--mi:'Michroma','Eurostile','Arial Narrow',sans-serif;--sans:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Segoe UI',Roboto,Arial,sans-serif}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;color:var(--ti);font:15px/1.4 var(--sans);-webkit-text-size-adjust:100%;min-height:100vh;background:radial-gradient(circle at 50% -10%,rgba(180,39,54,.10),transparent 45%),var(--bg)}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.07;mix-blend-mode:screen;background-size:12px 12px;
+background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 6px),repeating-linear-gradient(-45deg,rgba(255,255,255,.35) 0 1px,transparent 1px 6px)}
+main{position:relative;max-width:410px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) 12px calc(96px + env(safe-area-inset-bottom))}
+h1{font:400 15px/1.3 var(--mi);letter-spacing:.06em;margin:8px 2px 4px}
+h2{font:400 11px/1.3 var(--mi);letter-spacing:.08em;margin:0 0 10px;color:var(--ti2);text-transform:uppercase}
+.sub{color:var(--mut);font-size:13.5px;margin:0 2px 14px}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:10px}
+.mut{color:var(--mut);font-size:12.5px}.note{color:var(--mut);font-size:12.5px;margin:8px 0 0}.note b{color:var(--ti2)}
+button{font-family:var(--sans)}
+.btn{min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:16px;background:var(--card2);color:var(--ti);font:600 14px var(--sans);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.btn.pri{background:linear-gradient(180deg,var(--red),#8f1e2b);border-color:var(--red2);color:#f4efe6}
+.btn.big{width:100%;min-height:54px;font-size:16px;border-radius:18px}
+.btn.sm{min-height:38px;padding:0 12px;font-size:13px;border-radius:14px}
+.btn:disabled{opacity:.4;cursor:default}
+@media(hover:hover){.btn:hover,.stp button:hover,.chip:hover,.pal button:hover,.choice:hover,.tile:hover{border-color:var(--red);color:var(--red2)}.btn.pri:hover{color:#fff}}
+:focus-visible{outline:2px solid var(--red2);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0 10px}.top .btn{min-height:44px}
+.top .pair{display:flex;gap:6px}
+/* home */
+.choice{display:block;width:100%;text-align:left;margin-bottom:10px;padding:16px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--card2),var(--card));color:var(--ti);cursor:pointer;transition:border-color .15s}
+.choice b{display:block;font:400 12px var(--mi);letter-spacing:.06em;margin-bottom:5px;text-transform:uppercase}.choice span{color:var(--mut);font-size:13.5px}
+.choice.resume{border-color:var(--red)}.choice canvas{width:100%;height:auto;display:block;margin-top:10px;border-radius:10px}
+/* gallery */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{padding:8px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ti);cursor:pointer;text-align:left}
+.tile canvas{width:100%;height:auto;display:block;border-radius:8px}.tile b{display:block;font-size:13px;margin:7px 2px 1px}.tile span{font-size:11.5px;color:var(--mut);margin:0 2px}
+/* describe */
+textarea,input[type=text]{width:100%;background:var(--card);color:var(--ti);border:1px solid var(--line);border-radius:14px;padding:12px;font:16px/1.4 var(--sans)}
+textarea{min-height:96px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.chip{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--card2);color:var(--ti2);font:600 13px var(--sans);cursor:pointer}
+/* editor */
+.stage{padding:10px}.stage canvas{display:block;width:100%;border-radius:12px;touch-action:none}
+#rod{cursor:grab}#strip{margin-top:8px;touch-action:none;cursor:pointer;opacity:.95}
+.viewbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}.viewbar .mut{font-size:12px}
+.slots{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.slot{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px 0 6px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ti2);font:600 12.5px var(--sans);cursor:pointer}
+.slot i{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:block}
+.slot[aria-pressed=true]{border-color:var(--red2);color:var(--ti)}.slot[aria-pressed=true] i{border-color:var(--ti)}
+.pal{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:8px}
+.pal button{aspect-ratio:1;min-height:44px;border-radius:50%;border:2px solid var(--line);cursor:pointer;padding:0}
+.pal button[aria-pressed=true]{border-color:var(--ti);box-shadow:0 0 0 2px var(--red2)}
+.stp{display:flex;align-items:center;gap:8px;margin-top:6px}.stp .val{flex:1;text-align:center;font:800 15px var(--sans);font-variant-numeric:tabular-nums}.stp .val small{display:block;font:400 11.5px var(--sans);color:var(--mut)}
+.stp button{flex:none;width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--card2);color:var(--ti);font:400 22px var(--sans);cursor:pointer;transition:border-color .15s,color .15s}
+.stp button:disabled{opacity:.35;cursor:default}
+.field{display:block;font-size:12.5px;color:var(--mut);margin-bottom:12px}
+.seg{display:flex;gap:4px;margin-top:6px;padding:3px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.seg button{flex:1;min-height:44px;border:1px solid transparent;border-radius:13px;background:transparent;color:var(--mut);font:600 13px var(--sans);cursor:pointer}
+.seg button[aria-pressed=true]{background:linear-gradient(180deg,var(--red),#8f1e2b);border-color:var(--red2);color:#f4efe6}
+.status{border-radius:14px;padding:10px 12px;margin-bottom:10px;border:1px solid var(--line);background:var(--card);font-size:13.5px}
+.status.warn{border-color:#5b4a1e;background:#15130c}.status b{color:var(--ti)}.status .btn{margin-top:8px}
+details{margin-bottom:10px}details>summary{cursor:pointer;color:var(--ti2);font-size:14px;padding:12px 14px;list-style:none;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+details>summary::-webkit-details-marker{display:none}details>summary::after{content:"\25BE";color:var(--mut)}details[open]>summary::after{content:"\25B4"}details[open]>summary{border-radius:16px 16px 0 0}
+details>.in{border:1px solid var(--line);border-top:0;border-radius:0 0 16px 16px;padding:12px 14px;background:var(--card)}
+.dock{position:fixed;left:0;right:0;bottom:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg) 35%);z-index:5}
+.dock .in{max-width:410px;margin:0 auto;display:flex;gap:8px}.dock .btn.big{flex:1}.dock .btn.back{flex:0 0 30%}
+/* workshop */
+.prog{height:6px;border-radius:99px;background:var(--card2);border:1px solid var(--line);overflow:hidden;margin:6px 0 12px}.prog i{display:block;height:100%;background:linear-gradient(90deg,var(--red),var(--red2))}
+.cells{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:10px 0 4px}.cells i{flex:1;height:34px;display:block;border-right:1px solid rgba(0,0,0,.25)}
+.marks{display:flex;font-size:10px;color:var(--mut)}.marks span{flex:1;text-align:center;overflow:hidden}
+.runs{display:flex;flex-direction:column;gap:6px;margin-top:10px}.run{display:flex;align-items:center;gap:8px;font-size:13.5px}.run i{width:18px;height:18px;border-radius:50%;border:1px solid var(--line)}.run span{color:var(--mut);margin-left:auto;font-variant-numeric:tabular-nums}
+.stepTitle{font:400 13px var(--mi);letter-spacing:.04em;margin:0 0 8px}.stepText{font-size:15px;margin:0}
+.sw{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.sw span{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ti2)}.sw i{width:22px;height:22px;border-radius:50%;border:1px solid var(--line)}
+.err{color:var(--red2);font-size:12.5px}
+#print{display:none}
+@media print{body>*:not(#print){display:none!important}body::before{display:none}#print{display:block;background:#fff;color:#000;padding:8mm}html,body{background:#fff}}
+@media(max-width:420px){main{padding-left:10px;padding-right:10px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.diagram{margin-top:12px}.diagram svg{width:100%;height:auto;display:block;border-radius:10px}
+
+.phead{display:flex;align-items:center;gap:12px;margin:0 0 10px}.phead i{width:30px;height:30px;border-radius:50%;border:2px solid var(--ti);flex:none}.phead b{display:block;font:700 15px var(--mi);letter-spacing:.05em}.phead b.pc{font-size:20px;letter-spacing:.08em}.legend .enl{margin-left:auto;color:var(--mut)}
+.leg{display:flex;gap:10px;align-items:baseline;padding:8px 10px;border:1px solid var(--line);border-radius:12px;margin-bottom:6px;background:var(--card2)}.leg b{font:700 13px var(--mi);min-width:68px;color:var(--red2)}.leg span{font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chips span{font-size:12.5px;color:var(--ti2);border:1px solid var(--line);border-radius:99px;padding:3px 10px}
+button.diagram{display:block;width:100%;padding:0;margin-top:8px;background:none;border:0;color:inherit;position:relative;text-align:left}button.diagram em{position:absolute;right:8px;bottom:6px;font:normal 11px var(--mi);color:var(--mut)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0;font-size:12px;color:var(--ti2);align-items:center}.legend span{display:flex;align-items:center;gap:5px}.legend u{width:18px;border-top:2.5px solid var(--ti);display:inline-block}.legend u.d{border-top-style:dashed}
+.legend b{width:11px;height:11px;display:inline-block;box-sizing:border-box}.legend .ring{border:2px solid #fff;border-radius:50%}.legend .dia{border:2px solid #fff;transform:rotate(45deg) scale(.8)}.legend .mA{background:var(--ti);border-radius:50%}.legend .mC{border:1.5px solid var(--ti2);border-radius:50%}
+.ribbon svg{width:100%;height:auto;display:block}
+details.how{margin-top:8px}details.how summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--ti2);font-size:14px}details.how .stepText{font-size:14px;margin:0 0 8px}
+#zoom{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;padding-bottom:90px}#zoom .zh{font:700 15px var(--mi);letter-spacing:.05em;padding:14px 12px 8px}#zoom .zs{overflow-x:auto;padding:0 12px}#zoom .zs svg{width:900px;max-width:none;height:auto;display:block}
+
+/* responsive: phones keep the 410px shell; tablets and desktops widen it with the same components */
+@media(min-width:600px){main{max-width:640px;padding-left:20px;padding-right:20px}.tiles{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}.dock .in{max-width:520px}#zoom .zs svg{width:max(900px,100%)}}
+@media(min-width:900px){
+main[data-screen=edit],main[data-screen=work]{max-width:1200px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,1fr);column-gap:20px;align-items:start}
+main[data-screen=edit]>*,main[data-screen=work]>*{grid-column:2}
+main[data-screen=edit]>.top,main[data-screen=work]>.top,main[data-screen=work]>.prog{grid-column:1/-1}
+main[data-screen=edit]>.stage,main[data-screen=work]>.stage{grid-column:1;grid-row-end:span 40;position:sticky;top:12px}
+.card{padding:16px}
+}
+@media(min-width:1500px){main[data-screen=edit],main[data-screen=work]{max-width:1400px}}
+#rod:focus-visible{outline-offset:-2px}
+/* woven designs */
+.legend .wo{background:var(--ti);border-radius:2px}.legend .wu{background:var(--red2);border-radius:2px}
+.next{font-size:13px;color:var(--ti2);margin:6px 0}.next b{font:700 11px var(--mi);color:var(--red2);letter-spacing:.06em;margin-right:6px;text-transform:uppercase}
+.wring,.wchart{background:#1c1f24;border:1px solid var(--line);border-radius:10px;padding:6px;box-sizing:border-box}
+/* custom designs */
+.gridwrap{overflow-x:auto;text-align:center;-webkit-overflow-scrolling:touch}#gridc{touch-action:none;cursor:crosshair;border:1px solid var(--line);border-radius:6px;display:inline-block;vertical-align:top;max-width:none;user-select:none;-webkit-user-select:none}
+.tile.upl{position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;cursor:pointer;min-height:110px}.tile.upl input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}.tile.upl em{font:normal 28px var(--mi);color:var(--red2);margin-top:4px}.tile.upl:focus-within{outline:2px solid var(--red2);outline-offset:2px}
+.tilewrap{position:relative}.tilewrap .tile{width:100%}.tilewrap .del{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:rgba(0,0,0,.6);color:var(--ti);font:600 18px var(--sans);cursor:pointer;line-height:1}
+input[type=range]{width:100%;min-height:36px;accent-color:#c8323f}
+</style></head>
+<body><main id="app"></main><div id="print"></div>
+<script>/* K-Labs Thread Design Studio: engine (pure, no DOM).
+   Model: a design is painted onto a rod by a thread helix. Position (z along the rod, theta around it) maps to the
+   thread turn that covers it: turn = floor(z/w - theta/2pi) for one thread of width w.
+   Three construction families, each physically distinct:
+     bands  : colour depends on z only. Colour changes only BETWEEN turns. Plain wrapping.
+     spiral : several threads wound side by side in one helix (L threads, pitch L*w). No cuts.
+     grid   : a cell grid (N marks around x rows along). Colour changes inside a turn at marked positions
+              (cut-and-restart). Checks, diamonds, chevrons, waves, dots, lettering.
+   Nothing here claims a hand-wrapping bench trial has been done; see STATUS.md. */
+(function (root) {
+  'use strict';
+  const TAU = Math.PI * 2, T = {};
+  const hexOf = {};
+  T.THREADS = [
+    ['black', 'Black', '#17171a'], ['charcoal', 'Charcoal', '#4a4d52'], ['silver', 'Silver', '#b9bcc0'], ['white', 'White', '#f1eee6'],
+    ['cream', 'Cream', '#e3d3a8'], ['gold', 'Gold', '#d1a02b'], ['yellow', 'Yellow', '#f0d23a'], ['orange', 'Orange', '#e8731f'],
+    ['red', 'Red', '#cc2330'], ['wine', 'Wine', '#7a1830'], ['pink', 'Pink', '#e86f9b'], ['purple', 'Purple', '#6b3fa0'],
+    ['navy', 'Navy', '#14234f'], ['royal', 'Royal Blue', '#1f4fc4'], ['sky', 'Sky Blue', '#6db7e8'], ['teal', 'Teal', '#17898a'],
+    ['green', 'Green', '#2e9a4a'], ['forest', 'Forest', '#17452d'], ['brown', 'Brown', '#6b4426']
+  ].map(a => (hexOf[a[0]] = a[2], { id: a[0], name: a[1], hex: a[2] }));
+  T.thread = id => T.THREADS.find(t => t.id === id) || T.THREADS[0];
+  // Typical wrapped widths: approximate. The builder should pack ~20 turns and measure their own thread.
+  T.THREAD_SIZES = [{ id: 'A', name: 'Size A', mm: 0.18 }, { id: 'D', name: 'Size D', mm: 0.25 }, { id: 'E', name: 'Size E', mm: 0.30 }];
+  T.DETAIL = { fine: 1.0, standard: 1.5, bold: 2.5 };           // target mark spacing around the rod, mm
+  T.MIN_CELL_MM = 1.0;                                            // finer than this is not realistic to mark by hand
+  T.MIN_RUN = 2;                                                  // shortest colour run (cells) accepted
+  T.MAX_SPOOLS = 6;
+  T.DEFAULT_DIAMETER = 8;
+
+  // ---------- 5x7 lettering ----------
+  const G = {
+    A: '01110 10001 10001 11111 10001 10001 10001', B: '11110 10001 10001 11110 10001 10001 11110', C: '01110 10001 10000 10000 10000 10001 01110',
+    D: '11110 10001 10001 10001 10001 10001 11110', E: '11111 10000 10000 11110 10000 10000 11111', F: '11111 10000 10000 11110 10000 10000 10000',
+    G: '01110 10001 10000 10111 10001 10001 01111', H: '10001 10001 10001 11111 10001 10001 10001', I: '01110 00100 00100 00100 00100 00100 01110',
+    J: '00111 00010 00010 00010 00010 10010 01100', K: '10001 10010 10100 11000 10100 10010 10001', L: '10000 10000 10000 10000 10000 10000 11111',
+    M: '10001 11011 10101 10101 10001 10001 10001', N: '10001 11001 10101 10011 10001 10001 10001', O: '01110 10001 10001 10001 10001 10001 01110',
+    P: '11110 10001 10001 11110 10000 10000 10000', Q: '01110 10001 10001 10001 10101 10010 01101', R: '11110 10001 10001 11110 10100 10010 10001',
+    S: '01111 10000 10000 01110 00001 00001 11110', T: '11111 00100 00100 00100 00100 00100 00100', U: '10001 10001 10001 10001 10001 10001 01110',
+    V: '10001 10001 10001 10001 10001 01010 00100', W: '10001 10001 10001 10101 10101 11011 10001', X: '10001 10001 01010 00100 01010 10001 10001',
+    Y: '10001 10001 01010 00100 00100 00100 00100', Z: '11111 00001 00010 00100 01000 10000 11111',
+    0: '01110 10001 10011 10101 11001 10001 01110', 1: '00100 01100 00100 00100 00100 00100 01110', 2: '01110 10001 00001 00010 00100 01000 11111',
+    3: '11110 00001 00001 01110 00001 00001 11110', 4: '00010 00110 01010 10010 11111 00010 00010', 5: '11111 10000 11110 00001 00001 10001 01110',
+    6: '00110 01000 10000 11110 10001 10001 01110', 7: '11111 00001 00010 00100 01000 01000 01000', 8: '01110 10001 10001 01110 10001 10001 01110',
+    9: '01110 10001 10001 01111 00001 00010 01100',
+    '-': '00000 00000 00000 11111 00000 00000 00000', '.': '00000 00000 00000 00000 00000 01100 01100', '&': '01100 10010 10100 01000 10101 10010 01101',
+    '!': '00100 00100 00100 00100 00100 00000 00100', '+': '00000 00100 00100 11111 00100 00100 00000', "'": '00100 00100 01000 00000 00000 00000 00000',
+    '/': '00001 00010 00010 00100 01000 01000 10000'
+  };
+  T.FONT = {}; Object.keys(G).forEach(k => { T.FONT[k] = G[k].split(' '); });
+  T.FONT[' '] = ['000', '000', '000', '000', '000', '000', '000'];
+  T.cleanText = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9 \-.&!+'/]/g, ' ').replace(/\s+/g, ' ').replace(/^ +/, '').slice(0, 24);
+  T.droppedChars = s => { const c = T.cleanText(s); return Array.from(String(s || '').toUpperCase().replace(/\s+/g, ' ')).filter(ch => !/[A-Z0-9 \-.&!+'/]/.test(ch)); };
+  T.textBitmap = function (text) {
+    const t = T.cleanText(text).replace(/ +$/, ''), cols = [];
+    for (let k = 0; k < t.length; k++) { const g = T.FONT[t[k]]; for (let x = 0; x < g[0].length; x++) cols.push(g.map(r => r[x] === '1' ? 1 : 0)); if (k < t.length - 1) cols.push([0, 0, 0, 0, 0, 0, 0]); }
+    return { w: cols.length, h: 7, px: (x, y) => (cols[x] && cols[x][y]) ? 1 : 0, text: t };
+  };
+
+  // ---------- patterns ----------
+  const PAT = {
+    bands: { name: 'Racing bands', family: 'bands', slots: ['Main', 'Stripe', 'Edge'], colours: ['navy', 'gold', 'white'] },
+    spiral: { name: 'Barber pole', family: 'spiral', nc: 2, slots: ['Colour 1', 'Colour 2'], colours: ['red', 'black'] },
+    twist: { name: 'Triple twist', family: 'spiral', nc: 3, slots: ['Colour 1', 'Colour 2', 'Colour 3'], colours: ['gold', 'black', 'red'] },
+    checks: { name: 'Checks', family: 'grid', P: 4, Q: 4, slots: ['Colour 1', 'Colour 2'], colours: ['black', 'gold'], tile: (i, j) => (((j >> 1) + (i >> 1)) & 1) },
+    diamonds: { name: 'Diamond cross wrap', family: 'cross', slots: ['Underwrap', 'Main colour', 'Inner outline', 'Outer outline'], colours: ['navy', 'red', 'silver', 'black'] },
+    doublediamond: { name: 'Double diamond', family: 'cross', slots: ['Underwrap', 'Core band', 'Inner frame', 'Outer frame'], colours: ['navy', 'red', 'silver', 'gold'] },
+    chain: { name: 'Diamond chain', family: 'cross', slots: ['Underwrap', 'Link colour', 'Chain colour', 'Outline'], colours: ['navy', 'red', 'gold', 'black'] },
+    chevronwrap: { name: 'Chevron wrap', family: 'cross', slots: ['Underwrap', 'Main colour', 'Second colour', 'Outline'], colours: ['navy', 'red', 'gold', 'black'] },
+    herringbone: { name: 'Woven herringbone', family: 'weave', slots: ['Warp', 'Weft'], colours: ['black', 'gold'] },
+    wovendiamond: { name: 'Woven diamonds', family: 'weave', slots: ['Warp', 'Weft', 'Warp accent'], colours: ['navy', 'silver', 'red'] },
+    layered: { name: 'Multi-layer diamond', family: 'cross', slots: ['Underwrap', 'Main colour', 'Inner outline', 'Outer outline', 'Overlay'], colours: ['navy', 'red', 'silver', 'black', 'gold'] },
+    wovencustom: { name: 'My design', family: 'weave', slots: ['Design', 'Background'], colours: ['gold', 'black'] },
+    wovenletters: { name: 'Woven lettering', family: 'weave', slots: ['Lettering', 'Background'], colours: ['gold', 'black'] },
+    chevrons: { name: 'Chevrons', family: 'grid', P: 8, Q: 8, slots: ['Colour 1', 'Colour 2'], colours: ['black', 'red'],
+      tile: (i, j) => (Math.floor((i + Math.abs((j % 8) - 3.5)) / 2) & 1) },
+    waves: { name: 'Waves', family: 'grid', P: 12, Q: 8, slots: ['Colour 1', 'Colour 2'], colours: ['teal', 'white'],
+      tile: (i, j) => ((((i + Math.round(3 * Math.sin(TAU * (j % 12) / 12))) % 8 + 8) % 8) < 4 ? 1 : 0) },
+    dots: { name: 'Polka dots', family: 'grid', P: 6, Q: 6, slots: ['Background', 'Dots'], colours: ['black', 'silver'],
+      tile: (i, j) => { const a = i % 6, b = j % 6; return ((a < 2 && b < 2) || (a >= 3 && a < 5 && b >= 3 && b < 5)) ? 1 : 0; } },
+    text: { name: 'Lettering', family: 'grid', slots: ['Background', 'Lettering'], colours: ['black', 'gold'] }
+  };
+  T.PATTERNS = PAT;
+  T.GALLERY = ['diamonds', 'doublediamond', 'chain', 'layered', 'chevronwrap', 'herringbone', 'wovendiamond', 'wovenletters', 'bands', 'spiral', 'twist'];
+  T.EXPERIMENTAL = ['checks', 'chevrons', 'waves', 'dots'];   // colour-change method: kept, labelled experimental
+  const BAND_UNIT = [[0, 8], [1, 1.5], [2, 1], [1, 1.5]], BAND_SCALE = [0.5, 0.75, 1, 1.5, 2, 3];
+
+  T.createDesign = function (kind, over) {
+    const p = PAT[kind] || PAT.checks, text = kind === 'text' || kind === 'wovenletters';
+    const d = { v: 1, mode: text ? 'text' : 'pattern', pattern: text ? kind : kind, text: kind === 'wovenletters' ? 'K-LABS' : text ? 'YOUR NAME' : '', slots: p.colours.slice(),
+      size: kind === 'spiral' ? 3 : kind === 'twist' ? 2 : p.family === 'cross' ? 1 : null, bandThreads: p.family === 'cross' ? (T.cross ? T.cross.SPEC[kind].defN : 5) : undefined, detail: text ? 'fine' : 'standard', diameterMm: T.DEFAULT_DIAMETER, measured: false, lengthMm: 150, thread: 'A' };
+    if (kind === 'wovencustom') { d.art = T.art.templates.blank(); d.name = 'My design'; }
+    return Object.assign(d, over || {});
+  };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  T.clone = clone;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- layout ----------
+  T.layout = function (d) {
+    const pat = PAT[d.mode === 'text' && d.pattern !== 'wovenletters' ? 'text' : d.pattern] || PAT.checks;
+    const C = Math.PI * d.diameterMm, w = (T.THREAD_SIZES.find(s => s.id === d.thread) || T.THREAD_SIZES[0]).mm;
+    const turns = Math.floor(d.lengthMm / w);
+    const L = { d, C, w, len: d.lengthMm, turns, family: pat.family, warnings: [], patName: pat.name, slotNames: pat.slots };
+    const norm = th => { th = th % TAU; return th < 0 ? th + TAU : th; };
+    if (!d.measured) L.warnings.push({ id: 'size', level: 'info', text: 'Preview uses a standard ' + T.DEFAULT_DIAMETER + ' mm rod. Enter your measured rod size before marking.', fix: 'rodsize' });
+    if (pat.family === 'cross') return T.cross.layout(d, L);
+    if (pat.family === 'weave') return T.weave.layout(d, L);
+
+    if (pat.family === 'bands') {
+      const si = d.size == null ? 2 : clamp(d.size, 0, BAND_SCALE.length - 1), sc = BAND_SCALE[si];
+      const unit = BAND_UNIT.map(([s, mm]) => [s, mm * sc]), ul = unit.reduce((a, b) => a + b[1], 0);
+      L.size = si; L.larger = si < BAND_SCALE.length - 1 ? si + 1 : null; L.smaller = si > 0 ? si - 1 : null; L.sizeLabel = 'Repeat ' + ul.toFixed(1) + ' mm';
+      // explicit band list (clipped to length)
+      L.bands = []; let z0 = 0, k = 0;
+      while (z0 < d.lengthMm - 1e-9) { const [s, mm] = unit[k % unit.length]; const z1 = Math.min(d.lengthMm, z0 + mm); L.bands.push({ slot: s, z0, z1, turns: Math.max(1, Math.round((z1 - z0) / w)) }); z0 = z1; k++; }
+      L.slotAt = (z, th) => { if (z < 0 || z >= d.lengthMm) return -1; const u = z % ul; let a = 0; for (let q = 0; q < unit.length; q++) { a += unit[q][1]; if (u < a) return unit[q][0]; } return unit[unit.length - 1][0]; };
+      L.method = { kind: 'plain', label: 'Plain wrap · colour changes only between turns', changes: L.bands.length - 1 }; L.evidence = { tier: 'standard', label: 'Standard plain wrap', bench: 'Not bench tested' };
+      L.spools = [...new Set(L.bands.map(b => b.slot))].sort();
+      return L;
+    }
+    if (pat.family === 'spiral') {
+      const nc = pat.nc, mMax = Math.floor(T.MAX_SPOOLS / nc), m = d.size == null ? 1 : clamp(d.size, 1, mMax), Lt = m * nc;
+      L.size = m; L.larger = m < mMax ? m + 1 : null; L.smaller = m > 1 ? m - 1 : null; L.threads = Lt; L.perColour = m;
+      L.sizeLabel = Lt + ' threads wound together';
+      L.slotAt = (z, th) => { if (z < 0 || z >= d.lengthMm) return -1; const u = Math.floor(z / w - Lt * norm(th) / TAU); return Math.floor((((u % Lt) + Lt) % Lt) / m); };
+      L.pitchMm = Lt * w; L.spools = Array.from({ length: nc }, (_, i) => i);
+      L.method = { kind: 'spiral', label: 'Spiral · wind ' + Lt + ' threads together, no cuts', changes: 0 }; L.evidence = { tier: 'basic', label: 'Basic multi-thread spiral', bench: 'Not bench tested' };
+      return L;
+    }
+    // grid
+    const cell0 = T.DETAIL[d.detail] || T.DETAIL.standard, N0 = Math.max(1, Math.round(C / cell0));
+    let N, cellFn, P0 = pat.P, bm = null, s = 2, copies = 1, period = 0, off = 0;
+    if (d.mode === 'text') {
+      bm = T.textBitmap(d.text); const smax = Math.max(2, Math.floor((N0 - 3) / 7));
+      s = clamp(d.size == null ? 2 : d.size, 2, smax); period = 7 * s + 3; copies = Math.max(1, Math.floor(N0 / period));
+      N = copies > 1 ? copies * period : Math.max(N0, period); if (copies === 1) { period = N; off = Math.floor((N - 7 * s) / 2); } else off = 1;
+      L.size = s; L.larger = s < smax ? s + 1 : null; L.smaller = s > 2 ? s - 1 : null; L.copies = copies;
+      L.textRows = bm.w * s; L.bitmap = bm;
+    } else {
+      const repMax = Math.max(1, Math.floor(C / (pat.P * T.MIN_CELL_MM))), reps = clamp(d.size == null ? Math.round(N0 / pat.P) : d.size, 1, repMax);
+      N = pat.P * reps; L.size = reps; L.larger = reps > 1 ? reps - 1 : null; L.smaller = reps < repMax ? reps + 1 : null; L.reps = reps;
+    }
+    const cellMm = C / N, r = Math.max(1, Math.round(cellMm / w)), rows = Math.ceil(turns / r);
+    L.N = N; L.cellMm = cellMm; L.r = r; L.rows = rows; L.rowMm = r * w; L.markSpacingMm = cellMm;
+    if (d.mode === 'text') {
+      const rowOff = Math.max(0, Math.floor((rows - L.textRows) / 2)); L.rowOffset = rowOff; L.truncated = L.textRows > rows;
+      cellFn = (row, j) => { const jj = copies > 1 ? j % period : j, y = jj - off; if (y < 0 || y >= 7 * s) return 0; const x = Math.floor((row - rowOff) / s); return (x >= 0 && x < bm.w && bm.px(x, Math.floor(y / s))) ? 1 : 0; };
+      L.sizeLabel = 'Letters ' + (7 * s * cellMm).toFixed(1) + ' mm tall';
+    } else { cellFn = (row, j) => pat.tile(row % pat.Q, j % pat.P); L.sizeLabel = 'Repeat ' + (pat.P * cellMm).toFixed(1) + ' mm'; }
+    L.cell = cellFn;
+    L.rowCells = row => { const a = new Array(N); for (let j = 0; j < N; j++) a[j] = cellFn(row, j); return a; };
+    L.slotAt = (z, th) => { if (z < 0) return -1; th = norm(th); const t = Math.floor(z / w - th / TAU); if (t < 0 || t >= turns) return -1; return cellFn(Math.floor(t / r), Math.floor(th / TAU * N) % N); };
+    // statistics over every row
+    let minRun = N, changes = 0, used = new Set(), maxRows = Math.min(rows, 4000);
+    for (let row = 0; row < maxRows; row++) { const rr = T.runs(L.rowCells(row)); rr.forEach(x => used.add(x.slot)); if (rr.length > 1) { changes += rr.length * r; rr.forEach(x => { if (x.len < minRun) minRun = x.len; }); } }
+    L.minRun = minRun; L.spools = [...used].sort(); L.method = { kind: 'changes', label: 'Colour-change wrap · ' + changes + ' thread changes', changes };
+    L.evidence = { tier: 'experimental', label: 'Experimental colour-change method', bench: 'Not bench tested' };
+    L.effort = changes < 200 ? 'Quick' : changes < 800 ? 'Long job' : 'Very long job';
+    if (d.mode !== 'text' && cellMm < T.MIN_CELL_MM - 1e-9) L.warnings.push({ id: 'fine', level: 'warn', text: 'Marks would be ' + cellMm.toFixed(2) + ' mm apart, too fine to mark by hand on this rod. Use a larger rod size or another pattern.' });
+    if (minRun < T.MIN_RUN) L.warnings.push({ id: 'run', level: 'warn', text: 'Some colour runs are shorter than ' + T.MIN_RUN + ' marks.' });
+    if (d.mode === 'text') {
+      if (!bm.text) L.warnings.push({ id: 'empty', level: 'warn', text: 'Type a name or message to see it on the rod.' });
+      if (L.truncated) L.warnings.push({ id: 'long', level: 'warn', text: 'That message is longer than the wrapped length. Shorten it, use a smaller letter size, or increase the wrapped length in More options.', fix: 'more' });
+      const dr = T.droppedChars(d.text); if (dr.length) L.warnings.push({ id: 'chars', level: 'info', text: 'Left out characters the lettering can’t make: ' + dr.join(' ') });
+    }
+    return L;
+  };
+  T.runs = function (cells) {            // cyclic runs, starting at a colour boundary
+    const n = cells.length; let st = 0;
+    for (let j = 0; j < n; j++) if (cells[j] !== cells[(j - 1 + n) % n]) { st = j; break; }
+    const out = []; let j = 0;
+    while (j < n) { const a = (st + j) % n, sl = cells[a]; let len = 1; while (j + len < n && cells[(st + j + len) % n] === sl) len++; out.push({ slot: sl, from: a, len, to: (a + len) % n }); j += len; }
+    return out;
+  };
+
+  // ---------- workshop steps ----------
+  T.steps = function (d) {
+    const L = T.layout(d), nm = s => T.thread(d.slots[s]).name, st = [];
+    if (L.family === 'cross') return T.cross.steps(d, L);
+    if (L.family === 'weave') return T.weave.steps(d, L);
+    const spoolList = L.spools.map(nm);
+    if (L.family === 'grid' && !d.measured) st.push({ kind: 'needsize', title: 'Enter your rod size', text: 'Your design needs your measured rod diameter before we can work out the marks.' });
+    st.push({ kind: 'spools', title: 'Get your threads ready', text: spoolList.join(', '), slots: L.spools.slice() });
+    if (L.family === 'grid') {
+      const C = L.C;
+      st.push({ kind: 'marks', title: 'Mark the rod', text: 'Cut a paper strip that just wraps once around the rod (' + C.toFixed(1) + ' mm). Fold or mark it into ' + L.N + ' equal parts (' + L.markSpacingMm.toFixed(2) + ' mm each), then mark ' + L.N + ' points around the rod at the start of the design. Number them 0 to ' + (L.N - 1) + '. A printable template is available.', marks: L.N, spacing: L.markSpacingMm, needsMeasured: true });
+      let row = 0, rows = L.rows;
+      while (row < rows) {
+        const cells = L.rowCells(row), key = cells.join(''); let k = row + 1;
+        while (k < rows && L.rowCells(k).join('') === key) k++;
+        const n = k - row, rr = T.runs(cells), uniform = rr.length === 1;
+        st.push({ kind: 'row', rowFrom: row + 1, rowTo: k, rows: n, turns: n * L.r, cells, runs: rr, uniform, zEnd: Math.min(d.lengthMm, k * L.r * L.w),
+          title: n > 1 ? 'Rows ' + (row + 1) + '–' + k + ' of ' + rows : 'Row ' + (row + 1) + ' of ' + rows,
+          text: uniform ? 'Wrap ' + n * L.r + ' turns of ' + nm(rr[0].slot) + '. No colour changes.'
+            : 'Wrap ' + L.r + ' turn' + (L.r > 1 ? 's' : '') + (n > 1 ? ' for each of ' + n + ' rows (' + n * L.r + ' turns in all)' : '') + ', changing colour at the marks shown on every turn.' });
+        row = k;
+      }
+    } else if (L.family === 'bands') {
+      L.bands.forEach((b, i) => st.push({ kind: 'band', title: 'Wrap ' + nm(b.slot), text: b.turns + ' turns (about ' + (b.z1 - b.z0).toFixed(1) + ' mm), then change colour.', slot: b.slot, zEnd: b.z1, turns: b.turns, slots: [b.slot] }));
+    } else {
+      st.push({ kind: 'spiral', title: 'Wind ' + L.threads + ' threads together', text: 'Tie in ' + L.threads + ' threads side by side, ' + L.perColour + ' of each colour in this order: ' + Array.from({ length: L.spools.length }, (_, i) => L.perColour + ' × ' + nm(i)).join(', ') + '. Keep them flat and touching, and wind them as one band for about ' + Math.round(d.lengthMm / L.pitchMm) + ' turns (' + d.lengthMm + ' mm).', zEnd: d.lengthMm, slots: L.spools.slice() });
+    }
+    st.push({ kind: 'finish', title: 'Finish', text: 'Tie off, trim the tails and finish the wrap your usual way. Compare with the preview, and note anything to adjust for next time.', zEnd: d.lengthMm });
+    return st;
+  };
+
+  // ---------- describe your design ----------
+  const CWORDS = { black: 'black', charcoal: 'charcoal', grey: 'silver', gray: 'silver', silver: 'silver', white: 'white', cream: 'cream', ivory: 'cream', tan: 'cream', gold: 'gold', golden: 'gold',
+    yellow: 'yellow', orange: 'orange', red: 'red', crimson: 'red', wine: 'wine', maroon: 'wine', burgundy: 'wine', pink: 'pink', purple: 'purple', violet: 'purple', navy: 'navy',
+    blue: 'royal', royal: 'royal', sky: 'sky', teal: 'teal', green: 'green', forest: 'forest', brown: 'brown' };
+  const PWORDS = [[/woven diamond|diamond weave|weave.*diamond|diamond.*weav/, 'wovendiamond'], [/herringbone|twill|tweed|woven|weav/, 'herringbone'], [/barber|candy ?cane|spiral|twist(?!.*three)|swirl|stripes? (?:that )?(?:twist|spiral)/, 'spiral'], [/triple|three[- ]colou?r (?:twist|spiral)/, 'twist'],
+    [/check|chequer|checker|gingham|squares?/, 'checks'], [/double[- ]?diamond|nested diamond/, 'doublediamond'], [/diamond[- ]?chain|chain of diamonds|linked diamonds/, 'chain'], [/multi[- ]?layer|layered diamond|layered/, 'layered'], [/diamond|harlequin|argyle|cross[- ]?wrap/, 'diamonds'], [/chevron/, 'chevronwrap'], [/arrow|zig-?zag|herringbone/, 'chevrons'],
+    [/wave|ripple|water/, 'waves'], [/polka|dots?|spots?/, 'dots'], [/band|stripe|racing|pinstripe|trim/, 'bands']];
+  T.parse = function (input) {
+    const raw = String(input || ''), s = raw.toLowerCase(), found = { colours: [], motif: null, bg: null };
+    let text = null;
+    const q = raw.match(/["“”']([^"“”']{1,24})["“”']/);
+    if (q) text = q[1]; else { const m = raw.match(/\b(?:spell(?:ing)?|say(?:ing)?|name|initials?|text|word|message|monogram)\s+([A-Za-z0-9&.\- ]{1,24}?)(?=\s+(?:in|on|with|using|and|,)\b|[,.]|$)/i); if (m) text = m[1]; }
+    let body = s.replace(/["“”'][^"“”']*["“”']/g, ' ');
+    const idx = []; body.replace(/[a-z]+/g, (w, i) => { if (CWORDS[w]) idx.push([i, CWORDS[w]]); return w; });
+    const cols = []; idx.forEach(([, c]) => { if (!cols.includes(c)) cols.push(c); });
+    const onM = body.match(/([a-z ]*?)\bon\b(.*)/);
+    let motif = null, bg = null;
+    if (onM) { const f = w => { const a = w.match(/[a-z]+/g) || []; for (let i = 0; i < a.length; i++) if (CWORDS[a[i]]) return CWORDS[a[i]]; return null; }; motif = f(onM[1].split(/\bin\b/).pop()); bg = f(onM[2]); }
+    let pattern = null; if (!text) for (const [re, id] of PWORDS) if (re.test(body)) { pattern = id; break; }
+    if (/triple|three/.test(body) && pattern === 'spiral') pattern = 'twist';
+    let sizeDir = 0; if (/\b(large|larger|bold|chunky|big|wide|thick)\b/.test(body)) sizeDir = 1; else if (/\b(small|smaller|fine|tiny|thin|delicate|narrow)\b/.test(body)) sizeDir = -1;
+    const understood = []; let d, recognised = true;
+    const woven = text && !/colou?r[- ]?change|experimental|painted|grid/.test(body);
+    if (woven) d = T.createDesign('wovenletters', { text: T.cleanText(text) }); else if (text) d = T.createDesign('text', { text: T.cleanText(text) }); else if (pattern) d = T.createDesign(pattern); else { d = T.createDesign('diamonds'); recognised = false; }
+    if (motif && bg) { d.slots[0] = bg; d.slots[1] = motif; } else if (cols.length) cols.forEach((c, i) => { if (i < d.slots.length) d.slots[i] = c; });
+    if (woven) { d.slots[0] = motif || cols[0] || 'gold'; d.slots[1] = bg || (cols.length > 1 ? cols[cols.length - 1] : null) || 'black'; if (d.slots[0] === d.slots[1]) d.slots[1] = d.slots[0] === 'black' ? 'white' : 'black'; } else     if (text) { d.slots[0] = (bg || (cols.length > 1 ? cols[cols.length - 1] : null) || 'black'); d.slots[1] = motif || cols[0] || 'gold'; if (d.slots[0] === d.slots[1]) d.slots[0] = d.slots[1] === 'black' ? 'white' : 'black'; }
+    if (text) understood.push('Lettering “' + d.text + '”'); else if (pattern) understood.push(PAT[pattern].name);
+    understood.push(...d.slots.slice(0, PAT[d.pattern].slots.length).map(c => T.thread(c).name));
+    return { design: d, understood, recognised, sizeDir, text: !!text };
+  };
+  T.resize = function (d, dir) { const L = T.layout(d), v = dir > 0 ? L.larger : L.smaller; if (v == null) return d; return Object.assign(clone(d), { size: v }); };
+
+  // ---------- history (undo / redo) ----------
+  T.History = function (initial) { this.s = [clone(initial)]; this.i = 0; this.key = null; this.t = 0; };
+  T.History.prototype = {
+    push(d, key, now) { const c = JSON.stringify(d); if (c === JSON.stringify(this.s[this.i])) return; now = now == null ? Date.now() : now;
+      if (key && key === this.key && now - this.t < 1200 && this.i === this.s.length - 1) { this.s[this.i] = clone(d); this.t = now; return; }
+      this.s = this.s.slice(0, this.i + 1); this.s.push(clone(d)); if (this.s.length > 100) this.s.shift(); this.i = this.s.length - 1; this.key = key || null; this.t = now; },
+    can(u) { return u ? this.i > 0 : this.i < this.s.length - 1; },
+    undo() { if (this.i > 0) { this.i--; this.key = null; } return clone(this.s[this.i]); },
+    redo() { if (this.i < this.s.length - 1) { this.i++; this.key = null; } return clone(this.s[this.i]); },
+    cur() { return clone(this.s[this.i]); }
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = T; else root.THREAD = T;
+})(typeof self !== 'undefined' ? self : this);
+</script><script>/* K-Labs Thread Design Studio: diamond cross-wrap geometry engine.
+   Everything the preview draws and everything the workshop says comes from the thread list built here.
+
+   MODEL (independent implementation of the documented layout; see METHOD.md for sources and evidence tiers)
+   - Two opposite reference lines run along the blank: A at theta = 0 and C at theta = pi. Theta increases in the
+     direction the rod is turned while the thread travels (viewed with butt on the left, tip on the right, looking
+     at the side facing you, theta increases down the face).
+   - A marks sit at z = k*S, C marks at z = (k + 1/2)*S, with S the crossing spacing and z measured from the start
+     of the wrap.
+   - An "up" thread (butt to tip) is a helix of pitch S that leans "\" on the face toward you (family R).
+     A "back" thread (tip to butt) is a helix of pitch S leaning "/" (family L). Both pass through every mark,
+     so they cross on the marks: an X at each mark. The rod keeps turning the same way; only the feed direction reverses.
+   - A band is built outward from a centre thread, one pass (up then back) at a time, each thread laid touching the last.
+     Later threads lie over earlier ones (layered, not woven).
+   - One continuous thread per colour does all that colour's passes, so tie-offs = number of colours.
+   Constant blank diameter is assumed. */
+(function (root) {
+  'use strict';
+  const T = (typeof module !== 'undefined' && module.exports) ? require('./engine.js') : root.THREAD;
+  const TAU = Math.PI * 2, X = {}; T.cross = X;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), mod = (a, b) => ((a % b) + b) % b;
+  X.SPACING = [0.75, 1, 1.25, 1.5, 2, 3];   // crossing spacing as a multiple of rod diameter (index 1 = the commonly quoted "equal to the diameter")
+  X.BAND_OPTIONS = [3, 5, 7];                // threads in the main band
+  X.CAP_MM = 6;                              // end band width at each end (experimental sizing)
+  X.ALLOWANCE = 1.2; X.TAIL_MM = 150;         // thread allowances (experimental)
+  X.FILL = 0.9;                              // threads of one family may fill at most this fraction of the pitch
+  X.PASS_SLOTS = { main: 1, inner: 2, outer: 3 };
+  X.passOffsets = h => { const o = [0]; for (let k = 1; k <= h; k++) o.push(k, -k); o.push(h + 1, -(h + 1), h + 2, -(h + 2)); return o; };
+
+  // ---------- designs ----------
+  // A design is an ordered list of lattice groups. A group is one cross-wrap lattice: helices of pitch mult*S through the marks,
+  // shifted along the rod by shift*S, laid centre thread first and outward. Offsets may skip positions (a one-thread gap leaves the
+  // underwrap showing). Groups are laid in order, so later groups lie over earlier ones. The classic diamond is a single group.
+  const bandOffs = h => { const o = [0]; for (let k = 1; k <= h; k++) o.push(k, -k); return o; };
+  const pair = (a, slot) => [{ o: a, slot }, { o: -a, slot }];
+  const run = (offs, slot) => offs.map(o => ({ o, slot }));
+  X.SPEC = {
+    diamonds: { label: 'Diamond cross wrap', guide: 'diamond cross-wrap', options: [3, 5, 7], defN: 5, tier: 'documented', fill: 1, build: N => { const h = (N - 1) / 2, sl = j => { const a = Math.abs(j); return a <= h ? 1 : a === h + 1 ? 2 : 3; };
+      return [{ mult: 1, shift: 0, offs: X.passOffsets(h).map(o => ({ o, slot: sl(o) })) }]; } },
+    doublediamond: { label: 'Double diamond', options: [3, 5], defN: 5, tier: 'experimental', fill: 1, note: 'One-thread gaps between the bands let the underwrap show as fine lines between nested outlines.',
+      build: N => { const h = (N - 1) / 2, a = h + 2, b = h + 4; return [{ mult: 1, shift: 0, offs: [].concat(run(bandOffs(h), 1), pair(a, 2), pair(b, 3)) }]; } },
+    chain: { label: 'Diamond chain', options: [3, 5], defN: 3, tier: 'experimental', fill: 0.5, marksBoth: true, note: 'Two interlocked lattices, half a spacing apart, so one lattice crosses in the middle of the other’s diamonds.',
+      build: N => { const h = (N - 1) / 2; return [{ mult: 1, shift: 0, offs: [].concat(run(bandOffs(h), 1), pair(h + 1, 3)) }, { mult: 1, shift: 0.5, offs: [].concat(run(bandOffs(h), 2), pair(h + 1, 3)) }]; } },
+    chevronwrap: { label: 'Chevron cross wrap', guide: 'chevron cross-wrap', options: [2, 3, 4], defN: 3, tier: 'documented', fill: 1,
+      note: 'Each additional thread goes on the same side of the last one, so the crossings march along the rod and the colours nest into arrowheads.',
+      build: N => { const K = 2 * N; return [{ mult: 1, shift: 0, same: true, offs: [].concat(Array.from({ length: K }, (_, i) => ({ o: i, slot: i < N ? 1 : 2 })), [{ o: K, slot: 3 }, { o: -1, slot: 3 }]) }]; } },
+    layered: { label: 'Multi-layer diamond', options: [3, 5], defN: 3, tier: 'experimental', fill: 1, unit: 3, viewWin: 7, note: 'A banded fine lattice with a larger lattice, three times the spacing, laid over it.',
+      build: N => { const h = (N - 1) / 2, sl = j => { const a = Math.abs(j); return a <= h ? 1 : a === h + 1 ? 2 : 3; };
+        return [{ mult: 1, shift: 0, offs: X.passOffsets(h).map(o => ({ o, slot: sl(o) })) }, { mult: 3, shift: 0, offs: [].concat(run([0, 1, -1], 4), pair(2, 3)) }]; } }
+  };
+  X.specFor = d => X.SPEC[d.pattern] || X.SPEC.diamonds;
+  X.optionsFor = d => X.specFor(d).options;
+
+  X.layout = function (d, L) {
+    const spec = X.specFor(d), D = d.diameterMm, w = L.w, C = L.C, si = clamp(d.size == null ? 1 : d.size, 0, X.SPACING.length - 1), S = X.SPACING[si] * D;
+    const wvOf = mult => { const mm = S * mult / (Math.PI * D); return w * Math.sqrt(1 + mm * mm); }, m = S / (Math.PI * D), wv = wvOf(1);
+    const want = spec.options.includes(d.bandThreads) ? d.bandThreads : spec.defN;
+    const widest = N => Math.max(...spec.build(N).map(g => { const lo = Math.min(...g.offs.map(x => x.o)), hi = Math.max(...g.offs.map(x => x.o)), width = g.same ? hi - lo + 1 : 2 * Math.max(Math.abs(lo), hi) + 1; return width * wvOf(g.mult) / (g.mult * S * spec.fill); }));
+    const fits = N => widest(N) <= X.FILL;
+    let N = want; while (N > 3 && !fits(N)) N = N === 7 ? 5 : 3;
+    if (N < want) L.warnings.push({ id: 'bandfit', level: 'info', text: 'Main band reduced to ' + N + ' threads so the bands fit at this spacing.' });
+    if (!fits(N)) L.warnings.push({ id: 'nofit', level: 'warn', text: 'The bands are too wide for this spacing on this rod. Make the diamonds larger.' });
+    const h = (N - 1) / 2, unit = spec.unit || 1, n = unit > 1 ? Math.max(unit, Math.floor(d.lengthMm / S / unit + 1e-9) * unit) : Math.max(2, Math.floor(d.lengthMm / S + 1e-9)), len = n * S, cap = X.CAP_MM;
+    if (d.lengthMm < 2 * S) L.warnings.push({ id: 'short', level: 'warn', text: 'The wrap length is shorter than two diamonds at this size. Increase the length or make the diamonds smaller.', fix: 'more' });
+    // groups -> passes -> threads
+    const passes = [], threads = [], groups = [];
+    spec.build(N).forEach((g0, gi) => {
+      const Sg = S * g0.mult, grp = { g: gi, mult: g0.mult, S: Sg, wv: wvOf(g0.mult), z0: g0.shift * S, passOf: new Map(), slotByOff: new Map(), lsign: g0.same ? 1 : -1, J: Math.max(...g0.offs.map(x => Math.abs(x.o))), lo: Math.min(...g0.offs.map(x => x.o)), hi: Math.max(...g0.offs.map(x => x.o)), c: (Math.min(...g0.offs.map(x => x.o)) + Math.max(...g0.offs.map(x => x.o))) / 2, first: passes.length + 1 }, laid = [];
+      g0.offs.forEach(({ o, slot }) => {
+        const p = passes.length + 1, near = o > 0 ? Math.max(...laid.filter(x => x >= 0 && x < o), -1e9) : o < 0 ? Math.min(...laid.filter(x => x <= 0 && x > o), 1e9) : null;
+        const inward = o === 0 ? null : (Math.abs(near) > 1e8 ? 0 : near), gap = inward == null ? 0 : Math.abs(o - inward) - 1;
+        laid.push(o); grp.passOf.set(o, p); grp.slotByOff.set(o, slot);
+        passes.push({ p, o, slot, g: gi, inward, gap, S: Sg, turns: len / Sg });
+        const base = { g: gi, S: Sg, wv: grp.wv, z0: grp.z0 };
+        threads.push(Object.assign({ id: 'P' + p + 'U', pass: p, leg: 'up', fam: 'R', offset: o, slot, seq: 2 * p - 2 }, base), Object.assign({ id: 'P' + p + 'B', pass: p, leg: 'back', fam: 'L', offset: grp.lsign * o, slot, seq: 2 * p - 1 }, base));
+      });
+      grp.slotOf = j => grp.slotByOff.get(j); groups.push(grp);
+    });
+    const P = passes.length, g0 = groups[0];
+    Object.assign(L, { family: 'cross', S, m, wv, n, lenAdj: len, cap, N, h, J: g0.J, D, size: si, larger: si < X.SPACING.length - 1 ? si + 1 : null, smaller: si > 0 ? si - 1 : null,
+      sizeLabel: 'Crossings every ' + S.toFixed(1) + ' mm', bandThreads: N, spec, groups, viewWin: spec.viewWin || null });
+    L.passes = passes; L.threads = threads; L.P = P;
+    L.markLabel = spec.marksBoth ? ((line, k) => k) : ((line, k) => line === 'C' ? k + 1 : k);
+    L.marks = spec.marksBoth ? { A: Array.from({ length: 2 * n + 1 }, (_, k) => k * S / 2), C: Array.from({ length: 2 * n + 1 }, (_, k) => k * S / 2) }
+      : { A: Array.from({ length: n + 1 }, (_, k) => k * S), C: Array.from({ length: n }, (_, k) => (k + 0.5) * S) };
+    // top thread at a point: the covering thread with the highest sequence number (later threads lie over earlier ones)
+    const top = (z, th, mp) => {
+      const t = mod(th, TAU); let best = -1, gi = 0, pass = 0, leg = null, j = 0;
+      for (const g of groups) {
+        const ph = g.S * t / TAU, cR = g.c * g.wv, cL = g.lsign * cR,   // window centred on the band, so one-sided bands wider than half a pitch are not misread
+          dR = mod(z - g.z0 - ph - cR + g.S / 2, g.S) - g.S / 2 + cR, dL = mod(z - g.z0 + ph - cL + g.S / 2, g.S) - g.S / 2 + cL, jR = Math.round(dR / g.wv), jL = Math.round(dL / g.wv);
+        if (Math.abs(jR) <= g.J) { const p = g.passOf.get(jR); if (p <= mp && 2 * p - 2 > best) { best = 2 * p - 2; gi = g.g; pass = p; leg = 'up'; j = jR; } }
+        if (Math.abs(jL) <= g.J) { const p = g.passOf.get(g.lsign * jL); if (p <= mp && 2 * p - 1 > best) { best = 2 * p - 1; gi = g.g; pass = p; leg = 'back'; j = g.lsign * jL; } }
+      }
+      return best < 0 ? null : { slot: groups[gi].slotOf(j), pass, leg };
+    };
+    // maxPass: -1 bare rod, 0 underwrap only, p = passes 1..p, P+1 = everything including the end bands
+    L.slotAt = (z, th, maxPass) => {
+      if (z < 0 || z >= len) return -1; const mp = maxPass == null ? P + 1 : maxPass;
+      if (mp < 0) return -1; if (mp >= P + 1 && (z < cap || z >= len - cap)) return 3; if (mp < 1) return 0;
+      const c = top(z, th, mp); return c ? c.slot : 0;
+    };
+    // Presentation helpers, read-only: which pass/leg covers a point (same rule as slotAt), and lookups the views need.
+    L.passOf = g0.passOf; L.slotOf = g0.slotOf;
+    L.groupOf = p => groups[passes[p - 1].g];
+    L.coverAt = (z, th, maxPass) => {
+      if (z < 0 || z >= len) return { slot: -1 }; const mp = maxPass == null ? P + 1 : maxPass;
+      if (mp < 0) return { slot: -1 }; if (mp >= P + 1 && (z < cap || z >= len - cap)) return { slot: 3, pass: P + 1, cap: true }; if (mp < 1) return { slot: 0, pass: 0 };
+      return top(z, th, mp) || { slot: 0, pass: 0 };
+    };
+    // thread quantities: each leg is one helix, so its length follows its own pitch
+    const K = L.slotNames.length, legOf = Sg => Math.sqrt(len * len + Math.pow(len / Sg * Math.PI * D, 2)), legsBy = new Array(K).fill(0), runs = new Array(K).fill(0);
+    passes.forEach((p, i) => { p.leg = legOf(p.S); legsBy[p.slot] += 2 * p.leg; if (i === 0 || passes[i - 1].slot !== p.slot) runs[p.slot]++; });
+    const baseMm = len / w * Math.PI * D, capMm = 2 * cap / w * Math.PI * D, tails = 2 * X.TAIL_MM;
+    L.leg = passes[0].leg; L.runs = runs;
+    L.threadMm = legsBy.map((v, s) => s === 0 ? baseMm * X.ALLOWANCE : (v + runs[s] * tails + (s === 3 ? capMm : 0)) * X.ALLOWANCE);
+    L.turnsPerLeg = n; L.baseTurns = Math.round(len / w); L.capTurns = Math.round(cap / w);
+    L.spools = Array.from({ length: K }, (_, i) => i); L.tieOffs = runs.reduce((a, b) => a + b, 0);   // each run of a colour is one continuous thread; underwrap and end bands are plain wraps
+    const colours = new Set(passes.map(p => p.slot)).size;
+    L.method = { kind: 'cross', label: spec.label + ' · ' + P + ' passes · ' + colours + ' thread colours', changes: 0 };
+    L.evidence = X.evidence(spec);
+    return L;
+  };
+  X.evidence = spec => spec && spec.tier === 'experimental' ? ({ tier: 'experimental', label: 'Experimental arrangement', bench: 'Not bench tested',
+    verified: 'Geometry (thread paths, crossings, layering, measurements) is checked by automated tests.',
+    documented: 'Built from the documented cross-wrap method: marks, up-and-back passes crossing on the marks, tape turn-arounds, outline threads, end bands.',
+    experimental: (spec.note || '') + ' This arrangement is a Studio construction, not taken from a builder source, and has not been bench tested.' }) : ({ tier: 'documented', label: 'Documented technique', bench: 'Not bench tested',
+    verified: 'Geometry (thread paths, crossings, layering, measurements) is checked by automated tests.',
+    documented: 'Layout from builder-published descriptions: opposite lines, marks half a spacing apart, up-and-back passes crossing on the marks, tape turn-arounds, outline threads, end bands.',
+    experimental: 'Default spacing, band widths, pass order, end-band width and thread allowances are engineering choices awaiting bench testing.' });
+
+  // thread centreline in unrolled coordinates: [z, theta] pairs, in travel order (up legs run butt to tip, back legs run tip to butt)
+  X.pathPoints = function (L, t, perTurn) {
+    const k = perTurn || 8, pts = [], S = t.S || L.S, z0 = t.z0 || 0, dz = S / k, o = t.offset * (t.wv || L.wv);
+    for (let z = 0; z <= L.lenAdj + 1e-9; z += dz) pts.push([z, t.fam === 'R' ? TAU * (z - z0 - o) / S : TAU * (z0 + o - z) / S]);
+    if (t.leg === 'back') pts.reverse();
+    return pts;
+  };
+  // Where an R thread and an L thread meet: theta_R = 2pi(z-uR)/S_R and theta_L = 2pi(uL-z)/S_L, equal modulo 2pi.
+  X.crossings = function (L) {
+    const out = [], Rs = L.threads.filter(t => t.fam === 'R'), Ls = L.threads.filter(t => t.fam === 'L'), u = t => (t.z0 || 0) + t.offset * (t.wv || L.wv);
+    for (const a of Rs) for (const b of Ls) {
+      const ia = 1 / a.S, ib = 1 / b.S, ua = u(a), ub = u(b), kmin = Math.floor(-(ua * ia + ub * ib)) - 1, kmax = Math.ceil(L.lenAdj * (ia + ib) - (ua * ia + ub * ib)) + 1;
+      for (let k = kmin; k <= kmax; k++) {
+        const z = (k + ua * ia + ub * ib) / (ia + ib); if (z < 0 || z > L.lenAdj) continue;
+        out.push({ z, theta: mod(TAU * (z - ua) * ia, TAU), R: a.id, L: b.id, top: a.seq > b.seq ? a.id : b.id, visible: z >= L.cap && z < L.lenAdj - L.cap });
+      }
+    }
+    return out;
+  };
+  X.thread = (L, id) => L.threads.find(t => t.id === id);
+
+  // ---------- workshop steps (all numbers come from the layout above) ----------
+  const f1 = v => (Math.round(v * 10) / 10).toString();
+  X.steps = function (d, L) {
+    const nm = s => T.thread(d.slots[s]).name, st = [], S = L.S, side = o => o > 0 ? 'tip side' : 'butt side', m1 = v => (v / 1000).toFixed(1) + ' m';
+    const DOC = ['documented'], EXP = ['experimental'], GEO = ['geometry'];
+    if (!d.measured) st.push({ kind: 'needsize', pass: -1, title: 'Enter your rod size', text: 'The spacing and marks come from your measured rod diameter.', evidence: GEO });
+    st.push({ kind: 'spools', pass: -1, title: 'Get your threads ready', slots: L.spools.slice(), evidence: EXP,
+      text: L.spools.map(s => nm(s) + ' about ' + m1(L.threadMm[s])).join(' · ') + '. Lengths include a ' + Math.round((X.ALLOWANCE - 1) * 100) + '% allowance and ' + X.TAIL_MM + ' mm tails; they are estimates.' });
+    st.push({ kind: 'base', pass: 0, slots: [0], zEnd: L.lenAdj, evidence: DOC, title: 'Wrap the underwrap',
+      text: 'Wrap ' + nm(0) + ' tightly over ' + f1(L.lenAdj) + ' mm of the blank (about ' + L.baseTurns + ' turns). Builders lay an underwrap in the background colour first.' });
+    st.push({ kind: 'axes', pass: 0, evidence: DOC, title: 'Find the two centre lines',
+      text: 'Wrap a strip of paper or tape once around the rod, mark where it meets itself and measure it flat: about ' + f1(L.C) + ' mm. Half of that, ' + f1(L.C / 2) + ' mm, is the opposite side. Draw a straight line A along the blank, then line C exactly opposite, for ' + f1(L.lenAdj) + ' mm from the start of the wrap.' });
+    st.push({ kind: 'marks', pass: 0, evidence: DOC, needsMeasured: true, title: 'Mark the crossing points', marks: L.marks, spacing: S,
+      text: L.spec.marksBoth ? 'Both lines carry marks every ' + f1(S / 2) + ' mm from the start (' + (2 * L.n + 1) + ' marks on each, 0 to ' + f1(L.lenAdj) + '). Two sets of crossings use them: the first set uses A at 0, ' + f1(S) + ', … and C at ' + f1(S / 2) + ', …; the second set uses C at 0, ' + f1(S) + ', … and A at ' + f1(S / 2) + ', …. A printable guide is available.' : 'Line A: mark every ' + f1(S) + ' mm from the start (' + (L.n + 1) + ' marks, 0 to ' + f1(L.lenAdj) + '). Line C: mark every ' + f1(S) + ' mm starting ' + f1(S / 2) + ' mm from the start (' + L.n + ' marks). The marks on A and C alternate, ' + f1(S / 2) + ' mm apart along the rod.' + (L.spec.unit > 1 ? ' The large diamonds use every ' + L.spec.unit + 'rd A mark (0, ' + f1(S * L.spec.unit) + ', …) and the C marks halfway between, so no extra marks are needed.' : '') + ' A printable guide is available.' });
+    st.push({ kind: 'anchors', pass: 0, evidence: DOC, title: 'Set the turn-around tape',
+      text: 'At each end, inside the first and last ' + L.cap + ' mm, fold single-sided tape sticky side out around the rod. The thread turns around it at each end, then the end bands cover it. Keep the tape level so threads don’t slip as they turn.' });
+    const runStart = p => p.p === 1 || L.passes[p.p - 2].slot !== p.slot, runEnd = p => p.p === L.P || L.passes[p.p].slot !== p.slot, TURN = Math.PI;
+    L.passes.forEach(p => {
+      const c = nm(p.slot), up = p.o, bk = L.groups[p.g].lsign * p.o, tie = runStart(p), done = runEnd(p), grp = L.groups[p.g], newLattice = p.p > 1 && p.p === grp.first, turns = Math.round(p.turns);
+      const v = X.passView(L, p.p), a0 = mod(v.start[1], TAU), line = Math.min(a0, TAU - a0) < 1e-6 ? 'A' : Math.abs(a0 - TURN) < 1e-6 ? 'C' : null, from = line ? line + ' ' + L.markLabel(line, 0) : null;
+      const gapTxt = gp => 'Leave a gap of ' + gp + ' thread width' + (gp > 1 ? 's' : '') + ' (the underwrap shows), then ';
+      const nbName = nb => nb ? (nb.slot === p.slot ? 'previous ' + nm(nb.slot) + ' thread' : nm(nb.slot) + ' band') : '',
+        follow = (side, nb) => nb && nb.gap ? 'Gap of ' + nb.gap + ' thread' + (nb.gap > 1 ? 's' : '') + ', then follow the ' + side + '-side edge of the ' + nbName(nb) + '.' : 'Follow the ' + side + '-side edge of the ' + nbName(nb) + '.';
+      const lattice = grp.mult > 1 ? 'large' : 'second';
+      const lines = [];
+      lines.push(tie ? 'Tie in ' + c + ' with 3 or 4 turns at the butt end, under the end-band area.' : 'Keep going with the same ' + c + ' thread.');
+      lines.push('Up, butt to tip (about ' + turns + ' turns): lean it like “\\” on the side facing you, butt on your left. ' + (p.p === 1 ? 'Start at A 0. It reaches C 1 after half a turn, A 1 after another half, and so on every ' + f1(S / 2) + ' mm. It must cross each mark.'
+        : newLattice ? 'Start at ' + from + '. ' + (grp.mult > 1 ? 'This is the large lattice: it makes one turn every ' + f1(grp.S) + ' mm, so it crosses only every ' + f1(grp.S / 2) + ' mm, using every third A mark (0, ' + f1(grp.S) + ', …) and the C marks halfway between.' : 'It crosses the marks of the second set, every ' + f1(S / 2) + ' mm, between the marks of the first set.')
+        : (p.gap ? gapTxt(p.gap) + 'lay it against the ' : 'Lay it snug against the ') + side(up) + ' edge of the “\\” threads already on the rod.'));
+      lines.push('Back, tip to butt: lean it like “/”. ' + (p.p === 1 ? 'It crosses the same marks, making an X at each one.' : newLattice ? 'It crosses the same marks, making an X at each one.' : (p.gap ? gapTxt(p.gap) + 'lay it against the ' : 'Lay it snug against the ') + side(bk) + ' edge of the “/” threads already there.') + ' The back thread lies over the up thread at every crossing.');
+      if (p.p === 1 && L.spec === X.SPEC.chevronwrap) lines.push('Chevron rule: every new thread goes on the same side of the last one (here, toward the tip), so the crossings move along the rod instead of spreading around it. The up and back threads of a pass lie side by side.');
+      lines.push('Keep turning the rod the same way throughout; only the feed direction reverses.' + (done ? ' This is the last ' + c + ' ' + (L.runs[p.slot] > 1 ? 'pass of this run' : 'pass') + ': tie off under the end-band area.' : ''));
+      const legs = [
+        { dir: 'up', arrow: '→', label: 'UP', sub: 'butt to tip', action: p.p === 1 ? 'Start at A 0. Cross every mark.' : newLattice ? 'Start at ' + from + '. Cross every mark of this ' + lattice + ' set.' : follow(v.sideUp, v.nbUp) },
+        { dir: 'back', arrow: '←', label: 'BACK', sub: 'tip to butt', action: p.p === 1 || newLattice ? 'Same marks, over the up thread.' : follow(v.sideBack, v.nbBack) }];
+      const chips = [p.p === 1 ? 'Start at A 0' : newLattice ? 'Start at ' + from : 'Start at the butt end', turns + ' turns each way', '≈ ' + (p.leg / 1000).toFixed(2) + ' m per leg'];
+      if (p.p === 1) chips.push('Marks every ' + f1(S / 2) + ' mm'); if (newLattice) chips.push(grp.mult > 1 ? 'Large diamonds · every ' + f1(grp.S / 2) + ' mm' : 'Second set of crossings');
+      const notes = []; if (tie) notes.push('Tie in ' + c + ': 3–4 turns at the butt end, under the end band.'); if (done) notes.push('Last ' + c + ' pass' + (L.runs[p.slot] > 1 ? ' of this run' : '') + ': tie off under the end band.');
+      st.push({ kind: 'pass', pass: p.p, slot: p.slot, slots: [p.slot], offset: p.o, evidence: p.p === 1 ? DOC : EXP, lines,
+        head: 'PASS ' + p.p + ' OF ' + L.P + ' — ' + c.toUpperCase(), legs, chips, notes, how: lines, howOpen: p.p === 1,
+        title: 'Pass ' + p.p + ' of ' + L.P + ' · ' + c, text: lines.join(' ') });
+    });
+    st.push({ kind: 'caps', pass: L.P + 1, slots: [3], evidence: EXP, title: 'Wrap the end bands',
+      text: 'Wrap about ' + L.capTurns + ' turns (' + L.cap + ' mm) of ' + nm(3) + ' over each end, covering the tape, the thread turns and the tie-offs. Pack the threads together with the side of a packing tool.' });
+    st.push({ kind: 'finish', pass: L.P + 1, evidence: DOC, title: 'Finish', text: 'Check each X sits on its mark, pack any gaps, trim the tails and finish the wrap your usual way.' });
+    return st;
+  };
+
+  // ---------- views derived from the thread list (no separate illustration data) ----------
+  // Where the active pass starts, turns and ends, and which existing thread it lies against. All numbers come from pathPoints.
+  X.passView = function (L, p) {
+    const pr = L.passes[p - 1], g = L.groupOf(p), up = X.thread(L, 'P' + p + 'U'), bk = X.thread(L, 'P' + p + 'B'), pu = X.pathPoints(L, up), pb = X.pathPoints(L, bk);
+    const nbr = (t, sgn) => pr.inward == null ? null : { offset: sgn * pr.inward, pass: g.passOf.get(pr.inward), slot: g.slotOf(pr.inward), side: t.offset > 0 ? 'tip' : 'butt', gap: pr.gap };
+    return { pass: p, group: pr.g, up, back: bk, start: pu[0], turn: pu[pu.length - 1], end: pb[pb.length - 1], backStart: pb[0],
+      nbUp: nbr(up, 1), nbBack: nbr(bk, g.lsign), sideUp: up.offset > 0 ? 'tip' : 'butt', sideBack: bk.offset > 0 ? 'tip' : 'butt' };
+  };
+  // Cross-section of the active pass's lattice along the rod at one angle: one cell per thread position, for the "\" (up) and "/" (back) families.
+  // 'gap' cells are positions this design deliberately leaves empty.
+  X.ribbon = function (L, p) {
+    const g = L.groupOf(p), row = fam => { const out = [], a = fam === 'L' && g.lsign < 0 ? -g.hi : g.lo, b = fam === 'L' && g.lsign < 0 ? -g.lo : g.hi; for (let j = a; j <= b; j++) { const key = fam === 'R' ? j : g.lsign * j, pp = g.passOf.get(key); out.push(pp == null ? { offset: j, pass: null, slot: 0, state: 'gap' } : { offset: j, pass: pp, slot: g.slotOf(key), state: pp < p ? 'done' : pp === p ? 'active' : 'todo' }); } return out; };
+    return { up: row('R'), back: row('L') };
+  };
+  X.ribbonSVG = function (d, L, p) {
+    const rb = X.ribbon(L, p), hex = s => T.thread(d.slots[s]).hex, n = L.groupOf(p).hi - L.groupOf(p).lo + 1, x0 = 40, cw = (360 - x0 - 6) / n; let s = '<svg viewBox="0 0 360 62" role="img" aria-label="Where this thread sits in the band, butt side on the left, tip side on the right">';
+    [['up', rb.up, 4, 'UP'], ['back', rb.back, 26, 'BACK']].forEach(([nm, cells, y, lab]) => {
+      s += '<text x="2" y="' + (y + 13) + '" font-size="10.5" font-weight="700" fill="#ada99d">' + lab + '</text>';
+      cells.forEach((c, i) => { const x = x0 + i * cw, a = c.state === 'active';
+        s += '<rect data-fam="' + (nm === 'up' ? 'R' : 'L') + '" data-offset="' + c.offset + '" data-pass="' + c.pass + '" data-state="' + c.state + '" x="' + (x + 1).toFixed(1) + '" y="' + y + '" width="' + (cw - 2).toFixed(1) + '" height="18" rx="3" fill="' + (c.state === 'todo' ? 'none' : c.state === 'gap' ? hex(0) : hex(c.slot)) + '" opacity="' + (c.state === 'done' ? 0.5 : c.state === 'gap' ? 0.35 : 1) + '" stroke="' + (a ? '#ffffff' : c.state === 'gap' ? 'none' : '#3a4247') + '" stroke-width="' + (a ? 2.4 : 1) + '"' + (c.state === 'todo' ? ' stroke-dasharray="3 2"' : '') + '/>'; });
+    });
+    return s + '<text x="' + x0 + '" y="59" font-size="10" fill="#6f736d">◀ butt side</text><text x="354" y="59" font-size="10" fill="#6f736d" text-anchor="end">tip side ▶</text></svg>';
+  };
+
+  // ---------- unrolled diagram of the paths (the same threads the preview uses) ----------
+  // Horizontal: along the rod, butt left. Vertical: once round the rod. A is the top/bottom edge, C the dashed middle line.
+  X.diagramSVG = function (d, L, upTo, hl, opt) {
+    opt = opt || {}; const big = !!opt.big, W = big ? 1000 : 360, H = big ? 250 : 136, ml = big ? 44 : 40, mr = big ? 12 : 10, mt = big ? 30 : 22, mb = big ? 18 : 14;
+    const px0 = ml, px1 = W - mr, py0 = mt, py1 = H - mb, zx = z => px0 + z / L.lenAdj * (px1 - px0), ty = th => py0 + th / TAU * (py1 - py0), hex = s => T.thread(d.slots[s]).hex, fs = big ? 13 : 10.5;
+    const f = v => v.toFixed(1);
+    let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Thread paths unrolled: rod length across with butt on the left, once around the rod down">';
+    s += '<rect x="' + px0 + '" y="' + py0 + '" width="' + (px1 - px0) + '" height="' + (py1 - py0) + '" fill="#0a0c0e" stroke="#242a2d"/>';
+    s += '<line x1="' + px0 + '" x2="' + px1 + '" y1="' + py0 + '" y2="' + py0 + '" stroke="#ddd6c9" stroke-width="1.6"/><line x1="' + px0 + '" x2="' + px1 + '" y1="' + py1 + '" y2="' + py1 + '" stroke="#ddd6c9" stroke-width="1.6"/>';
+    s += '<line x1="' + px0 + '" x2="' + px1 + '" y1="' + f(ty(Math.PI)) + '" y2="' + f(ty(Math.PI)) + '" stroke="#ada99d" stroke-width="1.4" stroke-dasharray="5 4"/>';
+    const tooth = (t, k) => { const o = t.z0 + t.offset * t.wv, z0 = o + k * t.S, z1 = z0 + t.S, ya = t.fam === 'R' ? 0 : TAU, yb = t.fam === 'R' ? TAU : 0, at = z => ya + (yb - ya) * (z - z0) / t.S, c0 = Math.max(0, z0), c1 = Math.min(L.lenAdj, z1); return c1 <= c0 ? null : [c0, at(c0), c1, at(c1)]; };
+    const pathOf = t => { let p = ''; for (let k = -2; k <= Math.ceil(L.lenAdj / t.S) + 1; k++) { const g = tooth(t, k); if (g) p += 'M' + f(zx(g[0])) + ',' + f(ty(g[1])) + ' L' + f(zx(g[2])) + ',' + f(ty(g[3])) + ' '; } return p.trim(); };
+    // completed passes: actual colours, subdued
+    L.threads.filter(t => t.pass < hl).forEach(t => { s += '<path data-pass="' + t.pass + '" data-leg="' + t.leg + '" data-state="done" d="' + pathOf(t) + '" fill="none" stroke="' + hex(t.slot) + '" stroke-width="' + (big ? 1.6 : 1.1) + '" opacity="0.38"/>'; });
+    // active pass: dark casing then colour, up first then back so the back thread is drawn over the up thread (the real layering)
+    const act = L.threads.filter(t => t.pass === hl && t.pass <= upTo).sort((a, b) => a.seq - b.seq);
+    act.forEach(t => { const dash = t.leg === 'back' ? ' stroke-dasharray="' + (big ? '12 6' : '7 4') + '"' : '';
+      s += '<path data-pass="' + t.pass + '" data-leg="' + t.leg + '" data-state="active" d="' + pathOf(t) + '" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="' + (big ? 8 : 6) + '" stroke-linecap="round"/>';
+      s += '<path data-pass="' + t.pass + '" data-leg="' + t.leg + '" data-state="active" d="' + pathOf(t) + '" fill="none" stroke="' + hex(t.slot) + '" stroke-width="2.6"' + dash + ' stroke-linecap="round"/>'; });
+    // reference marks: A filled, C hollow
+    L.marks.A.forEach((z, k) => { [0, TAU].forEach(th => { s += '<circle data-mark="A" data-z="' + z + '" cx="' + f(zx(z)) + '" cy="' + f(ty(th)) + '" r="' + (big ? 4 : 2.8) + '" fill="#ddd6c9"/>'; }); if (big) s += '<text x="' + f(zx(z)) + '" y="' + (py0 - 5) + '" font-size="11" fill="#ddd6c9" text-anchor="middle">' + L.markLabel('A', k) + '</text>'; });
+    L.marks.C.forEach((z, k) => { s += '<circle data-mark="C" data-z="' + z + '" cx="' + f(zx(z)) + '" cy="' + f(ty(Math.PI)) + '" r="' + (big ? 4 : 2.8) + '" fill="#0a0c0e" stroke="#ada99d" stroke-width="1.5"/>'; if (big) s += '<text x="' + f(zx(z)) + '" y="' + (ty(Math.PI) - 7) + '" font-size="11" fill="#ada99d" text-anchor="middle">' + L.markLabel('C', k) + '</text>'; });
+    if (act.length && hl >= 1) {
+      const v = X.passView(L, hl), col = hex(v.up.slot), th0 = mod(v.start[1], TAU), halo = 'paint-order:stroke;stroke:#060708;stroke-width:3px;stroke-linejoin:round';
+      // arrows along travel (up: butt to tip; back: tip to butt)
+      [v.up, v.back].forEach(t => { const dirz = t.leg === 'up' ? 1 : -1; [0.25, 0.5, 0.75].forEach(fr => { const nt = Math.max(1, Math.round(L.lenAdj / t.S)), k = Math.max(0, Math.min(nt - 1, Math.floor(nt * fr))), g = tooth(t, k + Math.ceil(-(t.z0 + t.offset * t.wv) / t.S - 1e-9)); if (!g) return;
+        const mx = (zx(g[0]) + zx(g[2])) / 2, my = (ty(g[1]) + ty(g[3])) / 2; let dx = zx(g[2]) - zx(g[0]), dy = ty(g[3]) - ty(g[1]); if (t.leg === 'back') { dx = -dx; dy = -dy; } const len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, sz = big ? 8 : 6, nx = -uy, ny = ux;
+        s += '<polygon data-role="arrow" data-leg="' + t.leg + '" data-dz="' + dirz + '" data-pass="' + hl + '" points="' + f(mx + ux * sz) + ',' + f(my + uy * sz) + ' ' + f(mx - ux * sz * 0.6 + nx * sz * 0.7) + ',' + f(my - uy * sz * 0.6 + ny * sz * 0.7) + ' ' + f(mx - ux * sz * 0.6 - nx * sz * 0.7) + ',' + f(my - uy * sz * 0.6 - ny * sz * 0.7) + '" fill="' + col + '" stroke="#060708" stroke-width="1.4"/>'; }); });
+      // markers: START ring at the butt end, TURN diamond at the tip end (same angle: both come from the up thread's path points)
+      const mk = (role, z, th, shape, label, anchor) => { const x = zx(z), y = ty(th), top = th < Math.PI, ly = top ? y + (big ? 20 : 17) : y - (big ? 11 : 9), r = big ? 7.5 : 6;
+        let g = '<g data-role="' + role + '" data-z="' + z + '" data-theta="' + th + '">';
+        g += shape === 'ring' ? '<path d="M' + f(x - r) + ',' + f(y) + ' a' + r + ',' + r + ' 0 1,0 ' + 2 * r + ',0 a' + r + ',' + r + ' 0 1,0 ' + -2 * r + ',0" fill="#060708" stroke="#fff" stroke-width="2.2"/>' : '<path d="M' + f(x) + ',' + f(y - r - 1) + ' L' + f(x + r + 1) + ',' + f(y) + ' L' + f(x) + ',' + f(y + r + 1) + ' L' + f(x - r - 1) + ',' + f(y) + ' Z" fill="#060708" stroke="#fff" stroke-width="2.2"/>';
+        return g + '<text x="' + f(x + (anchor === 'end' ? -r - 3 : r + 3)) + '" y="' + f(ly) + '" font-size="' + (big ? 13 : 10.5) + '" font-weight="800" fill="#fff" text-anchor="' + anchor + '" style="' + halo + '">' + label + '</text></g>'; };
+      s += mk('start', v.start[0], th0, 'ring', 'START', 'start') + mk('turn', v.turn[0], mod(v.turn[1], TAU), 'diamond', 'TURN', 'end');
+    }
+    // orientation and line labels
+    s += '<text x="2" y="' + (py0 + 4) + '" font-size="' + fs + '" font-weight="800" fill="#ddd6c9">A</text><text x="2" y="' + (ty(Math.PI) + 4) + '" font-size="' + fs + '" font-weight="800" fill="#ada99d">C</text><text x="2" y="' + (py1 + 4) + '" font-size="' + fs + '" font-weight="800" fill="#ddd6c9">A</text>';
+    s += '<text x="' + px0 + '" y="' + (big ? 14 : 12) + '" font-size="' + fs + '" font-weight="800" fill="#ddd6c9">◀ BUTT</text><text x="' + px1 + '" y="' + (big ? 14 : 12) + '" font-size="' + fs + '" font-weight="800" fill="#ddd6c9" text-anchor="end">TIP ▶</text>';
+    return s + '</svg>';
+  };
+
+  // ---------- printable marking guide (real size, from the same marks) ----------
+  X.templateHTML = function (d) {
+    const L = T.layout(d); if (L.family !== 'cross') return '';
+    const len = Math.min(L.lenAdj, 270), x1 = 14, x2 = 44, hx = T.thread(d.slots[1]).hex; let g = '';
+    L.marks.A.filter(z => z <= len + 1e-9).forEach((z, k) => { g += '<line x1="' + (x1 - 4) + '" x2="' + (x1 + 4) + '" y1="' + z.toFixed(2) + '" y2="' + z.toFixed(2) + '" stroke="#000" stroke-width=".25"/><text x="' + (x1 - 6) + '" y="' + (z + 1).toFixed(2) + '" font-size="2.6" text-anchor="end">A ' + L.markLabel('A', k) + '</text>'; });
+    L.marks.C.filter(z => z <= len + 1e-9).forEach((z, k) => { g += '<line x1="' + (x2 - 4) + '" x2="' + (x2 + 4) + '" y1="' + z.toFixed(2) + '" y2="' + z.toFixed(2) + '" stroke="#000" stroke-width=".25"/><text x="' + (x2 + 6) + '" y="' + (z + 1).toFixed(2) + '" font-size="2.6">C ' + L.markLabel('C', k) + '</text>'; });
+    g += '<line x1="' + x1 + '" x2="' + x1 + '" y1="0" y2="' + len.toFixed(2) + '" stroke="#000" stroke-width=".25"/><line x1="' + x2 + '" x2="' + x2 + '" y1="0" y2="' + len.toFixed(2) + '" stroke="#000" stroke-width=".25"/>';
+    return '<h3 style="font:600 12pt sans-serif;margin:0 0 4mm">Thread Design Studio · ' + (L.spec.guide || L.spec.label.toLowerCase()) + ' marking guide</h3><p style="font:9pt sans-serif;margin:0 0 6mm">Rod diameter ' + f1(d.diameterMm) + ' mm · circumference ' + f1(L.C) + ' mm (half ' + f1(L.C / 2) + ') · crossings every ' + f1(L.S) + ' mm · wrap length ' + f1(L.lenAdj) + ' mm. Print at 100% (no scaling). Line A on the left, line C on the right; distances are from the start of the wrap. The guide shows the first ' + f1(len) + ' mm.</p>' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="70mm" height="' + (len + 6).toFixed(1) + 'mm" viewBox="-2 -3 70 ' + (len + 6).toFixed(1) + '" style="overflow:visible">' + g + '</svg>';
+  };
+})(typeof self !== 'undefined' ? self : this);
+</script><script>/* K-Labs Thread Design Studio: decorative weaving construction engine.
+   Separate from the cross-wrap engine (crosswrap.js) and from the colour-change grid. Nothing here is cross-wrapping.
+
+   PHYSICAL MODEL (warp and weft)
+   - WARP: M lines lie lengthwise along the blank, side by side round the circumference. Each line is g threads laid flat
+     together and handled as one. Line j owns the angle band [j, j+1) * 2pi/M. Line 0 starts at the seam (theta = 0);
+     line numbers increase in the direction the weft travels.
+   - WEFT: one continuous thread wound round the blank as a helix of pitch w (one thread width per turn), exactly like a plain wrap.
+     On each turn it passes OVER some warp lines (weft shows, the warp is covered) and UNDER the others (the warp is
+     lifted clear and shows on top). Which lines go under on a row is the "left list" of the row (builder glossary:
+     "each step indicates which threads are lifted and not wrapped over per revolution").
+   - A ROW is tau turns that use the same left list (tau = round(cell width / w), which keeps cells square).
+     "Do" in the glossary = repeat the previous step, so the tau turns of a row are one step.
+   - The wrapped length is: start band (nA turns over every line), whole pattern repeats, finish band. The start band locks
+     the warp ends; the warp tails are free until the finish band.
+   - Everything the preview draws (slotAt / coverAt) and everything the workshop says (steps) is read from the same row plan
+     L.unit (one pattern repeat of left lists) and the same turn numbering t = floor(z/w - theta/2pi).
+
+   EVIDENCE: the warp/weft/left-list principle is documented (builder glossary). The two drafts use standard weaving drafts
+   (2/2 twill, pointed). Line counts, band lengths, thread quantities and tension advice are engineering estimates.
+   Not bench tested. See METHOD.md. */
+(function (root) {
+  'use strict';
+  const T = (typeof module !== 'undefined' && module.exports) ? require('./engine.js') : root.THREAD;
+  const TAU = Math.PI * 2, W = {}; T.weave = W;
+  const mod = (a, b) => ((a % b) + b) % b, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const ramp = (n, H) => { const m = mod(n, 2 * H); return m < H ? m : 2 * H - 1 - m; };   // 0..H-1 then back H-1..0: the diagonal turns about the edge between two lines
+
+  // A design is a draft: P lines (period around), Q rows (period along), which warp colour each line has, and the left list per row.
+  W.SPEC = {
+    herringbone: { label: 'Woven herringbone', guide: 'herringbone weave', P: 12, Q: 4, slots: 2,
+      warpSlot: () => 0, lift: (r, j) => mod(ramp(j, 6) + r, 4) < 2,
+      what: '2/2 twill whose diagonal turns back every 6 lines, so the ribs zig-zag along the rod' },
+    wovendiamond: { label: 'Woven diamonds', guide: 'woven diamond', P: 16, Q: 16, slots: 3,
+      warpSlot: j => (mod(j, 16) === 7 || mod(j, 16) === 8) ? 2 : 0,
+      lift: (r, j) => Math.abs(2 * mod(j, 16) - 15) + Math.abs(2 * mod(r, 16) - 15) <= 13,
+      what: 'a diamond motif drawn by lifting the warp, with an accent colour in the two centre lines' }
+  };
+  W.isWeave = id => !!W.SPEC[id];
+
+  function ranges(a) { const out = []; a.forEach(v => { const l = out[out.length - 1]; if (l && l[1] === v - 1) l[1] = v; else out.push([v, v]); }); return out; }
+  const fmtR = r => r[0] === r[1] ? '' + r[0] : r[0] + '–' + r[1];
+  function fmtRanges(rs, max) { max = max || 8; const s = rs.slice(0, max).map(fmtR).join(', '); return rs.length > max ? s + ' …' : s; }
+  function period(row) { const M = row.length; for (let p = 1; p < M; p++) { if (M % p) continue; let ok = true; for (let j = p; j < M && ok; j++) if (row[j] !== row[j - p]) ok = false; if (ok) return p; } return M; }
+  const mm = v => (Math.round(v * 10) / 10).toString();
+  const metres = v => (Math.round(v / 100) / 10).toFixed(1);
+
+  W.layout = function (d, L) {
+    const C = L.C, w = L.w, text = d.pattern === 'wovenletters', custom = d.pattern === 'wovencustom', minCell = Math.max(2 * w, 0.5);
+    const turns = Math.floor(d.lengthMm / w), nA = Math.max(6, Math.round(4 / w));
+    let spec, P, Q, M, k = 1, g, tau, cellW;
+    if (text || custom) {
+      // lettering and custom designs: the 5x7 bitmap letters become a left list. Pixel x runs along the rod, pixel y round it; each pixel is s x s cells.
+      const bm = text ? T.textBitmap(d.text) : T.art.bitmap(d.art), bh = bm.h, M0 = Math.max(10, Math.min(Math.round(C / (3 * w)), Math.floor(C / minCell))), smax = Math.max(1, Math.floor((M0 - 3) / bh)), s = clamp(d.size == null ? Math.min(2, smax) : d.size, 1, smax);
+      const period = bh * s + 3, copies = Math.max(1, Math.floor(M0 / period)); M = copies > 1 ? copies * period : Math.max(M0, period); cellW = C / M; g = Math.max(1, Math.round(cellW / w)); tau = g;
+      const off = copies > 1 ? 1 : Math.floor((M - bh * s) / 2), textRows = bm.w * s, avail = Math.max(1, Math.floor((turns - 2 * nA) / tau)), need = textRows + 4 * s;
+      Q = Math.max(avail, need); const pre = Math.floor((Q - textRows) / 2); P = M;
+      const lift = (r, j) => { const x = Math.floor((r - pre) / s); if (x < 0 || x >= bm.w) return false; const y = (copies > 1 ? j % period : j) - off; return y >= 0 && y < bh * s && !!bm.px(x, Math.floor(y / s)); };
+      spec = { label: text ? 'Woven lettering' : 'Custom woven design', guide: text ? 'woven lettering' : 'custom woven design', P, Q, slots: 2, warpSlot: () => 0, lift };
+      const spans = []; let x = 0; if (text) Array.from(T.cleanText(d.text).replace(/ +$/, '')).forEach(ch => { const wd = T.FONT[ch][0].length; spans.push({ ch, x0: x, x1: x + wd - 1 }); x += wd + 1; });
+      L.text = { bm, s, copies, period, off, pre, textRows, avail, spans, pad: 2 * s, custom, bh };
+      L.size = s; L.larger = s < smax ? s + 1 : null; L.smaller = s > 1 ? s - 1 : null; L.sizeLabel = text ? 'Letters ' + (bh * s * cellW).toFixed(1) + ' mm tall' : 'Design ' + (bm.w * s * tau * w).toFixed(1) + ' × ' + (bh * s * cellW).toFixed(1) + ' mm';
+      L.viewHint = { z0: Math.max(0, (nA + pre * tau) * w - 3), rot: (off + bh * s / 2) / M * TAU };
+      if (Q > avail) L.warnings.push({ id: 'long', level: 'warn', text: 'This ' + (text ? 'message' : 'design') + ' needs about ' + Math.ceil((2 * nA + Q * tau) * w) + ' mm of wrap and the wrapped length is ' + d.lengthMm + ' mm. Increase the wrapped length in More options, choose a smaller ' + (text ? 'letter size or shorten the message' : 'design scale or grid') + '.', fix: 'more' });
+      if (!bm.text) L.warnings.push({ id: 'empty', level: 'warn', text: text ? 'Type a name or message to see it on the rod.' : 'Draw on the grid or upload artwork to see it on the rod.' });
+      if (custom && d.art && d.art.report) (d.art.report.warn || []).forEach(w => L.warnings.push(w));
+      const dr = text ? T.droppedChars(d.text) : []; if (dr.length) L.warnings.push({ id: 'chars', level: 'info', text: 'Left out characters the lettering can’t make: ' + dr.join(' ') });
+    } else {
+      spec = W.SPEC[d.pattern]; P = spec.P; Q = spec.Q;
+      const kmax = Math.max(1, Math.floor(C / (P * minCell))), kDef = clamp(Math.round(C / (3 * w) / P), 1, kmax); k = d.size == null ? kDef : clamp(d.size, 1, kmax);
+      M = P * k; cellW = C / M; g = Math.max(1, Math.round(cellW / w)); tau = g;
+      L.size = k; L.larger = k > 1 ? k - 1 : null; L.smaller = k < kmax ? k + 1 : null; L.sizeLabel = 'Repeat ' + mm(P * cellW) + ' mm around · ' + M + ' lines';
+    }
+    L.spec = spec; L.M = M; L.g = g; L.tau = tau; L.cellW = cellW; L.rowMm = tau * w; L.P = P; L.Q = Q; L.fit = g * w / cellW;
+    L.viewWin = 3.4;
+    // the row plan: one pattern repeat of left lists. lifted[j] = true means the weft goes UNDER line j (the warp shows).
+    L.unit = []; for (let r = 0; r < Q; r++) { const row = []; for (let j = 0; j < M; j++) row.push(!!spec.lift(r, j)); L.unit.push(row); }
+    L.liftAt = (r, j) => L.unit[mod(r, Q)][mod(j, M)];
+    L.warpAt = j => spec.warpSlot(mod(j, M));
+    L.weftSlot = 1;
+    // lengths in turns
+    const units = text ? 1 : Math.max(1, Math.floor((turns - 2 * nA) / tau / Q)), R = units * Q, Tt = 2 * nA + R * tau;
+    L.nA = nA; L.units = units; L.rows = R; L.turnsTotal = Tt; L.lenAdj = Tt * w; L.turns = Tt;
+    if (!text && !custom && Tt * w > d.lengthMm + 1e-9) L.warnings.push({ id: 'long', level: 'warn', text: 'One full pattern repeat needs about ' + Math.ceil(Tt * w) + ' mm. Increase the wrapped length in More options, or make the pattern smaller.', fix: 'more' });
+    if (cellW < minCell - 1e-9) L.warnings.push({ id: 'fine', level: 'warn', text: 'Each warp line would be only ' + cellW.toFixed(2) + ' mm wide. Use a larger rod size, a finer thread or a larger pattern.' });
+    if (L.fit < 0.8 || L.fit > 1.25) L.warnings.push({ id: 'fit', level: 'info', text: 'Threads per line (' + g + ') fill ' + Math.round(L.fit * 100) + '% of each line, so expect ' + (L.fit < 1 ? 'small gaps between lines' : 'slight crowding') + '. A different thread size fits better.' });
+    // row groups: consecutive identical left lists are one step
+    L.groups = []; for (let r = 0; r < Q; r++) { const key = L.unit[r].join(''), l = L.groups[L.groups.length - 1]; if (l && l.key === key) { l.to = r; } else L.groups.push({ key, from: r, to: r }); }
+    L.groups.forEach((gp, i) => { gp.stage = 3 + i; });
+    L.stageWarp = 1; L.stageStart = 2; L.repeatStage = units > 1 ? 3 + L.groups.length : null; L.finishStage = units > 1 ? 4 + L.groups.length : 3 + L.groups.length;
+    L.rowStage = []; L.groups.forEach(gp => { for (let r = gp.from; r <= gp.to; r++) L.rowStage[r] = gp.stage; });
+    L.stageOfTurn = t => { if (t < nA) return 2; if (t >= nA + R * tau) return L.finishStage; const r = Math.floor((t - nA) / tau); return r < Q ? L.rowStage[r] : L.repeatStage; };
+    // floats: longest warp float (lifted run along the rod) and longest weft-over run, in mm
+    let wf = 0; for (let j = 0; j < M; j++) { let run = 0, best = 0; for (let r = 0; r < 2 * Q; r++) { if (L.liftAt(r, j)) { run++; best = Math.max(best, run); } else run = 0; } wf = Math.max(wf, best >= 2 * Q ? Infinity : best); }
+    L.warpFloatMm = wf * L.rowMm;
+    if (L.warpFloatMm > 12) L.warnings.push({ id: 'float', level: 'warn', text: 'Some warp lines float loose for ' + mm(L.warpFloatMm) + ' mm. Expect them to need coaxing flat.' });
+    // geometry
+    const locate = (z, th) => { if (z < 0) return null; th = mod(th, TAU); const t = Math.floor(z / w - th / TAU), j = Math.min(M - 1, Math.floor(th / TAU * M)); return { t, j }; };
+    L.locate = locate;
+    L.visibleAt = (t, j) => { if (t < nA || t >= nA + R * tau) return 1; return L.liftAt(Math.floor((t - nA) / tau), j) ? L.warpAt(j) : 1; };   // t, j -> slot actually on top
+    L.slotAt = (z, th) => { const c = locate(z, th); if (!c) return -1; if (c.t < 0) return z < Tt * w + w ? L.warpAt(c.j) : -1; if (c.t >= Tt) return z < Tt * w + w ? L.warpAt(c.j) : -1; return L.visibleAt(c.t, c.j); };
+    L.coverAt = (z, th, P0) => {
+      const c = locate(z, th); if (!c) return { slot: -1 };
+      if (c.t >= Tt && z >= Tt * w + w) return { slot: -1 };
+      if (P0 === 1) return { slot: L.warpAt(c.j), pass: 1 };
+      if (c.t < 0 || c.t >= Tt) return { slot: L.warpAt(c.j), pass: 0 };
+      const s = L.stageOfTurn(c.t);
+      if (P0 != null && s > P0) return { slot: L.warpAt(c.j), pass: 0 };
+      return { slot: L.visibleAt(c.t, c.j), pass: s };
+    };
+    L.shadeAt = (z, th) => {
+      const c = locate(z, th); if (!c) return 1; const thn = mod(th, TAU);
+      const top = (c.t < 0 || c.t >= Tt) ? L.warpAt(c.j) : L.visibleAt(c.t, c.j);
+      if (top === 1) { const f = z / w - thn / TAU; return 0.86 + 0.14 * Math.pow(Math.sin(Math.PI * (f - Math.floor(f))), 0.6); }
+      const fj = thn / TAU * M; const edge = fj - Math.floor(fj), ft = fj * g; return (0.78 + 0.22 * Math.pow(Math.sin(Math.PI * edge), 0.45)) * (0.97 + 0.03 * Math.sin(Math.PI * (ft - Math.floor(ft))));
+    };
+    L.zOfTurn = t => t * w;
+    // quantities (engineering estimates: 20 mm tail at each end, 10% for the weft going over and under, 15% reserve)
+    const lines = {}; for (let j = 0; j < M; j++) { const s = L.warpAt(j); lines[s] = (lines[s] || 0) + 1; }
+    const eachMm = L.lenAdj + 40;
+    L.warpQty = Object.keys(lines).map(s => ({ slot: +s, lines: lines[s], threads: lines[s] * g, eachMm, totalMm: lines[s] * g * eachMm })).sort((a, b) => a.slot - b.slot);
+    const weftMm = Tt * Math.hypot(C, w) * 1.1 + 200;
+    L.weftQty = { slot: 1, turns: Tt, totalMm: weftMm, orderMm: Math.ceil(weftMm * 1.15 / 500) * 500 };
+    L.threadsTotal = M * g;
+    L.spools = [...new Set(L.warpQty.map(q => q.slot).concat([1]))].sort();
+    L.method = { kind: 'weave', label: 'Woven · ' + M + ' warp lines × ' + g + ' threads · ' + R + ' rows', changes: 0 };
+    L.evidence = { tier: 'weave', label: 'Warp-and-weft weave · principle documented, quantities estimated', bench: 'Not bench tested' };
+    L.effort = Tt < 400 ? 'Moderate job' : Tt < 900 ? 'Long job' : 'Very long job';
+    L.slotNames = (text ? ['Lettering', 'Background'] : custom ? ['Design', 'Background'] : ['Warp', 'Weft', 'Warp accent']).slice(0, spec.slots);
+    return L;
+  };
+
+  // ---------- workshop steps ----------
+  function runsOfColour(L, d) {       // colours of the first P lines as runs: "0–4 Navy, 5–6 Red, 7–11 Navy"
+    const out = []; for (let j = 0; j < L.P; j++) { const s = L.warpAt(j), l = out[out.length - 1]; if (l && l.s === s) l.to = j; else out.push({ s, from: j, to: j }); }
+    return out.map(r => (r.from === r.to ? r.from : r.from + '–' + r.to) + ' ' + T.thread(d.slots[r.s]).name);
+  }
+  W.rowText = function (L, r) {      // how one left list reads
+    const row = L.unit[r], under = []; row.forEach((v, j) => { if (v) under.push(j); });
+    if (!under.length) return { under, over: row.map((_, j) => j), p: L.M, text: 'Plain wrap: go over every line. Nothing is lifted on this row.', list: 'none' };
+    const p = period(row), rs = ranges(under.filter(j => j < p));
+    const over = [], uset = new Set(under); for (let j = 0; j < L.M; j++) if (!uset.has(j)) over.push(j);
+    return { under, over, p, text: p < L.M ? 'Every ' + p + ' lines, go under ' + fmtRanges(rs) + ' and over the rest. Repeat ' + (L.M / p) + ' times round.' : 'Go under lines ' + fmtRanges(ranges(under), 10) + ' and over all the others.', list: fmtRanges(ranges(under), 40) };
+  };
+  W.letterInfo = function (L, from, to) {     // which part of the message these rows make
+    const t = L.text; if (!t) return null; if (t.custom) { const a = Math.floor((from - t.pre) / t.s), b = Math.floor((to - t.pre) / t.s); if (b < 0 || a >= t.bm.w) return { chip: 'plain wrap', text: 'Plain wrap, no design on these rows: the weft goes over every line.' }; const c0 = Math.max(a, 0) + 1, c1 = Math.min(b, t.bm.w - 1) + 1; return { chip: 'column ' + (c0 === c1 ? c0 : c0 + '–' + c1) + ' of ' + t.bm.w, text: 'Design column ' + (c0 === c1 ? c0 : c0 + '–' + c1) + ' of ' + t.bm.w + '. Lifted lines show the design colour.' }; }
+    const x0 = Math.floor((from - t.pre) / t.s), x1 = Math.floor((to - t.pre) / t.s);
+    if (x1 < 0 || x0 >= t.bm.w) return { chip: 'plain wrap', text: 'Plain wrap, no lettering on these rows: the weft goes over every line.' };
+    const hit = t.spans.filter(p => p.x1 >= Math.max(0, x0) && p.x0 <= Math.min(t.bm.w - 1, x1)), real = hit.filter(p => p.ch !== ' ');
+    if (!real.length) return { chip: 'gap', text: 'Space between letters: plain wrap, the weft goes over every line.' };
+    const p = real[0], c0 = Math.max(x0, p.x0) - p.x0 + 1, c1 = Math.min(x1, p.x1) - p.x0 + 1, wd = p.x1 - p.x0 + 1;
+    return { chip: 'letter ' + real.map(q => q.ch).join(' '), text: 'Lettering: ' + (real.length > 1 ? 'letters ' + real.map(q => '“' + q.ch + '”').join(', ') : 'letter “' + p.ch + '”, column ' + (c0 === c1 ? c0 : c0 + '–' + c1) + ' of ' + wd) + '. Lifted lines show the lettering colour.' };
+  };
+  W.steps = function (d, L) {
+    const nm = s => T.thread(d.slots[s]).name, st = [], M = L.M, w = L.w, tau = L.tau, nA = L.nA, spec = L.spec, wn = nm(1);
+    const warpNames = [...new Set(L.warpQty.map(q => nm(q.slot)))];
+    const spoolLines = L.warpQty.map(q => nm(q.slot) + ' warp: ' + q.lines + ' lines of ' + L.g + ' threads, each ' + Math.ceil(q.eachMm) + ' mm (' + metres(q.totalMm) + ' m in all)');
+    spoolLines.push(wn + ' weft: one continuous length, about ' + metres(L.weftQty.totalMm) + ' m for ' + L.turnsTotal + ' turns. Have ' + metres(L.weftQty.orderMm) + ' m ready.');
+    spoolLines.push('Cut the warp lengths first and keep them in order. Put the weft on a bobbin that feeds freely. Amounts are estimates with a reserve.');
+    if (!d.measured) st.push({ kind: 'needsize', title: 'Enter your rod size', text: 'Your design needs your measured rod diameter before we can work out the lines.' });
+    st.push({ kind: 'spools', title: 'Get your threads ready', lines: spoolLines, evidence: ['geometry'], slots: L.spools.slice() });
+    st.push({ kind: 'marks', title: 'Mark the lines', evidence: ['geometry'], lines: ['Cut a paper strip that just wraps once around the rod (' + L.C.toFixed(1) + ' mm). Fold or mark it into ' + M + ' equal parts (' + L.cellW.toFixed(2) + ' mm each), then mark ' + M + ' points around the rod at the start of the wrap.',
+      'Number the marks 0 to ' + (M - 1) + ' in the direction the weft will travel. Mark 0 is the seam, where every row starts.', 'The printed guide shows the marks in their warp colours.'] });
+    // WARP
+    const colRuns = runsOfColour(L, d), wArrs = ['Lines ' + colRuns.join(', ') + (M > L.P ? '. Repeat this set ' + (M / L.P) + ' times round.' : '.')];
+    st.push({ kind: 'warp', stage: 1, title: 'Lay the warp lines', head: 'WARP LINES — ' + warpNames.join(' and '), slot: L.warpAt(0), zc: 0, evidence: ['documented'],
+      legs: [{ dir: 'wv', arrow: '●', label: 'START', action: 'Beside mark 0, at the start of the wrap. Leave a 20 mm tail hanging off the start end.' },
+        { dir: 'wv', arrow: '→', label: 'LAY', action: 'Lay ' + L.g + ' threads flat side by side for each line, straight along the blank to the far end, in order 0 to ' + (M - 1) + '.' },
+        { dir: 'wv', arrow: '≡', label: 'COLOURS', action: wArrs[0] }],
+      chips: [M + ' lines', L.threadsTotal + ' threads', L.lenAdj.toFixed(0) + ' mm + tails'],
+      notes: ['Nothing is wrapped yet. These lines just lie along the blank.'],
+      how: ['Tape the tails flat at the start end. Clip or tape the far ends so every line stays straight and in order.', 'Lines should touch but not overlap. The weft will hold them in place.', 'Check the numbering against your marks before you wrap anything.'], howOpen: true,
+      next: 'Next: lock the warp in place with the start band.' });
+    st.push({ kind: 'wstart', stage: 2, title: 'Start band', head: 'START BAND — ' + wn + ' weft', slot: 1, zc: nA * w / 2, evidence: ['documented'],
+      legs: [{ dir: 'wv', arrow: '●', label: 'START', action: 'At mark 0, at the very start of the wrap, over the warp lines and the tails.' },
+        { dir: 'wv', arrow: '→', label: 'GO', action: 'Wrap ' + nA + ' tight turns round the blank, OVER every line. Go in the numbering direction.' },
+        { dir: 'wv', arrow: '↻', label: 'END', action: 'Finish at mark 0, ready for row 1. Keep the thread on its bobbin.' }],
+      chips: [nA + ' turns', mm(nA * w) + ' mm'],
+      notes: ['This band covers every line, so only ' + wn + ' shows here. It locks the warp ends.'],
+      how: ['Tie in the weft the way you normally start a wrap: lay the tail along the blank and wrap over it.', 'Keep the turns touching and the warp lines in order.', 'Trim the start tails close to the band once it is tight.'],
+      next: 'Next: row 1, ' + W.rowText(L, 0).text.toLowerCase().slice(0, 90) });
+    // ROWS
+    const first = nA, rowRange = (a, b) => a === b ? 'ROW ' + (a + 1) : 'ROWS ' + (a + 1) + '–' + (b + 1);
+    L.groups.forEach((gp, gi) => {
+      const li = W.letterInfo(L, gp.from, gp.to), rt = W.rowText(L, gp.from), n = gp.to - gp.from + 1, turnA = nA + gp.from * tau + 1, turnB = nA + (gp.to + 1) * tau, prevDone = gp.from === 0 ? 'the start band' : 'row ' + gp.from;
+      const nextG = L.groups[gi + 1], nextTxt = nextG ? 'Next: ' + rowRange(nextG.from, nextG.to).toLowerCase() + '. ' + W.rowText(L, nextG.from).text.split('.')[0] + '.' : (L.units > 1 ? 'Next: repeat rows 1–' + L.Q + ' ' + (L.units - 1) + ' more time' + (L.units > 2 ? 's' : '') + '.' : 'Next: the finish band.');
+      st.push({ kind: 'wrow', stage: gp.stage, title: rowRange(gp.from, gp.to) + ' of ' + L.Q, head: rowRange(gp.from, gp.to) + ' OF ' + L.Q + ' — ' + wn + ' weft', slot: 1, rowFrom: gp.from, rowTo: gp.to, rows: n, turns: n * tau, turnFrom: turnA, turnTo: turnB,
+        zc: (nA + (gp.from + gp.to + 1) / 2 * tau) * w, evidence: ['documented'], under: rt.under, over: rt.over,
+        legs: [{ dir: 'wv', arrow: '●', label: 'START', action: 'At mark 0, against ' + prevDone + '. The weft is already there from the last turn.' },
+          { dir: 'wv', arrow: '→', label: 'GO', action: rt.text },
+          { dir: 'wv', arrow: '↻', label: 'TURNS', action: n * tau + ' turns in all, same lifts every turn. Each turn sits snug against the last.' }],
+        chips: [rt.under.length + ' of ' + M + ' lines under', turnA === turnB ? 'turn ' + turnA : 'turns ' + turnA + '–' + turnB].concat(li ? [li.chip] : []),
+        notes: (li ? [li.text] : []).concat(['Under: the warp line stays on top. Over: the weft covers it. Lines to lift: ' + rt.list + '.']),
+        how: ['Lift the lines to go under clear of the blank with a fine pick or a needle, pass the weft through beneath them, then let them drop.', 'Take the weft over every other line and bring it back to mark 0. It should arrive one thread width further along.', 'Repeat for each of the ' + n * tau + ' turns, lifting the same lines each time, and push each turn snug against the last.', 'Keep the weft tension even so the rows stay straight.'], howOpen: gi === 0,
+        next: nextTxt });
+    });
+    if (L.units > 1) {
+      const more = L.units - 1, rowsMore = more * L.Q;
+      st.push({ kind: 'wrepeat', stage: L.repeatStage, title: 'Repeat the pattern', head: 'REPEAT ROWS 1–' + L.Q + ' — ' + wn + ' weft', slot: 1, zc: (nA + (L.Q + rowsMore / 2) * tau) * w, evidence: ['documented'], units: more,
+        legs: [{ dir: 'wv', arrow: '●', label: 'START', action: 'At mark 0, against row ' + L.Q + '.' },
+          { dir: 'wv', arrow: '→', label: 'GO', action: 'Weave rows 1 to ' + L.Q + ' again, in the same order, with the same lifts (see the chart).' },
+          { dir: 'wv', arrow: '↻', label: 'REPEAT', action: more + ' more time' + (more > 1 ? 's' : '') + ': ' + rowsMore + ' rows, ' + rowsMore * tau + ' turns.' }],
+        chips: [more + ' more repeat' + (more > 1 ? 's' : ''), rowsMore * tau + ' turns', mm(rowsMore * L.rowMm) + ' mm'],
+        notes: ['Tick off each repeat as you finish it. The pattern comes out the same every time.'],
+        how: ['Every repeat starts at row 1 at mark 0. If you lose your place, count the rows back to the last full repeat.', 'Check the pattern against the preview after each repeat.'], howOpen: true,
+        next: 'Next: the finish band.' });
+    }
+    const zEnd = (L.turnsTotal - nA / 2) * w;
+    st.push({ kind: 'wfinish', stage: L.finishStage, title: 'Finish band', head: 'FINISH BAND — ' + wn + ' weft', slot: 1, zc: zEnd, evidence: ['documented'],
+      legs: [{ dir: 'wv', arrow: '●', label: 'START', action: 'At mark 0, against the last row.' },
+        { dir: 'wv', arrow: '→', label: 'GO', action: 'Wrap ' + nA + ' tight turns OVER every line. This locks the far ends.' },
+        { dir: 'wv', arrow: '✓', label: 'THEN', action: 'Tie off the weft. Trim the warp tails close to the band.' }],
+      chips: [nA + ' turns', mm(nA * w) + ' mm'],
+      notes: ['Hold the warp lines straight and in order while you wrap this band.'],
+      how: ['Remove the far-end clips as you reach them, keeping the lines in order.', 'Tie off the weft the way you normally finish a wrap.', 'Trim the warp tails and weft tail, then finish the wrap your usual way.'], howOpen: true });
+    st.push({ kind: 'finish', title: 'Finish', text: 'Tie off, trim the tails and finish the wrap your usual way. Compare with the preview, and note anything to adjust for next time. Not bench tested: expect to refine line counts and band lengths.', zEnd: L.lenAdj });
+    return st;
+  };
+
+  // ---------- diagrams ----------
+  const hex = (d, s) => T.thread(d.slots[s]).hex;
+  function ring(d, L, st, big) {
+    const M = L.M, cx = 110, cy = 110, ro = 84, ri = 56, step = Math.max(1, Math.ceil(M / 16)); let g = '';
+    for (let j = 0; j < M; j++) {
+      const a0 = -Math.PI / 2 + j / M * TAU, a1 = -Math.PI / 2 + (j + 1) / M * TAU, p = (r, a) => (cx + r * Math.cos(a)).toFixed(2) + ' ' + (cy + r * Math.sin(a)).toFixed(2);
+      g += '<path data-j="' + j + '" data-slot="' + L.warpAt(j) + '" d="M' + p(ro, a0) + 'A' + ro + ' ' + ro + ' 0 0 1 ' + p(ro, a1) + 'L' + p(ri, a1) + 'A' + ri + ' ' + ri + ' 0 0 0 ' + p(ri, a0) + 'Z" fill="' + hex(d, L.warpAt(j)) + '" stroke="#000" stroke-opacity=".5" stroke-width=".6"/>';
+      if (j % step === 0) { const am = (a0 + a1) / 2; g += '<text x="' + (cx + (ro + 11) * Math.cos(am)).toFixed(1) + '" y="' + (cy + (ro + 11) * Math.sin(am) + 3).toFixed(1) + '" font-size="9" text-anchor="middle" fill="#cfd2d6">' + j + '</text>'; }
+    }
+    if (st.kind === 'wstart' || st.kind === 'wfinish') g += '<circle data-weft="1" cx="' + cx + '" cy="' + cy + '" r="' + ((ro + ri) / 2) + '" fill="none" stroke="' + hex(d, 1) + '" stroke-width="' + (ro - ri + 6) + '" opacity=".92"/>';
+    g += '<circle cx="' + cx + '" cy="' + (cy - ro - 2) + '" r="5" fill="none" stroke="#fff" stroke-width="2"/>';
+    g += '<text x="' + cx + '" y="' + (cy - 4) + '" font-size="10" text-anchor="middle" fill="#cfd2d6">' + (st.kind === 'warp' ? 'Warp lines' : 'Weft over all') + '</text><text x="' + cx + '" y="' + (cy + 10) + '" font-size="9" text-anchor="middle" fill="#9aa0a6">seen from the start end</text><text x="' + cx + '" y="' + (cy + 22) + '" font-size="9" text-anchor="middle" fill="#9aa0a6">0 = seam, numbers go ↻</text>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" class="wring" data-kind="' + st.kind + '" viewBox="0 0 220 220" style="' + (big ? 'width:420px;max-width:none' : 'width:100%;max-width:300px;display:block;margin:0 auto') + '" role="img" aria-label="Warp lines seen from the start end">' + g + '</svg>';
+  }
+  function chart(d, L, st, big) {
+    const M = L.M, Q = L.Q, c = big ? 18 : 10, lm = 16, tm = 12, Wd = lm + M * c + 4, every = M > 36 ? 4 : M > 20 ? 2 : 1;
+    const full = st.kind === 'wrepeat', a0 = full ? 0 : st.rowFrom, a1 = full ? Q - 1 : Math.min(st.rowTo, st.rowFrom + 5), act = [a0, a1];
+    const r0 = L.text ? Math.max(0, a0 - 3) : 0, r1 = L.text ? Math.min(Q - 1, a1 + 3) : Q - 1, nr = r1 - r0 + 1; let g = '';
+    for (let j = 0; j < M; j += every) g += '<text x="' + (lm + (j + 0.5) * c).toFixed(1) + '" y="' + (tm - 3) + '" font-size="' + (big ? 9 : 6.5) + '" text-anchor="middle" fill="#9aa0a6">' + j + '</text>';
+    for (let r = r0; r <= r1; r++) {
+      const state = full ? 'active' : r < st.rowFrom ? 'done' : r <= st.rowTo ? 'active' : 'todo', op = state === 'done' ? .5 : state === 'todo' ? .28 : 1, y = tm + (r - r0) * c;
+      g += '<text x="' + (lm - 4) + '" y="' + (y + 0.65 * c).toFixed(1) + '" font-size="' + (big ? 9 : 6.5) + '" text-anchor="end" fill="#9aa0a6">' + (r + 1) + '</text>';
+      for (let j = 0; j < M; j++) g += '<rect data-r="' + r + '" data-j="' + j + '" data-state="' + state + '" data-lift="' + (L.unit[r][j] ? 1 : 0) + '" data-slot="' + (L.unit[r][j] ? L.warpAt(j) : 1) + '" x="' + (lm + j * c) + '" y="' + y + '" width="' + (c - 0.8) + '" height="' + (c - 0.8) + '" fill="' + hex(d, L.unit[r][j] ? L.warpAt(j) : 1) + '" opacity="' + op + '"/>';
+    }
+    g += '<rect x="' + (lm - 1.5) + '" y="' + (tm + (act[0] - r0) * c - 1.5) + '" width="' + (M * c + 2.4) + '" height="' + ((act[1] - act[0] + 1) * c + 2.2) + '" fill="none" stroke="#e14a58" stroke-width="' + (big ? 2.2 : 1.6) + '" rx="2"/>';
+    let H = tm + nr * c + 6;
+    if (st.kind === 'wrow') {       // the weft path along this row: over = line drawn on top, under = warp on top
+      const y0 = H + 8, h = big ? 26 : 16; g += '<text x="' + lm + '" y="' + (H + 5) + '" font-size="' + (big ? 10 : 7) + '" fill="#cfd2d6">This row: weft path, line 0 → ' + (M - 1) + '</text>';
+      for (let j = 0; j < M; j++) {
+        const lift = L.unit[st.rowFrom][j], x = lm + j * c, ln = '<line x1="' + (x - 0.4) + '" x2="' + (x + c - 0.4) + '" y1="' + (y0 + h / 2) + '" y2="' + (y0 + h / 2) + '" stroke="' + hex(d, 1) + '" stroke-width="' + (big ? 6 : 4) + '"/>', rc = '<rect data-pj="' + j + '" data-under="' + (lift ? 1 : 0) + '" x="' + x + '" y="' + (lift ? y0 - 2 : y0) + '" width="' + (c - 1.4) + '" height="' + (lift ? h + 4 : h) + '" fill="' + hex(d, L.warpAt(j)) + '" stroke="#000" stroke-opacity=".5" stroke-width=".5"/>';
+        g += lift ? ln + rc : rc + ln;
+      }
+      for (let j = 0; j < M; j += every) g += '<text x="' + (lm + (j + 0.5) * c).toFixed(1) + '" y="' + (y0 + h + (big ? 14 : 10)) + '" font-size="' + (big ? 9 : 6.5) + '" text-anchor="middle" fill="#9aa0a6">' + j + '</text>';
+      H = y0 + h + (big ? 20 : 14);
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" class="wchart" data-kind="' + st.kind + '" viewBox="0 0 ' + Wd + ' ' + H + '" style="' + (big ? 'width:' + Math.max(Wd * 1.0, 620) + 'px;max-width:none' : 'width:100%;display:block') + '" role="img" aria-label="Pattern chart. Each square is one line in one row; red frame is the current row.">' + g + '</svg>';
+  }
+  W.diagramSVG = function (d, L, st, opt) { const big = !!(opt && opt.big); return (st.kind === 'warp' || st.kind === 'wstart' || st.kind === 'wfinish') ? ring(d, L, st, big) : chart(d, L, st, big); };
+
+  // ---------- printable marking guide ----------
+  W.templateHTML = function (d) {
+    const L = T.layout(d), M = L.M, c = L.cellW; let g = '', ch = '';
+    for (let j = 0; j < M; j++) {
+      g += '<rect x="' + (j * c).toFixed(2) + '" y="0" width="' + c.toFixed(2) + '" height="9" fill="' + hex(d, L.warpAt(j)) + '" stroke="#000" stroke-width=".15"/><line x1="' + (j * c).toFixed(2) + '" x2="' + (j * c).toFixed(2) + '" y1="-3" y2="0" stroke="#000" stroke-width=".2"/><text x="' + ((j + 0.5) * c).toFixed(2) + '" y="-4" font-size="' + Math.min(2.4, c * 0.8).toFixed(2) + '" text-anchor="middle">' + j + '</text>';
+    }
+    for (let r = 0; r < L.Q; r++) for (let j = 0; j < M; j++) ch += '<rect x="' + (j * c).toFixed(2) + '" y="' + (14 + r * c).toFixed(2) + '" width="' + c.toFixed(2) + '" height="' + c.toFixed(2) + '" fill="' + hex(d, L.unit[r][j] ? L.warpAt(j) : 1) + '"/>';
+    return '<h3 style="font:600 12pt sans-serif;margin:0 0 4mm">Thread Design Studio · ' + L.spec.guide + ' marking guide</h3><p style="font:9pt sans-serif;margin:0 0 8mm">Rod diameter ' + mm(d.diameterMm) + ' mm · circumference ' + L.C.toFixed(1) + ' mm · ' + M + ' warp lines, ' + c.toFixed(2) + ' mm apart. Line 0 is the seam; numbers run the way the weft travels. Print at 100% (no scaling). Colours are approximate. Below: ' + (L.text ? (L.text.custom ? 'the whole design, ' : 'the whole lettering, ') : 'one pattern repeat, ') + L.Q + ' rows (each row is ' + L.tau + ' turns). Not bench tested.</p>' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + L.C.toFixed(2) + 'mm" height="' + (14 + L.Q * c + 8).toFixed(2) + 'mm" viewBox="0 -8 ' + L.C.toFixed(2) + ' ' + (14 + L.Q * c + 8).toFixed(2) + '" style="overflow:visible">' + g + ch + '<rect x="0" y="0" width="' + L.C.toFixed(2) + '" height="9" fill="none" stroke="#000" stroke-width=".25"/></svg>';
+  };
+})(typeof self !== 'undefined' ? self : this);
+</script><script>/* K-Labs Thread Design Studio: custom design drafts (drawn grids and converted artwork).
+   A custom design is d.art = { v:1, w, h, rows:[h strings of w '0'/'1'], edited, name?, src?, conv?, report? }.
+   Pixel x runs ALONG the rod, pixel y runs ROUND it (the same as lettering). weave.js turns it into the left list:
+   a '1' pixel is s x s cells where the weft goes UNDER (the warp shows); a '0' pixel is where it goes OVER.
+   There is no separate image: the rod preview, the chart, the steps and the printed guide all read this grid.
+   Artwork import (convert) is pure: it works on a small packed raster (src), so the same conversion can be redone
+   from saved data. Plain JSON throughout, ready for account storage later. */
+(function (root) {
+  'use strict';
+  const T = (typeof module !== 'undefined' && module.exports) ? require('./engine.js') : root.THREAD;
+  const A = {}; T.art = A;
+  A.MAXW = 48; A.MAXH = 24; A.MINW = 4; A.MINH = 4; A.SRC_SIDE = 96;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  A.blank = (w, h) => ({ v: 1, w, h, rows: Array.from({ length: h }, () => '0'.repeat(w)), edited: false });
+  A.get = (a, x, y) => x >= 0 && y >= 0 && x < a.w && y < a.h && a.rows[y][x] === '1';
+  A.set = function (a, x, y, v) { if (x < 0 || y < 0 || x >= a.w || y >= a.h) return false; const r = a.rows[y]; if ((r[x] === '1') === !!v) return false; a.rows[y] = r.slice(0, x) + (v ? '1' : '0') + r.slice(x + 1); return true; };
+  A.ink = a => a.rows.reduce((n, r) => n + (r.match(/1/g) || []).length, 0);
+  A.clear = a => Object.assign({}, a, { rows: a.rows.map(r => '0'.repeat(a.w)), edited: true });
+  A.resize = function (a, w, h) {            // keeps what is already drawn, anchored top-left
+    w = clamp(w, A.MINW, A.MAXW); h = clamp(h, A.MINH, A.MAXH); const rows = [];
+    for (let y = 0; y < h; y++) { const r = a.rows[y] || ''; rows.push((r + '0'.repeat(w)).slice(0, w)); }
+    return Object.assign({}, a, { w, h, rows, edited: true });
+  };
+  A.mirror = function (a, axis) {            // 'x' flips along the rod, 'y' flips round it
+    const rows = axis === 'x' ? a.rows.map(r => r.split('').reverse().join('')) : a.rows.slice().reverse();
+    return Object.assign({}, a, { rows, edited: true });
+  };
+  A.valid = a => !!a && a.w >= 1 && a.h >= 1 && Array.isArray(a.rows) && a.rows.length === a.h && a.rows.every(r => typeof r === 'string' && r.length === a.w && /^[01]*$/.test(r));
+  A.bitmap = function (a) { if (!A.valid(a)) a = A.blank(8, 8); return { w: a.w, h: a.h, px: (x, y) => a.rows[y][x] === '1' ? 1 : 0, text: A.ink(a) ? 'x' : '' }; };
+
+  // ---- starting templates
+  A.templates = {
+    blank: () => A.blank(16, 16),
+    symbol: () => { const a = A.blank(16, 16); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const d = Math.abs(x - 7.5) + Math.abs(y - 7.5); if (Math.abs(d - 6.5) <= 1 || d <= 1.5) A.set(a, x, y, 1); } return a; },
+    monogram: (ch) => { const g = T.FONT[(ch || 'K').toUpperCase()] || T.FONT.K, a = A.blank(14, 16); for (let y = 0; y < 7; y++) for (let x = 0; x < 5; x++) if (g[y][x] === '1') for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) A.set(a, 2 + x * 2 + i, 1 + y * 2 + j, 1); return a; }
+  };
+
+  // ---- artwork: raster -> packed source. rgba is RGBA bytes (w*h*4). Transparent pixels are '.', others a..p (16 brightness levels).
+  A.srcFromRGBA = function (rgba, w, h) {
+    const sc = Math.min(1, A.SRC_SIDE / Math.max(w, h)), nw = Math.max(1, Math.round(w * sc)), nh = Math.max(1, Math.round(h * sc)); let d = '';
+    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+      const x0 = Math.floor(x * w / nw), x1 = Math.max(x0 + 1, Math.floor((x + 1) * w / nw)), y0 = Math.floor(y * h / nh), y1 = Math.max(y0 + 1, Math.floor((y + 1) * h / nh)); let aS = 0, lS = 0, n = 0;
+      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) { const i = (yy * w + xx) * 4, al = rgba[i + 3] / 255; aS += al; lS += al * (0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]); n++; }
+      d += aS / n < 0.5 ? '.' : String.fromCharCode(97 + clamp(Math.floor(lS / aS / 16), 0, 15));
+    }
+    return { w: nw, h: nh, d };
+  };
+  const otsu = function (hist, total) {
+    let sum = 0; for (let i = 0; i < 16; i++) sum += i * hist[i]; let wB = 0, sB = 0, best = -1, thr = 8;
+    for (let t = 0; t < 16; t++) { wB += hist[t]; if (!wB) continue; const wF = total - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; thr = t + 1; } }
+    return thr;                                              // levels below thr are dark
+  };
+  // conversion options: gh = grid height in pixels (round the rod), thr = darkness cut-off 0..100 (null = automatic), invert, crop (trim empty margins)
+  A.convert = function (src, o) {
+    o = Object.assign({ gh: 16, thr: null, invert: false, crop: true }, o || {});
+    const W = src.w, H = src.h, d = src.d; let tr = 0; const lev = new Array(W * H), hist = new Array(16).fill(0); let opaque = 0;
+    for (let i = 0; i < W * H; i++) { if (d[i] === '.') { lev[i] = -1; tr++; } else { lev[i] = d.charCodeAt(i) - 97; hist[lev[i]]++; opaque++; } }
+    const hasAlpha = tr > 0.03 * W * H;
+    const cut = o.thr == null ? otsu(hist, opaque || 1) : clamp(Math.round(o.thr / 100 * 16), 1, 15);
+    const make = flip => { const ink = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) { let v = lev[i] < 0 ? 0 : hasAlpha ? 1 : (lev[i] < cut ? 1 : 0); if (flip) v = 1 - v; ink[i] = v; } return ink; };
+    // a dark border means a dark background: flip automatically (independent of the cut-off, so the slider never makes it jump). Invert then flips the visible result.
+    let autoInverted = false; if (!hasAlpha) { let bs = 0, bn = 0; for (let x = 0; x < W; x++) for (const y of [0, H - 1]) { bs += lev[y * W + x]; bn++; } for (let y = 1; y < H - 1; y++) for (const x of [0, W - 1]) { bs += lev[y * W + x]; bn++; } autoInverted = bn > 0 && bs / bn < 5; }
+    let ink = make(autoInverted !== !!o.invert);
+    let x0 = 0, y0 = 0, x1 = W, y1 = H;
+    if (o.crop) { x0 = W; y0 = H; x1 = 0; y1 = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ink[y * W + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1); y0 = Math.min(y0, y); y1 = Math.max(y1, y + 1); } if (x1 <= x0) { x0 = 0; y0 = 0; x1 = W; y1 = H; } }
+    const bw = x1 - x0, bh = y1 - y0, asp = bw / bh; let gh = clamp(Math.round(o.gh), A.MINH, A.MAXH), gw = Math.max(1, Math.round(gh * asp));
+    if (gw > A.MAXW) { gw = A.MAXW; gh = clamp(Math.round(gw / asp), 1, A.MAXH); }
+    gw = Math.max(gw, 1); gh = Math.max(gh, 1);
+    let cells = []; for (let gy = 0; gy < gh; gy++) { const row = []; for (let gx = 0; gx < gw; gx++) {
+      const sx0 = x0 + gx * bw / gw, sx1 = x0 + (gx + 1) * bw / gw, sy0 = y0 + gy * bh / gh, sy1 = y0 + (gy + 1) * bh / gh; let s = 0, n = 0;
+      for (let y = Math.floor(sy0); y < Math.max(Math.floor(sy0) + 1, Math.ceil(sy1)); y++) for (let x = Math.floor(sx0); x < Math.max(Math.floor(sx0) + 1, Math.ceil(sx1)); x++) { s += ink[Math.min(H - 1, y) * W + Math.min(W - 1, x)]; n++; }
+      row.push(s / n >= 0.5 ? 1 : 0); } cells.push(row); }
+    // simplify: remove isolated single cells, fill single-cell holes
+    const nb = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].reduce((a, [dx, dy]) => a + ((cells[y + dy] && cells[y + dy][x + dx]) ? 1 : 0), 0);
+    let removed = 0, filled = 0; const rm = [], fl = [];
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { if (cells[y][x] && nb(x, y) === 0) rm.push([x, y]); else if (!cells[y][x] && nb(x, y) === 4) fl.push([x, y]); }
+    rm.forEach(([x, y]) => { cells[y][x] = 0; removed++; }); fl.forEach(([x, y]) => { cells[y][x] = 1; filled++; });
+    const rows = cells.map(r => r.join('')), art = { v: 1, w: gw, h: gh, rows, edited: false };
+    // detail report
+    const seen = new Set(); let comps = 0; for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) if (cells[y][x] && !seen.has(y * gw + x)) { comps++; const st = [[x, y]]; seen.add(y * gw + x); while (st.length) { const [cx, cy] = st.pop(); [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const nx = cx + dx, ny = cy + dy; if (cells[ny] && cells[ny][nx] && !seen.has(ny * gw + nx)) { seen.add(ny * gw + nx); st.push([nx, ny]); } }); } }
+    let trn = 0; for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { if (x + 1 < gw && cells[y][x] !== cells[y][x + 1]) trn++; if (y + 1 < gh && cells[y][x] !== cells[y + 1][x]) trn++; }
+    const busy = trn / (gw * gh * 2), inkN = A.ink(art), frac = inkN / (gw * gh), warn = [];
+    if (!inkN) warn.push({ id: 'noart', level: 'warn', text: 'No artwork found. Try Invert, or lower the Darkness cut-off.' });
+    else {
+      if (comps > 10 || busy > 0.35 || removed > Math.max(3, 0.12 * inkN)) warn.push({ id: 'detail', level: 'warn', text: 'This artwork is too detailed to weave faithfully (' + comps + ' separate shapes). It has been simplified. Try a lower detail, a bolder image, or tidy it on the grid.' });
+      if (frac > 0.9) warn.push({ id: 'full', level: 'warn', text: 'Almost every cell is filled. Try Invert, or raise the Darkness cut-off.' });
+      if (gw * gh < 40) warn.push({ id: 'tiny', level: 'info', text: 'The pattern is very small. Increase the detail for a clearer shape.' });
+    }
+    return { art, report: { components: comps, busy, removed, filled, ink: inkN, fraction: frac, hasAlpha, autoInverted, cut, srcW: W, srcH: H, crop: [x0, y0, x1, y1], warn } };
+  };
+  // build a complete custom design's art from a source and options (what the editor stores)
+  A.fromSource = function (src, conv) {
+    const r = A.convert(src, conv), art = r.art; art.src = src; art.conv = Object.assign({ gh: 16, thr: null, invert: false, crop: true }, conv || {}); art.report = r.report; return art;
+  };
+  // ---- saved-design library (plain list, ready to move to account storage)
+  A.libUpsert = function (list, d, now) {
+    const c = JSON.parse(JSON.stringify(d)); if (!c.id) c.id = 'c' + (now || Date.now()).toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+    const rec = { id: c.id, name: c.name || 'My design', updated: now || Date.now(), design: c }, i = list.findIndex(x => x.id === c.id), out = list.slice();
+    if (i >= 0) out[i] = rec; else out.unshift(rec); return out;
+  };
+  A.newId = () => 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e5).toString(36);
+  A.libRemove = (list, id) => list.filter(x => x.id !== id);
+})(typeof self !== 'undefined' ? self : this);
+</script><script>/* K-Labs Thread Design Studio: UI. All design logic lives in engine.js. */
+(function () {
+  'use strict';
+  const T = THREAD, TAU = Math.PI * 2, $ = (s, r) => (r || document).querySelector(s), app = $('#app');
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const S = { screen: 'home', d: null, hist: null, sel: 1, view: { z0: 0, rot: 0 }, step: 0, steps: [], note: '', geom: null, L: null };
+  window.__ts = S;
+  // Hosted inside K-Labs Studio the host injects window.__TDS_HOST__ = {scope}; storage keys then carry the account scope (same ":<account>" convention as the Studio's builds). Standalone keeps the plain keys.
+  const HOST = window.__TDS_HOST__ || null, SCOPE = HOST && HOST.scope ? ':' + HOST.scope : '';
+  const KEY = 'ktds.design.v1' + SCOPE;
+  const store = { get() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }, set(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { } } };
+  const hexes = d => d.slots.map(id => T.thread(id).hex);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const f1 = v => (Math.round(v * 10) / 10).toString();
+
+  // ---------- rod drawing ----------
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+  const BARE = [38, 41, 45];
+  function drawRod(cv, L, opt) {                 // opt: {z0, rot, win (mm), limitZ, h (css px)}
+    const d = L.d, dpr = Math.min(2, window.devicePixelRatio || 1), cw = cv.clientWidth || 360, ch = Math.round((opt.h || 130) * (cw > 420 ? clamp(cw / 360, 1, 2.6) : 1));   // phones keep their size; wider screens get a taller preview
+    cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); cv.style.height = ch + 'px';
+    const W = cv.width, H = cv.height, win = clamp(opt.win || d.diameterMm * 3.4, 20, Math.max(20, d.lengthMm)), ppm = W / win;
+    let R = d.diameterMm / 2 * ppm; const ppmUse = Math.min(ppm, (H * 0.94) / d.diameterMm); R = d.diameterMm / 2 * ppmUse; const sx = ppmUse;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H), px = img.data, cy = H / 2, cols = hexes(d).map(rgb);
+    const hl = opt.hl || 0, tex = L.family !== 'bands' && L.w * sx >= 3, limit = opt.limitZ == null ? Infinity : opt.limitZ;
+    for (let x = 0; x < W; x++) {
+      const z = opt.z0 + x / sx;
+      for (let y = 0; y < H; y++) {
+        let glow = false; const v = (y - cy) / R; if (v < -1 || v > 1) continue;
+        const c = Math.sqrt(1 - v * v), th = Math.asin(v) + opt.rot;
+        let col = BARE, sl, gain = 1;
+        if (hl) { const cv2 = z > limit ? { slot: -1 } : L.coverAt(z, th, opt.pass); sl = cv2.slot; if (sl >= 0) { col = cols[sl]; if (cv2.cap || cv2.pass === 0) gain = 0.55; else if (cv2.pass < hl) gain = 0.42; else { gain = 1.12; glow = true; } } }
+        else { sl = z > limit ? -1 : L.slotAt(z, th, opt.pass); if (sl >= 0) col = cols[sl]; }
+        const spec = Math.exp(-Math.pow((v + 0.45) / 0.13, 2)); let sh = (0.16 + 0.84 * c + 0.2 * spec) * gain;
+        if (tex && sl >= 0) sh *= L.shadeAt ? L.shadeAt(z, th) : 0.95 + 0.05 * Math.cos(TAU * (z / L.w));
+        const i = (y * W + x) * 4; const add = (34 * spec + 10 * (1 - c)) * (hl && sl >= 0 && !glow ? 0.5 : 1) + (glow ? 14 : 0); px[i] = Math.min(255, col[0] * sh + add); px[i + 1] = Math.min(255, col[1] * sh + add); px[i + 2] = Math.min(255, col[2] * sh + add); px[i + 3] = 255;
+      }
+    }
+    ctx.clearRect(0, 0, W, H); ctx.putImageData(img, 0, 0);
+    return { ppm: sx / dpr, R: R / dpr, win: W / sx, z0max: Math.max(0, d.lengthMm - W / sx), dpr };
+  }
+  function drawStrip(cv, L, view, geom) {
+    const d = L.d, dpr = Math.min(2, window.devicePixelRatio || 1), cw = cv.clientWidth || 360, ch = cw > 420 ? 56 : 40;
+    cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); cv.style.height = ch + 'px';
+    const W = cv.width, H = cv.height, ctx = cv.getContext('2d'), img = ctx.createImageData(W, H), px = img.data, cols = hexes(d).map(rgb);
+    for (let x = 0; x < W; x++) { const z = x / W * d.lengthMm; for (let y = 0; y < H; y++) { const sl = L.slotAt(z, y / H * TAU), c = sl >= 0 ? cols[sl] : BARE, i = (y * W + x) * 4; px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = 255; } }
+    ctx.putImageData(img, 0, 0);
+    if (geom) { const x0 = view.z0 / d.lengthMm * W, x1 = (view.z0 + geom.win) / d.lengthMm * W; ctx.strokeStyle = '#e14a58'; ctx.lineWidth = 2 * dpr; ctx.strokeRect(x0 + dpr, dpr, Math.max(4, x1 - x0) - 2 * dpr, H - 2 * dpr); }
+  }
+  function thumb(cv, d, h) { const L = T.layout(d); drawRod(cv, L, { z0: L.viewHint ? L.viewHint.z0 : 0, rot: L.viewHint ? L.viewHint.rot : 0.5, h: h || 70, win: d.diameterMm * 7 }); }
+
+  // ---------- navigation ----------
+  function go(screen) { S.screen = screen; app.dataset.screen = screen; ({ home, gallery, describe, custom, edit, work })[screen](); window.scrollTo(0, 0); }
+  function open(d, note) {
+    S.d = T.clone(d); S.hist = new T.History(S.d); S.sel = 1; S.note = note || ''; store.set(S.d);
+    const L = T.layout(S.d); S.view = { z0: 0, rot: 0.6 };
+    if (L.family === 'grid' && S.d.mode === 'text') { const off = L.copies > 1 ? 1 : Math.floor((L.N - 7 * L.size) / 2); S.view.rot = (off + 3.5 * L.size) / L.N * TAU; S.view.z0 = Math.max(0, L.rowOffset * L.rowMm - 4); }
+    if (L.viewHint) { S.view.z0 = L.viewHint.z0; S.view.rot = L.viewHint.rot; }
+    go('edit');
+  }
+  function home() {
+    const saved = store.get();
+    app.innerHTML = `<h1>Thread Design Studio</h1><p class="sub">Pick a starting point. You’ll see it on the rod straight away.</p>
+${saved ? `<button class="choice resume" data-act="resume"><b>Continue your design</b><span>${esc(saved.mode === 'text' ? 'Lettering “' + saved.text + '”' : saved.pattern === 'wovencustom' ? (saved.name || 'My design') : T.PATTERNS[saved.pattern].name)}</span><canvas id="rc"></canvas></button>` : ''}
+<button class="choice" data-act="gallery"><b>Choose a Design</b><span>Browse beautiful, ready-to-customise patterns.</span></button>
+<button class="choice" data-act="text"><b>Create from Text</b><span>Enter a name, initials or a short message.</span></button>
+<button class="choice" data-act="describe"><b>Describe Your Design</b><span>Explain what you want in ordinary words.</span></button>
+<button class="choice" data-act="custom"><b>Create Your Own Design</b><span>Draw a logo or symbol, or upload artwork.</span></button>${HOST ? `<button class="choice" data-act="taper"><b>Diamond Layout for a Tapered Blank</b><span>Equal-area crossing rows from the butt and tip diameters.</span></button>` : ''}`;
+    if (saved) thumb($('#rc'), saved, 64);
+  }
+  const kindOf = id => { const L = T.layout(T.createDesign(id)); return L.family === 'cross' ? (L.evidence.tier === 'experimental' ? 'Experimental arrangement' : 'Documented method') : L.family === 'weave' ? 'Woven · not bench tested' : L.family === 'bands' ? 'Plain wrap' : L.family === 'spiral' ? 'Spiral, no cuts' : 'Experimental'; };
+  const tile = id => `<button class="tile" data-pat="${id}"><canvas data-th="${id}"></canvas><b>${T.PATTERNS[id].name}</b><span>${kindOf(id)}</span></button>`;
+  function gallery() {
+    app.innerHTML = `<div class="top"><button class="btn" data-act="home">← Back</button></div><h1>Choose a Design</h1><p class="sub">Tap one to see it on the rod.</p><div class="tiles">${T.GALLERY.map(tile).join('')}</div>
+<details style="margin-top:12px"><summary>Experimental designs</summary><div class="in"><p class="note" style="margin-top:0">These use thousands of colour changes and aren’t a recognised decorative technique. Kept for reference only.</p><div class="tiles" style="margin-top:10px">${T.EXPERIMENTAL.map(tile).join('')}</div></div></details>`;
+    document.querySelectorAll('canvas[data-th]').forEach(c => thumb(c, T.createDesign(c.dataset.th), 64));
+  }
+  const EXAMPLES = ['Gold diamonds on navy', 'Red and black checks', '“JW” in gold on black', 'Small teal waves', 'Barber pole in red and white'];
+  function describe() {
+    app.innerHTML = `<div class="top"><button class="btn" data-act="home">← Back</button></div><h1>Describe Your Design</h1><p class="sub">Say it in ordinary words. Put names or initials in quotes.</p>
+<textarea id="desc" placeholder="For example: gold diamonds on navy" aria-label="Describe your design"></textarea>
+<div class="chips">${EXAMPLES.map(e => `<button class="chip" data-ex="${esc(e)}">${esc(e)}</button>`).join('')}</div>
+<div class="dock"><div class="in"><button class="btn pri big" data-act="show">Show Me</button></div></div>`;
+  }
+  function fromWords(t) {
+    const r = T.parse(t); let d = r.design;
+    if (r.sizeDir) { const n = T.resize(d, r.sizeDir); d = n; }
+    const msg = r.recognised ? 'Here’s what I understood: ' + r.understood.join(' · ') + '.' : 'I couldn’t find a pattern in that, so here’s a starting point. Try words like stripes, checks, diamonds, spiral, chevrons, waves or dots, or put a name in quotes.';
+    open(d, msg);
+  }
+
+  // ---------- custom designs: library, start screen, artwork upload ----------
+  const LKEY = 'ktds.library.v1' + SCOPE;
+  const lib = { get() { try { const s = localStorage.getItem(LKEY); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l.filter(r => r && r.design && T.art.valid(r.design.art)) : []; } catch (e) { return []; } }, set(l) { try { localStorage.setItem(LKEY, JSON.stringify(l)); return true; } catch (e) { return false; } } };
+  function custom() {
+    const saved = lib.get(), tp = [['blank', 'Blank grid', 'Draw your own'], ['symbol', 'Geometric symbol', 'Edit as you like'], ['monogram', 'Monogram', 'A bold initial']];
+    app.innerHTML = `<div class="top"><button class="btn" data-act="home">← Back</button></div><h1>Create Your Own Design</h1><p class="sub">Draw on a grid, or turn simple artwork into a weave pattern. Bold shapes work best.</p>
+<div class="tiles">${tp.map(([k, n, sub]) => `<button class="tile" data-tpl="${k}"><canvas data-tp="${k}"></canvas><b>${n}</b><span>${sub}</span></button>`).join('')}
+<label class="tile upl"><input type="file" id="file" accept="image/png,image/jpeg,image/svg+xml,.png,.jpg,.jpeg,.svg"><b>Upload Artwork</b><span>PNG, JPG or SVG</span><em>＋</em></label></div>
+${S.upErr ? `<div class="status warn">${esc(S.upErr)}</div>` : ''}
+${saved.length ? `<h2 style="margin-top:18px">My Designs</h2><div class="tiles">${saved.map(r => `<div class="tilewrap"><button class="tile" data-lib="${esc(r.id)}"><canvas data-lb="${esc(r.id)}"></canvas><b>${esc(r.name)}</b><span>${r.design.art.w} × ${r.design.art.h} grid</span></button><button class="del" data-libdel="${esc(r.id)}" aria-label="Delete ${esc(r.name)}">×</button></div>`).join('')}</div>` : ''}`;
+    document.querySelectorAll('canvas[data-tp]').forEach(c => thumb(c, T.createDesign('wovencustom', { art: T.art.templates[c.dataset.tp]() }), 64));
+    document.querySelectorAll('canvas[data-lb]').forEach(c => { const r = saved.find(x => x.id === c.dataset.lb); if (r) thumb(c, r.design, 64); });
+  }
+  async function loadArt(file) {
+    if (!/^image\/(png|jpeg|svg\+xml)$/.test(file.type) && !/\.(png|jpe?g|svg)$/i.test(file.name)) throw new Error('Please choose a PNG, JPG or SVG image.');
+    if (file.size > 12e6) throw new Error('That file is too large. Please use an image under 12 MB.');
+    const url = URL.createObjectURL(file), img = new Image();
+    try {
+      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('That image could not be read. Try a PNG, JPG or SVG.')); img.src = url; });
+      const iw = img.naturalWidth || 300, ih = img.naturalHeight || 300, svg = /svg/.test(file.type) || /\.svg$/i.test(file.name), sc = svg ? 256 / Math.max(iw, ih) : Math.min(1, 512 / Math.max(iw, ih)), w = Math.max(1, Math.round(iw * sc)), h = Math.max(1, Math.round(ih * sc));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0, w, h);
+      return T.art.srcFromRGBA(cx.getImageData(0, 0, w, h).data, w, h);
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async function importFile(file) {
+    S.upErr = '';
+    try {
+      const src = await loadArt(file), art = T.art.fromSource(src, { gh: 16 }), nm = (file.name || 'Artwork').replace(/\.[^.]+$/, '').slice(0, 30) || 'Artwork';
+      open(T.createDesign('wovencustom', { art, name: nm }), art.report.autoInverted ? 'Artwork converted. It looked light on dark, so it was inverted. Use Invert if that’s wrong.' : 'Artwork converted to a weave pattern. Refine it on the grid.');
+    } catch (e) { S.upErr = e.message || 'That image could not be used.'; if (S.screen === 'custom') custom(); }
+  }
+  const gridCard = () => `<section class="card" id="gridcard"><h2>Draw</h2><div class="gridwrap"><canvas id="gridc" role="img" aria-label="Pattern grid. Tap or drag to add or remove cells."></canvas></div>
+<p class="mut" id="gridnote" style="margin:6px 2px"></p><div class="bar"><button class="btn sm" data-act="gclear">Clear</button><button class="btn sm" data-act="save" id="savebtn">Save to My Designs</button></div>
+<details id="artbox" style="margin-top:10px"><summary>Artwork conversion</summary><div class="in"><span class="field">Darkness cut-off</span><input type="range" id="athr" min="5" max="95" step="1" aria-label="Darkness cut-off"><div class="mut" style="display:flex;justify-content:space-between"><span>Less</span><span id="athv"></span><span>More</span></div>
+<div class="bar" style="margin-top:10px"><button class="btn sm" data-act="aauto">Auto</button><button class="btn sm" data-act="ainv" id="ainv">Invert</button><button class="btn sm" data-act="acrop" id="acrop">Crop to artwork</button></div>
+<span class="field" style="margin-top:12px">Detail (cells round the rod)</span>${stepper('cg', 'Detail')}<p class="note" id="artnote"></p></div></details></section>`;
+  // ---------- editor ----------
+  const stepper = (id, label, cap) => `<div class="stp"><button data-st="${id}-" aria-label="${label} smaller">−</button><div class="val" id="v${id}"></div><button data-st="${id}+" aria-label="${label} larger">+</button></div>${cap ? `<div class="mut" style="display:flex;justify-content:space-between;margin:2px 6px 0"><span>${cap[0]}</span><span>${cap[1]}</span></div>` : ''}`;
+  function edit() {
+    const d = S.d, text = d.mode === 'text';
+    app.innerHTML = `<div class="top"><button class="btn" data-act="home">← Back</button><div class="pair"><button class="btn" data-act="undo" id="bu">Undo</button><button class="btn" data-act="redo" id="br">Redo</button></div></div>
+<section class="card stage"><canvas id="rod" tabindex="0" role="img" aria-label="Rod preview. Drag to turn or slide the rod, or use the arrow keys."></canvas><canvas id="strip" aria-label="Whole design. Tap to jump."></canvas>
+<div class="viewbar"><button class="btn sm" data-act="turn">Turn the Rod</button><span class="mut">Drag the rod to turn or slide it</span></div></section>
+${text ? `<section class="card"><label class="field" for="txt">Your name or message</label><input type="text" id="txt" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(d.text)}"></section>` : ''}
+${d.pattern === 'wovencustom' ? gridCard() : ''}
+<div id="status"></div>
+<section class="card"><h2>Colours</h2><div class="slots" id="slots"></div><div class="pal" id="pal"></div><div class="bar" style="margin-top:10px"><button class="btn sm" data-act="swap" id="swap">Swap Colours</button></div></section>
+<section class="card"><h2 id="szh"></h2>${stepper('sz', 'Pattern', ['Smaller', 'Larger'])}</section>
+<details id="more"><summary>More options</summary><div class="in">
+<span class="field">Rod diameter where the design goes (mm)</span>${stepper('di', 'Rod diameter')}<div id="dm"></div>
+<span class="field" style="margin-top:14px">Length to wrap (mm)</span>${stepper('ln', 'Wrapped length')}
+<span class="field" style="margin-top:14px">Thread size</span><div class="seg" id="thr">${T.THREAD_SIZES.map(s => `<button data-thr="${s.id}">${s.name}</button>`).join('')}</div>
+<p class="note">Typical widths only (A about 0.18 mm, D 0.25 mm, E 0.30 mm). Pack 20 turns tightly and measure yours for the best fit.</p>
+<div id="bandbox"><span class="field" style="margin-top:14px">Threads in the main band</span><div class="seg" id="bnd">${T.cross.optionsFor(S.d).map(k => `<button data-bt="${k}">${k}</button>`).join('')}</div></div>
+<div id="customopts"><span class="field" style="margin-top:14px">Design name</span><input type="text" id="dname" maxlength="30" autocomplete="off" value="${esc(d.name || 'My design')}"><span class="field" style="margin-top:14px">Grid width (along the rod)</span>${stepper('gw', 'Grid width')}<span class="field" style="margin-top:14px">Grid height (round the rod)</span>${stepper('gh', 'Grid height')}<div class="bar" style="margin-top:12px"><button class="btn sm" data-act="gmx">Mirror ↔</button><button class="btn sm" data-act="gmy">Mirror ↕</button></div></div>
+<div id="detailbox"><span class="field" style="margin-top:14px">Mark spacing</span><div class="seg" id="det">${['fine', 'standard', 'bold'].map(k => `<button data-det="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div></div></div></details>
+<details><summary>How this works</summary><div class="in"><p class="note" style="margin-top:0">The preview wraps one thread helix along the rod and works out which colour lands where, so what you see is what the thread will lay down.</p>
+<p class="note"><b>Plain wrap</b> (bands): colours change only between turns.</p><p class="note"><b>Spiral</b>: several threads are wound side by side as one band, so there are no cuts.</p>
+<p class="note"><b>Colour-change wrap</b> (checks, diamonds, lettering and so on): the rod is marked into equal parts and the colour changes at the marks on each turn. It is accurate but slow, and the status above shows how many changes it takes.</p>
+<p class="note"><b>Woven designs</b>: warp lines (several threads each) lie along the blank and one weft thread is wound round it, going under the lines that should show and over the rest. The preview and the steps both come from that same list of lifts. The weaving principle is documented; line counts, band lengths and thread amounts are estimates. Not yet tested on a rod.</p><p class="note"><b>Chevron cross wrap</b>: the same up-and-back threads, but each extra thread goes on the same side of the last, so the crossings move along the rod and the colours nest into arrowheads.</p><p class="note"><b>Diamond cross wrap</b>: two sets of threads wound up and back along the blank, leaning opposite ways, crossing on marks set on two opposite lines. The preview and the steps are both drawn from the same thread paths. Geometry is checked by tests; the layout follows builder-published descriptions; spacing, band widths and end bands are experimental. Not yet tested on a rod. See METHOD.md for sources.</p>
+<p class="note">Marking instructions need your measured rod diameter. Until then the preview uses a standard size. Colours on screen are approximate.</p></div></details>
+<div class="dock"><div class="in"><button class="btn pri big" data-act="start">Start Wrapping</button></div></div>`;
+    paint(true);
+  }
+  function paint(full) {
+    const d = S.d, L = S.L = T.layout(d), text = d.mode === 'text';
+    S.geom = drawRod($('#rod'), L, { z0: Math.max(0, S.view.z0), rot: S.view.rot, h: 150, win: d.mode === 'text' ? d.diameterMm * 4.6 : L.viewWin ? d.diameterMm * L.viewWin : null });
+    if (S.view.z0 > S.geom.z0max || S.view.z0 < 0) { S.view.z0 = clamp(S.view.z0, 0, S.geom.z0max); S.geom = drawRod($('#rod'), L, { z0: S.view.z0, rot: S.view.rot, h: 150, win: d.mode === 'text' ? d.diameterMm * 4.6 : L.viewWin ? d.diameterMm * L.viewWin : null }); }
+    drawStrip($('#strip'), L, S.view, S.geom);
+    $('#slots').innerHTML = L.slotNames.map((n, i) => `<button class="slot" data-slot="${i}" aria-pressed="${S.sel === i}"><i style="background:${T.thread(d.slots[i]).hex}"></i>${esc(n)}</button>`).join('');
+    $('#pal').innerHTML = T.THREADS.map(t => `<button data-col="${t.id}" style="background:${t.hex}" aria-label="${t.name}" title="${t.name}" aria-pressed="${d.slots[S.sel] === t.id}"></button>`).join('');
+    $('#swap').style.display = L.slotNames.length > 1 ? '' : 'none';
+    $('#szh').textContent = d.pattern === 'wovencustom' ? 'Design scale' : text ? 'Letter size' : L.family === 'spiral' ? 'Stripe width' : L.family === 'weave' ? 'Weave size' : L.family === 'cross' ? (d.pattern === 'chevronwrap' ? 'Chevron size' : 'Diamond size') : 'Pattern size';
+    $('#vsz').innerHTML = `${esc(L.sizeLabel)}`;
+    document.querySelector('[data-st="sz-"]').disabled = L.smaller == null; document.querySelector('[data-st="sz+"]').disabled = L.larger == null;
+    $('#vdi').innerHTML = f1(d.diameterMm) + ' mm<small>' + (d.measured ? 'measured' : 'preview size') + '</small>';
+    $('#dm').innerHTML = d.measured ? '' : `<button class="btn sm" data-act="measured" style="margin-top:8px">Use this as my measured size</button>`;
+    $('#vln').innerHTML = d.lengthMm + ' mm';
+    document.querySelectorAll('#thr button').forEach(b => b.setAttribute('aria-pressed', b.dataset.thr === d.thread));
+    document.querySelectorAll('#det button').forEach(b => b.setAttribute('aria-pressed', b.dataset.det === d.detail));
+    $('#detailbox').style.display = L.family === 'grid' ? '' : 'none'; $('#bandbox').style.display = L.family === 'cross' ? '' : 'none';
+    document.querySelectorAll('#bnd button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.bt === L.bandThreads));
+    const cu = d.pattern === 'wovencustom'; $('#customopts').style.display = cu ? '' : 'none'; if (cu) paintCustom(d, L);
+    $('#bu').disabled = !S.hist.can(true); $('#br').disabled = !S.hist.can(false);
+    const tx = $('#txt'); if (tx && tx.value !== d.text && document.activeElement !== tx) tx.value = d.text;
+    let h = ''; if (S.note) h += `<div class="status"><b>${esc(S.note)}</b></div>`;
+    h += `<div class="status ${L.evidence.tier === 'experimental' ? 'warn' : ''}"><b>${esc(L.method.label)}</b>${L.effort ? ' · ' + L.effort : ''}<br><span class="mut">${esc(L.evidence.label)} · ${esc(L.evidence.bench.toLowerCase())}${L.family === 'grid' ? ' · marks every ' + L.markSpacingMm.toFixed(2) + ' mm, ' + L.N + ' around' : L.family === 'weave' ? ' · ' + L.M + ' lines ' + L.cellW.toFixed(2) + ' mm apart, wrap ' + L.lenAdj.toFixed(0) + ' mm' : L.family === 'cross' ? ' · marks every ' + (L.spec.marksBoth ? L.S / 2 : L.S).toFixed(1) + ' mm, wrap ' + L.lenAdj.toFixed(0) + ' mm' : ''}</span></div>`;
+    L.warnings.forEach(w => { h += `<div class="status ${w.level === 'warn' ? 'warn' : ''}">${esc(w.text)}${w.fix === 'rodsize' ? '<br><button class="btn sm" data-act="rodsize">Enter Rod Size</button>' : w.fix === 'more' ? '<br><button class="btn sm" data-act="rodsize">Open More Options</button>' : ''}</div>`; });
+    $('#status').innerHTML = h;
+  }
+  function drawGrid() {
+    const cv = $('#gridc'); if (!cv) return; const d = S.d, a = d.art, wrap = cv.parentNode, avail = wrap.clientWidth || 340, cs = clamp(Math.floor(avail / a.w), 7, 30), dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.style.width = cs * a.w + 'px'; cv.style.height = cs * a.h + 'px'; cv.width = Math.round(cs * a.w * dpr); cv.height = Math.round(cs * a.h * dpr);
+    const x = cv.getContext('2d'), c0 = T.thread(d.slots[0]).hex, c1 = T.thread(d.slots[1]).hex, k = cs * dpr; x.fillStyle = c1; x.fillRect(0, 0, cv.width, cv.height); x.fillStyle = c0;
+    for (let j = 0; j < a.h; j++) for (let i = 0; i < a.w; i++) if (a.rows[j][i] === '1') x.fillRect(i * k, j * k, k, k);
+    x.lineWidth = 1; for (let i = 0; i <= a.w; i++) { x.strokeStyle = i % 4 === 0 ? 'rgba(160,165,170,.55)' : 'rgba(160,165,170,.25)'; x.beginPath(); x.moveTo(i * k + .5, 0); x.lineTo(i * k + .5, cv.height); x.stroke(); }
+    for (let j = 0; j <= a.h; j++) { x.strokeStyle = j % 4 === 0 ? 'rgba(160,165,170,.55)' : 'rgba(160,165,170,.25)'; x.beginPath(); x.moveTo(0, j * k + .5); x.lineTo(cv.width, j * k + .5); x.stroke(); }
+  }
+  function paintCustom(d, L) {
+    drawGrid(); const a = d.art, ink = T.art.ink(a);
+    $('#gridnote').textContent = a.w + ' × ' + a.h + ' cells · ' + ink + ' filled · tap or drag to add, tap a filled cell then drag to erase. Along the rod →, round the rod ↓';
+    $('#vgw').innerHTML = a.w; $('#vgh').innerHTML = a.h;
+    document.querySelector('[data-st="gw-"]').disabled = a.w <= T.art.MINW; document.querySelector('[data-st="gw+"]').disabled = a.w >= T.art.MAXW;
+    document.querySelector('[data-st="gh-"]').disabled = a.h <= T.art.MINH; document.querySelector('[data-st="gh+"]').disabled = a.h >= T.art.MAXH;
+    const ab = $('#artbox'); ab.style.display = a.src ? '' : 'none';
+    if (a.src) { const cv = a.conv || {}, thr = cv.thr == null ? Math.round((a.report && a.report.cut || 8) / 16 * 100) : cv.thr; $('#athr').value = thr; $('#athv').textContent = cv.thr == null ? 'auto' : thr + '%'; $('#ainv').setAttribute('aria-pressed', !!cv.invert); $('#acrop').setAttribute('aria-pressed', cv.crop !== false); $('#vcg').innerHTML = (cv.gh || 16) + ' cells';
+      document.querySelector('[data-st="cg-"]').disabled = (cv.gh || 16) <= T.art.MINH; document.querySelector('[data-st="cg+"]').disabled = (cv.gh || 16) >= T.art.MAXH;
+      $('#artnote').textContent = a.edited ? 'You have edited the grid. Changing these settings converts the artwork again and replaces those edits (Undo brings them back).' : 'Adjust these until the shape on the grid looks right, then refine it by hand.'; }
+    const dn = $('#dname'); if (dn && document.activeElement !== dn && dn.value !== (d.name || 'My design')) dn.value = d.name || 'My design';
+    $('#savebtn').textContent = lib.get().some(r => r.id === d.id) ? 'Saved · tap to update' : 'Save to My Designs';
+  }
+  function reconvert(patch) { const nd = T.clone(S.d), a = nd.art, conv = Object.assign({}, a.conv, patch); nd.art = T.art.fromSource(a.src, conv); commit(nd, 'art'); }
+  function commit(nd, key) { S.d = nd; S.hist.push(nd, key); S.note = ''; store.set(nd); paint(); }
+  const pin = (v, a, b, st) => clamp(Math.round(v / st) * st, a, b);
+
+  // ---------- workshop ----------
+  function work() {
+    S.steps = T.steps(S.d); S.step = clamp(S.step, 0, S.steps.length - 1); drawWork();
+  }
+  function passHead(st, d) {
+    const hx = T.thread(d.slots[st.slot]).hex, parts = st.head.split(' — ');
+    return `<h3 class="stepTitle" hidden>${esc(st.title)}</h3><div class="phead"><i style="background:${hx}"></i><div><b>${esc(parts[0])}</b><b class="pc">${esc(parts[1])}</b></div></div>`;
+  }
+  function passBody(st, d, L) {
+    const legs = st.legs.map(l => `<div class="leg ${l.dir}"><b>${l.arrow} ${l.label}</b><span>${esc(l.action)}</span></div>`).join('');
+    return `${legs}<div class="chips">${st.chips.map(c => `<span>${esc(c)}</span>`).join('')}</div>${st.notes.map(n => `<p class="note">${esc(n)}</p>`).join('')}
+<button class="diagram" data-act="zoom" aria-label="Enlarge the thread diagram">${T.cross.diagramSVG(d, L, st.pass, st.pass)}</button>
+<div class="legend"><span><u class="s"></u>up →</span><span><u class="d"></u>back ←</span><span><b class="ring"></b>start</span><span><b class="dia"></b>turn</span><span><b class="mA"></b>A</span><span><b class="mC"></b>C</span><span class="enl">tap diagram to enlarge</span></div>
+<div class="ribbon" aria-label="Where this thread sits">${T.cross.ribbonSVG(d, L, st.pass)}</div>
+<details class="how"${st.howOpen ? ' open' : ''}><summary>How to do this</summary>${st.how.map(l => `<p class="stepText">${esc(l)}</p>`).join('')}</details>`;
+  }
+  function weaveBody(st, d, L) {
+    const legs = st.legs.map(l => `<div class="leg ${l.dir}"><b>${l.arrow} ${l.label}</b><span>${esc(l.action)}</span></div>`).join('');
+    return `${legs}<div class="chips">${st.chips.map(c => `<span>${esc(c)}</span>`).join('')}</div>${st.notes.map(n => `<p class="note">${esc(n)}</p>`).join('')}
+<button class="diagram" data-act="zoom" aria-label="Enlarge the diagram">${T.weave.diagramSVG(d, L, st)}</button>
+<div class="legend">${st.kind === 'wrow' ? '<span><b class="wo"></b>weft over (covers the line)</span><span><b class="wu"></b>weft under (line shows)</span>' : st.kind === 'warp' || st.kind === 'wstart' || st.kind === 'wfinish' ? '<span><b class="ring"></b>mark 0, the seam</span>' : '<span>one square = one line in one row</span>'}<span class="enl">tap diagram to enlarge</span></div>
+${st.next ? `<p class="next"><b>Next</b> ${esc(st.next.replace(/^Next:\s*/, ''))}</p>` : ''}
+<details class="how"${st.howOpen ? ' open' : ''}><summary>How to do this</summary>${st.how.map(l => `<p class="stepText">${esc(l)}</p>`).join('')}</details>`;
+  }
+  function openZoom() {
+    const d = S.d, L = T.layout(d), st = S.steps[S.step]; let z = $('#zoom'); if (!z) { z = document.createElement('div'); z.id = 'zoom'; document.body.appendChild(z); }
+    z.innerHTML = `<div class="zh">${esc(st.head)}</div><div class="zs">${st.stage != null ? T.weave.diagramSVG(d, L, st, { big: true }) : T.cross.diagramSVG(d, L, st.pass, st.pass, { big: true })}</div><p class="note" style="padding:0 12px">${st.stage != null ? 'Scroll sideways. Red frame = this row; faint rows are done or still to come.' : 'Scroll sideways. Thick line = this pass; faint = done.'}</p><div class="dock"><div class="in">${S.step > 0 ? '<button class="btn big back" data-act="prev">Back</button>' : ''}<button class="btn big" data-act="unzoom">Close</button><button class="btn pri big" data-act="next">Next</button></div></div>`;
+  }
+  const hasDia = st => st.kind === 'pass' || st.stage != null;
+  function closeZoom() { S.zoom = false; const z = $('#zoom'); if (z) z.remove(); }
+  function drawWork() {
+    const d = S.d, L = T.layout(d), st = S.steps[S.step], n = S.steps.length, nm = s => T.thread(d.slots[s]).name, hx = s => T.thread(d.slots[s]).hex;
+    const EV = { geometry: 'Calculated', documented: 'Documented technique', experimental: 'Experimental detail' };
+    const pass = st.kind === 'pass', stg = st.stage != null;
+    let body = pass || stg ? passHead(st, d) : `<h3 class="stepTitle">${esc(st.title)}</h3>${st.evidence ? `<p class="mut" style="margin:-2px 0 8px">${st.evidence.map(e => EV[e]).join(' · ')}</p>` : ''}${st.lines ? st.lines.map(l => `<p class="stepText" style="margin-bottom:8px">${esc(l)}</p>`).join('') : `<p class="stepText">${esc(st.text)}</p>`}`, primary = '';
+    if (st.kind === 'needsize') { body += `<div class="stp"><button data-st="di-" aria-label="Rod diameter smaller">−</button><div class="val" id="vdi"></div><button data-st="di+" aria-label="Rod diameter larger">+</button></div>`; primary = `<button class="btn pri big" data-act="usesize">Use This Measurement</button>`; }
+    else primary = `<button class="btn pri big" data-act="next">${st.kind === 'finish' ? 'Done' : 'Next'}</button>`;
+    if (st.slots && !pass) body += `<div class="sw">${st.slots.map(s => `<span><i style="background:${hx(s)}"></i>${esc(nm(s))}</span>`).join('')}</div>`;
+    if (st.kind === 'marks') body += `<div class="bar" style="margin-top:12px"><button class="btn sm" data-act="template">Print Marking Guide</button></div>`;
+    if (pass) body += passBody(st, d, L);
+    if (stg) body += weaveBody(st, d, L);
+    if (st.kind === 'row') {
+      const N = st.cells.length, every = N > 30 ? 5 : 1;
+      body += `<div class="cells" aria-label="One turn, marks 0 to ${N - 1}">${st.cells.map(s => `<i style="background:${hx(s)}"></i>`).join('')}</div><div class="marks">${st.cells.map((_, j) => `<span>${j % every === 0 ? j : ''}</span>`).join('')}</div>`;
+      if (!st.uniform) body += `<div class="runs">${st.runs.map(r => `<div class="run"><i style="background:${hx(r.slot)}"></i>${esc(nm(r.slot))}<span>mark ${r.from} → ${r.to} · ${r.len}</span></div>`).join('')}</div>`;
+    }
+    app.innerHTML = `<div class="top"><button class="btn" data-act="design">← Back to design</button><span class="mut">Step ${S.step + 1} of ${n}</span></div><div class="prog"><i style="width:${(S.step + 1) / n * 100}%"></i></div>
+<section class="card stage"><canvas id="wrod"></canvas></section><section class="card">${body}</section>
+<div class="dock"><div class="in">${S.step > 0 ? '<button class="btn big back" data-act="prev">Back</button>' : ''}${primary}</div></div>`;
+    const win = d.diameterMm * (L.viewWin || 3.4), wv = L.family === 'weave', cross = L.family === 'cross' || wv, lim = cross ? undefined : (st.zEnd != null ? st.zEnd : 0);
+    const z0 = wv ? clamp((st.zc != null ? st.zc : L.lenAdj / 2) - win / 2, 0, Math.max(0, L.lenAdj - win)) : cross ? clamp(L.lenAdj * 0.35, 0, Math.max(0, L.lenAdj - win)) : Math.max(0, (lim || 0) - win * 0.85);
+    drawRod($('#wrod'), L, { z0, rot: S.view.rot, h: pass || stg ? 104 : 120, limitZ: lim, win, pass: wv ? (stg ? st.stage : undefined) : cross ? st.pass : undefined, hl: wv ? (stg ? st.stage : 0) : pass && cross ? st.pass : 0 });
+    if (S.zoom && (pass || stg)) openZoom();
+    if ($('#vdi')) $('#vdi').innerHTML = f1(d.diameterMm) + ' mm<small>rod diameter</small>';
+  }
+  function template(d) {
+    const L = T.layout(d); if (L.family !== 'grid') return '';
+    const maxRows = Math.min(L.rows, Math.floor(270 / L.rowMm)), W = L.C, H = maxRows * L.rowMm, hx = d.slots.map(id => T.thread(id).hex);
+    let g = ''; for (let r = 0; r < maxRows; r++) { const cells = L.rowCells(r); let j = 0; while (j < L.N) { let k = j + 1; while (k < L.N && cells[k] === cells[j]) k++; g += `<rect x="${(j * L.cellMm).toFixed(2)}" y="${(r * L.rowMm).toFixed(2)}" width="${((k - j) * L.cellMm).toFixed(2)}" height="${L.rowMm.toFixed(2)}" fill="${hx[cells[j]]}"/>`; j = k; } }
+    let m = ''; for (let j = 0; j < L.N; j++) m += `<line x1="${(j * L.cellMm).toFixed(2)}" x2="${(j * L.cellMm).toFixed(2)}" y1="-3" y2="0" stroke="#000" stroke-width=".2"/><text x="${((j + 0.5) * L.cellMm).toFixed(2)}" y="-4" font-size="${Math.min(2.4, L.cellMm * 0.8).toFixed(2)}" text-anchor="middle">${j}</text>`;
+    return `<h3 style="font:600 12pt sans-serif;margin:0 0 4mm">Thread Design Studio · wrapping template</h3><p style="font:9pt sans-serif;margin:0 0 8mm">Rod diameter ${f1(d.diameterMm)} mm · circumference ${L.C.toFixed(1)} mm · ${L.N} marks, ${L.markSpacingMm.toFixed(2)} mm apart · print at 100% (no scaling). Colours are approximate. Template covers the first ${(maxRows * L.rowMm).toFixed(0)} mm.</p>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(2)}mm" height="${(H + 8).toFixed(2)}mm" viewBox="0 -8 ${W.toFixed(2)} ${(H + 8).toFixed(2)}" style="overflow:visible">${g}${m}<rect x="0" y="0" width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="none" stroke="#000" stroke-width=".2"/></svg>`;
+  }
+  T.templateHTML = template;
+
+  // ---------- events ----------
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return; const D = b.dataset;
+    if (D.act) return act(D.act);
+    if (D.pat) return open(T.createDesign(D.pat));
+    if (D.tpl) return open(T.createDesign('wovencustom', { art: T.art.templates[D.tpl]() }));
+    if (D.lib) { const r = lib.get().find(x => x.id === D.lib); if (r) open(r.design); return; }
+    if (D.libdel) { lib.set(T.art.libRemove(lib.get(), D.libdel)); return custom(); }
+    if (D.ex) return fromWords(D.ex.replace(/[“”]/g, '"'));
+    if (D.slot != null) { S.sel = +D.slot; return paint(); }
+    if (D.col) { const d = T.clone(S.d), i = S.sel, j = d.slots.indexOf(D.col); if (j >= 0 && j !== i) d.slots[j] = d.slots[i]; d.slots[i] = D.col; return commit(d); }
+    if (D.thr) return commit(Object.assign(T.clone(S.d), { thread: D.thr }));
+    if (D.bt) return commit(Object.assign(T.clone(S.d), { bandThreads: +D.bt }));
+    if (D.det) return commit(Object.assign(T.clone(S.d), { detail: D.det, size: null }));
+    if (D.st) return stp(D.st);
+  });
+  function act(a) {
+    if (a === 'home') return go('home');
+    if (a === 'resume') { const s = store.get(); if (s) { S.d = s; S.hist = new T.History(s); S.sel = 1; S.note = ''; const L = T.layout(s); S.view = { z0: 0, rot: 0.6 }; if (s.mode === 'text' && L.family === 'grid') { const off = L.copies > 1 ? 1 : Math.floor((L.N - 7 * L.size) / 2); S.view.rot = (off + 3.5 * L.size) / L.N * TAU; S.view.z0 = Math.max(0, L.rowOffset * L.rowMm - 4); } if (L.viewHint) { S.view.z0 = L.viewHint.z0; S.view.rot = L.viewHint.rot; } go('edit'); } return; }
+    if (a === 'taper') { try { parent.postMessage({ type: 'klabs-thread-studio', action: 'open-taper-designer' }, window.origin); } catch (e) { } return; }
+    if (a === 'gallery') return go('gallery');
+    if (a === 'custom') { S.upErr = ''; return go('custom'); }
+    if (a === 'gclear') return commit(Object.assign(T.clone(S.d), { art: T.art.clear(S.d.art) }));
+    if (a === 'gmx' || a === 'gmy') return commit(Object.assign(T.clone(S.d), { art: T.art.mirror(S.d.art, a === 'gmx' ? 'x' : 'y') }));
+    if (a === 'ainv') return reconvert({ invert: !(S.d.art.conv || {}).invert });
+    if (a === 'acrop') return reconvert({ crop: (S.d.art.conv || {}).crop === false });
+    if (a === 'aauto') return reconvert({ thr: null });
+    if (a === 'save') { if (!S.d.id) S.d.id = T.art.newId(); const ok = lib.set(T.art.libUpsert(lib.get(), S.d)); store.set(S.d); S.note = ok ? 'Saved to My Designs. Find it under Create Your Own Design.' : 'Could not save: this browser’s storage is full or blocked.'; return paint(); }
+    if (a === 'text') return open(T.createDesign('wovenletters'));
+    if (a === 'describe') return go('describe');
+    if (a === 'show') { const t = $('#desc').value.trim(); return t ? fromWords(t) : $('#desc').focus(); }
+    if (a === 'undo') { if (S.hist.can(true)) { S.d = S.hist.undo(); store.set(S.d); S.note = ''; paint(); } return; }
+    if (a === 'redo') { if (S.hist.can(false)) { S.d = S.hist.redo(); store.set(S.d); S.note = ''; paint(); } return; }
+    if (a === 'turn') { S.view.rot += Math.PI / 2; return paint(); }
+    if (a === 'swap') { const d = T.clone(S.d); [d.slots[0], d.slots[1]] = [d.slots[1], d.slots[0]]; return commit(d); }
+    if (a === 'measured') return commit(Object.assign(T.clone(S.d), { measured: true }));
+    if (a === 'rodsize') { const m = $('#more'); m.open = true; m.scrollIntoView({ block: 'center' }); return; }
+    if (a === 'start') { S.step = 0; return go('work'); }
+    if (a === 'design') return go('edit');
+    if (a === 'zoom') { S.zoom = true; return openZoom(); }
+    if (a === 'unzoom') return closeZoom();
+    if (a === 'next') { if (S.step >= S.steps.length - 1) { closeZoom(); return go('edit'); } S.step++; if (!hasDia(S.steps[S.step])) closeZoom(); return drawWork(); }
+    if (a === 'prev') { S.step = Math.max(0, S.step - 1); if (!hasDia(S.steps[S.step])) closeZoom(); return drawWork(); }
+    if (a === 'usesize') { S.d = Object.assign(T.clone(S.d), { measured: true }); S.hist.push(S.d); store.set(S.d); S.steps = T.steps(S.d); S.step = 0; return drawWork(); }
+    if (a === 'template') { const h = S.L.family === 'cross' ? T.cross.templateHTML(S.d) : S.L.family === 'weave' ? T.weave.templateHTML(S.d) : T.templateHTML(S.d); $('#print').innerHTML = h; if (!window.__noPrint) window.print(); return; }
+  }
+  function stp(k) {
+    const id = k.slice(0, -1), dir = k.slice(-1) === '+' ? 1 : -1, d = T.clone(S.d);
+    if (id === 'sz') return commit(T.resize(d, dir));
+    if (id === 'di') { d.diameterMm = pin(d.diameterMm + dir * 0.1, 3, 30, 0.1); d.measured = false; d.size = null; if (S.screen === 'work') { S.d = d; S.hist.push(d); store.set(d); return drawWork(); } return commit(d); }
+    if (id === 'gw' || id === 'gh') { d.art = T.art.resize(d.art, d.art.w + (id === 'gw' ? dir : 0), d.art.h + (id === 'gh' ? dir : 0)); d.size = null; return commit(d); }
+    if (id === 'cg') return reconvert({ gh: ((S.d.art.conv || {}).gh || 16) + dir });
+    if (id === 'ln') { d.lengthMm = pin(d.lengthMm + dir * 10, 30, 600, 10); return commit(d); }
+  }
+  document.addEventListener('input', e => {
+    if (e.target.id === 'athr') return reconvert({ thr: +e.target.value });
+    if (e.target.id === 'dname') { const nd = T.clone(S.d); nd.name = e.target.value.slice(0, 30); S.d = nd; S.hist.push(nd, 'name'); store.set(nd); return; }
+    if (e.target.id === 'txt') { const nd = T.clone(S.d); nd.text = e.target.value; nd.size = S.d.size; commit(nd, 'txt'); }
+  });
+  document.addEventListener('change', e => { if (e.target.id === 'file' && e.target.files && e.target.files[0]) importFile(e.target.files[0]); });
+  document.addEventListener('focusin', e => { if (e.target.id === 'txt' && (e.target.value === 'YOUR NAME' || e.target.value === 'K-LABS')) setTimeout(() => e.target.select(), 0); });
+  // rod drag: slide along (x) and turn (y); a tap picks the colour under the finger
+  let drag = null;
+  document.addEventListener('pointerdown', e => { const c = e.target; if (c.id === 'rod') { drag = { id: 'rod', x: e.clientX, y: e.clientY, z0: S.view.z0, rot: S.view.rot, moved: false }; c.setPointerCapture(e.pointerId); } else if (c.id === 'strip') { drag = { id: 'strip' }; jump(e); c.setPointerCapture(e.pointerId); } else if (c.id === 'gridc') gridDown(e); });
+  function gridCell(e) { const a = S.d.art, r = $('#gridc').getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * a.w), Math.floor((e.clientY - r.top) / r.height * a.h)]; }
+  let gq = 0; const gridPaint = () => { if (!gq) gq = requestAnimationFrame(() => { gq = 0; paint(); }); };
+  function gridLine(x0, y0, x1, y1, v) { let ch = false; const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1); for (let i = 0; i <= n; i++) ch = T.art.set(S.d.art, Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), v) || ch; return ch; }
+  function gridDown(e) { const [x, y] = gridCell(e), a = S.d.art; if (x < 0 || y < 0 || x >= a.w || y >= a.h) return; e.preventDefault(); drag = { id: 'grid', val: !T.art.get(a, x, y), lx: x, ly: y, changed: false, before: JSON.stringify(S.d) }; e.target.setPointerCapture(e.pointerId); if (gridLine(x, y, x, y, drag.val)) drag.changed = true; gridPaint(); }
+  function jump(e) { const r = $('#strip').getBoundingClientRect(), z = (e.clientX - r.left) / r.width * S.d.lengthMm; S.view.z0 = clamp(z - S.geom.win / 2, 0, S.geom.z0max); paint(); }
+  document.addEventListener('pointermove', e => {
+    if (!drag) return; if (drag.id === 'strip') return jump(e);
+    if (drag.id === 'grid') { const [x, y] = gridCell(e); if (gridLine(drag.lx, drag.ly, x, y, drag.val)) drag.changed = true; drag.lx = x; drag.ly = y; return gridPaint(); }
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true; if (!drag.moved) return;
+    S.view.z0 = clamp(drag.z0 - dx / S.geom.ppm, 0, S.geom.z0max); S.view.rot = drag.rot + dy / S.geom.R; paint();
+  });
+  document.addEventListener('pointerup', e => {
+    if (drag && drag.id === 'grid') { if (drag.changed) { S.d.art.edited = true; S.hist.push(S.d); store.set(S.d); S.note = ''; } drag = null; return paint(); }
+    if (drag && drag.id === 'rod' && !drag.moved) {
+      const r = $('#rod').getBoundingClientRect(), v = (e.clientY - r.top - r.height / 2) / S.geom.R;
+      if (Math.abs(v) < 1) { const z = S.view.z0 + (e.clientX - r.left) / S.geom.ppm, sl = S.L.slotAt(z, Math.asin(v) + S.view.rot); if (sl >= 0 && sl < S.L.slotNames.length) { S.sel = sl; paint(); } }
+    }
+    drag = null;
+  });
+  let rz = 0; window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { if (S.screen === 'edit' && S.d) paint(); else if (S.screen === 'work' && S.d) drawWork(); }); });
+  // keyboard: arrows step the workshop (Back/Next) or move the rod when it has focus; Esc closes the enlarged diagram
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; const t = e.target, tag = t && t.tagName;
+    if (e.key === 'Escape' && S.zoom) { closeZoom(); return; }
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (t && t.id === 'rod' && S.geom) { const k = e.key; if (k === 'ArrowLeft' || k === 'ArrowRight') S.view.z0 = clamp(S.view.z0 + (k === 'ArrowRight' ? 1 : -1) * S.geom.win * 0.08, 0, S.geom.z0max); else if (k === 'ArrowUp' || k === 'ArrowDown') S.view.rot += (k === 'ArrowDown' ? 1 : -1) * 0.25; else return; e.preventDefault(); paint(); return; }
+    if (S.screen === 'work' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && tag !== 'BUTTON' && tag !== 'SUMMARY') { const b = document.querySelector(e.key === 'ArrowRight' ? '[data-act=next]' : '[data-act=prev]'); if (b) { e.preventDefault(); b.click(); } }
+  });
+  home();
+})();
+</script></body></html>

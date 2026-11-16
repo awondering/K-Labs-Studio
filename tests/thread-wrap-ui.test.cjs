@@ -366,8 +366,10 @@ test('opening a Workshop tool: thread-wrap is selected, grip and diameter are un
 
 test('Workshop wiring: launcher, card, script order, offline cache and render hook are present',()=>{
   const list=html.match(/<div id="workshopToolsList"[\s\S]*?<\/div>\s*<article/)[0];
-  assert.ok(list.includes('data-workshop-tool-open="thread-wrap"'));
-  assert.ok(list.includes('Thread Wrap Designer'));
+  // The Thread Wrap Designer has no launcher of its own: the Thread Design Studio is the single Workshop entry and hands over to it.
+  assert.ok(list.includes('data-workshop-tool-open="thread-studio"'));
+  assert.ok(list.includes('Thread Design Studio'));
+  assert.equal(list.includes('data-workshop-tool-open="thread-wrap"'),false);
   ['guide-spacing','grip','diameter'].forEach((tool)=>assert.ok(list.includes(`data-workshop-tool-open="${tool}"`),tool));
   assert.match(html,/<article id="workshopToolThreadWrap" class="layout-control-card workshop-tool-card"[^>]*hidden>/);
   const card=html.match(/<article id="workshopToolThreadWrap"[\s\S]*?<\/article>/)[0];
@@ -518,8 +520,8 @@ test('validation messages and warnings render with correct degree signs',()=>{
 });
 
 test('Thread Wrap is a standard Workshop tool with practical starting-mark guidance',()=>{
-  const launcher=html.match(/<button[^>]*data-workshop-tool-open="thread-wrap"[\s\S]*?<\/button>/)[0];
-  assert.match(launcher,/<span class="workshop-tool-launch__title">Thread Wrap Designer<\/span>/);
+  const launcher=html.match(/<button[^>]*data-workshop-tool-open="thread-studio"[\s\S]*?<\/button>/)[0];
+  assert.match(launcher,/<span class="workshop-tool-launch__title">Thread Design Studio<\/span>/);
   assert.doesNotMatch(launcher,/Beta|thread-wrap-beta/);
   const card=html.match(/<article id="workshopToolThreadWrap"[\s\S]*?<\/article>/)[0];
   assert.match(card,/<h3>Thread Wrap Designer<\/h3>/);
