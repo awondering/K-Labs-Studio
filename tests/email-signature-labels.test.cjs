@@ -83,8 +83,8 @@ test('pricing labels and neutral headings',()=>{
   assert.ok(!/includes delivery/i.test(source.replace(/Delivery \(included in Total Price\)/g,'')));
   assert.match(html,/<span>Customer Price<\/span>/);
   assert.match(source,/`Customer Price \(\$\{activeCurrencyCode\(\)\}\)`/);
-  assert.match(html,/quote-section__toggle-title">Job Pricing</);
-  assert.match(html,/quote-section__toggle-title">Job Actions</);
+  assert.match(html,/quote-section__toggle-title">Job Pricing &amp; Actions</);
+  assert.ok(!/quote-section__toggle-title">Job Actions</.test(html));
   assert.ok(!/>Build Pricing</.test(html));
   assert.ok(!/>Build Actions</.test(html));
 });

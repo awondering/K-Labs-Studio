@@ -118,7 +118,7 @@ const CURRENCY_OPTIONS=[
 ];
 const UNASSIGNED_COMPONENT_CATEGORY='Unassigned';
 const QUOTE_STATUS_VALUES=['draft','sent','revised','declined','expired','accepted'];
-const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopComponentsBody','workshopQuoteSummaryBody','workshopBuildActionsBody'];
+const WORKSHOP_COLLAPSIBLE_SECTION_IDS=['workshopCustomerBody','workshopBuildSpecsBody','workshopComponentsBody','workshopQuoteSummaryBody'];
 const BUILD_SPEC_FIELDS=[
   {id:'quoteSpecReelSeatPosition',key:'reelSeatPosition',label:'Reel Seat Position',visibility:'customer'},
   {id:'quoteSpecRearGripLength',key:'rearGripLength',label:'Rear Grip Length',visibility:'customer'},
@@ -8863,8 +8863,7 @@ function workshopHasPricingData(){
 function nextWorkshopSectionId(){
   if(!workshopHasCustomerData())return 'workshopCustomerBody';
   if(componentRowsForTotals().length===0)return 'workshopBuildSpecsBody';
-  if(!workshopHasPricingData())return 'workshopQuoteSummaryBody';
-  return 'workshopBuildActionsBody';
+  return 'workshopQuoteSummaryBody';
 }
 function focusWorkshopSection(bodyId,options){
   const targetId=WORKSHOP_COLLAPSIBLE_SECTION_IDS.includes(bodyId)?bodyId:nextWorkshopSectionId();
@@ -11488,7 +11487,20 @@ function updateBuildPricingSummary(){
   const summaryEl=$('workshopBuildPricingSummaryText');
   if(!summaryEl)return;
   const price=numberOrZero(quote&&quote.finalCustomerPrice);
-  summaryEl.textContent=price>0?`Customer Price ${currencyWithCode(price)}`:'Set customer price';
+  // Collapsed-header summary only (read-only): status, customer price and what is still owing. All figures come from the
+  // same helpers the open card uses; nothing here is stored or recalculated.
+  const parts=[];
+  try{parts.push(buildLifecycleLabel(currentBuildLifecycleStatus()));}catch(error){}
+  if(price>0){
+    parts.push(currencyWithCode(price));
+    try{
+      const math=depositMaths();
+      parts.push(math.total>0&&math.balanceOwing===0?'Paid in full':`Owing ${currencyWithCode(math.balanceOwing)}`);
+    }catch(error){}
+  }else{
+    parts.push('Set customer price');
+  }
+  summaryEl.textContent=parts.join(' · ');
 }
 function componentRowMenuMarkup(item,index){
   const itemName=componentRowItemLabel(item);
@@ -13766,6 +13778,7 @@ function updateWorkshopBuildActionsUi(){
   if(menuToggle){
     menuToggle.textContent=lifecycle==='complete'?'Mark Active':'Mark Complete';
   }
+  if(typeof updateBuildPricingSummary==='function')updateBuildPricingSummary();
 }
 // Compact at-a-glance strip for an existing build: who/what it is, active/complete, and due date, without opening any section.
 // The header changes height here (entry buttons, Return button, overview line) once a build is saved, which sits
@@ -16600,21 +16613,20 @@ function renderWorkshopQuote(){
   homeRodRefreshFromState();
 }
 function updateWorkshopSectionVisibility(){
+  // One merged "Job Pricing & Actions" section: it shows as soon as there is anything to act on, and the pricing fields inside it
+  // appear once there are components or pricing values (as the separate Job Pricing section did).
   const pricingSection=$('workshopPricingSection');
-  const actionsSection=$('workshopActionsSection');
-  if(!pricingSection || !actionsSection)return;
+  const pricingFields=$('workshopPricingFields');
+  if(!pricingSection || !pricingFields)return;
   const hasComponents=componentRowsForTotals().length>0;
   const hasPricingValues=numberOrZero(quote&&quote.finalCustomerPrice)>0 || numberOrZero(quote&&quote.targetProfit)>0 || numberOrZero(quote&&quote.markupPercent)>0 || quoteHasCustomLabourRate(quote) || numberOrZero(quote&&quote.labourHours)>0 || deliveryAmounts(quote).charge>0;
   const hasIdentity=!!(specificationValue(quote&&quote.customerName) || specificationValue(quote&&quote.buildName));
   const showPricing=hasComponents || hasPricingValues;
   const showActions=showPricing || hasIdentity;
-  pricingSection.hidden=!showPricing;
-  actionsSection.hidden=!showActions;
-  if(!showPricing){
-    setWorkshopSectionCollapsed('workshopQuoteSummaryBody',true);
-  }
+  pricingSection.hidden=!showActions;
+  pricingFields.hidden=!showPricing;
   if(!showActions){
-    setWorkshopSectionCollapsed('workshopBuildActionsBody',true);
+    setWorkshopSectionCollapsed('workshopQuoteSummaryBody',true);
   }
 }
 // Internal only. Additional build profit is the existing pre-tax profit (pre-tax price - component buy costs - labour allowance),
@@ -16777,6 +16789,8 @@ function updatePaymentBlock(){
   if(received)received.textContent=currencyWithCode(math.amountReceived);
   if(balance)balance.textContent=math.total>0&&math.balanceOwing===0?`PAID IN FULL (${currencyWithCode(0)})`:currencyWithCode(math.balanceOwing);
   if(history)history.innerHTML=paymentHistoryMarkup(true);
+  const historyDetails=$('quotePaymentHistoryDetails');
+  if(historyDetails)historyDetails.hidden=!(Array.isArray(quote.payments)&&quote.payments.length);
   const retry=$('retryFinancialBtn');
   if(retry){
     try{retry.hidden=!window.KLABS_BUILD_SYNC?.pendingFinancial?.();}
@@ -16791,6 +16805,7 @@ function updatePaymentBlock(){
     status.textContent=math.depositEnabled?'Deposit not yet received.':'';
     trigger.textContent='Record Deposit Received';
   }
+  if(typeof updateBuildPricingSummary==='function')updateBuildPricingSummary();
 }
 function openDepositReceivedForm(){
   const math=depositMaths();
