@@ -496,7 +496,36 @@ function normalizeBusinessProfile(profile){
     paymentAccountNumber:String(source.paymentAccountNumber||'').trim(),
     quotePrefix:String(source.quotePrefix||'').trim(),
     quoteNextNumber:nextNumber,
+    logo:businessLogoApi()?businessLogoApi().sanitise(source.logo):'',
   };
+}
+// The business logo is an optional part of this account's own Business Profile. There is no built-in or shared logo.
+function businessLogoApi(){
+  return typeof KLABS_BUSINESS_LOGO!=='undefined'?KLABS_BUSINESS_LOGO:(window.KLABS_BUSINESS_LOGO||null);
+}
+// A logo that fails to load (corrupt data, missing legacy asset) is removed so the text business heading remains.
+if(typeof document!=='undefined' && document.addEventListener){
+  document.addEventListener('error',(event)=>{
+    const target=event.target;
+    if(target && target.tagName==='IMG' && target.classList && target.classList.contains('klabs-brand-logo'))target.remove();
+  },true);
+}
+function currentBusinessLogo(){
+  return businessProfile&&businessLogoApi()?businessLogoApi().sanitise(businessProfile.logo):'';
+}
+// Legacy issued invoices (made before logos were stored in snapshots) keep their original presentation only for the K-Labs account
+// itself; for every other business they show a text heading, so the K-Labs mark never appears under another business.
+function invoiceBrand(invoice){
+  const source=invoice&&typeof invoice==='object'?invoice:{};
+  if(source.brand&&typeof source.brand==='object')return{logo:businessLogoApi()?businessLogoApi().sanitise(source.brand.logo):'',legacy:false};
+  // Old snapshots also carry "K-Labs" when a subscriber's profile name was blank, so the name alone is not enough: the viewing
+  // account's own profile must be K-Labs too, and an invoice number that embeds a different account id never qualifies.
+  const owner=String(source.number||'').match(/^INV-([0-9a-f]{32})-/);
+  const account=String(typeof window!=='undefined'?window.KLABS_ACCOUNT_ID||'':'').replace(/-/g,'').toLowerCase();
+  const sameAccount=!owner||!account||owner[1]===account;
+  const legacyKLabs=sameAccount&&normalizeNameKey(source.businessName)==='k-labs'
+    &&typeof businessProfile!=='undefined'&&!!businessProfile&&normalizeNameKey(businessProfile.businessName)==='k-labs';
+  return{logo:legacyKLabs?'assets/logo.svg':'',legacy:legacyKLabs};
 }
 function saveBusinessProfile(){
   try {
@@ -4239,8 +4268,8 @@ function deliveryAddressIncomplete(){
 // One source for the collection/delivery block so the preview and email cannot disagree.
 function customerFulfilmentSection(){
   if(normalizeFulfilmentMethod(quote.fulfilmentMethod)==='collection'){
-    const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
-    return{heading:'Collection',lines:[`Customer to collect from ${businessName}.`],charge:0,collection:true};
+    const businessName=specificationValue(businessProfile.businessName);
+    return{heading:'Collection',lines:[businessName?`Customer to collect from ${businessName}.`:'Customer to collect.'],charge:0,collection:true};
   }
   const charge=deliveryAmounts(quote).charge;
   const lines=customerDeliveryAddressLines();
@@ -14310,8 +14339,10 @@ function customerQuoteSummaryMarkup(){
   const quoteNumber=specificationValue(quote.quoteNumber);
   const businessName=specificationValue(businessProfile.businessName);
   const businessLines=customerQuoteBusinessLines();
-  const businessBlock=(businessName||businessLines.length)
-    ?`<div class="view-quote__business">${businessName?`<strong>${escapeHtml(businessName)}</strong>`:''}${businessLines.map((line)=>`<span>${escapeHtml(line)}</span>`).join('')}</div>`
+  // Without the logo module (or in an isolated context) documents fall back to the text-only heading.
+  const businessLogo=typeof currentBusinessLogo==='function'?currentBusinessLogo():'';
+  const businessBlock=(businessName||businessLines.length||businessLogo)
+    ?`<div class="view-quote__business">${businessLogo?`<img class="klabs-brand-logo view-quote__logo" src="${businessLogo}" alt="${escapeHtml(businessName||'Business logo')}">`:''}${businessName?`<strong>${escapeHtml(businessName)}</strong>`:''}${businessLines.map((line)=>`<span>${escapeHtml(line)}</span>`).join('')}</div>`
     :'';
   const paymentBlock=businessProfileHasPaymentDetails()
     ?`<div class="view-quote__payment"><span>Payment Details</span><div><span>Account name</span><strong>${escapeHtml(businessProfile.paymentAccountName)}</strong></div><div><span>Bank account</span><strong>${escapeHtml(businessProfile.paymentAccountNumber)}</strong></div>${quoteNumber?`<div><span>Reference</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}</div>`
@@ -14427,7 +14458,8 @@ function buildInvoiceSnapshot(preview=false){
   return {
     number:preview?'':invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
     issuedDate:preview?'':localDateInputValue(),
-    businessName:specificationValue(businessProfile.businessName)||'K-Labs',
+    businessName:specificationValue(businessProfile.businessName),
+    brand:{logo:typeof currentBusinessLogo==='function'?currentBusinessLogo():''},
     businessLines,
     customerLines:[quote.customerName,quote.company,quote.phone,quote.email,...customerAddressLines()].map(specificationValue).filter(Boolean),
     buildId:preview?specificationValue(quote.id):String(quote.id),buildReference:specificationValue(quote.buildNumber),
@@ -14445,12 +14477,13 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
   const balance=roundMoney(Math.max(0,numberOrZero(invoice.total)-amount));
   const line=(label,value,extra='')=>`<div class="invoice-document__amount-row ${extra}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(money(value))}</dd></div>`;
   const reference=invoice.buildReference||invoice.buildId;
+  const brand=typeof invoiceBrand==='function'?invoiceBrand(invoice):{logo:'',legacy:false};
   const tax=invoice.tax?`${line(`Subtotal excluding ${invoice.tax.name}`,roundMoney(numberOrZero(invoice.total)-numberOrZero(invoice.tax.amount)))}
     ${line(`${invoice.tax.name} (${invoice.tax.rate}%)`,invoice.tax.amount)}`:'';
   return `<article class="invoice-document" data-invoice-issued="${!preview}" data-invoice-number="${escapeHtml(invoice.number||'')}">
     <header class="invoice-document__header">
-      <div class="invoice-document__brand"><img src="assets/logo.svg" alt="K-Labs" class="invoice-document__logo"><span>${escapeHtml(invoice.businessName)}</span></div>
-      <div class="invoice-document__heading"><p class="invoice-document__eyebrow">K-Labs Studio</p><h3>${statement?'Payment Statement':'Invoice'}</h3></div>
+      <div class="invoice-document__brand${brand.logo?'':' invoice-document__brand--text'}">${brand.logo?`<img src="${escapeHtml(brand.logo)}" alt="" class="klabs-brand-logo invoice-document__logo">`:''}<span>${escapeHtml(invoice.businessName||'')}</span></div>
+      <div class="invoice-document__heading">${brand.legacy?'<p class="invoice-document__eyebrow">K-Labs Studio</p>':''}<h3>${statement?'Payment Statement':'Invoice'}</h3></div>
     </header>
     ${preview?'<p class="invoice-document__draft" role="status">DRAFT — NOT ISSUED</p>':''}
     <section class="invoice-document__details">
@@ -14654,8 +14687,10 @@ function printInvoicePreview(){
     const printDocument=target.document;
     const stylesheet=printDocument?.querySelector('link[rel="stylesheet"]');
     const logo=printDocument?.querySelector('.invoice-document__logo');
-    if(!stylesheet?.sheet || !logo?.complete || !logo.naturalWidth){
-      frame.remove();openInfoDialog('Print Unavailable','The invoice design or logo could not be loaded. Please try again.');return;
+    // A logo that cannot be shown never blocks printing: the business name heading stands alone.
+    if(logo && (!logo.complete || !logo.naturalWidth))logo.remove();
+    if(!stylesheet?.sheet){
+      frame.remove();openInfoDialog('Print Unavailable','The invoice design could not be loaded. Please try again.');return;
     }
     target.addEventListener('afterprint',()=>window.setTimeout(()=>{
       frame.remove();
@@ -14830,7 +14865,8 @@ function customerEmailLines(){
   const customerName=specificationValue(quote.customerName)||'Customer';
   const customerFirstName=customerName.split(/\s+/).filter(Boolean)[0]||'there';
   const includedParts=customerIncludedParts();
-  const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
+  const businessName=specificationValue(businessProfile.businessName);
+  const withBusiness=businessName?` with ${businessName}`:'';
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
   const isComplete=docLabels.key==='complete';
@@ -14845,15 +14881,15 @@ function customerEmailLines(){
     '',
     docLabels.key==='active'
       ?(isRepair
-        ?`Your rod repair with ${businessName} has been confirmed. Below is a summary of the agreed work.`
-        :`Your custom rod build with ${businessName} has been confirmed. Thank you for your order. Below are the agreed build details.`)
+        ?`Your rod repair${withBusiness} has been confirmed. Below is a summary of the agreed work.`
+        :`Your custom rod build${withBusiness} has been confirmed. Thank you for your order. Below are the agreed build details.`)
       :isComplete
       ?(isRepair
-        ?`Your rod repair with ${businessName} is complete. Below is a summary of the work carried out.`
-        :`Your custom ${businessName} fishing rod is complete. Below is a summary of your finished build.`)
+        ?`Your rod repair${withBusiness} is complete. Below is a summary of the work carried out.`
+        :`Your custom ${businessName?businessName+' ':''}fishing rod is complete. Below is a summary of your finished build.`)
       :(isRepair
         ?'Thank you for your enquiry. Below is the proposed work and quotation for your rod repair.'
-        :`Thank you for your interest in a custom rod build with ${businessName}. Below is your proposed custom rod build and quotation.`),
+        :`Thank you for your interest in a custom rod build${withBusiness}. Below is your proposed custom rod build and quotation.`),
     '',
     `${docLabels.jobNoun} — ${reference}`,
     '',
@@ -14905,11 +14941,11 @@ function customerEmailLines(){
 function emailCurrentQuote(options){
   if(!(options&&options.fromPreview)){runWithFulfilmentCheck(()=>emailCurrentQuote({fromPreview:true}));return;}
   const email=specificationValue(quote.email);
-  const businessName=specificationValue(businessProfile.businessName)||'K-Labs';
+  const businessName=specificationValue(businessProfile.businessName);
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
   const lines=customerEmailLines();
-  const subject=`${businessName} ${docLabels.subjectName} — ${quoteNumber||docLabels.emailName}`;
+  const subject=`${businessName?businessName+' ':''}${docLabels.subjectName} — ${quoteNumber||docLabels.emailName}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -17559,6 +17595,7 @@ function syncBusinessProfileControls(force){
     const input=$(field.id);
     if(input && (force || document.activeElement!==input)){input.value=businessProfile[field.key]||'';}
   });
+  if(typeof syncBusinessLogoControls==='function')syncBusinessLogoControls();
   const nextNumberInput=$('settingsQuoteNextNumber');
   const preview=$('settingsQuoteNumberPreview');
   const statusNote=$('settingsQuoteNumberStatus');
@@ -17595,7 +17632,104 @@ function syncBusinessProfileControls(force){
   if(preview)preview.textContent=formatQuoteNumber(businessProfile.quoteNextNumber);
   if(statusNote){statusNote.textContent='';statusNote.hidden=true;}
 }
+function setBusinessLogoStatus(message,state){
+  const status=$('settingsBusinessLogoStatus');
+  if(!status)return;
+  status.textContent=String(message||'');
+  if(message)status.setAttribute('data-state',state||'info');else status.removeAttribute('data-state');
+}
+function syncBusinessLogoControls(){
+  const preview=$('settingsBusinessLogoPreview');
+  if(!preview)return;
+  const logo=currentBusinessLogo();
+  preview.replaceChildren();
+  if(logo){
+    const image=document.createElement('img');
+    image.className='klabs-brand-logo';
+    image.alt='Your business logo';
+    image.src=logo;
+    preview.appendChild(image);
+  }else{
+    const empty=document.createElement('span');
+    empty.className='settings-business-logo__empty';
+    empty.textContent='No logo';
+    preview.appendChild(empty);
+  }
+  const choose=$('settingsBusinessLogoChoose');
+  const remove=$('settingsBusinessLogoRemove');
+  const klabs=$('settingsBusinessLogoKLabs');
+  const readOnly=typeof window.KLABS_CAN_WRITE==='function'&&!window.KLABS_CAN_WRITE();
+  if(choose){choose.textContent=logo?'Replace logo':'Upload logo';choose.disabled=readOnly;}
+  if(remove){remove.hidden=!logo;remove.disabled=readOnly;}
+  // Only the K-Labs owner account is offered the bundled K-Labs mark; it is saved into that account's own profile like any upload.
+  if(klabs){klabs.hidden=!(window.KLABS_ADMIN_ACCESS&&typeof window.KLABS_ADMIN_ACCESS.isOwner==='function'&&window.KLABS_ADMIN_ACCESS.isOwner());klabs.disabled=readOnly;}
+}
+// Applies a prepared logo (or removes it with '') to this account's profile only, and confirms it was really stored.
+function commitBusinessLogo(dataUrl,account){
+  if(activeAccountKey()!==account){
+    reloadBusinessProfileForAccount();
+    setBusinessLogoStatus('The account changed. The logo was not saved.','error');
+    return false;
+  }
+  if(typeof window.KLABS_CAN_WRITE==='function'&&!window.KLABS_CAN_WRITE()){
+    setBusinessLogoStatus('This account is read-only, so the logo cannot be changed.','error');
+    return false;
+  }
+  const previous=businessProfile.logo||'';
+  businessProfile.logo=dataUrl;
+  const stored=saveBusinessProfile()&&(()=>{const saved=Store.get(businessProfileStorageKey(),null);return !!saved&&(saved.logo||'')===dataUrl;})();
+  if(!stored){
+    businessProfile.logo=previous;
+    setBusinessLogoStatus('The logo could not be saved on this device. Try a smaller image.','error');
+    syncBusinessLogoControls();
+    return false;
+  }
+  syncBusinessLogoControls();
+  return true;
+}
+function bindBusinessLogoControls(){
+  const file=$('settingsBusinessLogoFile');
+  const choose=$('settingsBusinessLogoChoose');
+  if(!file||!choose||choose.getAttribute('data-business-logo-bound')==='true')return;
+  choose.setAttribute('data-business-logo-bound','true');
+  const api=()=>businessLogoApi();
+  choose.addEventListener('click',()=>{file.value='';file.click();});
+  file.addEventListener('change',async()=>{
+    const picked=file.files&&file.files[0];
+    file.value='';
+    if(!picked)return;
+    const account=activeAccountKey();
+    setBusinessLogoStatus('Preparing logo…','info');
+    try{
+      const result=await api().process(picked);
+      if(commitBusinessLogo(result.dataUrl,account))setBusinessLogoStatus('Logo saved. It will appear on new customer documents.','info');
+    }catch(error){
+      setBusinessLogoStatus(error&&error.userMessage?error.userMessage:'That image could not be used as a logo.','error');
+    }
+  });
+  const remove=$('settingsBusinessLogoRemove');
+  if(remove)remove.addEventListener('click',()=>{
+    if(commitBusinessLogo('',activeAccountKey()))setBusinessLogoStatus('Logo removed. Your business name is shown as the heading.','info');
+  });
+  const klabs=$('settingsBusinessLogoKLabs');
+  if(klabs)klabs.addEventListener('click',async()=>{
+    const account=activeAccountKey();
+    setBusinessLogoStatus('Preparing logo…','info');
+    try{
+      const response=await fetch('assets/logo.svg');
+      if(!response.ok)throw new Error('The K-Labs logo could not be loaded.');
+      const svg=(await response.text()).replace('<svg ','<svg width="256" height="256" ');
+      const result=await api().process(new Blob([svg],{type:'image/svg+xml'}),{allowSvg:true});
+      if(commitBusinessLogo(result.dataUrl,account))setBusinessLogoStatus('K-Labs logo saved.','info');
+    }catch(error){
+      setBusinessLogoStatus(error&&error.userMessage?error.userMessage:'The K-Labs logo could not be loaded. Connect and try again.','error');
+    }
+  });
+  const card=$('settingsBusinessProfileCard');
+  if(card)card.addEventListener('toggle',()=>{if(card.open)syncBusinessLogoControls();});
+}
 function bindBusinessProfileControls(){
+  bindBusinessLogoControls();
   BUSINESS_PROFILE_BASE_FIELDS.forEach((field)=>{
     const input=$(field.id);
     if(!input || input.getAttribute('data-business-profile-bound')==='true')return;
