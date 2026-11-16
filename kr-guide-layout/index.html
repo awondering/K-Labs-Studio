@@ -83,8 +83,6 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
 .seg.wrap{flex-wrap:wrap}.seg.wrap button{flex:1 0 56px}
 .notice{border:1px solid var(--warn-line);border-radius:14px;padding:2px 12px;margin:0 0 10px;background:linear-gradient(180deg,#171409,#100f09)}.notice summary{color:var(--warn);font-size:13px}
 .notice .note{margin:0 0 8px}
-@media(min-width:900px){main{max-width:1120px}#app{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);column-gap:14px;align-items:start}#app>h1,#app>.sub,#app>.notice,#app>.about{grid-column:1/-1}.col-a{grid-column:1}.col-b{grid-column:2}}
-@media(min-width:600px) and (max-width:899px){main{max-width:720px}}
 .row .id .tag{display:block;width:max-content;margin:2px 0 0;font-size:9px;padding:0 5px}
 @media(max-width:400px){.row .id .tag{font-size:8.5px;padding:0 4px}}
 
@@ -93,6 +91,37 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
 .seg.wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0;border:0;background:transparent}
 .seg.wrap button{height:44px;border:1px solid var(--line);background:var(--card);flex:none}
 .seg.wrap button[aria-pressed=true]{border-color:var(--red2)}
+
+/* ---- layout: one column on phones; tablet and desktop compose rod/reel as a bar over a preview column and a decisions column ---- */
+#app{display:flex;flex-direction:column}
+.colL,.colR{display:contents}
+#app>h1,#app>.sub{order:0}.s-rod{order:1}.s-warn{order:2}.s-sum{order:3}.s-dia{order:4}.s-gui{order:5}.s-sta{order:6}.s-src{order:7}#app>.about{order:8}
+.rr-opt{grid-column:1/-1}
+@media(min-width:600px) and (max-width:899px){main{max-width:720px}.seg.wrap{grid-template-columns:repeat(8,1fr)}.rr-dims{grid-template-columns:1fr 1fr}}
+@media(min-width:900px){
+  main{max-width:1120px;padding-left:20px;padding-right:20px}
+  h1{font-size:17px}
+  #app{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);column-gap:14px;align-items:start}
+  #app>*{order:0}
+  #app>h1,#app>.sub,.s-rod,#app>.about{grid-column:1/-1}
+  .colL,.colR{display:flex;flex-direction:column;min-width:0}.colL{grid-column:1}.colR{grid-column:2}
+  .card{margin-bottom:12px}
+  .rodreel{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1.4fr) minmax(0,.85fr);gap:4px 20px;align-items:end;padding:14px 18px}
+  .rodreel>h2,.rr-opt{grid-column:1/-1}.rodreel>h2{margin-bottom:6px}
+  .rr-rod{min-width:0}.seg.wrap{grid-template-columns:repeat(8,1fr);gap:5px}.seg.wrap button{height:40px;font-size:12.5px;padding:0}
+  .rr-dims{grid-template-columns:1fr 1fr;margin:0!important}.rr-units{margin:0 0 1px;align-self:end}.rr-units button{height:36px;font-size:12px;padding:0 4px}
+  .rodreel .num{max-width:none}
+  .rr-opt{margin-top:2px}.rr-opt summary{padding:6px 0}
+  .s-dia svg{max-height:230px}
+  /* guide table: compact, aligned rows; tag beside the label, lock/ref side by side */
+  .hd,.row{grid-template-columns:112px minmax(0,1fr) 64px 108px;gap:10px}
+  .row{padding:4px 6px}.row .id{display:grid;grid-template-columns:auto 1fr;column-gap:6px;align-items:center}
+  .row .id b[class^=r-]{grid-row:1;grid-column:1}.row .id .tag{grid-row:1;grid-column:2;margin:0;justify-self:start}.row .id span{grid-column:1/-1;font-size:10.5px}
+  .row .num{max-width:300px;justify-self:center;width:100%}.row .num input{height:32px}.row .num button{width:32px;height:32px}
+  .row .ac{flex-direction:row;gap:6px}.row .ac button{flex:1;height:28px}
+  .row .sp{font-size:13px}
+}
+@media(min-width:1280px){main{max-width:1200px}}
 
 </style></head>
 <body><main id="app" aria-live="polite"></main>
@@ -278,7 +307,10 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
     N.guides.forEach(g => { const o = keep.find(x => x.refStemMm != null && Math.abs(x.refStemMm - g.refStemMm) < 1e-9);
       if (o && (o.basis !== 'published' || o.locked)) { g.tipMm = o.tipMm; g.basis = o.basis; g.locked = o.locked; } });
     const tt = N.guides.pop(); added.forEach(a => N.guides.push(Object.assign({}, a)));
-    N.guides.sort((a, b) => b.tipMm - a.tipMm); N.guides.push(tt); return N;
+    // Only the running guides are ordered by position: the stripper, reduction train and choke keep their roles and order, so a kept runner that now lies
+    // beyond the choke is reported as an ordering conflict instead of silently becoming part of the train.
+    const ci = N.guides.findIndex(g => g.role === 'choke'), head = N.guides.slice(0, ci + 1), run = N.guides.slice(ci + 1).sort((a, b) => b.tipMm - a.tipMm);
+    N.guides = [...head, ...run, tt]; return N;
   }
   function counts(L) {
     const blank = L.guides.length - 1;
@@ -370,9 +402,14 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
     const nRun = n - (ci + 1), free = nRun - fixed.length, tt = gs[last];
     if (nRun < 1) return bad('Needs at least one running guide');
     if (free < 0) return bad('Locked/manual guides exceed this count');
-    const a = tt.locked || tt.basis === 'manual' ? tt.tipMm : 0, hi = gs[ci].tipMm, P = runnerProfile(L.ref);
+    const ttFixed = tt.locked || tt.basis === 'manual';
+    if (ttFixed && Math.abs(tt.tipMm) > FIT_TOL) return bad('The tip-top is ' + (tt.locked ? 'locked' : 'adjusted') + ' ' + tt.tipMm.toFixed(1) + ' mm from the tip; it must sit at the tip. Unlock or reset it');
+    const a = ttFixed ? tt.tipMm : 0, hi = gs[ci].tipMm, P = runnerProfile(L.ref);
     const bounds = [a, ...fixed.map(g => g.tipMm), hi];
-    for (let i = 1; i < bounds.length; i++) if (bounds[i] - bounds[i - 1] < MIN_GAP) return bad('Fixed guides leave under ' + MIN_GAP + ' mm clearance');
+    for (let k = 0; k < fixed.length; k++) { const q = fixed[k], nm = label(L, gs.indexOf(q)) + (q.locked ? ' (locked)' : ' (adjusted)');
+      if (q.tipMm < a + MIN_GAP) return bad(nm + ' is at ' + q.tipMm.toFixed(1) + ' mm from the tip, too close to the tip or beyond it. Move or unlock it');
+      if (q.tipMm > hi - MIN_GAP) return bad(nm + ' is at ' + q.tipMm.toFixed(1) + ' mm, too close to the choke (' + hi.toFixed(1) + ' mm) or past it. Move or unlock it'); }
+    for (let i = 1; i < bounds.length; i++) if (bounds[i] - bounds[i - 1] < MIN_GAP) return bad('Locked or adjusted guides leave under ' + MIN_GAP + ' mm clearance between them');
     const lens = bounds.slice(1).map((b, i) => b - bounds[i]), q = lens.map(() => 0); // give each free guide to the widest current gap
     for (let k = 0; k < free; k++) { let s = 0; lens.forEach((l, i) => { if (l / (q[i] + 1) > lens[s] / (q[s] + 1)) s = i; }); q[s]++; }
     const run = []; // ascending from tip: {tipMm, guide|null}
@@ -391,11 +428,15 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
       lowWorstPct: Math.max(0, ...gaps.map(low)), highWorstPct: Math.max(0, ...gaps.map(high)), excessPct: gaps.reduce((s, g) => s + low(g) + high(g), 0),
       withinPublished: flags.every(x => !x), meanDevPct: (mean / P.mean - 1) * 100, score: Math.abs(Math.log(mean / P.mean)), refRange: [P.refMin, P.refMax], refMeanMm: P.mean };
   }
+  function limitText(L) {
+    const lim = limitingGeometry(L); if (!lim) return '';
+    return 'From the reel stem the chart puts the choke at ' + lim.chokeFromStemMm.toFixed(1) + ' mm, so with one running guide and the tip-top the blank must give at least ' + lim.needMm.toFixed(1) + ' mm from stem to tip (this one gives ' + lim.availableMm.toFixed(1) + ' mm, ' + (lim.shortfallMm > 0 ? lim.shortfallMm.toFixed(1) + ' mm short' : 'enough for that, so the limit is the locked or adjusted guides') + ').';
+  }
   function assess(L) {
     const v = validity(L), g = geometry(L);
     if (v.valid) return { needed: false, referenceFits: g.fits, valid: true };
-    const ci = L.guides.findIndex(x => x.role === 'choke'), trainBad = v.issues.filter(x => x.i <= ci);
-    if (ci < 0 || trainBad.length) return { needed: true, valid: false, candidates: [], ranked: [], reviewable: [], recommended: null, reason: 'The reduction train itself doesn\u2019t fit (' + (trainBad[0] ? trainBad[0].msg : 'no choke guide') + '). Move the reel seat or adjust it manually.' };
+    const ci = L.guides.findIndex(x => x.role === 'choke'), fixedG = q => q && (q.locked || q.basis === 'manual'), trainBad = v.issues.filter(x => x.i <= ci && !fixedG(L.guides[x.i]) && !fixedG(L.guides[x.i + 1])); // a locked/adjusted runner past the choke is a builder conflict, reported by candidate()
+    if (ci < 0 || trainBad.length) return { needed: true, valid: false, candidates: [], ranked: [], reviewable: [], recommended: null, reason: 'The reduction train itself doesn\u2019t fit (' + (trainBad[0] ? trainBad[0].msg : 'no choke guide') + '). ' + limitText(L) + ' Move the reel seat or adjust it manually.' };
     const lo = Math.max(MIN_BLANK, L.refBlank - COUNT_WINDOW), cands = [];
     for (let n = L.refBlank + COUNT_WINDOW; n >= lo; n--) cands.push(candidate(L, n));
     const valid = cands.filter(c => c.status === 'valid');
@@ -403,7 +444,40 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
     const reviewable = valid.filter(c => c.level === 'review').sort((x, y) => x.review.findings.length - y.review.findings.length || x.excessPct - y.excessPct || y.n - x.n);
     return { needed: true, valid: false, candidates: cands, ranked, reviewable, recommended: ranked[0] ? ranked[0].n : null,
       reason: ranked[0] ? '' : reviewable[0] ? 'Layouts that physically fit exist, but none has runner spacing the chart supports, so none is recommended. You can inspect them as manual-review layouts, or adjust the reel seat, guide count or positions by hand.'
-        : 'No guide count between ' + lo + ' and ' + (L.refBlank + COUNT_WINDOW) + ' keeps at least ' + MIN_GAP + ' mm between neighbouring guides with the fixed guides in place. Adjust manually or move the reel seat.' };
+        : 'No guide count between ' + lo + ' and ' + (L.refBlank + COUNT_WINDOW) + ' keeps at least ' + MIN_GAP + ' mm between neighbouring guides with the fixed guides in place (' + L.refBlank + ' + tip-top: ' + (cands.find(c => c.n === L.refBlank) || cands[0]).why + '). ' + limitText(L) + ' Adjust manually or move the reel seat.' };
+  }
+  // ---- Automatic proposal after a geometry change ---------------------------------------------------------------
+  // limitingGeometry: the stem-to-tip length the reduction train needs. The chart distances stripper..choke are fixed from the stem, and at least
+  // one running guide must fit between the choke and the tip-top (two gaps of MIN_GAP), so the blank must give at least choke-from-stem + 2 x MIN_GAP.
+  function limitingGeometry(L) {
+    const ci = L.guides.findIndex(g => g.role === 'choke'); if (ci < 0) return null;
+    const chokeFromStem = L.guides[ci].refStemMm, need = chokeFromStem + 2 * MIN_GAP;
+    return { chokeFromStemMm: chokeFromStem, needMm: need, availableMm: L.stemToTip, shortfallMm: Math.max(0, need - L.stemToTip),
+      latestStemFromButtMm: L.geom.bladeLenMm - need };
+  }
+  // A guide the builder moved, locked, added or removed (or a count they changed) is a builder decision; K-Labs-calculated guides are not.
+  const builderEdits = L => L.guides.some(g => g.locked || g.basis === 'manual' || g.basis === 'added' || g.basis === 'experimental') ||
+    (!L.guides.some(g => g.basis === 'heuristic') && L.guides.length - 1 !== L.refBlank);
+  function propose(L) {
+    if (validity(L).valid) return { status: 'fits' };
+    const a = assess(L), lim = limitingGeometry(L), edits = builderEdits(L);
+    const n = a.recommended != null ? a.recommended : a.reviewable && a.reviewable[0] ? a.reviewable[0].n : null;
+    if (n == null) return { status: 'none', reason: a.reason, limit: lim, edits, assessment: a };
+    const c = candidate(L, n);
+    return { status: 'proposed', n, level: c.level, candidate: c, edits, autoApply: !edits && c.level === 'suitable', assessment: a, limit: lim };
+  }
+  // Applies the proposal only when it replaces nothing the builder decided and the spacing is within what the chart supports.
+  function settle(L) {
+    const p = propose(L);
+    if (p.status === 'proposed' && p.autoApply) {
+      const before = L.guides.map(g => ({ role: g.role, refTipMm: g.refTipMm, tipMm: g.tipMm })), r = applyCandidate(L, p.n);
+      if (r.ok) { L.auto = { n: p.n, referenceBlank: L.refBlank, before }; return { L, proposal: null, auto: true, applied: p }; }
+    }
+    return { L, proposal: p, auto: false };
+  }
+  function reconcile(prev, geom) {
+    const wasAuto = !builderEdits(prev) && prev.guides.some(g => g.basis === 'heuristic');
+    return settle(wasAuto ? createLayout(prev.ref, geom, prev.train) : rebase(prev, geom));
   }
   function applyCandidate(L, n, opts) { // explicit builder action only
     const c = candidate(L, n); if (c.status !== 'valid') return { ok: false, msg: c.why || 'Candidate not acceptable' };
@@ -418,22 +492,26 @@ textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);bord
   }
   const api = { IN, MIN_GAP, FIT_TOL, toMm, fromMm, frac, fmt, CHART_RODS, DEFAULT_ROD, referenceForRod, referenceFromEntry, trainsOf, MIN_ENTRY_GUIDES, MAX_ENTRY_GUIDES, buildReference, crossCheck, createLayout, label,
     spacing, fromStem, fromButt, geometry, issues, setPosition, toggleLock, resetGuide, resetAll, counts, addGuide,
-    removeGuide, validity, candidate, assess, applyCandidate, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
+    removeGuide, validity, candidate, assess, applyCandidate, limitingGeometry, builderEdits, propose, settle, reconcile, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.KR = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script><script>
 (function () {
   'use strict'; const K = KR, $ = s => document.querySelector(s), IN = K.IN;
-  const S = { unit: 'mm', rod: K.DEFAULT_ROD, blade: 0, stem: 0, axle: null, spool: null, ref: K.referenceForRod(K.DEFAULT_ROD), entry: { label: '', stripper: '', gaps: '', models: '', chokeBeyond: '', envMin: '', envMax: '' }, entryMsg: '', sel: 0, prev: false, train: null, confirm: false, cand: null, msg: '', done: { st: false, cast: false } };
+  const S = { proposal: null, unit: 'mm', rod: K.DEFAULT_ROD, blade: 0, stem: 0, axle: null, spool: null, ref: K.referenceForRod(K.DEFAULT_ROD), entry: { label: '', stripper: '', gaps: '', models: '', chokeBeyond: '', envMin: '', envMax: '' }, entryMsg: '', sel: 0, prev: false, train: null, confirm: false, cand: null, msg: '', done: { st: false, cast: false } };
   let L;
   // Choosing a chart rod sets the blank to that rod length and the reel stem to the position at which the chart fits exactly (blank minus the chart's
   // stem-to-tip-top distance). That position is derived, not a Fuji figure; the builder replaces it with the real reel-seat position.
   const pickRod = id => { const r = K.CHART_RODS.find(x => x.id === id), ref = K.referenceForRod(id); S.rod = id; S.ref = ref; S.blade = r.lengthMm; S.stem = r.lengthMm - K.buildReference(ref).totalMm; S.train = null; S.entryMsg = ''; };
   pickRod(S.rod);
   const geom = () => ({ bladeLenMm: S.blade, stemFromButtMm: S.stem });
-  const build = () => { L = K.createLayout(S.ref, geom(), S.train); S.train = L.train; S.sel = Math.min(S.sel, L.guides.length - 1); S.prev = false; S.cand = null; };
-  const rebuild = () => { L = K.rebase(L, geom()); S.sel = Math.min(S.sel, L.guides.length - 1); S.prev = false; S.cand = null; };
+  // A geometry change recalculates the working layout. A layout the builder has not adjusted is replaced automatically by the best valid K-Labs layout
+  // when the chart reference no longer fits; anything the builder moved, locked, added or removed is never replaced without acceptance (the proposal is
+  // previewed and applied only by the builder).
+  const finish = r => { L = r.L; S.proposal = r.proposal; S.sel = Math.min(S.sel, L.guides.length - 1); S.prev = false; S.cand = r.proposal && r.proposal.status === 'proposed' ? r.proposal.n : null; };
+  const build = () => { const N = K.createLayout(S.ref, geom(), S.train); S.train = N.train; finish(K.settle(N)); };
+  const rebuild = () => finish(K.reconcile(L, geom()));
   const step = () => (S.unit === 'mm' ? 1 : IN / 16);
   const inV = mm => (mm == null ? '' : S.unit === 'mm' ? mm.toFixed(1) : (mm / IN).toFixed(3));
   const parse = v => K.parseLength(v, S.unit);
@@ -490,13 +568,26 @@ ${num('g' + i, q.tipMm, K.label(L, i) + ' position from tip')}<div class="sp">${
     let rows = ''; for (let i = L.guides.length - 1; i >= 0; i--) rows += row(i);
     const ax = S.axle != null ? ` \u00b7 beyond axle tip <b>${f(K.fromStem(L, sel) - S.axle)}</b>` : '';
     $('#app').innerHTML = `<h1>KR Guide Layout</h1><p class="sub">${S.ref.chart ? 'Stripper, reduction train, choke point and running guides for your rod, from the Fuji KR chart.' : 'Guide layout from your own chart measurements.'}</p>
-<section class="card col-a"><h2>Rod and reel</h2><div class="mut">Chart rod length</div><div class="seg wrap" role="group" aria-label="Chart rod length">${K.CHART_RODS.map(r => `<button data-rod="${esc(r.id)}" aria-pressed="${S.ref.chart && S.rod === r.id}">${r.label}</button>`).join('')}</div>
-<div class="grid" style="margin-top:10px"><label class="f">Blank length${num('blade', S.blade, 'Blank length')}</label><label class="f">Reel stem from butt${num('stem', S.stem, 'Reel stem from butt')}</label></div>
-<div class="seg" role="group" aria-label="Units"><button data-unit="mm" aria-pressed="${S.unit === 'mm'}">mm</button><button data-unit="in" aria-pressed="${S.unit === 'in'}">Decimal in</button><button data-unit="frac" aria-pressed="${S.unit === 'frac'}">Fractional in</button></div>
-<details><summary>Optional measurements</summary><div class="grid"><label class="f">Stem to spool axle tip${num('axle', S.axle, 'Stem to spool axle tip')}</label><label class="f">Spool diameter${num('spool', S.spool, 'Spool diameter')}</label></div>
+<section class="card s-rod rodreel"><h2>Rod and reel</h2><div class="rr-rod"><div class="mut">Chart rod length</div><div class="seg wrap" role="group" aria-label="Chart rod length">${K.CHART_RODS.map(r => `<button data-rod="${esc(r.id)}" aria-pressed="${S.ref.chart && S.rod === r.id}">${r.label}</button>`).join('')}</div></div>
+<div class="grid rr-dims"><label class="f">Blank length${num('blade', S.blade, 'Blank length')}</label><label class="f">Reel stem from butt${num('stem', S.stem, 'Reel stem from butt')}</label></div>
+<div class="seg rr-units" role="group" aria-label="Units"><button data-unit="mm" aria-pressed="${S.unit === 'mm'}">mm</button><button data-unit="in" aria-pressed="${S.unit === 'in'}">Decimal in</button><button data-unit="frac" aria-pressed="${S.unit === 'frac'}">Fractional in</button></div>
+<details class="rr-opt"><summary>Optional measurements</summary><div class="grid"><label class="f">Stem to spool axle tip${num('axle', S.axle, 'Stem to spool axle tip')}</label><label class="f">Spool diameter${num('spool', S.spool, 'Spool diameter')}</label></div>
 <p class="note">Choosing a rod fills in its chart length and the reel-stem position at which the chart fits exactly; replace that with your real reel-seat position. The chart uses only blank length and stem position. Axle offset adds a datum view; spool diameter isn\u2019t used yet.</p></details></section>
-${g.fits && v.valid ? '' : `<section class="card warn col-a"><h2>${as.needed ? 'Reference layout does not fit' : 'Working layout differs from the reference'}</h2>
-${as.needed ? `<p><b>Current:</b> ${c.blank} + tip-top \u2014 invalid geometry. ${v.reasons.slice(0, 2).join('; ')}.</p>
+<div class="colL"><section class="card s-gui"><h2>Guides</h2>${K.trainsOf(S.ref).length ? `<div class="mut">Reduction train</div><div class="seg" role="group" aria-label="Reduction train">${K.trainsOf(S.ref).map(tr => `<button data-train="${tr.id}" aria-pressed="${L.train === tr.id}">${tr.label}</button>`).join('')}</div><p class="note">${K.trainsOf(S.ref).find(tr => tr.id === L.train).note || 'Labels only'}. Labels only: positions follow your measurements.${L.train !== S.ref.train ? ' <b style="color:var(--warn)">Differs from this reference\u2019s train.</b>' : ''}</p>` : (S.ref.chart ? '<p class="note">Guide models and ring sizes follow the chart row. The chart\u2019s distances are the reference positions; use + and \u2212 or type a value to adjust one guide without moving the others.</p>' : '<p class="note">Guide models are labels from your entry; positions follow your measurements. The tool does not verify them.</p>')}
+<div class="grid" style="margin-top:10px"><div><div class="mut">Blank guides (excl. tip-top)</div><div class="num"><button data-cnt="-1" aria-label="Remove a blank guide">\u2212</button><input readonly value="${c.blank}" aria-label="Blank guide count"><button data-cnt="1" aria-label="Add a blank guide">+</button></div></div>
+<div class="mut" style="align-self:end">Tip-top 1 \u00b7 total ${c.total}${c.differs ? `<br><b style="color:var(--warn)">${c.delta > 0 ? '+' : ''}${c.delta} vs reference (${c.refBlank} + tip-top)</b>` : '<br>Matches reference'}</div></div>
+${S.msg ? `<p class="err" role="alert">${S.msg}</p>` : ''}
+<div class="hd" style="margin-top:10px"><span>Guide</span><span>From tip (${un})</span><span>Spacing</span><span></span></div>${rows}
+<p class="sel-info"><b>${K.label(L, sel)} ${t.model}</b> \u00b7 from stem <b>${f(K.fromStem(L, sel))}</b> \u00b7 from butt <b>${f(K.fromButt(L, sel))}</b>${ax}${t.refTipMm != null ? ' \u00b7 reference <b>' + f(t.refTipMm) + '</b>' : ''}</p>
+${t.unverified ? '<p class="note">' + (t.role === 'reduction' ? 'This is the third reduction guide. Its model is a label only and its frame designation has not been verified: check it against the manufacturer\u2019s own data.' : 'This guide\u2019s designation is unverified.') + '</p>' : ''}
+${is.filter(q => q.type !== 'range').map(q => `<p class="err">${q.msg}</p>`).join('')}
+<div class="bar"><button class="btn sm${S.confirm ? ' pri' : ''}" data-resetall>${S.confirm ? 'Tap again to reset all guides' : 'Reset all to reference'}</button></div></section>
+<section class="card s-sta"><h2>Status</h2><p style="margin:0 0 6px${v.valid ? '' : ';color:#e14a58'}">${K.status(L)}</p>
+<label class="chk"><input type="checkbox" data-done="st" ${v.valid ? '' : 'disabled'} ${S.done.st ? 'checked' : ''}>Static-load tested by builder</label><label class="chk"><input type="checkbox" data-done="cast" ${v.valid ? '' : 'disabled'} ${S.done.cast ? 'checked' : ''}>Cast tested by builder</label>
+${rv ? (rv.level === 'review' ? `<p class="note" style="color:var(--warn)"><b>Manual review needed:</b> ${findTxt(rv.findings[0])}${rv.findings.length > 1 ? ' (+' + (rv.findings.length - 1) + ' more)' : ''}</p>` : '<p class="note">Runner spacing is within what the chart publishes and narrows toward the tip.</p>') : ''}
+<p class="note">${S.done.st && S.done.cast ? 'Builder-attested only. The calculator can\u2019t verify results.' : 'A starting layout, not final or optimal. Verify with static-load and casting tests before wrapping.'}</p></section>
+</div><div class="colR">${g.fits && v.valid ? '' : `<section class="card warn s-warn"><h2>${as.needed ? 'Reference layout does not fit' : L.auto ? 'K-Labs calculated layout' : 'Working layout differs from the reference'}</h2>
+${as.needed && S.proposal && S.proposal.status === 'proposed' && S.proposal.edits ? '<p class="note"><b>Nothing has been changed.</b> You have locked or adjusted guides, so a proposal is shown for you to accept. Accepting keeps your locked and adjusted guides where they are and recalculates only the rest.</p>' : ''}${as.needed && S.proposal && S.proposal.status === 'proposed' && !S.proposal.edits && S.proposal.level === 'review' ? '<p class="note"><b>Nothing has been changed.</b> The best layout that fits has spacing the chart does not support, so it needs your review before it is applied.</p>' : ''}${as.needed ? `<p><b>Current:</b> ${c.blank} + tip-top \u2014 invalid geometry. ${v.reasons.slice(0, 2).join('; ')}.</p>
 ${rec ? `<p><b>Suggested:</b> ${rec.n} + tip-top \u2014 starting recommendation (K-Labs heuristic, not a Fuji layout).</p>
 <p class="note"><b>Why ${rec.n}:</b> it fits, every runner gap is within what the chart publishes and narrows toward the tip, and it deviates least from this rod\u2019s chart row. ${sum(rec)}.${as.ranked.length > 1 ? ' Also suitable: ' + as.ranked.slice(1, 3).map(k => k.n).join(', ') + '.' : ''}${as.reviewable.length ? ' Needs manual review: ' + as.reviewable.map(k => k.n + ' (' + k.review.findings.length + ')').join(', ') + '.' : ''}</p>`
  : as.reviewable.length ? `<p><b>No recommended count.</b> ${as.reason}</p>` : `<p><b>No geometrically valid candidate.</b> ${as.reason}</p>`}
@@ -506,10 +597,12 @@ ${cv && cv.runners ? `<p class="note"><b>${cv.n} + tip-top \u2014 ${cv.level ===
 ${cv.level === 'review' ? cv.review.findings.slice(0, 3).map(fd => `<p class="note">${findTxt(fd)}</p>`).join('') + (cv.review.findings.length > 3 ? `<p class="note">+${cv.review.findings.length - 3} more.</p>` : '') : ''}
 ${cv.status === 'valid' ? `<p class="note">Gaps from the tip: ${cv.gapsMm.map((g, i) => f(g) + (cv.flags[i] === 'high' ? '\u2191' : cv.flags[i] === 'low' ? '\u2193' : '')).join(' \u00b7 ')}${U}. \u2191 above, \u2193 below this row\u2019s published range. Reduction train and locked/manual guides unchanged.</p>` : ''}
 <div class="bar"><button class="btn sm${cv.level === 'suitable' ? ' pri' : ''}" data-candapply ${cv.status === 'valid' ? '' : 'disabled'}>${cv.level === 'review' ? 'Apply ' + cv.n + ' for manual review' : 'Apply ' + cv.n + ' + tip-top'}</button><button class="btn sm" data-candcancel>Cancel preview</button></div>` : rec ? `<div class="bar"><button class="btn sm" data-cand="${rec.n}">Preview ${rec.n} + tip-top</button></div>` : ''}
-<p class="note">Starting recommendation only. Changing the guide count changes blank support and tip spacing: verify by static-load and cast testing.</p>` : `<p>The working layout is valid but the chart reference needs ${f(L.refTotalMm)} from stem to tip-top and this blank gives ${f(L.stemToTip)}.</p>`}
-<div class="bar"><button class="btn sm" data-fit>Set stem to ${f(g.suggestStemFromButtMm)}</button>${as.needed && K.compressionAvailable(L) ? `<button class="btn sm" data-prev>${S.prev ? 'Hide' : 'Preview'} runner-gap scaling</button>` : ''}${pv ? '<button class="btn sm pri" data-compress>Apply scaling (experimental)</button>' : ''}</div>
+<p class="note">K-Labs calculation, not a manufacturer recommendation. Starting recommendation only. Changing the guide count changes blank support and tip spacing: verify by static-load and cast testing.</p>` : `<p>The chart reference needs <b>${f(L.refTotalMm)}${U}</b> from stem to tip-top; this blank gives <b>${f(L.stemToTip)}${U}</b> (${f(Math.abs(g.deltaMm))}${U} ${g.deltaMm < 0 ? 'short' : 'spare'}). ${L.auto ? `Showing a <b>K-Labs-calculated</b> layout: ${L.auto.n} guides + tip-top (the reference has ${L.auto.referenceBlank} + tip-top). Stripper, reduction and choke keep the chart distances from the stem; the running guides and tip-top are recalculated. This is a K-Labs calculation, not a manufacturer recommendation.` : 'The working layout is valid and differs from the reference.'}</p>
+${L.auto ? `<details><summary>Reference vs calculated positions</summary><p class="note"><b>Reference (from tip${U}):</b> ${L.auto.before.map(q => f(q.tipMm)).join(' \u00b7 ')}. Negative values are beyond the tip.</p><p class="note"><b>Calculated:</b> ${L.guides.map(q => f(q.tipMm)).join(' \u00b7 ')}.</p></details>` : ''}`}
+<div class="bar">${L.auto || !as.needed ? '<button class="btn sm" data-restoreref>Restore reference</button>' : ''}<button class="btn sm" data-fit>Set stem to ${f(g.suggestStemFromButtMm)}</button>${as.needed && K.compressionAvailable(L) ? `<button class="btn sm" data-prev>${S.prev ? 'Hide' : 'Preview'} runner-gap scaling</button>` : ''}${pv ? '<button class="btn sm pri" data-compress>Apply scaling (experimental)</button>' : ''}</div>
 ${pv ? `<p class="note">Experimental, not Fuji\u2019s method: runner gaps scaled by ${pv.k.toFixed(3)}, smallest gap ${f(pv.minGapMm)}. #1\u2013#4 stay put.</p>` : ''}</section>`}
-<section class="card col-a"><h2>KR layout</h2><div class="sumrow">${(() => { const gs = L.guides, ci = gs.findIndex(q => q.role === 'choke'), red = gs.filter(q => q.role === 'stripper' || q.role === 'reduction'), run = gs.filter(q => q.role === 'running'), idx = q => gs.indexOf(q), bs = q => `<i class="tag ${q.basis}">${BASIS[q.basis] || q.basis}</i>`;
+<section class="card s-dia"><h2>Layout from the tip</h2>${svg(g, pv, cv)}<div class="legend">${Object.keys(ROLE).map(k => `<span><i class="dot r-${k}"></i>${ROLE_NAME[k]}</span>`).join('')}</div><p class="note">Tip on the right. Ring size is drawn to relative scale. Heights show role order only; they are not frame dimensions, because verified manufacturer heights aren\u2019t held.</p></section>
+<section class="card s-sum"><h2>KR layout</h2><div class="sumrow">${(() => { const gs = L.guides, ci = gs.findIndex(q => q.role === 'choke'), red = gs.filter(q => q.role === 'stripper' || q.role === 'reduction'), run = gs.filter(q => q.role === 'running'), idx = q => gs.indexOf(q), bs = q => `<i class="tag ${q.basis}">${BASIS[q.basis] || q.basis}</i>`;
   const line = (cls, name, q, extra) => `<div class="sl"><span class="dot r-${cls}"></span><b>${name}</b><span>${extra}</span></div>`;
   const at = q => `${K.label(L, idx(q))} \u00b7 ${f(K.fromStem(L, idx(q)))} from stem \u00b7 ${f(q.tipMm)} from tip`;
   return line('stripper', 'Stripper', gs[0], `${gs[0].model} \u00b7 ${at(gs[0])} ${bs(gs[0])}`)
@@ -517,21 +610,7 @@ ${pv ? `<p class="note">Experimental, not Fuji\u2019s method: runner gaps scaled
     + (ci >= 0 ? line('choke', 'Choke point', gs[ci], `${gs[ci].model} \u00b7 ${at(gs[ci])} ${bs(gs[ci])}`) : '')
     + `<div class="sl"><span class="dot r-running"></span><b>Running guides</b><span>${run.length} \u00b7 spacing ${run.length ? f(Math.min(...gs.slice(ci).map((q, k, a) => (k ? a[k - 1].tipMm - q.tipMm : Infinity)))) + '\u2013' + f(Math.max(...gs.slice(ci).map((q, k, a) => (k ? a[k - 1].tipMm - q.tipMm : 0)))) + U : '\u2014'} (choke to tip-top)</span></div>`; })()}</div>
 <p class="note">Tags: <b>reference</b> = the chart\u2019s own distance, <b>calculated</b> = placed by K-Labs, <b>adjusted</b> = moved by you.</p></section>
-<section class="card col-b"><h2>Layout from the tip</h2>${svg(g, pv, cv)}<div class="legend">${Object.keys(ROLE).map(k => `<span><i class="dot r-${k}"></i>${ROLE_NAME[k]}</span>`).join('')}</div><p class="note">Tip on the right. Ring size is drawn to relative scale. Heights show role order only; they are not frame dimensions, because verified manufacturer heights aren\u2019t held.</p></section>
-<section class="card col-b"><h2>Guides</h2>${K.trainsOf(S.ref).length ? `<div class="mut">Reduction train</div><div class="seg" role="group" aria-label="Reduction train">${K.trainsOf(S.ref).map(tr => `<button data-train="${tr.id}" aria-pressed="${L.train === tr.id}">${tr.label}</button>`).join('')}</div><p class="note">${K.trainsOf(S.ref).find(tr => tr.id === L.train).note || 'Labels only'}. Labels only: positions follow your measurements.${L.train !== S.ref.train ? ' <b style="color:var(--warn)">Differs from this reference\u2019s train.</b>' : ''}</p>` : (S.ref.chart ? '<p class="note">Guide models and ring sizes follow the chart row. The chart\u2019s distances are the reference positions; use + and \u2212 or type a value to adjust one guide without moving the others.</p>' : '<p class="note">Guide models are labels from your entry; positions follow your measurements. The tool does not verify them.</p>')}
-<div class="grid" style="margin-top:10px"><div><div class="mut">Blank guides (excl. tip-top)</div><div class="num"><button data-cnt="-1" aria-label="Remove a blank guide">\u2212</button><input readonly value="${c.blank}" aria-label="Blank guide count"><button data-cnt="1" aria-label="Add a blank guide">+</button></div></div>
-<div class="mut" style="align-self:end">Tip-top 1 \u00b7 total ${c.total}${c.differs ? `<br><b style="color:var(--warn)">${c.delta > 0 ? '+' : ''}${c.delta} vs reference (${c.refBlank} + tip-top)</b>` : '<br>Matches reference'}</div></div>
-${S.msg ? `<p class="err" role="alert">${S.msg}</p>` : ''}
-<div class="hd" style="margin-top:10px"><span>Guide</span><span>From tip (${un})</span><span>Spacing</span><span></span></div>${rows}
-<p class="sel-info"><b>${K.label(L, sel)} ${t.model}</b> \u00b7 from stem <b>${f(K.fromStem(L, sel))}</b> \u00b7 from butt <b>${f(K.fromButt(L, sel))}</b>${ax}${t.refTipMm != null ? ' \u00b7 reference <b>' + f(t.refTipMm) + '</b>' : ''}</p>
-${t.unverified ? '<p class="note">' + (t.role === 'reduction' ? 'This is the third reduction guide. Its model is a label only and its frame designation has not been verified: check it against the manufacturer\u2019s own data.' : 'This guide\u2019s designation is unverified.') + '</p>' : ''}
-${is.filter(q => q.type !== 'range').map(q => `<p class="err">${q.msg}</p>`).join('')}
-<div class="bar"><button class="btn sm${S.confirm ? ' pri' : ''}" data-resetall>${S.confirm ? 'Tap again to reset all guides' : 'Reset all to reference'}</button></div></section>
-<section class="card col-a"><h2>Status</h2><p style="margin:0 0 6px${v.valid ? '' : ';color:#e14a58'}">${K.status(L)}</p>
-<label class="chk"><input type="checkbox" data-done="st" ${v.valid ? '' : 'disabled'} ${S.done.st ? 'checked' : ''}>Static-load tested by builder</label><label class="chk"><input type="checkbox" data-done="cast" ${v.valid ? '' : 'disabled'} ${S.done.cast ? 'checked' : ''}>Cast tested by builder</label>
-${rv ? (rv.level === 'review' ? `<p class="note" style="color:var(--warn)"><b>Manual review needed:</b> ${findTxt(rv.findings[0])}${rv.findings.length > 1 ? ' (+' + (rv.findings.length - 1) + ' more)' : ''}</p>` : '<p class="note">Runner spacing is within what the chart publishes and narrows toward the tip.</p>') : ''}
-<p class="note">${S.done.st && S.done.cast ? 'Builder-attested only. The calculator can\u2019t verify results.' : 'A starting layout, not final or optimal. Verify with static-load and casting tests before wrapping.'}</p></section>
-<section class="card col-b"><h2>Sources and limits</h2><p class="mut">Reference: ${S.ref.chart ? 'Fuji KR Concept chart row for ' + esc(S.rod) : 'the spacing between guides in your chart' + (S.ref.label ? ' (\u201c' + esc(S.ref.label) + '\u201d)' : '')}. The chart\u2019s choke-distance table is kept as a separate cross-check, never combined with the spacing${x ? ': ' + f(x.tableMm) + ' vs ' + f(x.chainMm) + ' from the stem' + (x.agrees ? ', in agreement' : ', ' + f(x.deltaMm) + ' apart. This layout uses the spacing diagram') : ''}.</p>
+<section class="card s-src"><h2>Sources and limits</h2><p class="mut">Reference: ${S.ref.chart ? 'Fuji KR Concept chart row for ' + esc(S.rod) : 'the spacing between guides in your chart' + (S.ref.label ? ' (\u201c' + esc(S.ref.label) + '\u201d)' : '')}. The chart\u2019s choke-distance table is kept as a separate cross-check, never combined with the spacing${x ? ': ' + f(x.tableMm) + ' vs ' + f(x.chainMm) + ' from the stem' + (x.agrees ? ', in agreement' : ', ' + f(x.deltaMm) + ' apart. This layout uses the spacing diagram') : ''}.</p>
 <details id="entrybox"${S.entryMsg || !S.ref.chart ? ' open' : ''}><summary>Other rod: enter your own measurements</summary>
 <p class="note">For a rod not in the chart, type the distances from your own chart. They are not saved or sent anywhere; enter them again next time.</p>
 <div class="grid"><label class="f">Label (optional)<input class="tin" data-e="label" value="${esc(S.entry.label)}" autocomplete="off" maxlength="60"></label><label class="f">Reel stem to first guide (${un})<input class="tin" data-e="stripper" inputmode="decimal" value="${esc(S.entry.stripper)}" autocomplete="off"></label></div>
@@ -545,7 +624,7 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
 <div class="bar"><button class="btn sm pri" data-applyentry>Use my measurements</button>${S.ref.chart ? '' : '<button class="btn sm" data-usedemo>Back to chart rod</button>'}</div>
 <p class="note">${esc(S.ref.source)}</p>
 <details><summary>Advanced: reference as JSON</summary><textarea id="refjson" spellcheck="false" aria-label="Reference data JSON">${JSON.stringify(S.ref, null, 1).replace(/</g, '&lt;')}</textarea>
-<div class="bar"><button class="btn sm" data-applyref>Apply values</button></div></details></details></section>
+<div class="bar"><button class="btn sm" data-applyref>Apply values</button></div></details></details></section></div>
 <details class="about col-all"><summary>About this calculator</summary>
 <p class="note">KR Guide Layout is an independent K-Labs Studio tool. It is not affiliated with or endorsed by Fuji; manufacturer names are used descriptively.${S.ref.chart ? ' The reference distances are Fuji\u2019s published KR Concept chart values, transcribed by K-Labs and not changed. The layout, guide counts, fit checks and scaling built on them are K-Labs calculations, not Fuji specifications.' : ' The reference distances are the measurements you typed in.'}</p>
 <p class="note"><b>Assumptions and limits.</b> Positions are ring centres measured from the blank tip (ring offset assumed 0), so do not use them to mark foot placement. The 15 mm minimum clearance is a working assumption. Layouts are starting points and have not been bench, static-load or casting tested.</p>
@@ -559,7 +638,8 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
     else if (d.unit) S.unit = d.unit;
     else if (d.lock != null) K.toggleLock(L, +d.lock);
     else if (d.reset != null) { const r = K.resetGuide(L, +d.reset); S.msg = r.ok ? '' : r.msg; }
-    else if (d.resetall != null) { if (!S.confirm) S.confirm = true; else { L = K.resetAll(L); S.msg = ''; S.prev = false; S.confirm = false; } }
+    else if (d.resetall != null) { if (!S.confirm) S.confirm = true; else { L = K.resetAll(L); S.proposal = K.propose(L); S.cand = S.proposal.status === 'proposed' ? S.proposal.n : null; S.msg = ''; S.prev = false; S.confirm = false; } }
+    else if (d.restoreref != null) { L = K.resetAll(L); S.proposal = K.propose(L); S.cand = S.proposal.status === 'proposed' ? S.proposal.n : null; S.msg = ''; S.prev = false; }
     else if (d.cand) S.cand = +d.cand;
     else if (d.candcancel != null) S.cand = null;
     else if (d.candapply != null) { const r = K.applyCandidate(L, S.cand, { acknowledgeReview: true }); S.msg = r.ok ? '' : r.msg; S.cand = null; S.sel = Math.min(S.sel, L.guides.length - 1); }

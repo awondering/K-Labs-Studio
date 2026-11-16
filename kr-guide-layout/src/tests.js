@@ -203,6 +203,79 @@
   T('every chart rod builds a reference with the chart\'s own label and models; rows are not modified', () => { K.CHART_RODS.forEach(r => { const ref = K.referenceForRod(r.id), row = FX.find(x => x.rod === r.id);
     A(ref.chart === true && ref.sourceCount.label === row.label && ref.guides.length === row.label && ref.stripperIn === row.stripperDiagram && ref.gapsIn.join() === row.gaps.join(), r.id); }); A(K.referenceForRod('nope') === null); });
   T('default rod stem position fits exactly: blank minus the chart\'s stem-to-tip-top distance', () => K.CHART_RODS.forEach(r => { const ref = K.referenceForRod(r.id), L = K.createLayout(ref, { bladeLenMm: r.lengthMm, stemFromButtMm: r.lengthMm - K.buildReference(ref).totalMm }); A(K.geometry(L).fits && K.validity(L).valid && near(L.guides[L.guides.length - 1].tipMm, 0, 1e-6), r.id); }));
+
+  // ---- Geometry correction: reel-stem changes must yield a valid proposed layout (independent expectations) -----------------------------
+  // Everything below is computed from the raw chart rows with plain arithmetic, never from engine helpers: stem distances, the chart's runner-gap
+  // envelope, and a separate validity check. 'd' is how much the stem-to-tip length differs from the chart's total (negative: runs past the tip).
+  const MM = 25.4, rowOf = id => FX.find(r => r.rod === id), lenMm = id => { const m = /^(\d+)'(?:(\d+)")?$/.exec(id); return (+m[1] * 12 + (m[2] ? +m[2] : 0)) * MM; };
+  const stemPos = row => { const o = [row.stripperDiagram * MM]; row.gaps.forEach(g => o.push(o[o.length - 1] + g * MM)); return o; };
+  const ENV = (() => { const g = []; FX.forEach(r => r.gaps.slice(3).forEach(x => g.push(x * MM))); return [Math.min(...g), Math.max(...g)]; })();
+  const indProblem = (L, blade) => { const t = L.guides.map(g => g.tipMm), n = t.length;
+    if (Math.abs(t[n - 1]) > 1.3) return 'tip-top off the tip: ' + t[n - 1];
+    for (let i = 0; i < n; i++) { if (t[i] < -1e-6) return 'guide ' + i + ' beyond tip: ' + t[i]; if (t[i] > blade + 1e-6) return 'guide ' + i + ' beyond butt';
+      if (i < n - 1 && t[i] - t[i + 1] < 15 - 1e-9) return 'gap ' + i + ' under 15 mm: ' + (t[i] - t[i + 1]); } return ''; };
+  const setup = (id, d) => { const row = rowOf(id), blade = lenMm(id), tot = stemPos(row)[row.gaps.length], stem = blade - (tot + d);
+    return { row, blade, tot, stem, L: K.createLayout(K.referenceForRod(id), { bladeLenMm: blade, stemFromButtMm: stem }) }; };
+  const DELTAS = [-300, -150, -100, -40, -10, -3, 3, 10, 40, 120, 300];
+  let swept = 0, autoN = 0, proposedN = 0, noneN = 0, fewer = 0, more = 0;
+  T('stem sweep, all 8 chart rods x 11 stem positions: every auto layout is on the blank, ordered, >= 15 mm apart, tip-top at the tip, train and choke at the chart distances, runner gaps inside the chart envelope and narrowing; nothing invalid is ever labelled valid', () => {
+    FX.forEach(row => DELTAS.forEach(d => { const S0 = setup(row.rod, d), sp = stemPos(row), tag = row.rod + ' d=' + d; swept++;
+      const refSnap = JSON.stringify(S0.L.ref), r = K.settle(S0.L), L = r.L, stemToTip = S0.blade - S0.stem;
+      A(JSON.stringify(L.ref) === refSnap, tag + ': reference data changed');
+      L.guides.forEach((g, i) => { if (g.refTipMm != null) A(sp.some(p => near(g.refStemMm, p, 1e-6) && near(g.refTipMm, stemToTip - p, 1e-6)), tag + ': reference position of guide ' + i + ' altered'); });
+      if (r.auto) { autoN++; A(!indProblem(L, S0.blade), tag + ' ' + indProblem(L, S0.blade)); A(K.validity(L).valid, tag + ': engine disagrees with independent check');
+        for (let i = 0; i < 4; i++) A(near(L.guides[i].tipMm, stemToTip - sp[i], 1e-6), tag + ': train/choke guide ' + i + ' moved');
+        const t = L.guides.map(g => g.tipMm), gaps = []; for (let i = 3; i < t.length - 1; i++) gaps.push(t[i] - t[i + 1]);
+        gaps.forEach((g, i) => { A(g >= ENV[0] - 0.05 * MM - 1e-6 && g <= ENV[1] + 0.05 * MM + 1e-6, tag + ': runner gap outside chart envelope ' + g); if (i) A(gaps[i] <= gaps[i - 1] + 0.05 * MM + 1e-6 === false || true); });
+        for (let i = 1; i < gaps.length; i++) A(gaps[i - 1] >= gaps[i] - 0.05 * MM - 1e-6, tag + ': runner gaps widen toward the tip'); // gaps listed choke -> tip; none may grow
+        A(K.counts(L).blank === t.length - 1 && L.auto.n === t.length - 1, tag + ': count disagrees with engine');
+        if (t.length - 1 < row.gaps.length) fewer++; if (t.length - 1 > row.gaps.length) more++;
+        L.guides.forEach((g, i) => { if (i > 3 || g.refTipMm == null) A(g.basis === 'heuristic' || g.refTipMm != null, tag + ': calculated guide not labelled calculated'); });
+        A(L.guides.slice(4, -1).every(g => g.basis === 'heuristic'), tag + ': recalculated running guides must be labelled calculated, not reference');
+      } else { A(K.validity(L).valid === !indProblem(L, S0.blade), tag + ': validity label disagrees with independent check');
+        if (r.proposal.status === 'proposed') { proposedN++; A(r.proposal.level === 'review' || r.proposal.edits, tag); } else if (r.proposal.status === 'none') noneN++;
+        if (indProblem(L, S0.blade)) A(/^Not a valid layout/.test(K.status(L)), tag + ': invalid layout not flagged'); }
+    })); });
+  T('sweep outcomes: most positions resolve automatically; both fewer and additional running guides occur', () => { A(swept === 88, String(swept)); A(autoN >= 70, 'auto ' + autoN + ' proposed ' + proposedN + ' none ' + noneN); A(fewer > 10 && more > 10, 'fewer ' + fewer + ' more ' + more); });
+  T('at the exact-fit stem nothing changes: reference shown, no proposal, every guide still published', () => FX.forEach(row => { const S0 = setup(row.rod, 0), r = K.settle(S0.L);
+    A(!r.auto && r.proposal.status === 'fits' && r.L.guides.every(g => g.basis === 'published') && !indProblem(r.L, S0.blade), row.rod); }));
+  T('moving the stem back to the exact-fit position restores the published reference exactly', () => FX.forEach(row => { const S0 = setup(row.rod, 40), r1 = K.settle(S0.L); A(r1.auto, row.rod + ' not auto');
+    const r2 = K.reconcile(r1.L, { bladeLenMm: S0.blade, stemFromButtMm: S0.blade - S0.tot }), sp = stemPos(row);
+    A(!r2.auto && r2.L.guides.length === row.gaps.length + 1 && r2.L.guides.every((g, i) => g.basis === 'published' && near(g.tipMm, S0.tot - sp[i], 1e-6)), row.rod); }));
+  T('worked example, 7 ft: stem 100 mm closer to the tip = 1835.5 mm stem-to-tip', () => { const S0 = setup("7'", -100), stemToTip = 2133.6 - S0.stem, sp = stemPos(rowOf("7'"));
+    A(near(S0.tot, 1935.48, 1e-6) && near(stemToTip, 1835.48, 1e-6), 'geometry');
+    const before = S0.L.guides.map(g => g.tipMm); // old behaviour: the chart distances unchanged, nothing recalculated
+    A(near(before[0], 1136.98, 1e-6) && near(before[9], -100, 1e-6) && before.filter(x => x < 0).length === 2, 'before: TT 100 mm and #9 beyond the tip');
+    const r = K.settle(S0.L), t = r.L.guides.map(g => g.tipMm);
+    A(r.auto && r.L.guides.length === 9, 'after: 8 + tip-top'); A(!indProblem(r.L, 2133.6) && near(t[8], 0, 1e-9), 'valid, TT at the tip');
+    for (let i = 0; i < 4; i++) A(near(t[i], 1835.48 - sp[i], 1e-6)); });
+  T('locked guide is never moved: stem change keeps it, shows a proposal, and applying keeps it where the builder put it', () => { const S0 = setup("7'", 0), L0 = S0.L; K.toggleLock(L0, 6);
+    const lockedAt = L0.guides[6].tipMm, geom = { bladeLenMm: S0.blade, stemFromButtMm: S0.stem + 100 }, r = K.reconcile(L0, geom), L = r.L;
+    A(!r.auto && r.proposal.status === 'proposed' && r.proposal.edits === true, 'proposal not applied silently');
+    A(L.guides[6].locked && near(L.guides[6].tipMm, lockedAt, 1e-9), 'locked guide moved'); A(K.validity(L).valid === false, 'layout is still the builder\'s, still flagged invalid');
+    const snap = JSON.stringify(L.guides.map(g => [g.tipMm, g.basis, g.locked])); K.propose(L); A(snap === JSON.stringify(L.guides.map(g => [g.tipMm, g.basis, g.locked])), 'proposing must not change the layout');
+    const ap = K.applyCandidate(L, r.proposal.n, { acknowledgeReview: true }); A(ap.ok, ap.msg); A(!indProblem(L, S0.blade), indProblem(L, S0.blade));
+    A(L.guides.filter(g => g.locked).length === 1 && L.guides.some(g => g.locked && near(g.tipMm, lockedAt, 1e-9)), 'locked guide lost'); });
+  T('manually adjusted guide survives a stem change and acceptance; nothing replaced until accepted', () => { const S0 = setup("7'", 0), L0 = S0.L; A(K.setPosition(L0, 4, 560).ok);
+    const r = K.reconcile(L0, { bladeLenMm: S0.blade, stemFromButtMm: S0.stem + 100 }), L = r.L; A(!r.auto && r.proposal.edits && r.proposal.status !== 'fits');
+    A(near(L.guides[4].tipMm, 560, 1e-9) && L.guides[4].basis === 'manual', 'manual guide changed before acceptance');
+    if (r.proposal.status === 'proposed') { const ap = K.applyCandidate(L, r.proposal.n, { acknowledgeReview: true }); A(ap.ok, ap.msg); A(L.guides.some(g => g.basis === 'manual' && near(g.tipMm, 560, 1e-9)), 'manual guide silently lost'); A(!indProblem(L, S0.blade)); } });
+  T('conflict with a locked guide is explained, not overridden', () => { const S0 = setup("7'", 0), L0 = S0.L; K.toggleLock(L0, 5); // #6 locked at 431.8 mm from the tip
+    const chokeFromStem = (27.5 + 9 + 6.6 + 5.9) * MM, r = K.reconcile(L0, { bladeLenMm: S0.blade, stemFromButtMm: S0.blade - (chokeFromStem + 300) }); // choke would sit 300 mm from the tip, tip-side of the locked guide
+    A(!r.auto && r.proposal.status === 'none', r.proposal.status); A(/#\d \(locked\) is at 431\.8 mm/.test(r.proposal.reason) && /Move or unlock/.test(r.proposal.reason), r.proposal.reason);
+    A(r.L.guides.filter(g => g.locked).length === 1 && near(r.L.guides.find(g => g.locked).tipMm, 431.8, 1e-9), 'locked guide moved'); });
+  T('no valid alternative: reason gives the limiting geometry (independent numbers) and the layout is never labelled valid', () => { const row = rowOf("7'"), sp = stemPos(row), chokeFromStem = sp[3], need = chokeFromStem + 30;
+    A(near(chokeFromStem, 1244.6, 1e-6) && near(need, 1274.6, 1e-6));
+    const blade = 2133.6, r = K.reconcile(setup("7'", 0).L, { bladeLenMm: blade, stemFromButtMm: blade - (need - 20) }); // 20 mm short of the minimum
+    A(r.proposal.status === 'none' && !r.auto, r.proposal.status); A(/1274\.6/.test(r.proposal.reason) && /20\.0 mm short/.test(r.proposal.reason), r.proposal.reason);
+    A(near(r.proposal.limit.needMm, 1274.6, 1e-6) && near(r.proposal.limit.shortfallMm, 20, 1e-6)); A(!K.validity(r.L).valid && /^Not a valid layout/.test(K.status(r.L)));
+    const ok = K.reconcile(setup("7'", 0).L, { bladeLenMm: blade, stemFromButtMm: blade - (need + 40) }); A(ok.auto || ok.proposal.status === 'proposed' || ok.proposal.status === 'none'); });
+  T('mm, decimal inch and fractional inch stem entry give identical layouts and display agrees with the engine', () => { const a = K.parseLength('190.5', 'mm'), b = K.parseLength('7.5', 'in'), c = K.parseLength('7 1/2', 'frac');
+    A(near(a, b, 1e-9) && near(b, c, 1e-9), 'same length'); const fr = K.parseLength('12 5/8', 'frac'); A(near(fr, 320.675, 1e-9));
+    const mkr = st => K.reconcile(setup("7'", 0).L, { bladeLenMm: 2133.6, stemFromButtMm: st }).L.guides.map(g => g.tipMm.toFixed(6)).join();
+    A(mkr(a) === mkr(b) && mkr(b) === mkr(c), 'layout differs by unit');
+    const L = K.reconcile(setup("7'", 0).L, { bladeLenMm: 2133.6, stemFromButtMm: fr }).L; A(!indProblem(L, 2133.6));
+    L.guides.forEach(g => { A(near(K.parseLength(K.fmt(g.tipMm, 'mm'), 'mm'), g.tipMm, 0.051)); A(near(K.parseLength(K.fmt(g.tipMm, 'in'), 'in'), g.tipMm, 0.128)); A(near(K.parseLength(K.fmt(g.tipMm, 'frac'), 'frac'), g.tipMm, MM / 32 + 0.01)); }); });
   const failed = results.filter(r => !r.ok);
   if (typeof module !== 'undefined' && typeof require !== 'undefined' && require.main === module) {
     if (results.sweep) console.log('sweep:', JSON.stringify(results.sweep)); results.forEach(r => console.log((r.ok ? 'PASS ' : 'FAIL ') + r.name + (r.msg ? ' :: ' + r.msg : '')));

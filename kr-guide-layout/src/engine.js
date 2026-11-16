@@ -154,7 +154,10 @@
     N.guides.forEach(g => { const o = keep.find(x => x.refStemMm != null && Math.abs(x.refStemMm - g.refStemMm) < 1e-9);
       if (o && (o.basis !== 'published' || o.locked)) { g.tipMm = o.tipMm; g.basis = o.basis; g.locked = o.locked; } });
     const tt = N.guides.pop(); added.forEach(a => N.guides.push(Object.assign({}, a)));
-    N.guides.sort((a, b) => b.tipMm - a.tipMm); N.guides.push(tt); return N;
+    // Only the running guides are ordered by position: the stripper, reduction train and choke keep their roles and order, so a kept runner that now lies
+    // beyond the choke is reported as an ordering conflict instead of silently becoming part of the train.
+    const ci = N.guides.findIndex(g => g.role === 'choke'), head = N.guides.slice(0, ci + 1), run = N.guides.slice(ci + 1).sort((a, b) => b.tipMm - a.tipMm);
+    N.guides = [...head, ...run, tt]; return N;
   }
   function counts(L) {
     const blank = L.guides.length - 1;
@@ -246,9 +249,14 @@
     const nRun = n - (ci + 1), free = nRun - fixed.length, tt = gs[last];
     if (nRun < 1) return bad('Needs at least one running guide');
     if (free < 0) return bad('Locked/manual guides exceed this count');
-    const a = tt.locked || tt.basis === 'manual' ? tt.tipMm : 0, hi = gs[ci].tipMm, P = runnerProfile(L.ref);
+    const ttFixed = tt.locked || tt.basis === 'manual';
+    if (ttFixed && Math.abs(tt.tipMm) > FIT_TOL) return bad('The tip-top is ' + (tt.locked ? 'locked' : 'adjusted') + ' ' + tt.tipMm.toFixed(1) + ' mm from the tip; it must sit at the tip. Unlock or reset it');
+    const a = ttFixed ? tt.tipMm : 0, hi = gs[ci].tipMm, P = runnerProfile(L.ref);
     const bounds = [a, ...fixed.map(g => g.tipMm), hi];
-    for (let i = 1; i < bounds.length; i++) if (bounds[i] - bounds[i - 1] < MIN_GAP) return bad('Fixed guides leave under ' + MIN_GAP + ' mm clearance');
+    for (let k = 0; k < fixed.length; k++) { const q = fixed[k], nm = label(L, gs.indexOf(q)) + (q.locked ? ' (locked)' : ' (adjusted)');
+      if (q.tipMm < a + MIN_GAP) return bad(nm + ' is at ' + q.tipMm.toFixed(1) + ' mm from the tip, too close to the tip or beyond it. Move or unlock it');
+      if (q.tipMm > hi - MIN_GAP) return bad(nm + ' is at ' + q.tipMm.toFixed(1) + ' mm, too close to the choke (' + hi.toFixed(1) + ' mm) or past it. Move or unlock it'); }
+    for (let i = 1; i < bounds.length; i++) if (bounds[i] - bounds[i - 1] < MIN_GAP) return bad('Locked or adjusted guides leave under ' + MIN_GAP + ' mm clearance between them');
     const lens = bounds.slice(1).map((b, i) => b - bounds[i]), q = lens.map(() => 0); // give each free guide to the widest current gap
     for (let k = 0; k < free; k++) { let s = 0; lens.forEach((l, i) => { if (l / (q[i] + 1) > lens[s] / (q[s] + 1)) s = i; }); q[s]++; }
     const run = []; // ascending from tip: {tipMm, guide|null}
@@ -267,11 +275,15 @@
       lowWorstPct: Math.max(0, ...gaps.map(low)), highWorstPct: Math.max(0, ...gaps.map(high)), excessPct: gaps.reduce((s, g) => s + low(g) + high(g), 0),
       withinPublished: flags.every(x => !x), meanDevPct: (mean / P.mean - 1) * 100, score: Math.abs(Math.log(mean / P.mean)), refRange: [P.refMin, P.refMax], refMeanMm: P.mean };
   }
+  function limitText(L) {
+    const lim = limitingGeometry(L); if (!lim) return '';
+    return 'From the reel stem the chart puts the choke at ' + lim.chokeFromStemMm.toFixed(1) + ' mm, so with one running guide and the tip-top the blank must give at least ' + lim.needMm.toFixed(1) + ' mm from stem to tip (this one gives ' + lim.availableMm.toFixed(1) + ' mm, ' + (lim.shortfallMm > 0 ? lim.shortfallMm.toFixed(1) + ' mm short' : 'enough for that, so the limit is the locked or adjusted guides') + ').';
+  }
   function assess(L) {
     const v = validity(L), g = geometry(L);
     if (v.valid) return { needed: false, referenceFits: g.fits, valid: true };
-    const ci = L.guides.findIndex(x => x.role === 'choke'), trainBad = v.issues.filter(x => x.i <= ci);
-    if (ci < 0 || trainBad.length) return { needed: true, valid: false, candidates: [], ranked: [], reviewable: [], recommended: null, reason: 'The reduction train itself doesn\u2019t fit (' + (trainBad[0] ? trainBad[0].msg : 'no choke guide') + '). Move the reel seat or adjust it manually.' };
+    const ci = L.guides.findIndex(x => x.role === 'choke'), fixedG = q => q && (q.locked || q.basis === 'manual'), trainBad = v.issues.filter(x => x.i <= ci && !fixedG(L.guides[x.i]) && !fixedG(L.guides[x.i + 1])); // a locked/adjusted runner past the choke is a builder conflict, reported by candidate()
+    if (ci < 0 || trainBad.length) return { needed: true, valid: false, candidates: [], ranked: [], reviewable: [], recommended: null, reason: 'The reduction train itself doesn\u2019t fit (' + (trainBad[0] ? trainBad[0].msg : 'no choke guide') + '). ' + limitText(L) + ' Move the reel seat or adjust it manually.' };
     const lo = Math.max(MIN_BLANK, L.refBlank - COUNT_WINDOW), cands = [];
     for (let n = L.refBlank + COUNT_WINDOW; n >= lo; n--) cands.push(candidate(L, n));
     const valid = cands.filter(c => c.status === 'valid');
@@ -279,7 +291,40 @@
     const reviewable = valid.filter(c => c.level === 'review').sort((x, y) => x.review.findings.length - y.review.findings.length || x.excessPct - y.excessPct || y.n - x.n);
     return { needed: true, valid: false, candidates: cands, ranked, reviewable, recommended: ranked[0] ? ranked[0].n : null,
       reason: ranked[0] ? '' : reviewable[0] ? 'Layouts that physically fit exist, but none has runner spacing the chart supports, so none is recommended. You can inspect them as manual-review layouts, or adjust the reel seat, guide count or positions by hand.'
-        : 'No guide count between ' + lo + ' and ' + (L.refBlank + COUNT_WINDOW) + ' keeps at least ' + MIN_GAP + ' mm between neighbouring guides with the fixed guides in place. Adjust manually or move the reel seat.' };
+        : 'No guide count between ' + lo + ' and ' + (L.refBlank + COUNT_WINDOW) + ' keeps at least ' + MIN_GAP + ' mm between neighbouring guides with the fixed guides in place (' + L.refBlank + ' + tip-top: ' + (cands.find(c => c.n === L.refBlank) || cands[0]).why + '). ' + limitText(L) + ' Adjust manually or move the reel seat.' };
+  }
+  // ---- Automatic proposal after a geometry change ---------------------------------------------------------------
+  // limitingGeometry: the stem-to-tip length the reduction train needs. The chart distances stripper..choke are fixed from the stem, and at least
+  // one running guide must fit between the choke and the tip-top (two gaps of MIN_GAP), so the blank must give at least choke-from-stem + 2 x MIN_GAP.
+  function limitingGeometry(L) {
+    const ci = L.guides.findIndex(g => g.role === 'choke'); if (ci < 0) return null;
+    const chokeFromStem = L.guides[ci].refStemMm, need = chokeFromStem + 2 * MIN_GAP;
+    return { chokeFromStemMm: chokeFromStem, needMm: need, availableMm: L.stemToTip, shortfallMm: Math.max(0, need - L.stemToTip),
+      latestStemFromButtMm: L.geom.bladeLenMm - need };
+  }
+  // A guide the builder moved, locked, added or removed (or a count they changed) is a builder decision; K-Labs-calculated guides are not.
+  const builderEdits = L => L.guides.some(g => g.locked || g.basis === 'manual' || g.basis === 'added' || g.basis === 'experimental') ||
+    (!L.guides.some(g => g.basis === 'heuristic') && L.guides.length - 1 !== L.refBlank);
+  function propose(L) {
+    if (validity(L).valid) return { status: 'fits' };
+    const a = assess(L), lim = limitingGeometry(L), edits = builderEdits(L);
+    const n = a.recommended != null ? a.recommended : a.reviewable && a.reviewable[0] ? a.reviewable[0].n : null;
+    if (n == null) return { status: 'none', reason: a.reason, limit: lim, edits, assessment: a };
+    const c = candidate(L, n);
+    return { status: 'proposed', n, level: c.level, candidate: c, edits, autoApply: !edits && c.level === 'suitable', assessment: a, limit: lim };
+  }
+  // Applies the proposal only when it replaces nothing the builder decided and the spacing is within what the chart supports.
+  function settle(L) {
+    const p = propose(L);
+    if (p.status === 'proposed' && p.autoApply) {
+      const before = L.guides.map(g => ({ role: g.role, refTipMm: g.refTipMm, tipMm: g.tipMm })), r = applyCandidate(L, p.n);
+      if (r.ok) { L.auto = { n: p.n, referenceBlank: L.refBlank, before }; return { L, proposal: null, auto: true, applied: p }; }
+    }
+    return { L, proposal: p, auto: false };
+  }
+  function reconcile(prev, geom) {
+    const wasAuto = !builderEdits(prev) && prev.guides.some(g => g.basis === 'heuristic');
+    return settle(wasAuto ? createLayout(prev.ref, geom, prev.train) : rebase(prev, geom));
   }
   function applyCandidate(L, n, opts) { // explicit builder action only
     const c = candidate(L, n); if (c.status !== 'valid') return { ok: false, msg: c.why || 'Candidate not acceptable' };
@@ -294,6 +339,6 @@
   }
   const api = { IN, MIN_GAP, FIT_TOL, toMm, fromMm, frac, fmt, CHART_RODS, DEFAULT_ROD, referenceForRod, referenceFromEntry, trainsOf, MIN_ENTRY_GUIDES, MAX_ENTRY_GUIDES, buildReference, crossCheck, createLayout, label,
     spacing, fromStem, fromButt, geometry, issues, setPosition, toggleLock, resetGuide, resetAll, counts, addGuide,
-    removeGuide, validity, candidate, assess, applyCandidate, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
+    removeGuide, validity, candidate, assess, applyCandidate, limitingGeometry, builderEdits, propose, settle, reconcile, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.KR = api;
 })(typeof window !== 'undefined' ? window : globalThis);
