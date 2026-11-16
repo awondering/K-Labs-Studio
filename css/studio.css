@@ -12977,6 +12977,59 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 }
 /* End Guide Train Designer */
 
+/* KR Guide Layout (Workshop): hosts the self-contained KR Guide Layout document in a frame that grows to its content, so the
+   Workshop page scrolls as it does for every other tool. Every rule is scoped to its own card. */
+.kr-guide-card{
+  padding:0;
+  gap:8px;
+  background:none;
+  border:0;
+  box-shadow:none;
+}
+.kr-guide-card .kr-guide-head{
+  padding:0 2px;
+}
+.kr-guide-card .kr-guide-head h3{
+  /* the tool shows its own title; the heading stays for assistive technology */
+  position:absolute;
+  width:1px;
+  height:1px;
+  margin:-1px;
+  padding:0;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+  white-space:nowrap;
+  border:0;
+}
+.kr-guide-host{
+  position:relative;
+  min-height:240px;
+  margin-left:-12px;
+  margin-right:-12px;
+  border:1px solid rgba(216,210,197,.14);
+  border-radius:18px;
+  overflow:hidden;
+  background:#060708;
+}
+.kr-guide-card .kr-guide-frame{
+  display:block;
+  width:100%;
+  height:640px;
+  border:0;
+  background:#060708;
+  color-scheme:dark;
+}
+.kr-guide-card .kr-guide-status{
+  margin:0;
+  padding:22px 18px;
+  color:var(--titanium);
+  font-size:14px;
+  line-height:1.4;
+}
+.kr-guide-card .kr-guide-status--error p{
+  margin:0 0 12px;
+}
+
 /* Thread Design Studio (Workshop): hosts the self-contained studio in a frame. Every rule is scoped to its own card
    so other Workshop tools are unaffected. The frame fills the space between the card heading and the bottom navigation. */
 .thread-studio-card{

@@ -1,0 +1,68 @@
+/* KR Guide Layout: styled to K-Labs Studio tokens (theme.css / layout.css / components.css, read 2026-11-15).
+   Token names below are this tool's own; values are Studio's. Studio rules adapted, not copied wholesale:
+   carbon-field texture, card gradient + 18px radius, circular +/- steppers with a weight-800 value, 16px-radius
+   primary/ghost buttons, red hover/focus rule, 410px shell. Keep class names stable: browser-tests.py depends on them. */
+:root{--bg:#060708;--card:#0d1012;--card2:#12161a;--line:#242a2d;--ti:#ddd6c9;--ti2:#ada99d;--mut:#6f736d;
+--red:#b42736;--red2:#e14a58;--warn:#c9a24a;--warn-line:#5b4a1e;--bad:#e14a58;
+--mi:'Michroma','Eurostile','Arial Narrow',sans-serif;--sans:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Segoe UI',Roboto,Arial,sans-serif}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;color:var(--ti);font:15px/1.4 var(--sans);-webkit-text-size-adjust:100%;min-height:100vh;
+background:radial-gradient(circle at 50% -10%,rgba(180,39,54,.10),transparent 45%),var(--bg)}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.07;mix-blend-mode:screen;background-size:12px 12px;
+background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.55) 0 1px,transparent 1px 6px),repeating-linear-gradient(-45deg,rgba(255,255,255,.35) 0 1px,transparent 1px 6px)}
+main{position:relative;max-width:410px;margin:0 auto;padding:max(14px,env(safe-area-inset-top)) 12px max(24px,env(safe-area-inset-bottom))}
+h1{font:400 15px/1.3 var(--mi);letter-spacing:.06em;margin:8px 2px 2px}
+h2{font:400 11px/1.3 var(--mi);letter-spacing:.08em;margin:0 0 10px;color:var(--ti2);text-transform:uppercase}
+.sub{color:var(--mut);font-size:12.5px;margin:0 2px 12px}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:10px}
+.mut{color:var(--mut);font-size:12.5px}.note{color:var(--mut);font-size:12px;margin:8px 0 0}
+.note b,.mut b{color:var(--ti2)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:380px){.grid{grid-template-columns:1fr}}
+label.f{display:block;font-size:12.5px;color:var(--mut)}
+/* stepper: Studio layout-control-card pattern (circular buttons, weight-800 value) */
+.num{display:flex;align-items:center;gap:6px;margin-top:4px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:3px}
+.num input{flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--ti);text-align:center;font:800 16px var(--sans);font-variant-numeric:tabular-nums;padding:0 2px;height:40px}
+.num button{flex:none;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card2);color:var(--ti);font:400 20px var(--sans);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.num button:active{background:rgba(180,39,54,.22)}
+@media(hover:hover){.num button:hover,.btn:hover,.seg button:hover,.row .ac button:hover{border-color:var(--red);color:var(--red2)}}
+input:focus-visible,button:focus-visible,summary:focus-visible,textarea:focus-visible{outline:2px solid var(--red2);outline-offset:2px}
+.num:focus-within{border-color:var(--red)}
+.seg{display:flex;gap:4px;margin-top:6px;padding:3px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.seg button{flex:1;height:38px;border:1px solid transparent;border-radius:13px;background:transparent;color:var(--mut);font:600 13px var(--sans);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.seg button[aria-pressed=true]{background:linear-gradient(180deg,var(--red),#8f1e2b);border-color:var(--red2);color:#f4efe6}
+.btn{height:44px;padding:0 16px;border:1px solid var(--line);border-radius:16px;background:var(--card2);color:var(--ti);font:600 13.5px var(--sans);cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.btn.pri{background:linear-gradient(180deg,var(--red),#8f1e2b);border-color:var(--red2);color:#f4efe6}
+@media(hover:hover){.btn.pri:hover,.seg button[aria-pressed=true]:hover{color:#fff;border-color:var(--red2)}}
+.btn.sm{height:38px;padding:0 12px;font-size:12.5px;border-radius:14px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.warn{border-color:var(--warn-line);background:linear-gradient(180deg,#171409,#100f09)}.warn h2{color:var(--warn)}.warn p{margin:0 0 6px;font-size:13.5px}
+.err{color:var(--bad);font-size:12.5px;margin:6px 0 0}
+details>summary{cursor:pointer;color:var(--ti2);font-size:13.5px;padding:8px 0;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details>summary::-webkit-details-marker{display:none}
+details>summary::after{content:"\25BE";color:var(--mut)}details[open]>summary::after{content:"\25B4"}
+svg{width:100%;height:auto;display:block}svg text{fill:var(--mut);font:8px var(--sans)}svg .g{cursor:pointer}
+svg .sel text{fill:var(--ti)}
+/* guide rows: Studio guide-spacing-panel pattern */
+.hd,.row{display:grid;grid-template-columns:78px 1fr 40px 52px;gap:5px;align-items:center}
+.hd{color:var(--mut);font-size:11.5px;padding:0 4px 4px}.hd span:nth-child(3){text-align:right}
+.row{padding:6px 4px;border-top:1px solid var(--line);border-left:3px solid transparent;border-radius:0}
+.row.sel{background:rgba(180,39,54,.10);border-left-color:var(--red2)}.row.lk .num{border-color:#3a4247}
+.row .id b{font-weight:800}.row .id span{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .num{margin:0;padding:2px;gap:3px;border-radius:12px}.row .num input{height:34px;font-size:14px;padding:0}.row .num button{width:34px;height:34px;font-size:18px}
+.row .sp{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--ti2)}
+.row .ac{display:flex;flex-direction:column;gap:3px}.row .ac button{height:26px;border:1px solid var(--line);border-radius:999px;background:var(--card2);color:var(--ti2);font:600 11px var(--sans);cursor:pointer;transition:border-color .15s,color .15s}
+.row .ac button[aria-pressed=true]{background:rgba(180,39,54,.22);border-color:var(--red);color:var(--ti)}
+.tag{font-style:normal;font-size:10px;margin-left:5px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);color:var(--mut)}
+.tag.manual,.tag.added{color:var(--ti);border-color:#4b5154}.tag.experimental,.tag.heuristic{color:var(--warn);border-color:var(--warn-line)}.tag.published{color:var(--mut)}
+.tag.off{color:var(--bad);border-color:#5b2a2a}
+.sel-info{font-size:12.5px;color:var(--mut);margin:8px 2px 0;font-variant-numeric:tabular-nums}.sel-info b{color:var(--ti)}
+.chk{display:flex;gap:10px;align-items:center;min-height:44px;font-size:13.5px}.chk input{width:22px;height:22px;accent-color:var(--red)}
+input.tin{display:block;width:100%;margin-top:4px;min-height:44px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ti);padding:0 10px;font:600 15px var(--sans)}
+input.tin:focus-visible{outline:2px solid var(--red2);outline-offset:2px}
+textarea{width:100%;min-height:140px;background:var(--card);color:var(--ti);border:1px solid var(--line);border-radius:12px;padding:8px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.btn.sm[aria-pressed=true]{background:linear-gradient(180deg,var(--red),#8f1e2b);border-color:var(--red2);color:#f4efe6}
+.btn:disabled,.row .ac button:disabled{opacity:.4;cursor:default}
+@media(max-width:420px){main{padding-left:10px;padding-right:10px}.card{padding:12px;border-radius:16px}.btn.sm{flex:1 1 auto}}
+/* Narrow phones (about 360 px, and the hosted width inside the Workshop): keep every guide row's position field readable. Layout only. */
+@media(max-width:400px){.hd,.row{grid-template-columns:70px 1fr 34px 46px;gap:3px}.row .tag{font-size:9.5px;padding:1px 5px}.row .num{gap:1px}.row .num button{width:30px;font-size:16px}.row .id span{font-size:10.5px}.row .sp{font-size:11.5px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
