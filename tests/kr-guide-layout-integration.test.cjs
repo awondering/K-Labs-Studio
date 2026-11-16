@@ -57,20 +57,39 @@ test('ui.js wiring: open mapping, visibility, focus return and render hook',()=>
 
 test('renderKrGuideTool mounts only while its card is open, once, and unmounts when another tool opens',()=>{
   const calls=[];let mounted=false;const host={};
-  const api={isMounted:()=>mounted,mount:()=>{calls.push('mount');mounted=true;},unmount:()=>{calls.push('unmount');mounted=false;}};
-  const c=vm.createContext({workshopToolsState:{activeTool:'list'},KLabsKrGuideLayoutHost:api,$:(id)=>id==='krGuideHost'?host:null});
+  const opts=[];let mode='decimal-inch';
+  const api={isMounted:()=>mounted,mount:(h,o)=>{calls.push('mount');opts.push(o);mounted=true;},unmount:()=>{calls.push('unmount');mounted=false;},syncMode:(h,m)=>{calls.push('sync:'+m);}};
+  const c=vm.createContext({workshopToolsState:{activeTool:'list'},KLabsKrGuideLayoutHost:api,measurementDisplayMode:()=>mode,$:(id)=>id==='krGuideHost'?host:null});
   const start=ui.indexOf('function renderKrGuideTool(');vm.runInContext(ui.slice(start,ui.indexOf('\n}',start)+2),c);
   c.renderKrGuideTool();c.workshopToolsState.activeTool='kr-guide';c.renderKrGuideTool();c.renderKrGuideTool();
   c.workshopToolsState.activeTool='thread-studio';c.renderKrGuideTool();
-  assert.deepEqual(calls,['unmount','mount','unmount']);
+  assert.deepEqual(calls,['unmount','mount','sync:decimal-inch','unmount']);
+  assert.equal(JSON.stringify(opts),'[{"mode":"decimal-inch"}]','the Settings measurement mode is passed at mount');
 });
 
 test('host: frame styles are injected ahead of the tool and content height is measured from the document',()=>{
   const doc=Host.buildSrcdoc('<!doctype html><html><head><title>t</title></head><body></body></html>');
-  assert.match(doc,/<head><style>html,body\{min-height:0!important/);
+  assert.match(doc,/<head><script>window\.__KR_HOST__=\{"unit":"mm"\};<\/script><style>html,body\{min-height:0!important/);
   const fake={documentElement:{scrollHeight:900},body:{getBoundingClientRect:()=>({bottom:880})},querySelector:()=>({getBoundingClientRect:()=>({bottom:910.2})})};
   assert.equal(Host.contentHeight(fake),911);
   assert.equal(Host.contentHeight(null),0);
+});
+
+test('host: Settings mode maps to the tool unit, anything else is metric, and the unit is embedded in the document',()=>{
+  assert.equal(Host.unitForMode('metric'),'mm');assert.equal(Host.unitForMode('decimal-inch'),'in');assert.equal(Host.unitForMode('fractional-inch'),'frac');
+  for(const bad of [undefined,null,'',' ','imperial','FRAC',42,{}])assert.equal(Host.unitForMode(bad),'mm',String(bad));
+  const html='<!doctype html><html><head></head><body></body></html>';
+  assert.match(Host.buildSrcdoc(html,'in'),/__KR_HOST__=\{"unit":"in"\}/);
+  assert.match(Host.buildSrcdoc(html,'frac'),/__KR_HOST__=\{"unit":"frac"\}/);
+  assert.match(Host.buildSrcdoc(html,'</script><b>'),/__KR_HOST__=\{"unit":"mm"\}/,'unknown values cannot inject markup');
+});
+
+test('host: syncMode pushes only when the Settings preference changed, never for an unrelated render',()=>{
+  const sent=[];const state={unit:'in',frame:{contentWindow:{postMessage:(m)=>sent.push(m)}}};const host={__krGuide:state};
+  assert.equal(Host.syncMode(host,'decimal-inch'),false);assert.equal(sent.length,0);
+  assert.equal(Host.syncMode(host,'metric'),true);assert.deepEqual(sent,[{type:'klabs-kr-guide',action:'set-unit',unit:'mm'}]);
+  assert.equal(Host.syncMode(host,'metric'),false);assert.equal(sent.length,1);
+  assert.equal(Host.syncMode({},'metric'),false);
 });
 
 function fakeHost(){

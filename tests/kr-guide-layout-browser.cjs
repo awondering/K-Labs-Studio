@@ -36,6 +36,11 @@ const metrics=(page)=>page.evaluate(()=>{const f=document.querySelector('#krGuid
     snapshot:JSON.stringify([...d.querySelectorAll('.row')].map((r)=>[r.querySelector('input').value,(r.querySelector('.sp')||{}).textContent])),
     minTouch:Math.min(...[...d.querySelectorAll('.row .num button')].map((b)=>Math.min(b.getBoundingClientRect().width,b.getBoundingClientRect().height)))};});
 
+const setPref=(page,mode)=>page.evaluate((m)=>{const n=measurementDisplaySettings(m);studioSettings.measurementUnits=n.measurementUnits;studioSettings.imperialDisplay=n.imperialDisplay;saveStudioSettings();},mode);
+const closeKr=async(page)=>{await page.evaluate(()=>openWorkshopTool('thread-studio'));await page.waitForFunction(()=>!document.querySelector('#krGuideHost iframe'));};
+const krUnit=(page)=>page.evaluate(()=>{const d=document.querySelector('#krGuideHost iframe').contentDocument;const c=d.querySelector('#app').cloneNode(true);c.querySelectorAll('button[data-unit=mm],textarea').forEach((x)=>x.remove());
+  return {pressed:[...d.querySelectorAll('[data-unit][aria-pressed=true]')].map((x)=>x.dataset.unit).join(),blade:d.querySelector('input[data-k=blade]').value,stem:d.querySelector('input[data-k=stem]').value,first:d.querySelector('.row[data-i="0"] input').value,mmText:/\bmm\b/.test(c.textContent),rows:d.querySelectorAll('.row').length};});
+const rawSettings=(page)=>page.evaluate(()=>JSON.stringify(Object.keys(localStorage).filter((k)=>/settings/i.test(k)).sort().map((k)=>[k,localStorage.getItem(k)])));
 async function main(){
   const server=await serve();const base=`http://127.0.0.1:${server.address().port}`;
   const browser=await playwright[process.env.TDS_BROWSER||'chromium'].launch({headless:true});
@@ -123,15 +128,48 @@ async function main(){
       ck(`${w}px: ${two?'desktop uses the width (rod/reel column beside layout and guides)':'phone stays a single compact column'}`,lay.sideBySide===two&&(two?lay.wide>900:lay.wide<=410),lay);await context.close();}
     ck('The layout numbers (positions and spacings) are identical at every size',new Set(snaps).size===1);
 
+    // ---- Studio Settings unit preference reaches the tool; the tool never writes it back ----
+    ({context,page,errors}=await boot(browser,base,{width:390,height:844}));
+    await page.evaluate(()=>{localStorage.clear();goScreen('workshopLandingScreen');});
+    const MATRIX=[['metric','mm','2133.6','198.1','1237.0',false],['decimal-inch','in','84.000','7.800','48.700',true],['fractional-inch','frac','84','7 13/16','48 11/16',true]];
+    for(const [mode,unit,blade,stem,first,noMm] of MATRIX){
+      await setPref(page,mode);await openKr(page);const u=await krUnit(page);
+      ck(`Settings "${mode}" opens KR in ${unit}: blank, stem and stripper converted${noMm?', no mm anywhere':''}`,u.pressed===unit&&u.blade===blade&&u.stem===stem&&u.first===first&&(!noMm||!u.mmText)&&u.rows===10,u);
+      await closeKr(page);
+    }
+    await setPref(page,'decimal-inch');await openKr(page);
+    const prefBefore=await rawSettings(page);
+    await fr(page).locator('.seg button',{hasText:'Fractional in'}).first().click();
+    const local=await krUnit(page);
+    ck('Choosing Fractional in inside KR updates KR (blank 84, stem 7 13/16, stripper 48 11/16) ...',local.pressed==='frac'&&local.blade==='84'&&local.first==='48 11/16'&&!local.mmText,local);
+    ck('... without changing the global Settings preference (still Decimal in, storage byte-identical)',(await page.evaluate(()=>measurementDisplayMode()))==='decimal-inch'&&(await rawSettings(page))===prefBefore);
+    await page.evaluate(()=>{renderWorkshopCalculator();render();});await page.waitForTimeout(80);
+    ck('An unrelated Studio render does not override the temporary unit chosen inside KR',(await krUnit(page)).pressed==='frac');
+    await closeKr(page);await openKr(page);
+    const reopened=await krUnit(page);
+    ck('Closing and reopening KR restores the Settings preference (Decimal in)',reopened.pressed==='in'&&reopened.blade==='84.000'&&reopened.first==='48.700',reopened);
+    // adjustments and locks survive a Settings change made while KR is open; geometry identical
+    await fr(page).locator('.row[data-i="4"] input').fill('22');await fr(page).locator('.row[data-i="4"] input').press('Enter');await fr(page).locator('.row[data-i="5"] button[data-lock]').click();await page.waitForTimeout(60);
+    await setPref(page,'metric');await page.evaluate(()=>renderWorkshopCalculator());await page.waitForTimeout(120);
+    const afterU=await krUnit(page);
+    ck('A Settings change made while KR is open is adopted (mm); guide #5 stays at 558.8 mm, adjusted, #6 stays locked, stripper unchanged',afterU.pressed==='mm'&&afterU.first==='1237.0'&&(await fr(page).locator('.row[data-i="4"] input').inputValue())==='558.8'&&(await fr(page).locator('.row[data-i="4"] .tag').innerText())==='adjusted'&&(await fr(page).locator('.row[data-i="5"] button[data-lock]').getAttribute('aria-pressed'))==='true',afterU);
+    await closeKr(page);
+    await page.evaluate(()=>{studioSettings.measurementUnits=undefined;studioSettings.imperialDisplay=undefined;});await openKr(page);
+    ck('A missing preference opens KR safely in mm',(await krUnit(page)).pressed==='mm');
+    ck('No page errors during the Settings unit checks',errors.length===0,errors);
+    await context.close();
     ({context,page,errors}=await boot(browser,base,{width:390,height:844},true));
     const cached=await page.evaluate(async()=>{await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;const k=(await caches.keys()).find((x)=>x.startsWith('klabs-studio-app-shell-'));const c=await caches.open(k);return {k,a:!!(await c.match(new URL('kr-guide-layout/index.html',location.href))),b:!!(await c.match(new URL('js/kr-guide-layout-host.js',location.href)))};});
-    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v228/.test(cached.k),cached);
+    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v229/.test(cached.k),cached);
     await page.reload({waitUntil:'load'});
     for(const s of SCRIPTS)await page.addScriptTag({url:`${base}/js/${s}`});
     await page.evaluate(()=>{window.KLABS_ACCOUNT_ID='aaaaaaaa-0000-0000-0000-000000000001';document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');});
     await context.setOffline(true);
     await openKr(page);
     ck('Offline: the tool opens from the service-worker cache and calculates',await fr(page).locator('.row').count()===10&&(await fr(page).locator('.row[data-i="4"] input').inputValue())==='556.3');
+    await closeKr(page);await setPref(page,'fractional-inch');await openKr(page);
+    const offU=await krUnit(page);
+    ck('Offline: KR still opens in the Settings unit (fractional inch) from the cached document',offU.pressed==='frac'&&offU.blade==='84'&&offU.first==='48 11/16',offU);
     await context.setOffline(false);await context.close();
   }finally{await browser.close();server.close();}
   console.log(`PASS: ${passed} KR Guide Layout browser integration checks (${process.env.TDS_BROWSER||'chromium'}).`);
