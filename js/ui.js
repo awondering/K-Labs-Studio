@@ -4787,6 +4787,12 @@ function updateQuoteActionPriority(){
       statusEl.classList.toggle('is-pending',true);
       return;
     }
+    // A failed sync (connection, session or server) is not a conflict: the build is safe on this device and is retried automatically.
+    if(syncStatus==='failed'){
+      statusEl.textContent='Saved locally — sync will retry';
+      statusEl.classList.toggle('is-pending',true);
+      return;
+    }
     if(syncStatus==='pending'){
       statusEl.textContent='Saved locally — syncing';
       statusEl.classList.toggle('is-pending',true);
