@@ -7973,8 +7973,9 @@ textarea::-moz-selection,
 #workshopScreen .workshop-build-actions-docs__label{color:var(--ds-text-muted);font-size:9px;letter-spacing:.09em;text-transform:uppercase}
 #workshopScreen .workshop-build-actions-docs__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 #workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:8px;padding-right:8px}
-#workshopScreen .workshop-build-actions-row.workshop-build-actions-row--status{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px}
-#workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-toggle{min-height:40px;padding:0 14px;width:auto}
+#workshopScreen .workshop-build-actions-row.workshop-build-actions-row--status{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px}
+#workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-value{flex:0 1 auto;min-width:0;max-width:100%;min-height:26px;padding:0 12px;white-space:normal;overflow-wrap:anywhere}
+#workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-toggle{flex:0 0 auto;margin-left:auto;width:auto;min-width:132px;min-height:44px;padding:0 18px;white-space:nowrap}
 #workshopScreen .quote-payment__history-details[hidden]{display:none}
 #workshopScreen .quote-payment__history-details > .quote-payment__history > span{display:none}
 #workshopScreen .quote-payment__history-details > summary{cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--ds-text-muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
