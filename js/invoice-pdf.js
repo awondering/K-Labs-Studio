@@ -98,10 +98,12 @@
   }
 
   function documentDefinition(node, logo) {
+    // logo: null (text-only heading), { svg } for the legacy K-Labs vector mark, or { image } for an uploaded raster logo.
     const text = (value, options = {}, width = 490) => textNode(value, options, width);
     const label = (value) => text(value.toUpperCase(), { fontSize: 8, bold: true, color: '#77716f' });
     const heading = requireText(node, '.invoice-document__heading h3');
-    const business = requireText(node, '.invoice-document__brand span');
+    const business = (node.querySelector('.invoice-document__brand span')?.textContent || '').trim();
+    const eyebrow = node.querySelector('.invoice-document__eyebrow')?.textContent.trim().toUpperCase() || '';
     const address = Array.from(node.querySelectorAll('.invoice-document__address p'), (p) => text(p.textContent.trim(), {}, 215));
     const metadata = Array.from(node.querySelectorAll('.invoice-document__metadata div'), (row) => ({
       columns: [
@@ -122,8 +124,11 @@
     if (!footer) throw new Error('The invoice footer is missing.');
     const content = [
       { columns: [
-        { width: '*', columns: [{ svg: logo, width: 29 }, { width: '*', ...text(business, { fontSize: 13, bold: true }, 200), margin: [9, 4, 0, 0] }] },
-        { width: 160, stack: [text('K-LABS STUDIO', { fontSize: 8, color: '#77716f', alignment: 'right' }, 160),
+        { width: '*', columns: logo
+          ? [logo.svg ? { svg: logo.svg, width: 29 } : { image: logo.image, fit: [120, 44] },
+             ...(business ? [{ width: '*', ...text(business, { fontSize: 13, bold: true }, 200), margin: [9, 4, 0, 0] }] : [])]
+          : [{ width: '*', ...text(business, { fontSize: 17, bold: true }, 250) }] },
+        { width: 160, stack: [...(eyebrow ? [text(eyebrow, { fontSize: 8, color: '#77716f', alignment: 'right' }, 160)] : []),
           text(heading, { fontSize: 22, alignment: 'right' }, 160)] }
       ], margin: [0, 0, 0, 12] },
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 493, y2: 0, lineWidth: 1.5, lineColor: '#861e2a' }] }
@@ -154,11 +159,49 @@
     return { pageSize: 'A4', pageMargins: [51, 45, 51, 45], defaultStyle: { font: 'Roboto', fontSize: 10 }, content };
   }
 
+  function imageLoads(src) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(!!image.naturalWidth);
+      image.onerror = () => resolve(false);
+      image.src = src;
+    });
+  }
+
+  // The logo is whatever the document itself shows (the issuing business's own logo, embedded in the invoice), so no shared
+  // image is ever fetched. If it cannot be read, the PDF is produced with the business name heading instead of failing.
+  async function documentLogo(node) {
+    const element = node.querySelector('.invoice-document__logo');
+    const src = element ? element.getAttribute('src') || '' : '';
+    if (!src) return null;
+    if (/^data:image\/(png|jpeg|webp);base64,/.test(src)) {
+      return /^data:image\/webp/.test(src) || !(await imageLoads(src)) ? await rasterised(src) : { image: src };
+    }
+    try {
+      const response = await fetch(src);
+      if (!response.ok) return null;
+      const text = await response.text();
+      return /^\s*<svg[\s>]/i.test(text) ? { svg: text } : null;
+    } catch (error) { return null; }
+  }
+
+  // pdfmake embeds PNG and JPEG only: WebP (and anything the engine cannot read) is redrawn as PNG, or dropped.
+  async function rasterised(src) {
+    if (!(await imageLoads(src))) return null;
+    const image = new Image();
+    await new Promise((resolve) => { image.onload = resolve; image.src = src; });
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.drawImage(image, 0, 0);
+    return { image: canvas.toDataURL('image/png') };
+  }
+
   async function create(node) {
     await loadLibraries();
-    const response = await fetch('assets/logo.svg');
-    if (!response.ok) throw new Error('The invoice logo could not be loaded.');
-    const logo = await response.text();
+    const logo = await documentLogo(node);
     const definition = documentDefinition(node, logo);
     return new Promise((resolve, reject) => {
       let timeout;

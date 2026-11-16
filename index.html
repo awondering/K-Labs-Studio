@@ -1131,6 +1131,23 @@
           </div>
           <label><span>Country</span><input id="settingsBusinessCountry" type="text" autocomplete="country-name" /></label>
         </div>
+        <div class="settings-business-logo" id="settingsBusinessLogo">
+          <div class="settings-business-logo__head">
+            <span class="settings-business-label-row">Business Logo<small class="settings-business-optional">Optional</small></span>
+            <p class="settings-business-logo__hint">Shown at the top of your customer documents. Without one, your business name is shown as the heading.</p>
+          </div>
+          <div class="settings-business-logo__body">
+            <div class="settings-business-logo__preview" id="settingsBusinessLogoPreview" aria-live="polite"><span class="settings-business-logo__empty">No logo</span></div>
+            <div class="settings-business-logo__actions">
+              <input id="settingsBusinessLogoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+              <button id="settingsBusinessLogoChoose" class="ghost-action" type="button">Upload logo</button>
+              <button id="settingsBusinessLogoKLabs" class="ghost-action" type="button" hidden>Use K-Labs logo</button>
+              <button id="settingsBusinessLogoRemove" class="ghost-action" type="button" hidden>Remove logo</button>
+            </div>
+          </div>
+          <p class="settings-business-logo__status" id="settingsBusinessLogoStatus" role="status"></p>
+          <p class="settings-business-logo__note">PNG, JPEG or WebP, up to 5 MB. Your logo is prepared for printing and stored with your own business profile only.</p>
+        </div>
         <div class="settings-context-actions"><button id="settingsBusinessProfileSaveBtn" class="ghost-action settings-context-action settings-save-btn is-saved" type="button" hidden>✓ SAVED</button></div>
       </details>
 

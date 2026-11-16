@@ -91,10 +91,11 @@ test('collection: shows business name, no address, no Delivery section, build an
   }
 });
 
-test('collection falls back to K-Labs when no business name saved',()=>{
+test('collection uses neutral wording, never another business name, when no business name is saved',()=>{
   const c=ctx({fulfilmentMethod:'collection'});
   c.businessProfile.businessName='';
-  assert.match(c.customerFulfilmentSection().lines[0],/K-Labs/);
+  assert.equal(c.customerFulfilmentSection().lines[0],'Customer to collect.');
+  assert.doesNotMatch(c.customerFulfilmentSection().lines[0],/K-Labs/);
   profile.businessName='Woof Rods';
 });
 

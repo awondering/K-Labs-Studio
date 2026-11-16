@@ -78,6 +78,7 @@
       paymentAccountName: String(source.paymentAccountName || "").trim(),
       paymentAccountNumber: String(source.paymentAccountNumber || "").trim(),
       quotePrefix: String(source.quotePrefix || "").trim(),
+      logo: window.KLABS_BUSINESS_LOGO ? window.KLABS_BUSINESS_LOGO.sanitise(source.logo) : (typeof source.logo === "string" ? source.logo : ""),
     };
   }
   function normalizePayload(payload) {

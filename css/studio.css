@@ -1256,6 +1256,59 @@ body.component-sheet-open .workshop-back-to-top{
   align-content:start;
 }
 
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo{
+  display:grid;
+  gap:8px;
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__hint,
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__note,
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__status{
+  margin:0;
+  font-size:11px;
+  line-height:1.45;
+  color:rgba(214,210,200,.62);
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__status:empty{display:none}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__status[data-state="error"]{color:#e0a3a3}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__body{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:10px;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__preview{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:84px;
+  padding:12px;
+  border:1px dashed rgba(255,255,255,.14);
+  border-radius:10px;
+  background:#f4f1ea;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__preview img{
+  display:block;
+  max-width:100%;
+  max-height:72px;
+  object-fit:contain;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__empty{
+  font-size:11px;
+  letter-spacing:.06em;
+  color:#77716f;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+#settingsScreen #settingsBusinessProfileCard .settings-business-logo__actions button{
+  flex:1 1 140px;
+  min-height:44px;
+}
+
 @media (max-width:359px){
   #settingsScreen #settingsBusinessProfileCard .settings-business-city-row{
     grid-template-columns:minmax(0,1fr);
@@ -3392,6 +3445,15 @@ textarea::placeholder{
   gap:3px;
   padding-bottom:8px;
   border-bottom:1px solid rgba(255,255,255,.06);
+}
+
+.view-quote__logo{
+  display:block;
+  height:40px;
+  width:auto;
+  max-width:140px;
+  object-fit:contain;
+  margin-bottom:6px;
 }
 
 .view-quote__business strong{

@@ -26,7 +26,9 @@
   border-bottom: 2px solid #861e2a;
 }
 .invoice-document__brand { display: flex; align-items: center; gap: 12px; font-weight: 650; font-size: 13pt; letter-spacing: -.025em; }
-.invoice-document__logo { display: block; width: 39px; height: 39px; flex: none; }
+.invoice-document__logo { display: block; width: auto; height: 39px; max-width: 132px; object-fit: contain; flex: none; }
+.invoice-document__logo[src$=".svg"] { width: 39px; }
+.invoice-document__brand--text { font-size: 17pt; font-weight: 600; letter-spacing: -.03em; line-height: 1.15; }
 .invoice-document__heading { text-align: right; }
 .invoice-document__eyebrow, .invoice-document__label {
   color: #77716f;
@@ -70,7 +72,9 @@
   .invoice-document { min-height: 0; padding: 25px 20px 30px; font-size: 10pt; }
   .invoice-document__header { gap: 12px; }
   .invoice-document__brand { font-size: 11pt; }
-  .invoice-document__logo { width: 34px; height: 34px; }
+  .invoice-document__logo { height: 34px; max-width: 110px; }
+  .invoice-document__logo[src$=".svg"] { width: 34px; }
+  .invoice-document__brand--text { font-size: 14pt; }
   .invoice-document__heading h3 { font-size: 17pt; }
   .invoice-document__details { grid-template-columns: 1fr; gap: 22px; margin-top: 26px; }
   .invoice-document__description { margin-top: 28px; }
@@ -162,7 +166,9 @@
   }
   .invoice-preview__columns .invoice-document__header { gap: 20px; }
   .invoice-preview__columns .invoice-document__brand { font-size: 13pt; }
-  .invoice-preview__columns .invoice-document__logo { width: 39px; height: 39px; }
+  .invoice-preview__columns .invoice-document__logo { height: 39px; max-width: 132px; }
+  .invoice-preview__columns .invoice-document__logo[src$=".svg"] { width: 39px; }
+  .invoice-preview__columns .invoice-document__brand--text { font-size: 17pt; }
   .invoice-preview__columns .invoice-document__heading h3 { font-size: 22pt; }
   .invoice-preview__columns .invoice-document__details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12mm; margin-top: 11mm; }
   .invoice-preview__columns .invoice-document__description { margin-top: 12mm; }
