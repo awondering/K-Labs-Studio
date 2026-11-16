@@ -7218,32 +7218,41 @@ textarea::-moz-selection,
 #workshopScreen #workshopCustomerSection,
 #workshopScreen #workshopSpecsSection,
 #workshopScreen #workshopComponentsSection,
-#workshopScreen #workshopPricingSection,
-#workshopScreen #workshopActionsSection{
+#workshopScreen #workshopPricingSection{
   padding:0;
   gap:0;
 }
 
 #workshopScreen #workshopCustomerSection.quote-section--collapsed .quote-section__body,
 #workshopScreen #workshopSpecsSection.quote-section--collapsed .quote-section__body,
-#workshopScreen #workshopActionsSection.quote-section--collapsed .quote-section__body{
+#workshopScreen #workshopPricingSection.quote-section--collapsed .quote-section__body{
   display:none;
 }
 
 #workshopScreen #workshopCustomerSection .quote-section__toggle-summary span,
 #workshopScreen #workshopSpecsSection .quote-section__toggle-summary span,
-#workshopScreen #workshopPricingSection .quote-section__toggle-summary span,
-#workshopScreen #workshopActionsSection .quote-section__toggle-summary span{
+#workshopScreen #workshopPricingSection .quote-section__toggle-summary span{
   white-space:normal;
   overflow:visible;
   text-overflow:clip;
   overflow-wrap:anywhere;
 }
 
-#workshopScreen #workshopActionsSection .workshop-build-actions-surface{
+#workshopScreen #workshopPricingSection .workshop-build-actions-surface{
   padding:0;
   border:0;
   background:transparent;
+}
+
+/* Merged Job Pricing & Actions: the body owns the padding; the actions block sits under the pricing fields. */
+#workshopScreen #workshopPricingFields[hidden]{
+  display:none;
+}
+
+#workshopScreen #workshopPricingFields:not([hidden]) + .workshop-build-actions-surface{
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--ds-border,rgba(255,255,255,.12));
 }
 
 #workshopScreen .quote-section__components-head{
@@ -7299,13 +7308,8 @@ textarea::-moz-selection,
   gap:6px 8px;
 }
 
-#workshopScreen #workshopPricingSection:not(.quote-section--collapsed) .build-pricing{
+#workshopScreen #workshopPricingSection:not(.quote-section--collapsed) #workshopQuoteSummaryBody{
   padding:8px 10px 10px;
-}
-
-#workshopScreen #workshopPricingSection.quote-section--collapsed .build-pricing{
-  padding-top:0;
-  padding-bottom:0;
 }
 
 #workshopScreen .build-pricing > label{
@@ -7425,7 +7429,7 @@ textarea::-moz-selection,
   gap:4px 8px;
 }
 
-#workshopScreen #workshopPricingSection:not(.quote-section--collapsed) .build-pricing{
+#workshopScreen #workshopPricingSection:not(.quote-section--collapsed) #workshopQuoteSummaryBody{
   padding:6px 10px 8px;
 }
 
@@ -7962,6 +7966,18 @@ textarea::-moz-selection,
   border-color:rgba(186,86,96,.46);
   color:#efd0d4;
 }
+
+/* Job Pricing & Actions: Documents group, status row and payment history (layout only). */
+#workshopScreen .workshop-build-actions-surface{display:grid;gap:10px}
+#workshopScreen .workshop-build-actions-docs{display:grid;gap:6px}
+#workshopScreen .workshop-build-actions-docs__label{color:var(--ds-text-muted);font-size:9px;letter-spacing:.09em;text-transform:uppercase}
+#workshopScreen .workshop-build-actions-docs__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:8px;padding-right:8px}
+#workshopScreen .workshop-build-actions-row.workshop-build-actions-row--status{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px}
+#workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-toggle{min-height:40px;padding:0 14px;width:auto}
+#workshopScreen .quote-payment__history-details[hidden]{display:none}
+#workshopScreen .quote-payment__history-details > .quote-payment__history > span{display:none}
+#workshopScreen .quote-payment__history-details > summary{cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--ds-text-muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 
 @media (max-width:520px){
   .saved-build-card{

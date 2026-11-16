@@ -961,14 +961,15 @@
         <article id="workshopPricingSection" class="quote-section quote-section--collapsible quote-section--collapsed">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopQuoteSummaryBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Job Pricing</span>
+              <span class="quote-section__toggle-title">Job Pricing &amp; Actions</span>
               <span id="workshopBuildPricingSummary" class="quote-section__toggle-summary" aria-live="polite">
                 <span id="workshopBuildPricingSummaryText">Add pricing details</span>
               </span>
             </span>
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
-          <div id="workshopQuoteSummaryBody" class="quote-grid quote-grid--two quote-section__body build-pricing">
+          <div id="workshopQuoteSummaryBody" class="quote-section__body">
+            <div id="workshopPricingFields" class="quote-grid quote-grid--two build-pricing">
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
             <div id="quoteFulfilmentGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Fulfilment Method">
@@ -1019,12 +1020,13 @@
                 <div><span>Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
               </div>
               <p id="quoteDepositReceivedStatus" class="quote-payment__status" aria-live="polite"></p>
-              <div id="quotePaymentHistory" class="quote-payment__history"></div>
+              <details id="quotePaymentHistoryDetails" class="quote-payment__history-details" hidden>
+                <summary>Payment history</summary>
+                <div id="quotePaymentHistory" class="quote-payment__history"></div>
+              </details>
               <div class="quote-payment__actions">
                 <button id="quoteRecordDepositBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteDepositReceivedForm">Record Deposit Received</button>
                 <button id="quoteRecordBalanceBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Balance Received</button>
-                <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
-                <button id="viewPaymentStatementBtn" class="ghost-action" type="button">Payment Statement</button>
                 <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Confirm Pending Transaction</button>
               </div>
               <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
@@ -1048,31 +1050,23 @@
                 </div>
               </div>
             </div>
-          </div>
-        </article>
-
-        <article id="workshopActionsSection" class="quote-section quote-section--collapsible quote-section--collapsed">
-          <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildActionsBody">
-            <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Job Actions</span>
-              <span class="quote-section__toggle-summary" aria-live="polite">
-                <span>Track status and manage this build.</span>
-              </span>
-            </span>
-            <b class="quote-section__chevron" aria-hidden="true">▾</b>
-          </button>
-          <div id="workshopBuildActionsBody" class="quote-actions-grid quote-actions-grid--build quote-section__body">
+            </div>
             <section class="workshop-build-actions-surface" aria-label="Build actions">
-              <div class="workshop-build-actions-row">
+              <div class="workshop-build-actions-docs" role="group" aria-label="Documents">
+                <span class="workshop-build-actions-docs__label">Documents</span>
+                <div class="workshop-build-actions-docs__grid">
+                  <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
+                  <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
+                  <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
+                  <button id="viewPaymentStatementBtn" class="ghost-action" type="button">Payment Statement</button>
+                </div>
+              </div>
+              <div class="workshop-build-actions-row workshop-build-actions-row--status">
                 <span>Status</span>
                 <strong id="workshopBuildLifecycleStatus" class="workshop-build-actions-status-value">Active</strong>
+                <button id="toggleCurrentBuildStatusBtn" class="ghost-action workshop-build-actions-status-toggle" type="button">Mark Complete</button>
               </div>
               <button id="confirmBuildBtn" class="primary-action workshop-build-actions-confirm" type="button" hidden>Confirm Build</button>
-              <button id="toggleCurrentBuildStatusBtn" class="ghost-action workshop-build-actions-status-toggle" type="button">Mark Complete</button>
-              <div class="workshop-build-actions-quote-row">
-                <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
-                <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
-              </div>
               <div class="workshop-build-actions-row">
                 <div class="workshop-build-actions-row-end">
                   <strong id="workshopBuildActionsStatus" class="quote-actions-status" aria-live="polite">✓ Saved</strong>
