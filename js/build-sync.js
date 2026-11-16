@@ -7,6 +7,8 @@
   let status = "local";
   let mode = "unknown";
   let sequence = 0;
+  let failures = 0;
+  let lastRunAt = 0;
 
   const journal = () => window.KLABS_BUILD_SYNC_JOURNAL;
   const transport = () => window.KLABS_GUARDED_BUILD_TRANSPORT;
@@ -118,6 +120,31 @@
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => { timer = null; run(); }, 700);
   }
+  // A failed attempt (network, session, server) is not a conflict: records stay as they are and the attempt is retried
+  // automatically with a growing delay. Only genuine version conflicts use the "error" status that asks for review.
+  function failed(ctx, error) {
+    console.error("[K-Labs Studio] Build sync could not complete:", error);
+    if (!current(ctx)) return;
+    let conflicts = false;
+    try { conflicts = Object.keys(journal().read(ctx.userId).conflicts).length > 0; } catch (readError) { conflicts = false; }
+    setStatus(conflicts ? "error" : "failed");
+    failures = Math.min(failures + 1, 6);
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { timer = null; run(); }, Math.min(15000 * 2 ** (failures - 1), 300000));
+  }
+  // The server answers some degraded sessions (for example an expired token falling back to the public role) with an empty,
+  // error-free list. A missing cloud row is only treated as a deletion once the live session is confirmed to be this account.
+  async function confirmSession(ctx) {
+    const auth = client().auth;
+    if (!auth || typeof auth.getUser !== "function") throw new Error("Could not confirm the signed-in session. No records were changed.");
+    let result;
+    try { result = await auth.getUser(); }
+    catch (error) { throw new Error("Could not confirm the signed-in session. No records were changed.", { cause: error }); }
+    if (!current(ctx)) throw new Error("The signed-in account changed.");
+    if (result?.error || String(result?.data?.user?.id || "") !== ctx.userId) {
+      throw new Error("The signed-in session could not be confirmed. No records were changed.");
+    }
+  }
   async function reconcile(ctx) {
     const rows = await fetchRows(ctx);
     let state = journal().read(ctx.userId);
@@ -125,6 +152,13 @@
     const cloud = new Map(rows.map((row) => [String(row.client_id), row]));
     const ids = new Set([...local.keys(), ...cloud.keys(), ...Object.keys(state.pending), ...Object.keys(state.baselines)]);
     const hydrate = [];
+    const isAbsent = (id) => !cloud.has(id) && (state.baselines[id] || state.pending[id]?.kind === "delete"
+      || state.pending[id]?.kind === "delete-intent");
+    if ([...ids].some(isAbsent)) {
+      await confirmSession(ctx);
+      state = journal().read(ctx.userId);
+    }
+    const retire = [];
     for (const id of ids) {
       const row = cloud.get(id);
       const remote = row ? rowRecord(row) : null;
@@ -145,6 +179,26 @@
       if (!pending && here && (!base || !equal(here, base.payload))) {
         pending = state.pending[id] = { kind: "save", record: clone(here), token: `${Date.now()}-${++sequence}` };
       }
+      if (!row && pending?.kind === "delete" && !here) {
+        // Deleted here and already absent in the cloud (deleted elsewhere, or the server completed a delete whose reply was
+        // lost, or the build was never uploaded): the intended end state already holds. Nothing is left to review.
+        if (state.conflicts[id]) state.archive.push({ ...clone(state.conflicts[id]), resolvedAt: new Date().toISOString(), choice: "deleted" });
+        delete state.pending[id];
+        delete state.conflicts[id];
+        delete state.baselines[id];
+        continue;
+      }
+      if (!row && !pending && base && here && equal(here, base.payload)) {
+        // Deleted on another device while this copy has not been edited since it last matched the cloud: no local change can
+        // be lost, so the record is retired (archived on this device) instead of being kept or re-uploaded.
+        if (window.KLABS_UI?.isBuildOpen?.(id)) continue; // retired by a later run once it is closed
+        state.archive.push({ id, local: clone(here), cloud: null, revision: base.revision,
+          reason: "Deleted on another device", archivedAt: new Date().toISOString() });
+        delete state.conflicts[id];
+        delete state.baselines[id];
+        retire.push(id);
+        continue;
+      }
       if (state.conflicts[id]) {
         addConflict(state, id, pending?.record || here, remote, row?.updated_at, "Versions require review.");
         continue;
@@ -154,8 +208,9 @@
         if (pending.kind === "save" && remote && equal(pending.record, remote)) {
           state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
           delete state.pending[id];
-        } else if (pending.kind === "delete" && !remote) {
-          addConflict(state, id, pending.record, null, null, "The cloud build is absent. Review the deletion.");
+        } else if (pending.kind === "save" && !row && base) {
+          addConflict(state, id, pending.record || here, null, null,
+            "This build was edited on this device but deleted on another device. Keep the edited version or confirm the deletion.");
         } else if ((base && (!row || row.updated_at !== base.revision || !equal(remote, base.payload))) || (!base && row)) {
           addConflict(state, id, pending.record || here, remote, row?.updated_at,
             "The cloud version changed or has no verified common baseline.");
@@ -177,6 +232,7 @@
       }
     }
     store(ctx, state);
+    for (const id of retire) putLocal(ctx, null, id);
     for (const [id, record] of hydrate) putLocal(ctx, record, id);
     return state;
   }
@@ -204,14 +260,13 @@
         store(ctx, state);
       } catch (error) {
         if (!current(ctx)) return;
-        console.error("[K-Labs Studio] Build sync failed:", error);
         try { await reconcile(ctx); }
         catch (readError) { console.error("[K-Labs Studio] Could not check cloud versions:", readError); }
-        if (current(ctx)) setStatus("error");
+        failed(ctx, error);
         return;
       }
     }
-    if (current(ctx)) refreshStatus(journal().read(ctx.userId));
+    if (current(ctx)) { refreshStatus(journal().read(ctx.userId)); failures = 0; }
   }
   async function run() {
     if (!userId) return;
@@ -224,12 +279,10 @@
     }
     const ctx = context();
     active.requested = false;
+    lastRunAt = Date.now();
     active.running = (async () => {
       try { await flush(ctx); }
-      catch (error) {
-        console.error("[K-Labs Studio] Build sync failed:", error);
-        if (current(ctx)) setStatus("error");
-      }
+      catch (error) { failed(ctx, error); }
     })();
     await active.running;
     active.running = null;
@@ -459,4 +512,8 @@
     retry: run,
   };
   window.addEventListener?.("online", () => { if (userId) run(); });
+  // Another device may have changed or deleted records while this one was in the background: refresh when it returns.
+  window.document?.addEventListener?.("visibilitychange", () => {
+    if (userId && window.document.visibilityState === "visible" && Date.now() - lastRunAt > 20000) run();
+  });
 })();

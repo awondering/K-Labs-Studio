@@ -174,7 +174,7 @@ test('a failed upload reports not synced and retry never replaces a newer queued
   h.fireTimers();
   pending.resolve({error:{message:'offline'}});
   await settle();
-  assert.equal(h.window.KLABS_BUILD_SYNC.getStatus(),'error');
+  assert.equal(h.window.KLABS_BUILD_SYNC.getStatus(),'failed'); // a transport failure is reported as a sync failure (retried automatically); "error" is reserved for conflicts
   h.setInterceptor(()=>null);
   h.fireTimers();
   await settle();
