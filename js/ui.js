@@ -3303,7 +3303,7 @@ function renderThreadStudioTool(){
   api.mount(host,{scope,onOpenTaperDesigner:()=>openWorkshopTool('thread-wrap')});
 }
 // KR Guide Layout: an independent document mounted only while its Workshop card is open. It holds no storage and has no
-// access to builds, customers, quotes, components, Guide Setup or sync, so nothing is passed in or read back.
+// access to builds, customers, quotes, components, Guide Setup or sync. Only the Settings measurement mode is passed in.
 function renderKrGuideTool(){
   const host=$('krGuideHost');
   const api=typeof KLabsKrGuideLayoutHost!=='undefined'?KLabsKrGuideLayoutHost:null;
@@ -3312,8 +3312,13 @@ function renderKrGuideTool(){
     api.unmount(host);
     return;
   }
-  if(api.isMounted(host))return;
-  api.mount(host);
+  // The tool opens in the unit saved in Settings. While it stays open, a change to the Settings preference is passed on;
+  // a unit picked inside the tool is temporary and is never written back.
+  if(api.isMounted(host)){
+    api.syncMode(host,measurementDisplayMode());
+    return;
+  }
+  api.mount(host,{mode:measurementDisplayMode()});
 }
 function renderWorkshopCalculator(){
   refreshWorkshopMeasurementLabels();

@@ -1,6 +1,7 @@
 (function () {
   'use strict'; const K = KR, $ = s => document.querySelector(s), IN = K.IN;
-  const S = { proposal: null, unit: 'mm', rod: K.DEFAULT_ROD, blade: 0, stem: 0, axle: null, spool: null, ref: K.referenceForRod(K.DEFAULT_ROD), entry: { label: '', stripper: '', gaps: '', models: '', chokeBeyond: '', envMin: '', envMax: '' }, entryMsg: '', sel: 0, prev: false, train: null, confirm: false, cand: null, msg: '', done: { st: false, cast: false } };
+  const HOST_UNIT = (typeof window !== 'undefined' && window.__KR_HOST__ && window.__KR_HOST__.unit) || 'mm'; // Studio Settings preference, if the host passed one
+  const S = { proposal: null, unit: HOST_UNIT === 'in' || HOST_UNIT === 'frac' ? HOST_UNIT : 'mm', rod: K.DEFAULT_ROD, blade: 0, stem: 0, axle: null, spool: null, ref: K.referenceForRod(K.DEFAULT_ROD), entry: { label: '', stripper: '', gaps: '', models: '', chokeBeyond: '', envMin: '', envMax: '' }, entryMsg: '', sel: 0, prev: false, train: null, confirm: false, cand: null, msg: '', done: { st: false, cast: false } };
   let L;
   // Choosing a chart rod sets the blank to that rod length and the reel stem to the position at which the chart fits exactly (blank minus the chart's
   // stem-to-tip-top distance). That position is derived, not a Fuji figure; the builder replaces it with the real reel-seat position.
@@ -22,6 +23,7 @@
   const listU = v => { const raw = String(v).split(/([\s,;]+)/), out = []; // "5 1/2 6" is two gaps; a fraction joins the whole number just before it
     for (let i = 0; i < raw.length; i += 2) { const t = raw[i]; if (!t) continue; const sep = raw[i - 1] || '', last = out[out.length - 1];
       if (last && /^\d+\/\d+$/.test(t) && /^-?\d+$/.test(last) && /^ +$/.test(sep)) out[out.length - 1] = last + ' ' + t; else out.push(t); } return out; };
+  const switchUnit = u => { if (u !== S.unit && (u === 'mm' || u === 'in' || u === 'frac')) { convertEntry(S.unit, u); S.unit = u; K.setUnit(S.unit); S.msg = ''; } };
   const convertEntry = (from, to) => { const one = t => { const v = K.parseLength(t, from); return String(t).trim() === '' || !isFinite(v) ? t : entryTxt(v, to); };
     ['stripper', 'chokeBeyond', 'envMin', 'envMax'].forEach(k => { if (S.entry[k] != null) S.entry[k] = one(S.entry[k]); });
     if (S.entry.gaps) S.entry.gaps = listU(S.entry.gaps).map(one).join(', '); };
@@ -148,7 +150,7 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
   A.addEventListener('click', e => {
     const b = e.target.closest('button,[data-i]'); if (!b) return; const d = b.dataset; if (d.resetall == null) S.confirm = false;
     if (d.st) { const k = d.k, cur = val(k) == null ? 0 : val(k); apply(k, cur + (+d.st) * step()); }
-    else if (d.unit) { if (d.unit !== S.unit) { convertEntry(S.unit, d.unit); S.unit = d.unit; K.setUnit(S.unit); S.msg = ''; } }
+    else if (d.unit) switchUnit(d.unit);
     else if (d.lock != null) K.toggleLock(L, +d.lock);
     else if (d.reset != null) { const r = K.resetGuide(L, +d.reset); S.msg = r.ok ? '' : r.msg; }
     else if (d.resetall != null) { if (!S.confirm) S.confirm = true; else { L = K.resetAll(L); S.proposal = K.propose(L); S.cand = S.proposal.status === 'proposed' ? S.proposal.n : null; S.msg = ''; S.prev = false; S.confirm = false; } }
@@ -173,6 +175,8 @@ ${S.entryMsg ? `<p class="err">${esc(S.entryMsg)}</p>` : ''}
     else if (d.i != null && !e.target.closest('input')) S.sel = +d.i; else return;
     render();
   });
+  // Studio Settings preference pushed by the host (only when the global preference itself changes). Display only: geometry is untouched, nothing is stored or sent back.
+  window.addEventListener('message', e => { const m = e.data; if (e.source !== window.parent || !m || m.type !== 'klabs-kr-guide' || m.action !== 'set-unit' || m.unit === S.unit) return; switchUnit(m.unit); render(); });
   A.addEventListener('toggle', e => { if (e.target.id === 'entrybox') S.entryOpen = e.target.open; }, true); // keep the entry form open across unit changes
   A.addEventListener('input', e => { const t = e.target; if (t.dataset && t.dataset.e) S.entry[t.dataset.e] = t.value; });
   A.addEventListener('change', e => { const t = e.target;
