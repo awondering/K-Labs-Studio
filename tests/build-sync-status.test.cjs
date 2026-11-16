@@ -27,6 +27,7 @@ test('sync errors and pending sync cannot be hidden by a local saved flash',()=>
   assert.equal(run('pending','Saved').textContent,'Saved locally — syncing');
   assert.equal(run('synced').textContent,'✓ Synced');
   assert.equal(run('local').textContent,'Saved locally');
+  assert.equal(run('failed','Saved').textContent,'Saved locally — sync will retry','a connection or session failure is not a review-required conflict');
 });
 test('unsaved draft and validation errors take precedence over a prior synced state or flash',()=>{
   assert.equal(run('synced','Saved',{dirty:true}).textContent,'Saving locally...');
