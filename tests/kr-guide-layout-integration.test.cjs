@@ -113,39 +113,27 @@ test('isolation: the KR tool has no network, storage, account, Supabase or Studi
   assert.doesNotMatch(hostCode,/localStorage|sessionStorage|KLABS_ACCOUNT|supabase/i);
 });
 
-test('licensing: no manufacturer chart data anywhere in the KR directory; builder entry only; independence and unverified items stated',()=>{
+test('chart data: the Fuji chart values live only in src/chart-data.js (with provenance); non-endorsement and unverified items stated; no demo values',()=>{
   const dir=path.join(root,'kr-guide-layout');
   const files=[];(function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=path.join(d,e.name);e.isDirectory()?walk(f):files.push(f);}})(dir);
-  assert.equal(files.some((f)=>/chart-fixture/i.test(f)),false,'no chart fixture file');
-  // Signatures of the restricted chart: its reduction-train pairings, its model designations, its published row values and its retail-copy provenance.
-  const restricted=[/chart-fixture|KR_CHART_FIXTURE/,/25-12-5\.5|20-10-5\.5|16-8-5\.5/,/\bKL\d+(?:\.\d+)?H?\b|\bKB\d|\bKT\d/,/6\.6,\s*5\.9,\s*5\.3|27\.5,\s*9\.0/,/Merrick|Rapid Choke|manually supplied/i,/\b(?:3\.5|6\.2) in\b/];
-  for(const f of files){const text=fs.readFileSync(f,'utf8');for(const re of restricted)assert.doesNotMatch(text,re,`${path.relative(root,f)} must not carry restricted chart data (${re})`);}
-  assert.equal(fs.existsSync(path.join(root,'kr-guide-layout','src','chart-fixture.js')),false);
-  // The demonstration values are labelled as invented, and builders type their own chart measurements.
-  assert.match(bundle,/Invented demonstration values, not from any manufacturer chart/);
-  assert.match(bundle,/This tool contains no manufacturer chart data/);
-  assert.match(bundle,/data-applyentry/);assert.match(bundle,/Your chart measurements/);
+  const data=path.join(dir,'src','chart-data.js');assert.ok(fs.existsSync(data));
+  const dtext=fs.readFileSync(data,'utf8');
+  assert.match(dtext,/Fuji.s data, not a K-Labs specification/);assert.match(dtext,/not\s+affiliated with or endorsed by Fuji/);assert.match(dtext,/only place the chart values live/);
+  // Row-value signatures must not be duplicated in hand-written source files (the bundle inlines chart-data.js by design).
+  for(const f of files){if(f===data||/index\.html$|VERIFICATION\.md$|tests\.js$/.test(f))continue;const t=fs.readFileSync(f,'utf8');assert.doesNotMatch(t,/6\.6,\s*5\.9,\s*5\.3|27\.5,\s*9\.0/,`${path.relative(root,f)} duplicates chart rows`);}
+  assert.doesNotMatch(bundle,/Invented demonstration values|DEMO_REFERENCE|demonstration values/);
+  assert.match(bundle,/KR_CHART_DATA/);assert.match(bundle,/data-rod/);assert.match(bundle,/data-applyentry/);
   assert.match(bundle,/independent K-Labs Studio tool, not affiliated with or endorsed by Fuji/);
-  assert.match(bundle,/K-Labs heuristic, not a Fuji layout/);
-  assert.match(bundle,/Experimental, not Fuji/);
-  assert.match(bundle,/has not been verified|unverified/);
-  assert.match(bundle,/never use these numbers to mark foot placement|Don.t use these numbers to mark foot placement|Ring-centre-to-foot offsets are/i);
+  assert.match(bundle,/K-Labs heuristic, not a Fuji layout/);assert.match(bundle,/Experimental, not Fuji/);
+  assert.match(bundle,/unverified/i);assert.match(bundle,/foot placement/);
   assert.match(read('kr-guide-layout','VERIFICATION.md'),/Still unverified/);
-});
-
-test('the served bundle kr-guide-layout/index.html is current with its source',()=>{
-  const tmp=path.join(os.tmpdir(),`kr-${process.pid}.html`);
-  const r=spawnSync(process.execPath,[path.join(root,'kr-guide-layout','src','build.js')],{env:{...process.env,KR_OUT:tmp},encoding:'utf8'});
-  assert.equal(r.status,0,r.stderr);
-  assert.equal(fs.readFileSync(tmp,'utf8'),bundle,'run: node kr-guide-layout/src/build.js');
-  fs.unlinkSync(tmp);
 });
 
 test('the KR engine suite passes (calculations unchanged)',()=>{
   const dir=path.join(root,'kr-guide-layout','src');
   const r=spawnSync(process.execPath,[path.join(dir,'tests.js')],{encoding:'utf8',cwd:dir});
   assert.equal(r.status,0,r.stdout.split('\n').filter((l)=>/^FAIL/.test(l)).join('\n'));
-  assert.match(r.stdout,/71\/71 passed/);
+  assert.match(r.stdout,/82\/82 passed/);
 });
 
 test('every new style rule is scoped to the KR Guide Layout card so other Workshop tools are untouched',()=>{

@@ -51,24 +51,35 @@ async function main(){
     await page.waitForFunction(()=>document.querySelector('#krGuideHost iframe').contentDocument.querySelectorAll('.row').length>0);
     ck('Tapping the launcher opens the tool in the Workshop (card visible, list hidden, frame titled)',await page.evaluate(()=>!document.getElementById('workshopToolKrGuide').hidden&&document.getElementById('workshopToolsList').hidden&&document.querySelector('#krGuideHost iframe').title==='KR Guide Layout'));
     const f=fr(page);
-    ck('Tool shows its title, ten guide rows and the independence statement',(await f.locator('h1').innerText())==='KR Guide Layout'&&await f.locator('.row').count()===10&&(await f.locator('#app').innerText()).includes('not affiliated with or endorsed by Fuji'));
-    const txt=await f.locator('#app').innerText();
-    ck('Calculated results are labelled as such: reference start, invented demonstration values, unverified guide, ring-centre note, prototype status',/Reference start/i.test(txt)&&/invented/i.test(txt)&&/no manufacturer chart data/i.test(txt)&&/unverified/i.test(txt)&&/ring centres/i.test(txt)&&/internal testing/i.test(txt));
+    ck('Tool shows its title, ten guide rows and the independence statement',(await f.locator('h1').innerText())==='KR Guide Layout'&&await f.locator('.row').count()===10&&(await f.locator('#app').textContent()).includes('not affiliated with or endorsed by Fuji'));
+    const txt=await f.locator('#app').textContent();
+    ck('Calculated results are labelled as such: reference start, Fuji-chart source, unverified guide, ring-centre note, prototype status',/Reference start/i.test(txt)&&/Fuji.s published KR Concept chart/i.test(txt)&&!/invented|demonstration/i.test(txt)&&/unverified/i.test(txt)&&/ring centres/i.test(txt)&&/internal testing/i.test(txt));
     let m=await metrics(page);
     ck('The frame grows to its content: no inner scroll area, no clipped fields, no sideways overflow (390 px)',Math.abs(m.frameH-m.docH)<=2&&!m.pageOver&&!m.frameOver&&m.clipped===0&&m.rows===10,m);
     const row5=async()=>f.locator('.row[data-i="4"] input').inputValue();
-    ck('Reference start: guide #5 at 561.3 mm (invented demonstration values)',(await row5())==='561.3');
+    ck('Reference start: guide #5 at 556.3 mm (7 ft chart row, stem at the exact-fit position)',(await row5())==='556.3');
     await f.locator('.row[data-i="4"] button[data-st="1"]').click();
-    ck('One tap on + moves the guide by 1 mm, tags it manual and updates its spacing',(await row5())==='562.3'&&(await f.locator('.row[data-i="4"] .tag').innerText())==='manual');
+    ck('One tap on + moves the guide by 1 mm, tags it manual and updates its spacing',(await row5())==='557.3'&&(await f.locator('.row[data-i="4"] .tag').innerText())==='adjusted');
     await f.locator('.row[data-i="4"] button[data-st="-1"]').click();
-    ck('And one tap on - returns it exactly',(await row5())==='561.3');
+    ck('And one tap on - returns it exactly',(await row5())==='556.3');
+    ck('Guide roles: legend lists stripper, reduction, choke, running and tip-top; summary names the stripper, reduction train and choke point',(await f.locator('.legend span').count())===5&&/Stripper[\s\S]*Reduction train[\s\S]*Choke point[\s\S]*Running guides/.test(await f.locator('.sumrow').innerText()));
+    const others=await f.locator('.row input').evaluateAll((a)=>a.map((i)=>[i.closest('.row').dataset.i,i.value].join(':')));
+    await f.locator('.row[data-i="4"] button[data-st="1"]').click();
+    const moved=await f.locator('.row input').evaluateAll((a)=>a.map((i)=>[i.closest('.row').dataset.i,i.value].join(':')));
+    ck('Adjusting one guide changes only that guide; every other position is untouched',moved.every((v,i)=>v.startsWith('4:')?v==='4:557.3':v===others[i]),{others,moved});
+    await f.locator('.row[data-i="4"] button[data-st="-1"]').click();
     await f.locator('.seg button',{hasText:'Decimal in'}).first().click();
     const inchVal=await f.locator('.row[data-i="4"] input').inputValue();
-    ck('Switching to decimal inches converts the displayed positions',inchVal==='22.100',inchVal);
+    ck('Switching to decimal inches converts the displayed positions',inchVal==='21.900',inchVal);
     await f.locator('.seg button',{hasText:'Decimal in'}).first().click();
+    await f.locator('button[data-rod]').first().click();
+    ck('Choosing the 5\'6" chart rod loads its eight-guide row: reduction 16/8/5.5, stripper at 21.6 in, 8 guides',await f.locator('.row').count()===8&&/KL16H[\s\S]*KL8H/.test(await f.locator('.sumrow').innerText())&&(await f.locator('.row[data-i="0"] input').inputValue())==='33.600'&&(await f.locator('.row[data-i="7"] input').inputValue())==='0.000');
+    await f.locator('button[data-rod]').nth(3).click();
+    await f.locator('#entrybox > summary').click();
     await f.locator('input[data-e=label]').fill('My 6 ft test');await f.locator('input[data-e=stripper]').fill('26.2');await f.locator('input[data-e=gaps]').fill('10 8 6.5 6 5.4 5 4.8 4.3');
     await f.locator('button[data-applyentry]').click();
-    ck('Builder-entered chart measurements build a layout in the Workshop (9 guides; first guide 50 in from the tip; no restricted data needed)',await f.locator('.row').count()===9&&(await f.locator('.row[data-i="0"] input').inputValue())==='50.000');
+    const eg={n:await f.locator('.row').count(),v:await f.locator('.row[data-i="0"] input').inputValue(),e:await f.locator('.err').allInnerTexts()};
+    ck('Builder-entered chart measurements build a layout in the Workshop (9 guides; first guide 50 in from the tip)',eg.n===9&&eg.v==='50.000',eg);
     const after=await page.evaluate(()=>JSON.stringify(Object.keys(localStorage).sort().map((k)=>[k,localStorage.getItem(k)])));
     ck('Using the tool leaves all browser storage (builds, customers, settings) byte-identical',after===before);
     await page.click('#workshopToolKrGuide [data-workshop-tool-back]');
@@ -91,17 +102,20 @@ async function main(){
       ck(`${name}: no page errors`,errors.length===0,errors);
       await context.close();
     }
+    for(const [w,two] of [[390,false],[1440,true]]){({context,page,errors}=await boot(browser,base,{width:w,height:900}));await openKr(page);
+      const lay=await page.evaluate(()=>{const d=document.querySelector('#krGuideHost iframe').contentDocument,a=d.querySelector('.col-a').getBoundingClientRect(),b=d.querySelector('.col-b').getBoundingClientRect();return {sideBySide:b.left>a.right-2,wide:Math.round(d.querySelector('main').getBoundingClientRect().width)};});
+      ck(`${w}px: ${two?'desktop uses the width (rod/reel column beside layout and guides)':'phone stays a single compact column'}`,lay.sideBySide===two&&(two?lay.wide>900:lay.wide<=410),lay);await context.close();}
     ck('The layout numbers (positions and spacings) are identical at every size',new Set(snaps).size===1);
 
     ({context,page,errors}=await boot(browser,base,{width:390,height:844},true));
     const cached=await page.evaluate(async()=>{await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;const k=(await caches.keys()).find((x)=>x.startsWith('klabs-studio-app-shell-'));const c=await caches.open(k);return {k,a:!!(await c.match(new URL('kr-guide-layout/index.html',location.href))),b:!!(await c.match(new URL('js/kr-guide-layout-host.js',location.href)))};});
-    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v223/.test(cached.k),cached);
+    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v224/.test(cached.k),cached);
     await page.reload({waitUntil:'load'});
     for(const s of SCRIPTS)await page.addScriptTag({url:`${base}/js/${s}`});
     await page.evaluate(()=>{window.KLABS_ACCOUNT_ID='aaaaaaaa-0000-0000-0000-000000000001';document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');});
     await context.setOffline(true);
     await openKr(page);
-    ck('Offline: the tool opens from the service-worker cache and calculates',await fr(page).locator('.row').count()===10&&(await fr(page).locator('.row[data-i="4"] input').inputValue())==='561.3');
+    ck('Offline: the tool opens from the service-worker cache and calculates',await fr(page).locator('.row').count()===10&&(await fr(page).locator('.row[data-i="4"] input').inputValue())==='556.3');
     await context.setOffline(false);await context.close();
   }finally{await browser.close();server.close();}
   console.log(`PASS: ${passed} KR Guide Layout browser integration checks (${process.env.TDS_BROWSER||'chromium'}).`);

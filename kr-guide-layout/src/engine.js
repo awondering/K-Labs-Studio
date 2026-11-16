@@ -14,25 +14,29 @@
   }
   const fmt = (mm, u) => (u === 'mm' ? mm.toFixed(1) : u === 'frac' ? frac(mm / IN) : (mm / IN).toFixed(2));
 
-  // DEMONSTRATION values only. They are INVENTED to show how the tool works; they are not from any manufacturer chart and must not be
-  // used to build a rod. No manufacturer chart data is included in this tool: the builder enters measurements from their own chart
-  // (see referenceFromEntry). Same structure as a real reference: reel stem -> stripper, then the gaps toward the tip-top.
-  const DEMO_REFERENCE = {
-    id: 'demo', demo: true, label: 'Demonstration values (invented)',
-    source: 'Invented demonstration values, not from any manufacturer chart. Enter your own chart measurements to lay out a real rod.',
-    stripperIn: 26.5,                                     // reel stem -> stripper ring
-    gapsIn: [9.2, 7, 6, 5.4, 5, 4.7, 4.4, 4.2, 3.8],      // stripper -> ... -> tip-top (stem to tip-top = 76.2 in, a 7 ft blank with a 7.8 in stem)
-    chokeTable: { stripperIn: 26.5, chokeBeyondIn: 22.3, g2In: 9.2, g3In: 7 }, // invented cross-check, deliberately 0.1 in off the spacing chain
-    sourceCount: { label: 10, includesTipTop: true },
-    envelope: { minGapIn: 3.3, maxGapIn: 6.5, verified: false, definition: 'invented demonstration limits for the gaps after the choke guide', source: 'Invented demonstration limits.' },
-    guides: [
-      { role: 'stripper', model: 'Stripper' }, { role: 'reduction', model: 'Reduction 2' },
-      { role: 'reduction', model: 'Reduction 3', unverified: true, unverifiedNote: 'third reduction guide: the model entered here is a label only and has not been verified' },
-      { role: 'choke', model: 'Choke' },
-      ...Array(5).fill({ role: 'running', model: 'Running' }),
-      { role: 'tip-top', model: 'Tip-top' }
-    ]
-  };
+  // Reference layouts come from Fuji's published KR Concept chart rows (chart-data.js, transcribed by K-Labs, see VERIFICATION.md).
+  // A row gives the reel-stem-to-stripper distance and the gap between every following guide down to the tip-top; the layout is those
+  // distances laid onto the builder's blank from the reel stem. The chart's choke-distance table is kept only as a separate cross-check.
+  const CHART = typeof module !== 'undefined' && module.exports ? require('./chart-data.js') : root.KR_CHART_DATA;
+  const rodInches = rod => { const m = /^(\d+)'(?:(\d+)")?$/.exec(rod); return m ? +m[1] * 12 + (m[2] ? +m[2] : 0) : NaN; };
+  const CHART_RODS = CHART.rows.map(r => ({ id: r.rod, label: r.rod, lengthMm: rodInches(r.rod) * IN }));
+  const DEFAULT_ROD = "7'";
+  const CHART_ENVELOPE = { minGapIn: CHART.envelope.minGapIn, maxGapIn: CHART.envelope.maxGapIn, verified: true,
+    definition: 'gaps after the choke guide; counting the #3-to-#4 transition gap as well would raise the maximum to 6.8 in (a builder-side definition, the chart does not state which is meant)',
+    source: 'Smallest and largest gap after the choke guide across all eight rows of the chart; every row narrows toward the tip' };
+  // Guide models follow the chart's labels (KL-H reduction guides, KB choke and further KB, KT running guides, LG tip-top) with the chart's ring sizes in mm.
+  function referenceForRod(rod) {
+    const r = CHART.rows.find(x => x.rod === rod); if (!r) return null;
+    const n = r.gaps.length + 1, sz = r.sizes;
+    const models = Array.from({ length: n }, (_, i) => (i < 2 ? 'KL' + sz[i] + 'H' : i === 2 ? 'KL' + sz[i] : i < 3 + r.kb ? 'KB' + sz[i] : i === n - 1 ? 'LG' + sz[i] : 'KT' + sz[i]));
+    const guides = models.map((model, i) => ({ role: i === 0 ? 'stripper' : i < 3 ? 'reduction' : i === 3 ? 'choke' : i === n - 1 ? 'tip-top' : 'running', model }));
+    guides[2].unverified = true; guides[2].unverifiedNote = 'third KR reduction guide; chart groups it with KL-H guides but gives no individual frame designation';
+    return { id: 'kr-' + rod, rod, label: 'Fuji KR Concept chart, ' + rod, chart: true,
+      source: 'Fuji KR Concept spinning guide-placement chart, ' + rod + ' row, as transcribed by K-Labs. Not an official Fuji specification of this tool.',
+      stripperIn: r.stripperDiagram, gapsIn: r.gaps.slice(),
+      chokeTable: { stripperIn: r.stripperTable, chokeBeyondIn: r.choke, g2In: r.g2, g3In: r.g3 },
+      sourceCount: { label: r.label, includesTipTop: true }, envelope: Object.assign({}, CHART_ENVELOPE), guides };
+  }
   const MAX_ENTRY_GUIDES = 24, MIN_ENTRY_GUIDES = 5;
   // Builds a reference from the builder's own chart measurements (pure). e = { label, unit: 'mm' | 'in', stripper, gaps: [..], models?: [..],
   // chokeBeyond?, envelopeMin?, envelopeMax? } with lengths in the stated unit. Guide roles follow the KR-style train (stripper, two further
@@ -288,7 +292,7 @@
     if (validity(L).issues.length) { L.guides = backup; tt.tipMm = ttOld.tipMm; tt.basis = ttOld.basis; return { ok: false, msg: 'Result failed validation; nothing changed' }; }
     return { ok: true, level: c.level };
   }
-  const api = { IN, MIN_GAP, FIT_TOL, toMm, fromMm, frac, fmt, DEMO_REFERENCE, referenceFromEntry, trainsOf, MIN_ENTRY_GUIDES, MAX_ENTRY_GUIDES, buildReference, crossCheck, createLayout, label,
+  const api = { IN, MIN_GAP, FIT_TOL, toMm, fromMm, frac, fmt, CHART_RODS, DEFAULT_ROD, referenceForRod, referenceFromEntry, trainsOf, MIN_ENTRY_GUIDES, MAX_ENTRY_GUIDES, buildReference, crossCheck, createLayout, label,
     spacing, fromStem, fromButt, geometry, issues, setPosition, toggleLock, resetGuide, resetAll, counts, addGuide,
     removeGuide, validity, candidate, assess, applyCandidate, reviewGaps, spacingReview, PREC, COUNT_WINDOW, compressionPreview, compressionAvailable, applyCompression, status, ringMm, frameHeightMm, parseLength, applyTrain, rebase };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.KR = api;

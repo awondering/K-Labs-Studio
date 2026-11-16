@@ -13011,6 +13011,14 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   overflow:hidden;
   background:#060708;
 }
+/* Desktop: the KR tool uses the screen width instead of the phone column (scoped to its own card; phones and tablets keep the single column). */
+@media (min-width:900px){
+  #workshopToolKrGuide{
+    width:min(1120px,calc(100vw - 64px));
+    margin-left:calc(50% - min(560px,calc(50vw - 32px)));
+  }
+  #workshopToolKrGuide .kr-guide-host{margin-left:0;margin-right:0}
+}
 .kr-guide-card .kr-guide-frame{
   display:block;
   width:100%;
