@@ -123,7 +123,7 @@ test('chart data: the Fuji chart values live only in src/chart-data.js (with pro
   for(const f of files){if(f===data||/index\.html$|VERIFICATION\.md$|tests\.js$/.test(f))continue;const t=fs.readFileSync(f,'utf8');assert.doesNotMatch(t,/6\.6,\s*5\.9,\s*5\.3|27\.5,\s*9\.0/,`${path.relative(root,f)} duplicates chart rows`);}
   assert.doesNotMatch(bundle,/Invented demonstration values|DEMO_REFERENCE|demonstration values/);
   assert.match(bundle,/KR_CHART_DATA/);assert.match(bundle,/data-rod/);assert.match(bundle,/data-applyentry/);
-  assert.match(bundle,/independent K-Labs Studio tool, not affiliated with or endorsed by Fuji/);
+  assert.match(bundle,/independent K-Labs Studio tool. It is not affiliated with or endorsed by Fuji/);
   assert.match(bundle,/K-Labs heuristic, not a Fuji layout/);assert.match(bundle,/Experimental, not Fuji/);
   assert.match(bundle,/unverified/i);assert.match(bundle,/foot placement/);
   assert.match(read('kr-guide-layout','VERIFICATION.md'),/Still unverified/);

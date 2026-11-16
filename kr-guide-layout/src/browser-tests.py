@@ -65,7 +65,7 @@ with sync_playwright() as p:
     L('button[data-unit="in"]').click()
     L('#entrybox > summary').click(); L('input[data-e="label"]').fill('My 6 ft test'); L('input[data-e="stripper"]').fill('26.2'); L('input[data-e="gaps"]').fill('10 8 6.5 6 5.4 5 4.8 4.3')
     L('button[data-applyentry]').click(); pg.wait_for_timeout(80)
-    ck('builder entry: 9 guides built from typed numbers, labelled as builder-entered, own measurements labelled', L('.row').count() == 9 and 'Your measurements' in L('#app').text_content() and 'My 6 ft test' in L('#app').inner_text())
+    ck('builder entry: 9 guides built from typed numbers, labelled as builder-entered, own measurements labelled', L('.row').count() == 9 and 'your own chart measurements' in L('#app').text_content() and 'My 6 ft test' in L('#app').inner_text())
     ck('builder entry: first guide sits the sum of the typed gaps (50 in) from the tip; the entered chart fits the blade, so no geometry warning', val(0) == '50.000' and L('.warn').count() == 0, val(0))
     L('input[data-e="gaps"]').fill('8 abc 5'); L('button[data-applyentry]').click(); pg.wait_for_timeout(60)
     ck('bad entry: reason shown, previous layout kept', 'Check the numbers' in L('#app').inner_text() and L('.row').count() == 9)
