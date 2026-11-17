@@ -350,6 +350,11 @@
         } else if (pending.kind === "save" && row && !base) {
           addConflict(state, id, pending.record || here, remote, row.updated_at,
             "The cloud version has no verified common baseline with this device.");
+        } else if (pending.kind === "delete" && row && (!base || row.updated_at !== base.revision || !same(remote, base.payload))) {
+          // Deleted here but changed on another device since they last matched: the server refuses the stale delete, so it
+          // must be reviewed (keep the cloud version or confirm the deletion) instead of failing and retrying forever.
+          addConflict(state, id, pending.record || here, remote, row.updated_at,
+            "This build was deleted on this device but changed on another device. Keep the cloud version or confirm the deletion.");
         }
       } else if (row) {
         if (here && base && !same(here, remote)) {
@@ -595,7 +600,10 @@
       throw new Error("The cloud version changed. Review both versions again.");
     }
     const known = state.baselines[id];
-    if (choice === "local" && row && known && conflict.local && same(conflict.local, known.payload) && !same(conflict.local, rowRecord(row))) {
+    // A pending deletion IS this device's change ("Confirm deletion" in the review), even though the deleted copy itself
+    // is unedited; build-sync-diff.js offers that choice for delete conflicts, so it is not refused here.
+    if (choice === "local" && state.pending[id]?.kind !== "delete" && row && known && conflict.local
+      && same(conflict.local, known.payload) && !same(conflict.local, rowRecord(row))) {
       throw new Error("This device has no changes of its own to keep. Use the cloud version instead.");
     }
     if (choice === "local" && row && conflict.local && !equal(conflict.local.issuedInvoice, rowRecord(row).issuedInvoice)) {
