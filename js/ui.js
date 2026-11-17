@@ -15586,6 +15586,14 @@ const GUIDE_ORIENTATION_METHOD_LABELS={standard:'Standard / Conventional',acute:
 function guideOrientationMethodLabel(method){
   return GUIDE_ORIENTATION_METHOD_LABELS[normalizeSpiralMethod(method)]||GUIDE_ORIENTATION_METHOD_LABELS.progressive;
 }
+// Spacing shown beside each saved guide position: guide 1 is its distance from the tip, later guides are measured from the previous guide.
+function guideRowSpacingMm(rows,index){
+  const here=Number(rows[index]&&rows[index].cum);
+  if(!Number.isFinite(here))return NaN;
+  if(index<=0)return here;
+  const previous=Number(rows[index-1]&&rows[index-1].cum);
+  return Number.isFinite(previous)?here-previous:NaN;
+}
 // Build Specification's Guide section is a live read-out of Guide Spacing + Guide Orientation - no separate guide data is stored/edited here.
 function renderGuideSpecificationSummary(){
   const countEl=$('guideSpecCount');
@@ -15623,8 +15631,15 @@ function renderGuideSpecificationSummary(){
     rowsHost.innerHTML=rows.map((row,index)=>{
       const angle=view.angles.length===rows.length?clampSpiralAngle(view.angles[index]):NaN;
       const angleText=Number.isFinite(angle)?`${formatDecimal(angle,1)}\u00b0`:'\u2014';
-      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${escapeHtml(formatGuideListMeasurement(row.cum))}</strong><em>${angleText}</em></div>`;
+      const spacing=guideRowSpacingMm(rows,index);
+      const spacingText=Number.isFinite(spacing)?formatGuideListMeasurement(spacing,{withUnit:false}):'\u2014';
+      return `<div class="guide-specification__row"><span>Guide ${row.g}</span><strong>${escapeHtml(formatGuideListMeasurement(row.cum,{withUnit:false}))}</strong><strong class="guide-specification__spacing">${escapeHtml(spacingText)}</strong><em>${angleText}</em></div>`;
     }).join('');
+    const unit=activeMeasurementUnits()==='imperial'?'in':'mm';
+    const positionHead=document.querySelector('[data-guide-spec-position-column]');
+    const spacingHead=document.querySelector('[data-guide-spec-spacing-column]');
+    if(positionHead)positionHead.textContent=`Position (${unit})`;
+    if(spacingHead)spacingHead.textContent=`Spacing (${unit})`;
   }
   renderRodBuildLayout();
 }
