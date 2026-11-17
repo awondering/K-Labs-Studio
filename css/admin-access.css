@@ -199,15 +199,13 @@
 .admin-status-picker[open]>summary{
   border-color:rgba(214,210,200,.3);
 }
+/* The option list sits in the page flow (not floating) so the page grows to hold every option, and the space reserved for the
+   fixed bottom navigation applies to it; it is also scrolled clear of that navigation when opened (see admin-panel.js). */
 .admin-status-picker__options{
-  position:absolute;
-  z-index:30;
-  top:calc(100% + 5px);
-  right:0;
-  left:0;
+  position:static;
   display:grid;
-  max-height:min(55vh,360px);
-  overflow:auto;
+  margin-top:5px;
+  scroll-margin-bottom:calc(130px + env(safe-area-inset-bottom,0px));
   padding:5px;
   border:1px solid rgba(214,210,200,.2);
   border-radius:8px;
