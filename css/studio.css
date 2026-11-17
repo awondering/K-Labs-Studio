@@ -4825,7 +4825,7 @@ textarea::placeholder{
 
 .guide-specification__row{
   display:grid;
-  grid-template-columns:auto 1fr auto;
+  grid-template-columns:48px minmax(0,1fr) minmax(0,1fr) 44px;
   gap:8px;
   align-items:baseline;
   font-size:11px;
@@ -4845,12 +4845,36 @@ textarea::placeholder{
   text-align:right;
 }
 
+.guide-specification__spacing{
+  font-weight:500;
+  color:rgba(223,216,205,.9);
+}
+
 .guide-specification__row em{
   font-style:normal;
   font-variant-numeric:tabular-nums;
   color:rgba(var(--kl-red-rgb),.86);
   text-align:right;
   min-width:44px;
+}
+
+.guide-specification__row.guide-specification__head{
+  margin-top:8px;
+  padding:0 0 4px;
+  font-size:10px;
+  color:rgba(214,210,200,.6);
+}
+
+.guide-specification__head strong,
+.guide-specification__head em,
+.guide-specification__head span{
+  color:rgba(214,210,200,.6);
+  font-weight:600;
+  white-space:nowrap;
+}
+
+.guide-specification__head+.guide-specification__rows{
+  margin-top:0;
 }
 
 @media (max-width:520px){
