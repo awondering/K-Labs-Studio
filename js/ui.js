@@ -146,6 +146,8 @@ let customerFinderCustomerMenuOpen=false;
 let customerFinderIntent='browse';
 let customerFinderOrigin=null;
 let customerFinderNewBuildStep='actions';
+// Job type requested when the new-job customer finder was opened (Home actions). Read only by that finder.
+let customerFinderNewJobType='build';
 let customerFinderCreateInFlight=false;
 let activeCustomerRenameContext={key:'',existingName:''};
 let buildRenameQuoteRef=null;
@@ -9170,6 +9172,7 @@ async function startFreshQuoteForCustomer(record,options){
   const settings={origin:'customer',customerKey:'',...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
+  if(settings.jobType)next.jobType=normalizeJobType(settings.jobType);
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
@@ -9219,13 +9222,19 @@ function runNewBuildStartAction(startAction){
   }
   startAction();
 }
-function startNewQuoteFlow(){
+function startNewQuoteFlow(jobType){
   runNewBuildStartAction(()=>{
+    // Set on every open, so a cancelled Repair start never carries over to a later New Build.
+    customerFinderNewJobType=normalizeJobType(jobType);
     openCustomerFinderSheet('new-build');
   });
 }
 function startNewBuildFlow(){
   startNewQuoteFlow();
+}
+// Repair / Refurb: the same customer finder; the new job starts as the existing 'repair' job type.
+function startNewRepairFlow(){
+  startNewQuoteFlow('repair');
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
@@ -12755,9 +12764,10 @@ function handleCustomerSelectionForNewBuild(customerKey,customerName){
     return rightDate-leftDate;
   });
   const sourceRecord=matches[0]&&matches[0].record?matches[0].record:{customerName:String(customerName||'').trim()};
+  const jobType=customerFinderNewJobType;
   closeCustomerFinderSheet();
   runNewBuildStartAction(async()=>{
-    if(await startFreshQuoteForCustomer(sourceRecord))flashWorkshopStatus('Customer linked');
+    if(await startFreshQuoteForCustomer(sourceRecord,{jobType}))flashWorkshopStatus('Customer linked');
   });
 }
 function handleAddCustomerForNewBuild(){
@@ -12837,8 +12847,9 @@ function commitCreateCustomerFromNewBuildForm(){
       flashWorkshopStatus('Customer saved');
       return;
     }
+    const jobType=customerFinderIntent==='new-build'?customerFinderNewJobType:'build';
     runNewBuildStartAction(async()=>{
-      if(await startFreshQuoteForCustomer(savedCustomer))flashWorkshopStatus('Customer saved');
+      if(await startFreshQuoteForCustomer(savedCustomer,{jobType}))flashWorkshopStatus('Customer saved');
     });
   },220);
   return true;
