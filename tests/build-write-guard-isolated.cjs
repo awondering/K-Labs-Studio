@@ -251,7 +251,8 @@ async function main(){
     d1.builds=[localEdit,...d1.builds.filter(r=>r.id!=='integrated')];
     d1.w.KLABS_BUILD_SYNC.notifyBuildSaved(localEdit);
     await d1.w.KLABS_BUILD_SYNC.retry();
-    assert.equal(d1.w.KLABS_BUILD_SYNC.getStatus(),'error');
+    assert.equal(d1.w.KLABS_BUILD_SYNC.getStatus(),'failed'); // contract (46da3d3, v237): offline is a failed attempt, retried; not a conflict
+    assert.deepEqual(Object.keys(d1.w.KLABS_BUILD_SYNC.getConflicts()),[]);
     online=true;
     await d1.w.KLABS_BUILD_SYNC.retry();
     const conflict=d1.w.KLABS_BUILD_SYNC.getConflicts().integrated;
@@ -297,12 +298,14 @@ async function main(){
     restarted.w.KLABS_BUILD_SYNC.notifyBuildSaved(interrupted);
     guardAvailable=false;
     await restarted.w.KLABS_BUILD_SYNC.retry();
-    assert.equal(restarted.w.KLABS_BUILD_SYNC.getStatus(),'error');
+    assert.equal(restarted.w.KLABS_BUILD_SYNC.getStatus(),'failed'); // contract (46da3d3, v237): server guard unavailable is a failed attempt, retried; not a conflict
+    assert.deepEqual(Object.keys(restarted.w.KLABS_BUILD_SYNC.getConflicts()),[]);
     assert.equal((await db.query('select * from builds where user_id=$1 and client_id=$2',[accountA,interrupted.id])).rows.length,0);
     guardAvailable=true;
     loseNextResponse=true;
     await restarted.w.KLABS_BUILD_SYNC.retry();
-    assert.equal(restarted.w.KLABS_BUILD_SYNC.getStatus(),'error');
+    assert.equal(restarted.w.KLABS_BUILD_SYNC.getStatus(),'failed'); // contract: a lost reply is a failed attempt, recognised on retry; not a conflict
+    assert.deepEqual(Object.keys(restarted.w.KLABS_BUILD_SYNC.getConflicts()),[]);
     await restarted.w.KLABS_BUILD_SYNC.retry();
     assert.equal(restarted.w.KLABS_BUILD_SYNC.getStatus(),'synced');
     assert.equal((await db.query('select * from builds where user_id=$1 and client_id=$2',[accountA,interrupted.id])).rows.length,1);

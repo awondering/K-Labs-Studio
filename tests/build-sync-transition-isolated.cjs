@@ -112,7 +112,8 @@ async function main() {
     sync.notifyBuildSaved(record);
     failProbe = { code:'42501',message:'permission denied' };
     await sync.retry();
-    assert.equal(sync.getStatus(),'error');
+    assert.equal(sync.getStatus(),'failed'); // contract (46da3d3, v237): a refused attempt with no conflict is 'failed' and retried; 'error' means a conflict to review
+    assert.deepEqual(Object.keys(sync.getConflicts()),[]);
     assert.ok(first.window.KLABS_BUILD_SYNC_JOURNAL.read(account).pending.transition);
     assert.equal((await db.query('select * from builds where client_id=$1',['transition'])).rows.length,0);
     failProbe = null;
@@ -154,7 +155,8 @@ async function main() {
     first.builds = [record];
     sync.notifyBuildSaved(record);
     await sync.retry();
-    assert.equal(sync.getStatus(),'error');
+    assert.equal(sync.getStatus(),'failed'); // contract (46da3d3, v237): offline is a failed attempt, retried; not a conflict
+    assert.deepEqual(Object.keys(sync.getConflicts()),[]);
     const accountB = 'bbbbbbbb-0000-0000-0000-000000000002';
     await db.exec(`set request.jwt.claim.sub='${accountB}'`);
     first.builds = [];
@@ -172,11 +174,13 @@ async function main() {
     first.builds = [record];
     sync.notifyBuildSaved(record);
     await sync.retry();
-    assert.equal(sync.getStatus(),'error');
+    assert.equal(sync.getStatus(),'failed'); // contract (46da3d3, v237): offline is a failed attempt, retried; not a conflict
+    assert.deepEqual(Object.keys(sync.getConflicts()),[]);
     online = true;
     afterProbe = activate;
     await sync.retry();
-    assert.equal(sync.getStatus(),'error');
+    assert.equal(sync.getStatus(),'failed'); // contract (46da3d3, v237): the guard activating mid-write fails this attempt; the change stays queued and is retried
+    assert.deepEqual(Object.keys(sync.getConflicts()),[]);
     assert.equal(first.window.KLABS_BUILD_SYNC_JOURNAL.read(account).pending.transition.record.note,'queued during activation');
     await sync.retry();
     assert.equal(sync.getMode(),'guarded');
@@ -199,7 +203,8 @@ async function main() {
     first.builds = [record];
     sync.notifyBuildSaved(record);
     await sync.retry();
-    assert.equal(sync.getStatus(),'error');
+    assert.equal(sync.getStatus(),'failed'); // contract (46da3d3, v237): a stale server schema is a failed attempt, retried; not a conflict
+    assert.deepEqual(Object.keys(sync.getConflicts()),[]);
     assert.equal(first.window.KLABS_BUILD_SYNC_JOURNAL.read(account).pending.transition.record.note,'kept locally');
     failProbe = null;
     await sync.retry();
