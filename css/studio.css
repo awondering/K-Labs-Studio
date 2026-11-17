@@ -11601,6 +11601,30 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   white-space:nowrap;
 }
 
+/* Stock Quantity has the longest inline label, so its input is the narrowest of the three; Safari's
+   spinner arrows then covered the number. Hide the spinner (as .component-quantity__value does) and keep
+   room for the value. Typing, keyboard arrows, step and min are unchanged. */
+@media (min-width:640px){
+  #studioComponentDetails .studio-component-details__fields .quote-component-field--cost:has(#studioComponentStockOnHand){
+    grid-template-columns:auto minmax(64px,1fr);
+  }
+}
+
+#studioComponentDetails #studioComponentStockOnHand{
+  min-width:64px;
+  padding-left:8px;
+  padding-right:8px;
+  font-variant-numeric:tabular-nums;
+  -moz-appearance:textfield;
+  appearance:textfield;
+}
+
+#studioComponentDetails #studioComponentStockOnHand::-webkit-outer-spin-button,
+#studioComponentDetails #studioComponentStockOnHand::-webkit-inner-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+
 #studioComponentDetails .studio-size-list{
   grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
 }
