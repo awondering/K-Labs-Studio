@@ -54,7 +54,7 @@ function harness({realSave=false,realFamilyDialog=false}={}){
     'studioComponentSizeList','studioComponentSizeInput','studioComponentSizeFrom',
     'studioComponentSizeTo','studioComponentSizeStep',
     'studioComponentsDuplicateFamilyBtn','studioComponentDuplicateDestinationLabel',
-    'studioComponentDuplicateNameLabel','studioComponentDuplicateConfirm',
+    'studioComponentDuplicateNameLabel','studioComponentDuplicateConfirm','studioComponentsGenerateSizesBtn',
   ].forEach(element);
   let sequence=0;
   const store=new Map();
@@ -111,6 +111,7 @@ function harness({realSave=false,realFamilyDialog=false}={}){
     studioRenameCategoryById:(id,_old,name)=>context.records.forEach(record=>{if(record.categoryId===id)record.category=name;}),
     studioRenameSubcategory:(category,old,name)=>context.records.forEach(record=>{if(record.category===category && record.subcategory===old)record.subcategory=name;}),
     openSubcategoryDuplicateSheet:(category,family)=>calls.push(['family-duplicate',category.id,family.id]),
+    openFamilySizeGeneratorSheet:(category,family)=>calls.push(['generate-sizes',category.id,family.id]),
     openComponentMoveSheet:()=>calls.push(['component-move',context.currentStudioComponentRecord().id]),
     openComponentDuplicateSheet:()=>calls.push(['component-duplicate',context.currentStudioComponentRecord().id]),
     requestDeleteStudioComponent:record=>calls.push(['component-delete',record.id]),
@@ -604,4 +605,21 @@ test('blank/invalid categories remain reachable and Back from a direct duplicate
   click('studioComponentsBackBtn');
   assert.equal(c.studioLibraryPath.subcategoryId,'Unassigned');
   assert.deepEqual(labels(e('studioComponentsList').innerHTML),['Black Silver','Gunmetal Hexy Duplicate','Hex']);
+});
+
+test('Generate Sizes shows only inside a saved family and opens for that family; Duplicate Family is unchanged',()=>{
+  const {context:c,element:e,click,calls}=harness();
+  c.renderStudioComponentsLibrary();
+  assert.equal(e('studioComponentsGenerateSizesBtn').hidden,true);
+  c.studioLibraryPath={level:'subcategory',categoryId:'Winding Checks',subcategoryId:'Unassigned'};
+  c.renderStudioComponentsLibrary();
+  assert.equal(e('studioComponentsGenerateSizesBtn').hidden,true);
+  c.studioLibraryPath={level:'subcategory',categoryId:'Winding Checks',subcategoryId:'Silver'};
+  c.renderStudioComponentsLibrary();
+  assert.equal(e('studioComponentsGenerateSizesBtn').hidden,false);
+  assert.equal(e('studioComponentsDuplicateFamilyBtn').hidden,false);
+  click('studioComponentsGenerateSizesBtn');
+  assert.deepEqual(calls.pop(),['generate-sizes','winding','silver']);
+  click('studioComponentsDuplicateFamilyBtn');
+  assert.deepEqual(calls.pop(),['family-duplicate','winding','silver']);
 });

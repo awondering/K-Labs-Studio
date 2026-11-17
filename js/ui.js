@@ -6691,6 +6691,240 @@ function duplicateStudioSubcategory(categoryName,subcategoryName,name){
   if(notificationErrors.length)openInfoDialog('Saved Locally',`Saved locally; sync needs retry. ${notificationErrors.join('; ')}`);
   return true;
 }
+// Generate Sizes: creates one ordinary component per size inside an existing family, each with its own
+// Buy/Sell price. Sizes go in the component name; no new record fields, so library, build pricing and sync are unchanged.
+const FAMILY_SIZE_GENERATOR_MAX=50;
+let studioFamilySizeGeneratorState=null;
+// Size labels from a comma list (used as typed) or else a From/To/Step range (unit appended). {labels} or {error}.
+function familySizeGeneratorLabels(listRaw,fromRaw,toRaw,stepRaw,unit){
+  const listed=String(listRaw||'').split(',').map((part)=>part.replace(/\s+/g,' ').trim()).filter(Boolean);
+  let labels=listed;
+  if(!listed.length){
+    const fromText=String(fromRaw??'').trim();
+    const toText=String(toRaw??'').trim();
+    const stepText=String(stepRaw??'').trim();
+    const from=Number(fromText);
+    const to=Number(toText);
+    const step=stepText===''?1:Number(stepText);
+    if(fromText==='' || toText==='' || !Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(step) || step<=0){
+      return {error:'Enter sizes separated by commas, or a numeric From, To and a Step greater than zero.'};
+    }
+    // Small tolerance so 0.5→0.7 step 0.1 keeps 0.7 despite binary float division (1.9999…).
+    const count=Math.floor(Math.abs(to-from)/step+1e-9)+1;
+    if(count>FAMILY_SIZE_GENERATOR_MAX)return {error:`That range would create ${count} components. The limit is ${FAMILY_SIZE_GENERATOR_MAX}.`};
+    const direction=to>=from?1:-1;
+    labels=[];
+    for(let i=0;i<count;i+=1){
+      const rounded=Number((from+(direction*step*i)).toFixed(6));
+      if(Number.isFinite(rounded))labels.push(unit?`${rounded} ${unit}`:String(rounded));
+    }
+  }
+  const seen=new Set();
+  labels=labels.filter((label)=>{const key=label.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
+  if(!labels.length)return {error:'Enter at least one size.'};
+  if(labels.length>FAMILY_SIZE_GENERATOR_MAX)return {error:`That would create ${labels.length} components. The limit is ${FAMILY_SIZE_GENERATOR_MAX}.`};
+  return {labels};
+}
+function familySizeGeneratorComponentName(baseName,size){
+  return `${String(baseName||'').trim()} ${String(size||'').trim()}`.replace(/\s+/g,' ').trim();
+}
+// First problem with the size rows, or ''. Every name must be new (to the library and the batch) and every price valid.
+function familySizeGeneratorProblem(baseName,rows,existingRecords){
+  const list=Array.isArray(rows)?rows:[];
+  if(!String(baseName||'').trim())return 'Enter a base name for the components.';
+  if(!list.length)return 'Create the size list before saving.';
+  if(list.length>FAMILY_SIZE_GENERATOR_MAX)return `The limit is ${FAMILY_SIZE_GENERATOR_MAX} components at a time.`;
+  const existing=new Set((existingRecords||[]).map((record)=>normalizeNameKey(record&&record.name)).filter(Boolean));
+  const batch=new Set();
+  for(const row of list){
+    const name=familySizeGeneratorComponentName(baseName,row.size);
+    const key=normalizeNameKey(name);
+    if(existing.has(key))return `A component named "${name}" already exists. Change the base name or the sizes.`;
+    if(batch.has(key))return `"${name}" appears more than once. Each size must be unique.`;
+    batch.add(key);
+    const buy=componentPriceProblem(row.buy,'Buy Price');
+    if(buy)return `${row.size}: ${buy}`;
+    const sell=componentPriceProblem(row.sell,'Sell Price');
+    if(sell)return `${row.size}: ${sell}`;
+  }
+  return '';
+}
+function familySizeGeneratorError(message){
+  const status=$('studioFamilySizeStatus');
+  if(status){status.textContent=String(message||'');status.dataset.state=message?'error':'';}
+}
+function renderFamilySizeGeneratorRows(){
+  const state=studioFamilySizeGeneratorState;
+  const host=$('studioFamilySizeRows');
+  const confirm=$('studioFamilySizeConfirm');
+  const rows=state?state.rows:[];
+  if(confirm){
+    confirm.textContent=rows.length?`Create ${rows.length} Component${rows.length===1?'':'s'}`:'Create Components';
+    confirm.disabled=!rows.length;
+  }
+  if(!host)return;
+  host.innerHTML=rows.length?`
+    <div class="studio-family-size__row studio-family-size__row--head" aria-hidden="true"><span>Component</span><span>Buy</span><span>Sell</span></div>
+    ${rows.map((row,index)=>{
+      const name=familySizeGeneratorComponentName(state.baseName,row.size);
+      return `<div class="studio-family-size__row"><strong data-family-size-name="${index}">${escapeHtml(name)}</strong><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Buy Price ${row.size}`)}" data-family-size-index="${index}" data-family-size-field="buy" value="${escapeAttributeValue(row.buy)}" /><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Sell Price ${row.size}`)}" data-family-size-index="${index}" data-family-size-field="sell" value="${escapeAttributeValue(row.sell)}" /></div>`;
+    }).join('')}`:'';
+}
+function buildFamilySizeGeneratorRows(){
+  const state=studioFamilySizeGeneratorState;
+  if(!state)return false;
+  const value=(id)=>String($(id)&&$(id).value||'');
+  const result=familySizeGeneratorLabels(value('studioFamilySizeList'),value('studioFamilySizeFrom'),value('studioFamilySizeTo'),value('studioFamilySizeStep'),measurementUnitSuffix());
+  if(result.error){familySizeGeneratorError(result.error);return false;}
+  const buy=value('studioFamilySizeBuy').trim();
+  const sell=value('studioFamilySizeSell').trim();
+  state.rows=result.labels.map((size)=>({size,buy,sell}));
+  familySizeGeneratorError('');
+  renderFamilySizeGeneratorRows();
+  return true;
+}
+// One atomic library write. On failure the previous records are restored, so no partial family is left behind.
+function commitFamilySizeGenerator(){
+  const state=studioFamilySizeGeneratorState;
+  if(!state)return false;
+  const category=studioCategoryById(state.categoryId);
+  const family=category&&category.subcategories.find((item)=>item.id===state.subcategoryId);
+  if(!category || !family){familySizeGeneratorError('The selected family was not found.');return false;}
+  const records=componentLibraryRecords();
+  const problem=familySizeGeneratorProblem(state.baseName,state.rows,records);
+  if(problem){familySizeGeneratorError(problem);return false;}
+  const brand=explicitBrandForSubcategory(category.name,family.name);
+  const created=state.rows.map((row)=>{
+    const buy=numberOrZero(String(row.buy).trim());
+    return {
+      id:'',
+      name:familySizeGeneratorComponentName(state.baseName,row.size),
+      category:category.name,
+      categoryId:category.id,
+      subcategory:family.name,
+      brand,
+      cost:buy,
+      unitCost:buy,
+      unitPrice:numberOrZero(String(row.sell).trim()),
+      stockOnHand:0,
+      sizeOptions:[],
+    };
+  });
+  const snapshot=Store.get(componentLibraryStorageKey(),[]);
+  const sync=window.KLABS_SYNC;
+  const notify=sync&&sync.notifyComponentsChanged;
+  let changed=false;
+  try{
+    if(typeof notify==='function')sync.notifyComponentsChanged=()=>{changed=true;};
+    saveComponentLibraryRecords([...created,...records]);
+  }catch(error){
+    const reason=error&&error.message||'Save failed.';
+    try{
+      Store.set(componentLibraryStorageKey(),snapshot);
+      familySizeGeneratorError(`Save failed: ${reason} No components were created. You can retry.`);
+    }catch(restoreError){
+      familySizeGeneratorError(`Save failed: ${reason} Restoring the component library also failed (${restoreError&&restoreError.message||'restore failed'}). Do not retry until this is resolved.`);
+    }
+    return false;
+  }finally{
+    if(typeof notify==='function')sync.notifyComponentsChanged=notify;
+  }
+  let notifyError='';
+  if(changed){
+    try{notify.call(sync);}
+    catch(error){notifyError=error&&error.message||'Sync notification failed.';}
+  }
+  studioComponentDraft=null;
+  studioLibraryEditor={type:'',mode:'',targetName:''};
+  studioLibraryPath={level:'subcategory',categoryId:category.name,subcategoryId:family.name};
+  closeFamilySizeGeneratorSheet();
+  renderStudioComponentsLibrary();
+  if(notifyError)openInfoDialog('Saved Locally',`Saved locally; sync needs retry. ${notifyError}`);
+  return true;
+}
+function closeFamilySizeGeneratorSheet(){
+  const sheet=$('studioFamilySizeSheet');
+  if(sheet)sheet.hidden=true;
+  studioFamilySizeGeneratorState=null;
+  unlockModalLayer({restoreFocus:true});
+}
+function ensureFamilySizeGeneratorSheet(){
+  if($('studioFamilySizeSheet'))return;
+  const sheet=document.createElement('div');
+  sheet.id='studioFamilySizeSheet';
+  sheet.className='component-sheet component-hierarchy-picker studio-component-duplicate studio-family-size';
+  sheet.hidden=true;
+  sheet.innerHTML=`
+    <div class="component-sheet__scrim" data-family-size-action="cancel"></div>
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Generate Sizes">
+      <header class="component-sheet__header">
+        <h2>Generate Sizes</h2>
+        <button class="component-sheet__close" type="button" data-family-size-action="cancel" aria-label="Close size generator">&#215;</button>
+      </header>
+      <div class="component-sheet__body">
+        <section class="studio-component-duplicate__placement" aria-label="Generated component placement">
+          <div><span>Category</span><strong id="studioFamilySizeCategory"></strong></div>
+          <div><span>Family</span><strong id="studioFamilySizeFamily"></strong></div>
+        </section>
+        <label class="component-hierarchy-picker__brand"><span>Base Name</span><input id="studioFamilySizeBase" type="text" autocomplete="off" /></label>
+        <label class="component-hierarchy-picker__brand"><span>Sizes (comma separated)</span><input id="studioFamilySizeList" type="text" autocomplete="off" placeholder="e.g. 5.5, 6, 8, 10 - or use a range below" /></label>
+        <div class="studio-family-size__fields">
+          <label class="quote-component-field"><span>From</span><input id="studioFamilySizeFrom" type="number" inputmode="decimal" step="any" /></label>
+          <label class="quote-component-field"><span>To</span><input id="studioFamilySizeTo" type="number" inputmode="decimal" step="any" /></label>
+          <label class="quote-component-field"><span>Step</span><input id="studioFamilySizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
+        </div>
+        <div class="studio-family-size__fields studio-family-size__fields--prices">
+          <label class="quote-component-field"><span>Starting Buy Price</span><input id="studioFamilySizeBuy" type="number" inputmode="decimal" step="0.01" min="0" /></label>
+          <label class="quote-component-field"><span>Starting Sell Price</span><input id="studioFamilySizeSell" type="number" inputmode="decimal" step="0.01" min="0" /></label>
+        </div>
+        <button id="studioFamilySizeBuild" class="ghost-action studio-family-size__build" type="button">Create Size List</button>
+        <p class="studio-component-duplicate__note">Each size becomes its own component in this family. Starting prices fill every size; edit any size below before saving. Stock starts at 0. Up to ${FAMILY_SIZE_GENERATOR_MAX} at a time.</p>
+        <div id="studioFamilySizeRows" class="studio-family-size__rows" aria-label="Generated sizes and prices"></div>
+        <p id="studioFamilySizeStatus" class="studio-component-duplicate__status" aria-live="polite"></p>
+        <div class="studio-component-duplicate__actions">
+          <button class="ghost-action" type="button" data-family-size-action="cancel">Cancel</button>
+          <button id="studioFamilySizeConfirm" class="primary-action" type="button" disabled>Create Components</button>
+        </div>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',(event)=>{
+    if(event.target.closest('[data-family-size-action]')){closeFamilySizeGeneratorSheet();return;}
+    if(event.target.closest('#studioFamilySizeBuild')){buildFamilySizeGeneratorRows();return;}
+    if(event.target.closest('#studioFamilySizeConfirm')){
+      runExplicitSave($('studioFamilySizeConfirm'),commitFamilySizeGenerator);
+    }
+  });
+  sheet.addEventListener('input',(event)=>{
+    const state=studioFamilySizeGeneratorState;
+    if(!state)return;
+    const target=event.target;
+    if(target.id==='studioFamilySizeBase'){
+      state.baseName=String(target.value||'');
+      state.rows.forEach((row,index)=>{
+        const label=sheet.querySelector(`[data-family-size-name="${index}"]`);
+        if(label)label.textContent=familySizeGeneratorComponentName(state.baseName,row.size);
+      });
+      return;
+    }
+    const index=Number(target.getAttribute&&target.getAttribute('data-family-size-index'));
+    const field=target.getAttribute&&target.getAttribute('data-family-size-field');
+    if(Number.isInteger(index) && state.rows[index] && (field==='buy' || field==='sell'))state.rows[index][field]=String(target.value||'');
+  });
+}
+function openFamilySizeGeneratorSheet(category,family){
+  studioFamilySizeGeneratorState={categoryId:category.id,subcategoryId:family.id,baseName:family.name,rows:[]};
+  ensureFamilySizeGeneratorSheet();
+  ['studioFamilySizeList','studioFamilySizeFrom','studioFamilySizeTo','studioFamilySizeStep','studioFamilySizeBuy','studioFamilySizeSell'].forEach((id)=>{if($(id))$(id).value='';});
+  if($('studioFamilySizeBase'))$('studioFamilySizeBase').value=family.name;
+  if($('studioFamilySizeCategory'))$('studioFamilySizeCategory').textContent=category.name;
+  if($('studioFamilySizeFamily'))$('studioFamilySizeFamily').textContent=family.name;
+  familySizeGeneratorError('');
+  renderFamilySizeGeneratorRows();
+  $('studioFamilySizeSheet').hidden=false;
+  lockModalLayer(document.activeElement);
+}
 function studioTaxonomySectionMode(section){
   const scope=studioTaxonomyUiState&&studioTaxonomyUiState[section]?studioTaxonomyUiState[section]:null;
   const mode=scope&&scope.mode;
@@ -7952,6 +8186,14 @@ function renderStudioComponentsLibrary(){
     duplicateFamilyButton.setAttribute('data-category-id',category&&category.id||'');
     duplicateFamilyButton.setAttribute('data-family-id',family&&family.id||'');
   }
+  const generateSizesButton=$('studioComponentsGenerateSizesBtn');
+  if(generateSizesButton){
+    const category=studioCategoryByName(studioLibraryPath.categoryId);
+    const family=category&&category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(studioLibraryPath.subcategoryId));
+    generateSizesButton.hidden=studioLibraryPath.level!=='subcategory' || showFormScreen || !family;
+    generateSizesButton.setAttribute('data-category-id',category&&category.id||'');
+    generateSizesButton.setAttribute('data-family-id',family&&family.id||'');
+  }
   if(searchInput){
     searchInput.hidden=studioLibraryPath.level==='component' || studioLibraryPath.level==='supplier-component';
   }
@@ -8183,6 +8425,15 @@ function bindStudioComponentsPanel(){
       const family=category&&category.subcategories.find((item)=>item.id===duplicateFamilyButton.getAttribute('data-family-id'));
       if(!category || !family){openInfoDialog('Family Missing','The selected family was not found.');return;}
       openSubcategoryDuplicateSheet(category,family);
+    });
+  }
+  const generateSizesButton=$('studioComponentsGenerateSizesBtn');
+  if(generateSizesButton){
+    generateSizesButton.addEventListener('click',()=>{
+      const category=studioCategoryById(generateSizesButton.getAttribute('data-category-id'));
+      const family=category&&category.subcategories.find((item)=>item.id===generateSizesButton.getAttribute('data-family-id'));
+      if(!category || !family){openInfoDialog('Family Missing','The selected family was not found.');return;}
+      openFamilySizeGeneratorSheet(category,family);
     });
   }
   if(addBtn){
