@@ -361,7 +361,9 @@ async function main(){
     const opened=device();
     await opened.w.KLABS_BUILD_SYNC.onAuthStateChanged({user:{id:accountA}});
     let active=true;
-    opened.w.KLABS_UI.isBuildOpen=id=>active&&id==='integrated';
+    // The build stays open on this device; only while it has typing that is not saved yet is it being edited.
+    opened.w.KLABS_UI.isBuildOpen=id=>id==='integrated';
+    opened.w.KLABS_UI.hasUnsavedEdits=id=>active&&id==='integrated';
     sharedBrowser.w.KLABS_ACCOUNT_ID=accountA;
     await sharedBrowser.w.KLABS_BUILD_SYNC.onAuthStateChanged({user:{id:accountA}});
     const activeUpdate={...accountRecords[accountA].find(r=>r.id==='integrated'),note:'updated elsewhere'};
@@ -369,18 +371,19 @@ async function main(){
     sharedBrowser.w.KLABS_BUILD_SYNC.notifyBuildSaved(activeUpdate);
     await sharedBrowser.w.KLABS_BUILD_SYNC.retry();
     await opened.w.KLABS_BUILD_SYNC.retry();
-    const openConflict=opened.w.KLABS_BUILD_SYNC.getConflicts().integrated;
-    assert.ok(openConflict);
+    // Typing in progress: the cloud change is deferred, never overwrites the typing and is not a conflict.
+    assert.equal(opened.w.KLABS_BUILD_SYNC.getConflicts().integrated,undefined);
     assert.equal(opened.builds.find(r=>r.id==='integrated').note,undefined);
-    await assert.rejects(opened.w.KLABS_BUILD_SYNC.resolveConflict('integrated','cloud',openConflict.revision),/Open another build/);
+    // Once nothing is unsaved the unchanged open build takes the newer cloud version without a conflict.
     active=false;
-    await opened.w.KLABS_BUILD_SYNC.resolveConflict('integrated','cloud',openConflict.revision);
+    await opened.w.KLABS_BUILD_SYNC.retry();
+    assert.equal(Object.keys(opened.w.KLABS_BUILD_SYNC.getConflicts()).length,0);
     assert.equal(opened.builds.find(r=>r.id==='integrated').note,'updated elsewhere');
     console.log('Integrated sync: normal deletion and conflicting deletion with recovery verified.');
     console.log('Integrated sync: missing guard, lost response, interrupted deletion and read-only access verified.');
     console.log('Integrated sync: account-scoped journals and 502-record paginated pull verified.');
     console.log('Integrated sync: same-browser offline account switching verified.');
-    console.log('Integrated sync: active editors protected from cloud hydration and conflict resolution.');
+    console.log('Integrated sync: unsaved typing protected from cloud hydration; an unchanged open build updates without a conflict.');
     console.log('Integrated sync: guarded saves, offline conflict, restart and explicit cloud resolution verified.');
     console.log('Isolated guard: outdated and stale writes rejected; valid writes, immutable invoices and account isolation verified.');
   }finally{

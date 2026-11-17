@@ -10700,6 +10700,19 @@ body:not(.klabs-logged-out) .home-public-entry {
 .build-sync-review { width:min(920px,94vw);max-height:85vh;overflow:auto;background:#17191a;color:#ddd;border:1px solid #6b5152;border-radius:8px; }
 .build-sync-review::backdrop { background:rgba(0,0,0,.75); }
 .build-sync-review__versions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+.build-sync-review__item{margin:0 0 18px;padding:12px;border:1px solid rgba(214,210,200,.16);border-radius:8px;display:grid;gap:8px}
+.build-sync-review__item h3{margin:0;font-size:15px}
+.build-sync-review__summary,.build-sync-review__flags,.build-sync-review__effect{margin:0;font-size:13px}
+.build-sync-review__flags{color:#e4aeb4}
+.build-sync-review__effect{color:#b8b1a6;font-size:12px}
+.build-sync-review__table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.build-sync-review__table th,.build-sync-review__table td{text-align:left;padding:5px 6px;border-bottom:1px solid rgba(214,210,200,.12);overflow-wrap:anywhere;vertical-align:top}
+.build-sync-review__table tr.is-stamp td{color:#8f8a80}
+.build-sync-review__table tr.is-financial td:first-child{color:#e4aeb4}
+.build-sync-review__choices{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.build-sync-review__choice{display:grid;gap:4px;align-content:start}
+.build-sync-review__choice .ghost-action{min-height:44px}
+.build-sync-review__copy{justify-self:start;min-height:40px}
 .build-sync-review pre { max-height:35vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#101112;padding:10px;font-size:12px; }
 .build-sync-review button { margin:4px; }
 @media (max-width:620px) { .build-sync-review__versions { grid-template-columns:1fr; } }

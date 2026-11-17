@@ -9,6 +9,8 @@
   let sequence = 0;
   let failures = 0;
   let lastRunAt = 0;
+  // Builds whose newer cloud version is waiting behind typing that is not saved yet. While any exist the device is not synchronised.
+  let deferred = new Set();
 
   const journal = () => window.KLABS_BUILD_SYNC_JOURNAL;
   const transport = () => window.KLABS_GUARDED_BUILD_TRANSPORT;
@@ -33,6 +35,64 @@
     return value;
   }
   const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+  // Sync decisions compare business content. The save/update stamps change on every autosave and are not business edits, and
+  // legacy numeric ids are compared as the strings the cloud stores. Financial and every other field stay strictly compared.
+  const VOLATILE = ["savedAt", "updatedAt"];
+  const FINANCIAL = ["payments", "issuedInvoice"];
+  const GENERIC_REASON = "Versions require review.";
+  // Price, cost, labour, delivery, tax and deposit fields (and the components that carry costs) depend on one another: a total
+  // or balance is only meaningful for the exact set of inputs it was calculated from. They are therefore never merged field by
+  // field from two devices. The pattern also catches pricing fields added later.
+  const PRICING_KEYS = new Set(["components", "blankCost", "blankId", "blankName", "blankMaker", "blankSeries", "blankSku", "jobType",
+    "fulfilmentMethod"]);
+  const PRICING_PATTERN = /^(labour|freight|packaging|delivery|markup|margin|target|pricing|final|natural|price|tax|gst|include(Gst|Tax)|deposit)/i;
+  const isPricing = (key) => PRICING_KEYS.has(key) || PRICING_PATTERN.test(key);
+  function strip(record) {
+    if (!record || typeof record !== "object") return record;
+    const copy = { ...record };
+    VOLATILE.forEach((key) => delete copy[key]);
+    delete copy._expectedBuildRevision;
+    delete copy._buildGuardCreate;
+    if (copy.id !== undefined && copy.id !== null) copy.id = String(copy.id);
+    return copy;
+  }
+  const same = (a, b) => equal(strip(a), strip(b));
+  // Only a build with typing that has not been saved yet is "being edited". A build that is merely open is not.
+  function hasUnsaved(id) {
+    const ui = window.KLABS_UI;
+    if (typeof ui?.hasUnsavedEdits === "function") return !!ui.hasUnsavedEdits(String(id));
+    return !!ui?.isBuildOpen?.(String(id));
+  }
+  // Top-level three-way merge against the verified baseline. Returns null unless every change is demonstrably safe:
+  // no field changed differently on both sides, and this device never changes a financial field.
+  function mergeThreeWay(base, mine, theirs) {
+    if (!base || !mine || !theirs) return null;
+    const b = strip(base), m = strip(mine), t = strip(theirs);
+    const merged = { ...t };
+    const keys = [...new Set([...Object.keys(b), ...Object.keys(m), ...Object.keys(t)])];
+    const pricing = keys.filter(isPricing);
+    const mineTouchedPricing = pricing.some((key) => !equal(m[key], b[key]));
+    const theirsTouchedPricing = pricing.some((key) => !equal(t[key], b[key]));
+    // Interdependent fields changed on both devices: consistency cannot be shown, so nothing is combined.
+    if (mineTouchedPricing && theirsTouchedPricing && pricing.some((key) => !equal(m[key], t[key]))) return null;
+    // A payment or invoice recorded elsewhere was calculated from the old pricing; a local pricing change is not applied over it.
+    if (mineTouchedPricing && FINANCIAL.some((key) => !equal(t[key], b[key]) && !equal(m[key], t[key]))) return null;
+    for (const key of keys) {
+      const mineChanged = !equal(m[key], b[key]);
+      const theirsChanged = !equal(t[key], b[key]);
+      if (mineChanged && theirsChanged && !equal(m[key], t[key])) return null;
+      if (mineChanged && FINANCIAL.includes(key) && !equal(m[key], t[key])) return null;
+      if (mineChanged) {
+        if (m[key] === undefined) delete merged[key];
+        else merged[key] = clone(m[key]);
+      }
+    }
+    VOLATILE.forEach((key) => {
+      if (mine[key] !== undefined) merged[key] = mine[key];
+      else if (theirs[key] !== undefined) merged[key] = theirs[key];
+    });
+    return merged;
+  }
   function setStatus(value) {
     status = value;
     window.KLABS_UI?.onBuildSyncStatus?.(value);
@@ -43,7 +103,7 @@
   }
   function refreshStatus(state) {
     if (Object.keys(state.conflicts).length) setStatus("error");
-    else if (Object.keys(state.pending).length) setStatus("pending");
+    else if (Object.keys(state.pending).length || deferred.size) setStatus("pending");
     else setStatus(canWrite() ? "synced" : "local");
   }
   async function detectMode(ctx) {
@@ -79,6 +139,7 @@
       if (window.saveBuildRecords(list) === false) throw new Error("Could not save the local build.");
     }
     finally { window.KLABS_SYNC_HYDRATION = old; }
+    if (record) window.KLABS_UI?.refreshOpenBuild?.(id, record);
     window.KLABS_UI?.refreshBuildViews?.();
   }
   function addConflict(state, id, local, cloud, revision, reason) {
@@ -87,8 +148,13 @@
     if (old && (!equal(old.local, local) || !equal(old.cloud, cloud) || old.revision !== revision)) {
       history.push({ local: old.local, cloud: old.cloud, revision: old.revision });
     }
+    const kept = old?.reason && old.reason !== GENERIC_REASON ? old.reason : reason;
     state.conflicts[id] = { id, local: clone(local), cloud: clone(cloud), revision: revision || null,
-      operation: state.pending[id]?.kind || "save", reason, history };
+      operation: state.pending[id]?.kind || "save", reason: kept, latest: reason, createdAt: old?.createdAt || new Date().toISOString(), history };
+  }
+  function archiveAuto(state, id, local, cloud, revision, rule, extra) {
+    state.archive.push({ id, local: clone(local), cloud: clone(cloud), revision: revision || null, reason: rule,
+      choice: "auto-resolved", resolvedAt: new Date().toISOString(), ...(extra || {}) });
   }
   async function fetchRows(ctx) {
     const rows = [];
@@ -116,9 +182,9 @@
     } while (rows.length < expected);
     return rows;
   }
-  function schedule() {
+  function schedule(delay = 700) {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => { timer = null; run(); }, 700);
+    timer = setTimeout(() => { timer = null; run(); }, delay);
   }
   // A failed attempt (network, session, server) is not a conflict: records stay as they are and the attempt is retried
   // automatically with a growing delay. Only genuine version conflicts use the "error" status that asks for review.
@@ -147,23 +213,30 @@
   }
   async function reconcile(ctx) {
     const rows = await fetchRows(ctx);
-    let state = journal().read(ctx.userId);
-    const local = new Map(records().map((record) => [String(record.id), record]));
+    const snapshot = () => {
+      const state = journal().read(ctx.userId);
+      const local = new Map(records().map((record) => [String(record.id), record]));
+      const ids = new Set([...local.keys(), ...rows.map((row) => String(row.client_id)), ...Object.keys(state.pending),
+        ...Object.keys(state.baselines)]);
+      return { state, local, ids };
+    };
+    let { state, local, ids } = snapshot();
     const cloud = new Map(rows.map((row) => [String(row.client_id), row]));
-    const ids = new Set([...local.keys(), ...cloud.keys(), ...Object.keys(state.pending), ...Object.keys(state.baselines)]);
-    const hydrate = [];
     const isAbsent = (id) => !cloud.has(id) && (state.baselines[id] || state.pending[id]?.kind === "delete"
       || state.pending[id]?.kind === "delete-intent");
     if ([...ids].some(isAbsent)) {
       await confirmSession(ctx);
-      state = journal().read(ctx.userId);
+      // Everything below runs without yielding, so no edit can slip in between reading the records and acting on them.
+      ({ state, local, ids } = snapshot());
     }
+    const hydrate = [];
     const retire = [];
+    deferred = new Set();
     for (const id of ids) {
       const row = cloud.get(id);
       const remote = row ? rowRecord(row) : null;
       const here = local.get(id) || null;
-      const base = state.baselines[id];
+      let base = state.baselines[id];
       let pending = state.pending[id];
       if (pending?.kind === "delete-intent") {
         if (here) {
@@ -176,7 +249,7 @@
           pending = state.pending[id] = { kind: "delete", record: pending.record, token: pending.token };
         }
       }
-      if (!pending && here && (!base || !equal(here, base.payload))) {
+      if (!pending && here && (!base || !same(here, base.payload))) {
         pending = state.pending[id] = { kind: "save", record: clone(here), token: `${Date.now()}-${++sequence}` };
       }
       if (!row && pending?.kind === "delete" && !here) {
@@ -188,7 +261,7 @@
         delete state.baselines[id];
         continue;
       }
-      if (!row && !pending && base && here && equal(here, base.payload)) {
+      if (!row && !pending && base && here && same(here, base.payload)) {
         // Deleted on another device while this copy has not been edited since it last matched the cloud: no local change can
         // be lost, so the record is retired (archived on this device) instead of being kept or re-uploaded.
         if (window.KLABS_UI?.isBuildOpen?.(id)) continue; // retired by a later run once it is closed
@@ -199,41 +272,102 @@
         retire.push(id);
         continue;
       }
+      const typing = !!here && hasUnsaved(id);
+      // This device holds nothing of its own: no saved change since it last matched the cloud.
+      const unedited = !!(here && base && same(here, base.payload)
+        && (!pending || (pending.kind === "save" && same(pending.record, base.payload))));
+      const adopt = (rule) => {
+        const conflict = state.conflicts[id];
+        archiveAuto(state, id, here, remote, row.updated_at, rule, conflict ? { conflict: clone(conflict) } : {});
+        delete state.conflicts[id];
+        delete state.pending[id];
+        state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
+        if (!same(here, remote)) hydrate.push([id, remote]);
+      };
       if (state.conflicts[id]) {
-        addConflict(state, id, pending?.record || here, remote, row?.updated_at, "Versions require review.");
+        // An existing conflict is reassessed every time. It is cleared only when nothing on this device can be lost.
+        const mine = pending?.record || here;
+        const deleting = pending?.kind === "delete" || pending?.kind === "delete-intent";
+        if (deleting) {
+          // A deletion intention is never cleared, resurrected or overridden automatically.
+          addConflict(state, id, mine, remote, row?.updated_at, GENERIC_REASON);
+          continue;
+        }
+        if (row && mine && same(mine, remote)) {
+          adopt("Both versions are now the same");
+          continue;
+        }
+        if (row && unedited) {
+          if (typing) { deferred.add(id); continue; } // being typed into: the cloud version is taken once that has been saved or abandoned
+          adopt("This device had no changes of its own; the cloud version was taken");
+          continue;
+        }
+        if (row && base && pending?.kind === "save") {
+          const merged = mergeThreeWay(base.payload, pending.record, remote);
+          if (merged) {
+            if (typing) { deferred.add(id); continue; }
+            archiveAuto(state, id, pending.record, remote, row.updated_at, "Non-overlapping changes were merged",
+              { conflict: clone(state.conflicts[id]) });
+            delete state.conflicts[id];
+            state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
+            state.pending[id] = { kind: "save", record: clone(merged), token: `${Date.now()}-${++sequence}` };
+            hydrate.push([id, merged]);
+            continue;
+          }
+        }
+        addConflict(state, id, mine, remote, row?.updated_at, GENERIC_REASON);
         continue;
       }
       if (pending) {
         if (pending.kind === "delete" && here) putLocal(ctx, null, id);
-        if (pending.kind === "save" && remote && equal(pending.record, remote)) {
+        if (pending.kind === "save" && row && pending.inflight && same(remote, pending.inflight.payload)
+          && (!base || row.updated_at !== base.revision)) {
+          // The server already holds the version this device was sending when the reply was lost: not a foreign change.
+          base = state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
+          delete pending.inflight;
+        }
+        if (pending.kind === "save" && remote && same(pending.record, remote)) {
           state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
           delete state.pending[id];
         } else if (pending.kind === "save" && !row && base) {
           addConflict(state, id, pending.record || here, null, null,
             "This build was edited on this device but deleted on another device. Keep the edited version or confirm the deletion.");
-        } else if ((base && (!row || row.updated_at !== base.revision || !equal(remote, base.payload))) || (!base && row)) {
-          addConflict(state, id, pending.record || here, remote, row?.updated_at,
-            "The cloud version changed or has no verified common baseline.");
+        } else if (pending.kind === "save" && row && base && row.updated_at === base.revision && same(remote, base.payload)) {
+          // The cloud has not moved. A save that only changed stamps is not worth uploading.
+          if (same(pending.record, base.payload)) delete state.pending[id];
+        } else if (pending.kind === "save" && row && base) {
+          const merged = mergeThreeWay(base.payload, pending.record, remote);
+          if (merged) {
+            if (typing) { deferred.add(id); continue; }
+            archiveAuto(state, id, pending.record, remote, row.updated_at, "Non-overlapping changes were merged");
+            state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
+            state.pending[id] = { kind: "save", record: clone(merged), token: `${Date.now()}-${++sequence}` };
+            hydrate.push([id, merged]);
+          } else {
+            addConflict(state, id, pending.record || here, remote, row.updated_at,
+              "This device and the cloud both changed this build since they last matched.");
+          }
+        } else if (pending.kind === "save" && row && !base) {
+          addConflict(state, id, pending.record || here, remote, row.updated_at,
+            "The cloud version has no verified common baseline with this device.");
         }
       } else if (row) {
-        if (here && base && !equal(here, remote) && window.KLABS_UI?.isBuildOpen?.(id)) {
-          addConflict(state, id, here, remote, row.updated_at, "This build is open. Close it before reviewing the cloud version.");
-          continue;
-        }
-        if (here && base && !equal(here, remote)) {
+        if (here && base && !same(here, remote)) {
+          if (typing) { deferred.add(id); continue; } // being typed into: refreshed after it has been saved
           state.archive.push({ id, local: clone(here), cloud: clone(remote), revision: row.updated_at,
             reason: "Cloud update", archivedAt: new Date().toISOString() });
         }
         state.baselines[id] = { revision: row.updated_at, payload: clone(remote) };
-        if (!equal(here, remote)) hydrate.push([id, remote]);
+        if (!here || !same(here, remote)) hydrate.push([id, remote]);
       } else if (base) {
         if (here) addConflict(state, id, here, null, null, "The cloud build was deleted.");
         else delete state.baselines[id];
       }
     }
-    store(ctx, state);
+    // The local copies are brought up to date first: if that fails nothing is recorded as done and the next run repeats it.
     for (const id of retire) putLocal(ctx, null, id);
     for (const [id, record] of hydrate) putLocal(ctx, record, id);
+    store(ctx, state);
     return state;
   }
   async function flush(ctx) {
@@ -250,6 +384,11 @@
       if (entry.kind === "delete" && !base) throw new Error("Deletion has no verified cloud revision.");
       try {
         let result;
+        if (entry.kind === "save") {
+          // Durably note exactly what is about to be sent, so a lost reply can be recognised as this device's own write.
+          entry.inflight = { revision: base?.revision || null, payload: clone(entry.record) };
+          store(ctx, state);
+        }
         if (entry.kind === "delete") await transport().remove(client(), ctx, id, base.revision, activeMode);
         else result = await transport().save(client(), ctx, entry.record, base?.revision || null, activeMode);
         if (!current(ctx)) return;
@@ -257,6 +396,7 @@
         if (entry.kind === "delete") delete state.baselines[id];
         else state.baselines[id] = { revision: result.updated_at, payload: clone(rowRecord(result)) };
         if (state.pending[id]?.token === entry.token) delete state.pending[id];
+        else if (state.pending[id]) delete state.pending[id].inflight;
         store(ctx, state);
       } catch (error) {
         if (!current(ctx)) return;
@@ -266,7 +406,11 @@
         return;
       }
     }
-    if (current(ctx)) { refreshStatus(journal().read(ctx.userId)); failures = 0; }
+    if (current(ctx)) {
+      refreshStatus(journal().read(ctx.userId));
+      failures = 0;
+      if (deferred.size) schedule(5000);   // a cloud change is waiting behind unsaved typing: look again shortly
+    }
   }
   async function run() {
     if (!userId) return;
@@ -327,7 +471,7 @@
       const id = String(buildId);
       const base = state.baselines[id];
       const local = records().find(item => String(item.id) === id);
-      if (!base?.revision || !local || !equal(local, base.payload) || state.pending[id] || state.conflicts[id]) {
+      if (!base?.revision || !local || !same(local, base.payload) || state.pending[id] || state.conflicts[id]) {
         throw new Error("Save and synchronise this build before recording a financial transaction.");
       }
       operation = { account: ctx.userId, id: window.crypto.randomUUID(), buildId: id,
@@ -370,9 +514,9 @@
     const local = records().find(item => String(item.id) === operation.buildId) || null;
     const remoteRow = latest.data[0];
     const remote = rowRecord(remoteRow);
-    const alreadyReconciled = base?.revision === result.updated_at && equal(base.payload, remote) && equal(local, remote);
+    const alreadyReconciled = base?.revision === result.updated_at && same(base.payload, remote) && same(local, remote);
     if (state.pending[operation.buildId] || state.conflicts[operation.buildId] ||
-        !base || (!alreadyReconciled && (base.revision !== operation.revision || !equal(local, base.payload))) ||
+        !base || (!alreadyReconciled && (base.revision !== operation.revision || !same(local, base.payload))) ||
         remoteRow.updated_at !== result.updated_at) {
       addConflict(state, operation.buildId, local, remote, remoteRow.updated_at,
         "A financial operation was acknowledged while this build changed. Review both versions.");
@@ -402,6 +546,7 @@
       const previousPending = state.pending[id];
       const previousConflict = state.conflicts[id];
       state.pending[id] = { kind, record: clone(record), token: `${Date.now()}-${++sequence}` };
+      if (previousPending?.inflight) state.pending[id].inflight = previousPending.inflight;
       if (kind === "delete-intent") {
         state.pending[id].previous = clone(previousPending);
         state.pending[id].previousConflict = clone(previousConflict);
@@ -435,7 +580,7 @@
   async function resolve(id, choice, expectedRevision) {
     if (!canWrite()) throw new Error("This account is read-only.");
     if (choice !== "local" && choice !== "cloud") throw new Error("Choose a version to keep.");
-    if (window.KLABS_UI?.isBuildOpen?.(String(id))) throw new Error("Open another build before resolving this conflict.");
+    if (hasUnsaved(id)) throw new Error("This build has typing that is not saved yet. Wait for it to save, then review again.");
     const ctx = context();
     const activeMode = await detectMode(ctx);
     if (!current(ctx) || !canWrite()) throw new Error("The account or write permission changed.");
@@ -448,6 +593,13 @@
       addConflict(state, id, conflict.local, row ? rowRecord(row) : null, row?.updated_at, "Cloud version changed. Review it again.");
       store(ctx, state);
       throw new Error("The cloud version changed. Review both versions again.");
+    }
+    const known = state.baselines[id];
+    if (choice === "local" && row && known && conflict.local && same(conflict.local, known.payload) && !same(conflict.local, rowRecord(row))) {
+      throw new Error("This device has no changes of its own to keep. Use the cloud version instead.");
+    }
+    if (choice === "local" && row && conflict.local && !equal(conflict.local.issuedInvoice, rowRecord(row).issuedInvoice)) {
+      throw new Error("An issued invoice cannot be replaced. Use the cloud version instead.");
     }
     state.archive.push({ ...clone(conflict), resolvedAt: new Date().toISOString(), choice });
     store(ctx, state);
@@ -463,7 +615,7 @@
       }
     }
     if (!current(ctx)) throw new Error("The signed-in account changed.");
-    if (window.KLABS_UI?.isBuildOpen?.(String(id))) throw new Error("This build was opened during review. Close it and review again.");
+    if (hasUnsaved(id)) throw new Error("This build has typing that is not saved yet. Wait for it to save, then review again.");
     state = journal().read(ctx.userId);
     if (!equal(state.conflicts[id], conflict) || state.pending[id]?.token !== pending?.token) {
       throw new Error("The local version changed during review. Review it again.");
@@ -508,6 +660,19 @@
     notifyBuildDeleted: (record) => enqueue("delete-intent", record),
     confirmBuildDeleted: confirmDelete,
     getConflicts() { return userId ? clone(journal().read(userId).conflicts) : {}; },
+    // Read-only facts the review screen needs to explain a conflict and to offer only safe choices.
+    getConflictContext() {
+      if (!userId) return {};
+      const state = journal().read(userId);
+      const out = {};
+      for (const id of Object.keys(state.conflicts)) {
+        const base = state.baselines[id];
+        out[id] = { baseline: clone(base?.payload || null), baselineRevision: base?.revision || null,
+          localUnedited: !!(base && state.conflicts[id].local && same(state.conflicts[id].local, base.payload)),
+          pendingKind: state.pending[id]?.kind || null, unsaved: hasUnsaved(id) };
+      }
+      return out;
+    },
     resolveConflict: resolve,
     retry: run,
   };
