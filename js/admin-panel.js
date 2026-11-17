@@ -369,6 +369,13 @@
   });
   byId("adminBuilderStatusFilter")?.addEventListener("change", () => loadBuilders(true));
   byId("adminLoadMoreBtn")?.addEventListener("click", () => loadBuilders(false));
+  // Opening the list brings every option above the fixed bottom navigation.
+  byId("adminStatusPicker")?.addEventListener("toggle", (event) => {
+    const picker = event.currentTarget;
+    if (!picker.open) return;
+    const options = picker.querySelector(".admin-status-picker__options");
+    if (options && typeof options.scrollIntoView === "function") options.scrollIntoView({ block: "nearest" });
+  });
   byId("adminStatusPicker")?.querySelectorAll("[data-admin-status]").forEach((option) => {
     option.addEventListener("click", () => {
       const filter = byId("adminBuilderStatusFilter");
