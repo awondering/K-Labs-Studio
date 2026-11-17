@@ -12,40 +12,55 @@
   window.KLABS_UI.onBuildSyncMode = (mode) => {
     compatibility.hidden = mode !== "compatibility";
   };
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
   function render() {
     list.replaceChildren();
-    const conflicts = window.KLABS_BUILD_SYNC.getConflicts();
+    const sync = window.KLABS_BUILD_SYNC;
+    const conflicts = sync.getConflicts();
+    const context = sync.getConflictContext?.() || {};
     const items = Object.values(conflicts);
-    message.textContent = items.length ? "" : "No conflicts are available. Retry the connection to check for changes.";
+    message.textContent = items.length ? "" : "Nothing needs review. Everything is up to date.";
     items.forEach((conflict) => {
-      const section = document.createElement("section");
-      const heading = document.createElement("h3");
-      heading.textContent = `Build ID: ${conflict.id}`;
-      section.append(heading);
-      const reason = document.createElement("p");
-      reason.textContent = conflict.reason;
-      section.append(reason);
-      const versions = document.createElement("div");
-      versions.className = "build-sync-review__versions";
-      ["local", "cloud"].forEach((side) => {
-        const container = document.createElement("div");
-        const title = document.createElement("strong");
-        title.textContent = side === "local" ? "Local version" : "Cloud version";
-        const details = document.createElement("pre");
-        details.textContent = conflict[side] ? JSON.stringify(conflict[side], null, 2) : "No version";
-        container.append(title, details);
-        const button = document.createElement("button");
+      const info = window.KLABS_BUILD_SYNC_DIFF.describe(conflict, context[conflict.id]);
+      const section = el("section", "build-sync-review__item");
+      section.append(el("h3", "", info.title));
+      section.append(el("p", "build-sync-review__summary", info.summary));
+      const flags = [];
+      if (info.customerDiffers) flags.push("Customer details differ");
+      if (info.financialDiffers) flags.push("Payment, price or invoice details differ");
+      if (flags.length) section.append(el("p", "build-sync-review__flags", flags.join(" · ")));
+      if (info.unsaved) section.append(el("p", "build-sync-review__flags", "This build has typing that is not saved yet. Wait a moment, then review again."));
+      if (info.rows.length) {
+        const table = el("table", "build-sync-review__table");
+        const head = el("tr");
+        ["Field", "This device", "Cloud", "Changed on"].forEach((t) => head.append(el("th", "", t)));
+        table.append(head);
+        info.rows.forEach((row) => {
+          const tr = el("tr", row.kind === "stamp" ? "is-stamp" : row.kind === "financial" ? "is-financial" : "");
+          tr.append(el("td", "", row.label), el("td", "", row.mine), el("td", "", row.cloud),
+            el("td", "", row.changedBy === "unknown" ? "" : row.changedBy === "neither" ? "—" : row.changedBy === "cloud" ? "cloud" : row.changedBy));
+          table.append(tr);
+        });
+        section.append(table);
+      }
+      const choices = el("div", "build-sync-review__choices");
+      info.options.forEach((option) => {
+        const box = el("div", "build-sync-review__choice");
+        const button = el("button", "ghost-action", option.label);
         button.type = "button";
-        button.className = "ghost-action";
-        button.textContent = side === "local" && conflict.operation === "delete" ? "Confirm deletion" :
-          side === "local" ? "Keep local version" : "Keep cloud version";
-        button.disabled = typeof window.KLABS_CAN_WRITE === "function" && !window.KLABS_CAN_WRITE();
+        const writable = typeof window.KLABS_CAN_WRITE !== "function" || window.KLABS_CAN_WRITE();
+        button.disabled = !writable || option.disabled || info.unsaved;
+        box.append(button, el("p", "build-sync-review__effect", option.disabled ? option.why : option.effect));
         button.addEventListener("click", async () => {
-          const action = side === "local" && conflict.operation === "delete" ? "Delete" : `Keep the ${side} version of`;
-          if (!window.confirm(`${action} build ${conflict.id}? Both versions will be archived on this device.`)) return;
+          if (!window.confirm(`${option.label}? ${option.effect}`)) return;
           button.disabled = true;
           try {
-            await window.KLABS_BUILD_SYNC.resolveConflict(conflict.id, side, conflict.revision);
+            await sync.resolveConflict(conflict.id, option.choice, conflict.revision);
             render();
           } catch (error) {
             console.error("[K-Labs Studio] Could not resolve build conflict:", error);
@@ -53,10 +68,17 @@
             message.textContent = error.message || "Could not resolve this conflict.";
           }
         });
-        container.append(button);
-        versions.append(container);
+        choices.append(box);
       });
-      section.append(versions);
+      section.append(choices);
+      const copy = el("button", "ghost-action build-sync-review__copy", "Copy diagnostics (no customer text)");
+      copy.type = "button";
+      copy.addEventListener("click", async () => {
+        const report = window.KLABS_BUILD_SYNC_DIFF.redactedReport(conflict, context[conflict.id]);
+        try { await navigator.clipboard.writeText(report); message.textContent = "Diagnostics copied. They contain no customer text."; }
+        catch (error) { message.textContent = "Could not copy. Select and copy the text shown below."; section.append(el("pre", "", report)); }
+      });
+      section.append(copy);
       list.append(section);
     });
   }

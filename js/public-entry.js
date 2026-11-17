@@ -2,7 +2,7 @@
   const privateScripts = [
     "js/config.js", "js/storage.js", "js/guide-layout.js", "js/thread-wrap.js",
     "js/guide-train.js", "js/thread-studio-host.js", "js/kr-guide-layout-host.js", "js/studio-visuals.js", "js/navigation.js", "js/business-logo.js", "js/invoice-pdf.js", "js/ui.js",
-    "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js",
+    "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-diff.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js",
     "js/quote-number-allocator.js", "js/app.js"
   ];
   const adminScript = "js/admin-panel.js";

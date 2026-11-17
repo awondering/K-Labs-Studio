@@ -18257,3 +18257,19 @@ window.KLABS_UI.readRecoveryDraft=()=>({
 });
 window.KLABS_UI.isBuildOpen=(id)=>String(id)===specificationValue(quote&&quote.id)
   || !!(activeSavedBuildRef && activeSavedBuildRef.source==='build' && String(id)===specificationValue(activeSavedBuildRef.id));
+// Synchronisation hooks. "Open" only means the build is loaded; a build is only being edited while it has typing that is not
+// saved yet. An open build with nothing unsaved can safely take a newer cloud version.
+window.KLABS_UI.hasUnsavedEdits=(id)=>String(id)===specificationValue(quote&&quote.id)
+  && !!(hasUnsavedQuoteChanges || quoteAutosaveInFlight || quoteAutosaveTimer);
+window.KLABS_UI.refreshOpenBuild=(id,record)=>{
+  if(!record || String(id)!==specificationValue(quote&&quote.id))return false;
+  if(window.KLABS_UI.hasUnsavedEdits(id))return false;
+  quote=normalizeQuote(record);
+  saveQuoteCurrent();
+  try{
+    if(studioScreenView==='workflow')renderWorkshopQuote();
+  }catch(error){
+    console.error('[K-Labs Studio] Could not refresh the open build after a cloud update:',error);
+  }
+  return true;
+};
