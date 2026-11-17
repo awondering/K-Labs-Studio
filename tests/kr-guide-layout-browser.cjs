@@ -160,7 +160,7 @@ async function main(){
     await context.close();
     ({context,page,errors}=await boot(browser,base,{width:390,height:844},true));
     const cached=await page.evaluate(async()=>{await navigator.serviceWorker.register('/service-worker.js');await navigator.serviceWorker.ready;const k=(await caches.keys()).find((x)=>x.startsWith('klabs-studio-app-shell-'));const c=await caches.open(k);return {k,a:!!(await c.match(new URL('kr-guide-layout/index.html',location.href))),b:!!(await c.match(new URL('js/kr-guide-layout-host.js',location.href)))};});
-    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v239/.test(cached.k),cached);
+    ck('Service worker precaches the KR document and host script',cached.a&&cached.b&&/build148-v240/.test(cached.k),cached);
     await page.reload({waitUntil:'load'});
     for(const s of SCRIPTS)await page.addScriptTag({url:`${base}/js/${s}`});
     await page.evaluate(()=>{window.KLABS_ACCOUNT_ID='aaaaaaaa-0000-0000-0000-000000000001';document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');});

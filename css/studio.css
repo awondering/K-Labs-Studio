@@ -11836,6 +11836,77 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   color:#e4aeb4;
 }
 
+/* Generate Sizes: compact one-component-per-size price table. */
+#studioFamilySizeSheet .component-sheet__body{
+  min-height:0;
+  overflow:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+}
+
+.studio-family-size__fields{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  min-width:0;
+}
+
+.studio-family-size__fields--prices{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+
+.studio-family-size__fields input{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+
+.studio-family-size__build{
+  width:100%;
+  min-height:44px;
+}
+
+.studio-family-size__rows{
+  display:grid;
+  gap:4px;
+  min-width:0;
+}
+
+.studio-family-size__row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 76px 76px;
+  gap:6px;
+  align-items:center;
+  min-width:0;
+}
+
+.studio-family-size__row strong{
+  font-size:12px;
+  font-weight:500;
+  overflow-wrap:anywhere;
+}
+
+.studio-family-size__row input{
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  box-sizing:border-box;
+  font-variant-numeric:tabular-nums;
+  text-align:right;
+}
+
+.studio-family-size__row--head span{
+  font-size:10px;
+  letter-spacing:.04em;
+  color:var(--ds-text-muted,#9aa096);
+}
+
+.studio-family-size__row--head span:not(:first-child){
+  text-align:right;
+}
+
 .studio-custom-select-picker .component-sheet__close{
   width:44px;
   min-width:44px;
