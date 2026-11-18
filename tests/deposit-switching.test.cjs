@@ -56,7 +56,7 @@ function harness(initial={}){
     persistBuildRecord(record){state.writes++;state.saved=JSON.parse(JSON.stringify(record));return {};},
     setActiveSavedBuildRef(){},
   });
-  for(const name of ['depositMaths','depositValueValidationMessage','depositValidationMessage',
+  for(const name of ['normalizeJobType','normalizeJobKind','isComponentsJob','depositMaths','depositValueValidationMessage','depositValidationMessage',
     'convertedDepositValueForType','bindDepositTypeAndValue','updateDepositFields']){
     vm.runInContext(extract(name),context);
   }

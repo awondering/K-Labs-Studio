@@ -880,7 +880,7 @@
         <article id="workshopSpecsSection" class="quote-section quote-section--collapsible quote-section--collapsed" data-internal-only aria-label="Build Details">
           <button class="quote-section__toggle" type="button" data-collapsible-trigger aria-expanded="false" aria-controls="workshopBuildSpecsBody">
             <span class="quote-section__toggle-copy">
-              <span class="quote-section__toggle-title">Build Details</span>
+              <span id="workshopSpecsSectionTitle" class="quote-section__toggle-title">Build Details</span>
               <span id="workshopBuildSpecsSummary" class="quote-section__toggle-summary" aria-live="polite">
                 <span id="workshopBuildSpecsSummaryText">Add build details</span>
               </span>
@@ -996,7 +996,6 @@
               <p id="quoteDeliveryLegacyText"></p>
             </details>
             <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Components Cost</span><input id="quoteCostBeforeMargin" type="text" readonly tabindex="-1" /></label>
-            <div id="quotePricePendingBlock" class="quote-grid__full quote-price-pending" hidden><p class="quote-gst-status">Pricing to be confirmed. Invoices and payments are unavailable until it is confirmed.</p><button id="confirmPricingBtn" class="ghost-action" type="button">Confirm Pricing</button></div>
             <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteProfitField"><span>Required Profit</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
             <label id="quoteMarginPercentField"><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>

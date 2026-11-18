@@ -64,7 +64,7 @@ function pricingHarness(overrides={}){
     specificationValue:value=>String(value||'').trim(),
     migrateBlankWorkflow(){},
   });
-  ['deliveryAmounts','naturalCustomerPrice','quoteMaths','setDeliveryBreakdown','setDeliveryTotal','applyManualFinalCustomerPrice','depositMaths']
+  ['normalizeJobType','normalizeJobKind','isComponentsJob','deliveryAmounts','naturalCustomerPrice','quoteMaths','setDeliveryBreakdown','setDeliveryTotal','applyManualFinalCustomerPrice','depositMaths']
     .forEach(name=>vm.runInContext(extractFunction(name),context));
   return context;
 }

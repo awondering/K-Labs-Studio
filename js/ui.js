@@ -3893,7 +3893,7 @@ function componentRowSellValue(item){
 // The natural (unadjusted) customer price: component sell prices, labour charge and delivery recovered at cost.
 function naturalCustomerPrice(){
   const componentsSellTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowSellValue(item),0);
-  const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
+  const labourCost=isComponentsJob(quote)?0:numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   return componentsSellTotal+labourCost+deliveryAmounts(quote).charge;
 }
 // Delivery is kept separate from components and labour; legacy records retain their original cost/charge pair.
@@ -4114,10 +4114,16 @@ function normalizeJobKind(value){
 function isComponentsJob(record){
   return !!record && normalizeJobType(record.jobType)==='build' && normalizeJobKind(record.jobKind)==='components';
 }
-// Pricing not yet confirmed: unknown prices are never shown as genuine amounts, and no invoice or payment can be recorded.
-function quotePricePending(record){
-  const target=record===undefined?(typeof quote!=='undefined'?quote:null):record;
-  return !!(target && target.pricePending===true);
+// Components pricing to be confirmed (current job): a Quote-stage Components job with no components yet, or with a
+// component whose Sell Price is still $0.00. Confirm Order makes any remaining $0.00 line a genuine no-charge line.
+// (A job saved as pending by v244 stays pending after confirmation until every line is priced.) While pending, unknown
+// prices are never shown as amounts and no invoice or payment can be recorded. Rod builds and repairs are never pending.
+function quotePricePending(){
+  const target=typeof quote!=='undefined'?quote:null;
+  if(!isComponentsJob(target))return false;
+  const lines=componentRowsForTotals();
+  const unknown=!lines.length || lines.some((item)=>numberOrZero(item&&item.unitPrice)===0);
+  return unknown && (buildLifecycleStatusKey(target)==='quote' || target.pricePending===true);
 }
 // Start-of-job request from the new-job customer finder: 'build', 'repair' or 'components'.
 function normalizeNewJobRequest(value){
@@ -8979,11 +8985,12 @@ function requestDeleteCurrentBuild(){
     openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
     return;
   }
-  const displayName=specificationValue(target.record&&target.record.buildName)||'this build';
+  const order=isComponentsJob(target.record);
+  const displayName=specificationValue(target.record&&target.record.buildName)||(order?'this order':'this build');
   openConfirmDialog({
-    title:'Delete Build',
-    message:`Delete ${displayName}? This will permanently delete this saved build only.`,
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:'Delete Build',kind:'danger'}]
+    title:order?'Delete Order':'Delete Build',
+    message:`Delete ${displayName}? This will permanently delete this saved ${order?'order':'build'} only.`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:order?'Delete Order':'Delete Build',kind:'danger'}]
   },(action)=>{
     if(action!=='delete')return;
     const records=savedBuildRecords();
@@ -9433,7 +9440,9 @@ function quoteMaths(){
   // Internal Build Cost stays on the Buy Price basis (qty\u00d7Buy Price + labour) - never the customer Sell Price total.
   const componentTotal=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
   const materialCost=componentTotal;
-  const labourCost=numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
+  // Components job: the customer total is exactly the Sell Prices x quantities plus delivery (tax as for every job).
+  const componentsOnly=isComponentsJob(quote);
+  const labourCost=componentsOnly?0:numberOrZero(quote.labourRate)*numberOrZero(quote.labourHours);
   const delivery=deliveryAmounts(quote);
   const freightCost=delivery.cost;
   const freightCharge=delivery.charge;
@@ -9446,7 +9455,7 @@ function quoteMaths(){
   quote.naturalCustomerPrice=natural;
   // pricingDriver is whichever of Final Price/Required Profit/Required Margin the builder most recently
   // edited; a later Internal Build Cost change (component/labour edit) recalculates from that same target.
-  const driver=normalizePricingDriver(quote.pricingDriver);
+  const driver=componentsOnly?'price':normalizePricingDriver(quote.pricingDriver);
   let finalPrice;
   if(driver==='profit'){
     // Required Profit is the net (post-tax) profit target above Internal Build Cost.
@@ -9460,7 +9469,7 @@ function quoteMaths(){
     finalPrice=inclusiveFromExclusive(exclusiveRevenue)+freightCharge;
   }else{
     // 'price' driver: unchanged established path - natural sell-price total plus the builder's stored adjustment.
-    finalPrice=natural+numberOrZero(quote.priceAdjustment);
+    finalPrice=natural+(componentsOnly?0:numberOrZero(quote.priceAdjustment));
   }
   finalPrice=roundMoney(Math.max(0,finalPrice));
   quote.finalCustomerPrice=finalPrice;
@@ -9480,13 +9489,15 @@ function quoteMaths(){
   quote.targetProfit=roundMoney(rodProfit);
   quote.marginPercent=roundMoney(rodMarginPercent);
   quote.markupPercent=quote.marginPercent;
+  // Kept equal to the worked-out state so v244 devices, which read the stored marker, agree.
+  if(componentsOnly)quote.pricePending=quotePricePending();
   return{rodProfit,rodMarginPercent,materialCost,labourCost,freightCost,freightCharge,deliveryCost:freightCost,deliveryCharge:freightCharge,internalBuildCost,subtotal,gst,total,exclusiveRevenue,profit,marginPercent,markupPercent:quote.markupPercent,taxRate:gstRate,naturalCustomerPrice:natural,priceAdjustment:quote.priceAdjustment};
 }
 // Deposit is an optional quote/build field (not a status): percentage OR fixed dollar, computed off the same live Final Customer Price.
 function depositMaths(){
   const math=quoteMaths();
   const total=Math.max(0,numberOrZero(quote.issuedInvoice?.total ?? math.total));
-  const enabled=!!quote.depositEnabled;
+  const enabled=!!quote.depositEnabled && !isComponentsJob(quote);
   const type=normalizeDepositType(quote.depositType);
   const rawValue=Math.max(0,numberOrZero(quote.depositValue));
   const depositAmount=enabled?Math.min(total,type==='fixed'?rawValue:(total*rawValue/100)):0;
@@ -11730,31 +11741,16 @@ function componentSellPriceInputAttributes(item){
   const value=numberOrZero(item&&item.unitPrice);
   return quotePricePending()&&value===0?'value="" placeholder="To be confirmed"':`value="${value}"`;
 }
-// Confirm Pricing: any line still at a $0.00 Sell Price is named and must be confirmed as deliberate first.
+// Confirm Order (Components): any line still at a $0.00 Sell Price is named and confirmed as supplied at no charge.
 function zeroPricedComponentLabels(){
   return componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)===0)
     .map((item)=>componentRowItemLabel(item)||'Component');
 }
-function confirmQuotePricing(){
-  if(!quotePricePending())return;
-  const zero=zeroPricedComponentLabels();
-  const message=zero.length
-    ?`These components still have a Sell Price of ${currency(0)}: ${zero.join(', ')}. Confirm they are deliberately ${currency(0)}?`
-    :'Confirm the pricing? The customer price will then be shown on documents, and invoices and payments become available.';
-  openConfirmDialog({title:'Confirm Pricing',message,
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Pricing',kind:'primary'}]},(action)=>{
-    if(action!=='confirm' || !quotePricePending())return;
-    quote.pricePending=false;
-    saveQuoteCurrent();
-    markQuoteDirty();
-    renderQuoteComponents();
-    updateQuoteSummary();
-  });
-}
 // Invoices and payments are refused while pricing is pending (this app; the server separately refuses payments above the saved price).
 function blockedByPendingPricing(action){
   if(!quotePricePending())return false;
-  openInfoDialog('Pricing To Be Confirmed',`Confirm Pricing in the Pricing section before ${action}.`);
+  const confirmStep=buildLifecycleStatusKey(quote)==='quote'?', then Confirm Order,':'';
+  openInfoDialog('Pricing To Be Confirmed',`Add a Sell Price to every component${confirmStep} before ${action}.`);
   return true;
 }
 function componentRowCostLabel(item){
@@ -11820,8 +11816,6 @@ function updateBuildPricingSummary(){
   // same helpers the open card uses; nothing here is stored or recalculated.
   const parts=[];
   try{parts.push(buildLifecycleLabel(currentBuildLifecycleStatus()));}catch(error){}
-  const pendingBlock=$('quotePricePendingBlock');
-  if(pendingBlock)pendingBlock.hidden=!quotePricePending();
   if(quotePricePending()){
     parts.push('Price to be confirmed');
   }else if(price>0){
@@ -14047,6 +14041,8 @@ function saveBuildLifecycleStatusBySource(source,index,nextLifecycle){
   if(nextLifecycle==='complete'){
     nextRecord.completedAt=nowIso;
   }
+  // Confirm Order (Components): saved with the status change, so any remaining $0.00 line becomes a genuine no-charge line.
+  if(nextStatus==='active' && isComponentsJob(target) && buildLifecycleStatusKey(target)==='quote')nextRecord.pricePending=false;
   records[numericIndex]=nextRecord;
   Store.set(storageKey,records);
   if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildSaved?.(nextRecord);
@@ -14104,6 +14100,16 @@ function updateWorkshopBuildActionsUi(){
   if(viewDocBtn)viewDocBtn.textContent=customerDocumentLabels(lifecycle).viewLabel;
   const confirmBtn=$('confirmBuildBtn');
   if(confirmBtn)confirmBtn.hidden=!isQuote;
+  const componentsKind=isComponentsJob(quote);
+  if(confirmBtn)confirmBtn.textContent=componentsKind?'Confirm Order':'Confirm Build';
+  const deleteItem=document.querySelector('#currentBuildActionsMenu [data-current-build-action="delete"]');
+  if(deleteItem)deleteItem.textContent=componentsKind?'Delete Order':'Delete Build';
+  const pricingSection=$('workshopPricingSection');
+  if(pricingSection){
+    pricingSection.setAttribute('data-job-kind',componentsKind?'components':'');
+    pricingSection.setAttribute('data-lifecycle',lifecycle);
+    pricingSection.setAttribute('data-has-payments',String(Array.isArray(quote&&quote.payments)&&quote.payments.length>0));
+  }
   const toggleButton=$('toggleCurrentBuildStatusBtn');
   if(toggleButton){
     toggleButton.hidden=isQuote;
@@ -14215,7 +14221,19 @@ async function toggleCurrentBuildLifecycle(){
 // Confirm Build: QUOTE -> ACTIVE on the same record. Flushes any unsaved edits first so nothing is silently discarded.
 async function confirmCurrentBuildAsActive(){
   if(currentBuildLifecycleStatus()!=='quote')return;
-  openConfirmDialog({
+  const order=isComponentsJob(quote);
+  if(order && !componentRowsForTotals().length){
+    openInfoDialog('Confirm Order','Add the components before confirming the order.');
+    return;
+  }
+  const noCharge=order?zeroPricedComponentLabels():[];
+  openConfirmDialog(order?{
+    title:'Confirm Order',
+    message:noCharge.length
+      ?`Supplied at no charge (${currency(0)}): ${noCharge.join(', ')}. Confirm the order?`
+      :'Confirm this order?',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Order',kind:'primary'}]
+  }:{
     title:'Confirm Build',
     message:'Confirm this quote as an active build?',
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Build',kind:'primary'}]
@@ -14230,7 +14248,7 @@ async function confirmCurrentBuildAsActive(){
         return;
       }
     }
-    await setCurrentBuildLifecycle('active',{message:'Build confirmed \u2014 now Active'});
+    await setCurrentBuildLifecycle('active',{message:order?'Order confirmed \u2014 now Active':'Build confirmed \u2014 now Active'});
   });
 }
 function handleCurrentBuildAction(action){
@@ -14642,6 +14660,8 @@ function customerDocumentLabels(status,jobType){
       ?{title:'Order Summary',viewLabel:'View Order Summary',emailName:'Order Summary',subjectName:'Components Order Summary',ariaLabel:'Order summary',closeLabel:'Close order summary'}
       :base.key==='active'
       ?{title:'Order Confirmation',viewLabel:'View Order Confirmation',emailName:'Order Confirmation',subjectName:'Components Order Confirmation',ariaLabel:'Order confirmation',closeLabel:'Close order confirmation'}
+      :quotePricePending()
+      ?{title:'Components Enquiry',viewLabel:'View Enquiry',emailName:'Enquiry',subjectName:'Components Enquiry',ariaLabel:'Components enquiry',closeLabel:'Close components enquiry'}
       :{title:'Components Quote',viewLabel:'View Quote',emailName:'Quote',subjectName:'Components Quote',ariaLabel:'Components quote',closeLabel:'Close components quote'};
     return{...base,...common,...componentNames,jobType:'components',jobNoun:'Components Order',partsHeading:'Components',previewPartsHeading:'Components',defaultRodName:'Components'};
   }
@@ -14665,6 +14685,7 @@ function customerDocumentConfirmationText(depositEnabled,status){
   if(labels.jobType==='components'){
     if(labels.key==='active')return 'Thank you for confirming your order. Please check the components, quantities, contact details and delivery details, and let us know promptly if anything needs to change.';
     if(labels.key==='complete')return 'Your components order is complete. This summary shows the components supplied and payment status.';
+    if(quotePricePending())return 'Please check the components, quantities, contact details and delivery details. We will confirm pricing shortly.';
     return depositEnabled
       ?'Please check the components, quantities, contact details and delivery details before confirming. Your order will be confirmed once the required deposit has been received.'
       :'Please check the components, quantities, contact details and delivery details before confirming.';
@@ -14710,7 +14731,7 @@ function customerQuoteSummaryMarkup(){
   const businessBlock=(businessName||businessLines.length||businessLogo)
     ?`<div class="view-quote__business">${businessLogo?`<img class="klabs-brand-logo view-quote__logo" src="${businessLogo}" alt="${escapeHtml(businessName||'Business logo')}">`:''}${businessName?`<strong>${escapeHtml(businessName)}</strong>`:''}${businessLines.map((line)=>`<span>${escapeHtml(line)}</span>`).join('')}</div>`
     :'';
-  const paymentBlock=businessProfileHasPaymentDetails()
+  const paymentBlock=!pricePending&&businessProfileHasPaymentDetails()
     ?`<div class="view-quote__payment"><span>Payment Details</span><div><span>Account name</span><strong>${escapeHtml(businessProfile.paymentAccountName)}</strong></div><div><span>Bank account</span><strong>${escapeHtml(businessProfile.paymentAccountNumber)}</strong></div>${quoteNumber?`<div><span>Reference</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}</div>`
     :'';
   return `
@@ -15289,7 +15310,7 @@ function customerEmailLines(){
       lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
       if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing)))lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
       lines.push(`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
-    }else if(docLabels.key!=='active'||isRepair||math.depositEnabled){
+    }else if(!isComponents&&(docLabels.key!=='active'||isRepair||math.depositEnabled)){
       lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`,`Balance remaining: ${currencyWithCode(math.remainingBalance)}`);
     }
     const dueRaw=specificationValue(quote.estimatedCompletionDate);
@@ -15306,7 +15327,7 @@ function customerEmailLines(){
     if(fulfilment.charge>0)lines.push(`Delivery (included in Total Price): ${currencyWithCode(fulfilment.charge)}`);
     lines.push(...fulfilment.lines);
   }
-  if(balanceDue && businessProfileHasPaymentDetails()){
+  if(balanceDue && !pricePending && businessProfileHasPaymentDetails()){
     lines.push(
       '',
       'Payment Details',
@@ -15315,7 +15336,7 @@ function customerEmailLines(){
       `Reference: ${reference}`
     );
   }
-  if(!pricePending && docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':isComponents?'order':'build'} will be confirmed.`);
+  if(!pricePending && !isComponents && docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':isComponents?'order':'build'} will be confirmed.`);
   const signature=activeEmailIncludeSignature()?customerEmailSignatureLines():[];
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
@@ -15660,6 +15681,8 @@ function fulfilmentStudioNote(){
 }
 function syncFulfilmentSelector(){
   const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
+  const pricingSection=$('workshopPricingSection');
+  if(pricingSection)pricingSection.setAttribute('data-show-delivery',String(method==='shipping' || deliveryAmounts(quote||{}).charge>0));
   document.querySelectorAll('#quoteFulfilmentGroup [data-fulfilment-method]').forEach((button)=>{
     button.setAttribute('aria-pressed',String(button.getAttribute('data-fulfilment-method')===method));
   });
@@ -15709,6 +15732,7 @@ function syncJobTypeSelector(){
   }
   const setText=(id,text)=>{const el=$(id);if(el)el.textContent=text;};
   setText('buildDetailsGroupTitle',componentsKind?'Components':repair?'Repair':'Build');
+  setText('workshopSpecsSectionTitle',componentsKind?'Order Details':'Build Details');
   setText('quoteNotesLabel',componentsKind?'Order Notes \u00B7 Shown on Quote':repair?'Repair Description \u00B7 Shown on Quote':'Build Note \u00B7 Shown on Quote');
   const notes=$('quoteNotes');
   if(notes)notes.setAttribute('placeholder',componentsKind?'What the customer has asked for':repair?'What needs repairing or refurbishing':'Thread, trim or finish requests');
@@ -16704,7 +16728,7 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['confirmPricingBtn',confirmQuotePricing],['viewPaymentStatementBtn',openPaymentStatement],['retryFinancialBtn',retryFinancialOperation]].forEach(([id,handler])=>{
+  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['viewPaymentStatementBtn',openPaymentStatement],['retryFinancialBtn',retryFinancialOperation]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
@@ -17029,9 +17053,9 @@ function updateQuoteSummary(){
   if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=currency(math.exclusiveRevenue-math.materialCost-math.freightCost);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal') && document.activeElement!==$('quoteTotal')){
-    const unknownTotal=quotePricePending() && numberOrZero(math.total)===0;
-    $('quoteTotal').value=unknownTotal?'':numberOrZero(math.total).toFixed(2);
+    $('quoteTotal').value=quotePricePending()?'':numberOrZero(math.total).toFixed(2);
     $('quoteTotal').setAttribute('placeholder',quotePricePending()?'To be confirmed':'0.00');
+    $('quoteTotal').readOnly=isComponentsJob(quote);
   }
   // Required Profit/Margin are editable pricing targets (BUILD "pricingtarget103" restore) - never overwrite
   // the field the builder is actively typing into, same guard as Final Customer Price/Tax Rate above.
@@ -17217,7 +17241,7 @@ function openDepositReceivedForm(){
 }
 async function commitFinancialOperation(kind,data,retry=false){
   if(financialOperationInFlight)throw new Error('A financial operation is already in progress.');
-  if(quotePricePending())throw new Error('Confirm Pricing before recording payments or issuing invoices.');
+  if(quotePricePending())throw new Error('Pricing to be confirmed: add a Sell Price to every component first.');
   if(window.navigator?.onLine===false)throw new Error('Connect to record payments or issue invoices.');
   if(!window.KLABS_ACCOUNT_ID || !window.KLABS_BUILD_SYNC?.financialOperation)throw new Error('Sign in to record financial transactions.');
   const target=findCurrentSavedBuildTarget();
