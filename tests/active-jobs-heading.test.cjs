@@ -13,3 +13,13 @@ test('the list heading reads "Active Jobs" on first load and when the tab switch
   assert.doesNotMatch(html,/>Active Builds</);
   assert.ok(!ui.includes("'Active Builds'"));
 });
+
+test('Q9: subtitle, empty list and Home tile say "jobs"; the Quotes wording is unchanged',()=>{
+  assert.ok(html.includes('<p id="buildsScreenSubtitle" class="subtle">Continue working on jobs in progress.</p>'));
+  assert.ok(ui.includes(":'Continue working on jobs in progress.';"));
+  assert.ok(ui.includes('<h3>No active jobs yet.</h3>'));
+  assert.ok(html.includes('<span class="workshop-tool-launch__meta">Manage active jobs and customer quotes.</span>'));
+  assert.ok(ui.includes("isQuoteTab?'Quotes waiting to be confirmed as active builds.'"),'Quotes subtitle unchanged');
+  assert.ok(ui.includes('<h3>No quotes yet.</h3>'),'Quotes empty state unchanged');
+  for(const old of ['rods currently in progress','No active builds yet','Manage active builds'])assert.ok(!ui.includes(old)&&!html.includes(old),old);
+});
