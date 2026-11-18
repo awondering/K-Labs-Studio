@@ -54,7 +54,7 @@ function harness(){
   });
   vm.runInContext("let paymentFormBuildKey='';",context);
   for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','customerInvoicePreviewMarkup','closeDepositReceivedForm',
-    'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
+    'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }
 
@@ -134,7 +134,7 @@ test('invoice preview takes focus, closes with Escape and avoids duplicate modal
   context.refreshInvoicePreview=()=>{body.scrollTop=0;};
   context.lockModalLayer=()=>{locks++;};
   context.unlockModalLayer=()=>{unlocks++;};
-  for(const name of ['quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);vm.runInContext(extract('openInvoicePreview'),context);
+  for(const name of ['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);vm.runInContext(extract('openInvoicePreview'),context);
   context.openInvoicePreview();
   assert.equal(sheet.hidden,false);
   assert.equal(focused,true);
@@ -223,7 +223,7 @@ test('successful issuance immediately replaces the preview and enables printing'
   context.openConfirmDialog=(options,callback)=>{context.confirm=callback;};
   context.commitFinancialOperation=async(kind,data)=>{quote.issuedInvoice=data.invoice;};
   context.openInfoDialog=(title)=>{throw new Error(title);};
-  for(const name of ['quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);vm.runInContext('async '+extract('issueCustomerInvoice'),context);
+  for(const name of ['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);vm.runInContext('async '+extract('issueCustomerInvoice'),context);
   await context.issueCustomerInvoice();
   await context.confirm('issue');
   assert.equal(issue.hidden,true);

@@ -12650,8 +12650,12 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .build-details[data-job-kind="components"] > #quoteJobTypeGroup,
 #workshopScreen .build-details[data-job-kind="components"] > #buildRodSpecsToggle,
 #workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
-#workshopScreen .quote-price-pending{display:grid;gap:8px;justify-items:start}
-#workshopScreen .quote-price-pending[hidden]{display:none}
+/* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
+   per-job tax-rate controls are hidden; payments, invoice, statement and completion appear once the order is confirmed. */
+#workshopPricingSection[data-job-kind="components"] :is(#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField,#quoteRecordDepositBtn){display:none}
+#workshopPricingSection[data-job-kind="components"][data-show-delivery="false"] #quoteDeliveryFields{display:none}
+#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"] :is(#viewInvoicePreviewBtn,#viewPaymentStatementBtn),
+#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock{display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
 #workshopScreen .build-details__rod-specs{display:contents}
