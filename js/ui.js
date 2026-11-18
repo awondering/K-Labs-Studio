@@ -8976,8 +8976,8 @@ function finalizeDeletedCurrentBuild(){
   renderCustomerFinder();
   goScreen('buildsScreen');
 }
-// Deletion wording by job type (wording only; the deletion rules are the same for every job type):
-// custom builds "Build", repairs "Repair", Components jobs "Order".
+// Job wording by job type: custom builds "Build", repairs "Repair", Components jobs "Order".
+// Used for deletion wording (the deletion rules are the same for every job type) and the Workshop job labels.
 function deletionNoun(record){
   if(isComponentsJob(record))return 'Order';
   return normalizeJobType(record&&record.jobType)==='repair'?'Repair':'Build';
@@ -15843,7 +15843,12 @@ function syncJobTypeSelector(){
   }
   const setText=(id,text)=>{const el=$(id);if(el)el.textContent=text;};
   setText('buildDetailsGroupTitle',componentsKind?'Components':repair?'Repair':'Build');
-  setText('workshopSpecsSectionTitle',componentsKind?'Order Details':'Build Details');
+  // Labels only: Build / Repair / Order above the job name and on the details section.
+  const jobNoun=deletionNoun(quote);
+  setText('workshopJobEyebrow',jobNoun);
+  setText('workshopSpecsSectionTitle',`${jobNoun} Details`);
+  const specsSection=$('workshopSpecsSection');
+  if(specsSection)specsSection.setAttribute('aria-label',`${jobNoun} Details`);
   setText('quoteNotesLabel',componentsKind?'Order Notes \u00B7 Shown on Quote':repair?'Repair Description \u00B7 Shown on Quote':'Build Note \u00B7 Shown on Quote');
   const notes=$('quoteNotes');
   if(notes)notes.setAttribute('placeholder',componentsKind?'What the customer has asked for':repair?'What needs repairing or refurbishing':'Thread, trim or finish requests');

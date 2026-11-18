@@ -73,7 +73,7 @@ function formHarness({jobType='build',specs={},notes='',due=''}={}){
   const els={};
   const make=(id)=>(els[id]={id,hidden:false,textContent:'',value:'',attrs:{},isConnected:true,getBoundingClientRect:()=>({top:100,bottom:140,height:40}),
     setAttribute(n,v){this.attrs[n]=String(v);},getAttribute(n){return this.attrs[n]===undefined?null:this.attrs[n];}});
-  ['workshopBuildSpecsBody','buildDetailsGroupTitle','quoteNotesLabel','quoteNotes','quoteRodIdentificationField','buildRodSpecsToggle','buildRodSpecsSummary','workshopBuildSpecsSummaryText'].forEach(make);
+  ['workshopBuildSpecsBody','workshopJobEyebrow','workshopSpecsSectionTitle','workshopSpecsSection','buildDetailsGroupTitle','quoteNotesLabel','quoteNotes','quoteRodIdentificationField','buildRodSpecsToggle','buildRodSpecsSummary','workshopBuildSpecsSummaryText'].forEach(make);
   const buttons=['build','repair'].map((type)=>({type,attrs:{},getAttribute:(n)=>n==='data-job-type'?type:null,setAttribute(n,v){this.attrs[n]=v;}}));
   const c=vm.createContext({
     $:(id)=>els[id]||null,
@@ -89,7 +89,7 @@ function formHarness({jobType='build',specs={},notes='',due=''}={}){
     // the guide-based summary used by a New Build
     firstSavedComponentByCategory:()=>null,firstComponentByCategory:()=>null,buildGuideView:()=>null,guideOrientationMethodLabel:()=>'',
   });
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','rodSpecsEnteredCount','syncRodSpecsToggleSummary','buildSpecSummaryData','updateBuildSpecSummary','syncJobTypeSelector','setQuoteJobType','toggleRodSpecsSection'].map(fn).join('\n')+'\nlet workshopRodSpecsOpen=false;',c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','quotePricePending','normalizeNewJobRequest','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','rodSpecsEnteredCount','syncRodSpecsToggleSummary','buildSpecSummaryData','updateBuildSpecSummary','syncJobTypeSelector','setQuoteJobType','toggleRodSpecsSection'].map(fn).join('\n')+'\nlet workshopRodSpecsOpen=false;',c);
   return {c,els,buttons};
 }
 
@@ -404,4 +404,22 @@ test('REGRESSION: opening Build Details with its header held at the top of the s
   assert.ok(selector.getBoundingClientRect().top>=trigger.getBoundingClientRect().top,'the Job Type buttons are below the header, never above it');
   assert.ok(selector.getBoundingClientRect().top>=0,'and on screen');
   assert.equal(calls.filter((o)=>o.behavior!=='auto').length,0,'no smooth scrolling');
+});
+
+test('the label above the job name and the details section follow the job type: Build / Repair / Order (labels only)',()=>{
+  const {c,els}=formHarness({jobType:'build'});
+  const labels=()=>[els.workshopJobEyebrow.textContent,els.workshopSpecsSectionTitle.textContent,els.workshopSpecsSection.attrs['aria-label']];
+  const before=JSON.stringify(c.quote);
+  c.syncJobTypeSelector();
+  assert.deepEqual(labels(),['Build','Build Details','Build Details'],'custom build: unchanged');
+  c.quote.jobType='repair';c.syncJobTypeSelector();
+  assert.deepEqual(labels(),['Repair','Repair Details','Repair Details']);
+  c.quote.jobType='build';c.quote.jobKind='components';c.syncJobTypeSelector();
+  assert.deepEqual(labels(),['Order','Order Details','Order Details']);
+  delete c.quote.jobKind;c.syncJobTypeSelector();
+  assert.deepEqual(labels(),['Build','Build Details','Build Details'],'switching back to a custom build restores Build');
+  delete c.quote.jobType;c.syncJobTypeSelector();
+  assert.deepEqual(labels(),['Build','Build Details','Build Details'],'a job without a type is a custom build');
+  c.quote.jobType='build';
+  assert.deepEqual(JSON.parse(JSON.stringify(c.quote)),JSON.parse(before),'setting the labels changes no job data');
 });
