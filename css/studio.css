@@ -12642,6 +12642,12 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 #workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}
 
+/* Components job (Job 9): job type fixed at creation; rod specifications not used. */
+#workshopScreen .build-details[data-job-kind="components"] > #quoteJobTypeGroup,
+#workshopScreen .build-details[data-job-kind="components"] > #buildRodSpecsToggle,
+#workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
+#workshopScreen .quote-price-pending{display:grid;gap:8px;justify-items:start}
+#workshopScreen .quote-price-pending[hidden]{display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
 #workshopScreen .build-details__rod-specs{display:contents}

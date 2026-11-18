@@ -42,7 +42,7 @@ function ctx(status,jobType){
     updateBuildSpecSummary:()=>{},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
   return c;
 }
 
@@ -153,8 +153,8 @@ test('job type labels, legacy default, header and list display',()=>{
   assert.equal(c.jobTypeLabel('repair'),'Repair / Refurbishment');
   assert.equal(c.jobTypeLabel('build'),'New Build');
   assert.equal(c.jobTypeLabel(undefined),'New Build');
-  assert.match(fn('savedBuildRowMarkup'),/jobTypeLabel\(record\.jobType\)/);
-  assert.match(fn('applyWorkshopBuildOverview'),/jobTypeLabel\(quote&&quote\.jobType\)/);
+  assert.match(fn('savedBuildRowMarkup'),/jobTypeLabel\(record\.jobType,record\.jobKind\)/);
+  assert.match(fn('applyWorkshopBuildOverview'),/jobTypeLabel\(quote&&quote\.jobType,quote&&quote\.jobKind\)/);
   assert.match(html,/id="quoteBuilderOverviewJobType"/);
 });
 

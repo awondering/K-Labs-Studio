@@ -4102,8 +4102,27 @@ function normalizeFulfilmentMethod(value){
 function normalizeJobType(value){
   return String(value||'').trim().toLowerCase()==='repair'?'repair':'build';
 }
-function jobTypeLabel(value){
+function jobTypeLabel(value,kind){
+  if(normalizeJobType(value)==='build' && normalizeJobKind(kind)==='components')return 'Components';
   return normalizeJobType(value)==='repair'?'Repair / Refurbishment':'New Build';
+}
+// Customer Components job (Job 9): stored as jobType 'build', which every app version understands, plus this marker.
+// The kind is fixed when the job is created.
+function normalizeJobKind(value){
+  return String(value||'').trim().toLowerCase()==='components'?'components':'';
+}
+function isComponentsJob(record){
+  return !!record && normalizeJobType(record.jobType)==='build' && normalizeJobKind(record.jobKind)==='components';
+}
+// Pricing not yet confirmed: unknown prices are never shown as genuine amounts, and no invoice or payment can be recorded.
+function quotePricePending(record){
+  const target=record===undefined?(typeof quote!=='undefined'?quote:null):record;
+  return !!(target && target.pricePending===true);
+}
+// Start-of-job request from the new-job customer finder: 'build', 'repair' or 'components'.
+function normalizeNewJobRequest(value){
+  const next=String(value||'').trim().toLowerCase();
+  return next==='repair'||next==='components'?next:'build';
 }
 function normalizeAddressText(value){
   return String(value||'').trim();
@@ -4725,6 +4744,11 @@ function normalizeQuote(inputQuote){
   merged.includeGst=(inputQuote&&typeof inputQuote.includeGst==='boolean')?inputQuote.includeGst:activeTaxEnabled();
   merged.quoteMode=normalizeQuoteMode(inputQuote&&inputQuote.quoteMode);
   merged.jobType=normalizeJobType(inputQuote&&inputQuote.jobType);
+  if(Object.prototype.hasOwnProperty.call(merged,'jobKind')){
+    const kind=normalizeJobKind(merged.jobKind);
+    if(kind)merged.jobKind=kind;else delete merged.jobKind;
+  }
+  if(Object.prototype.hasOwnProperty.call(merged,'pricePending'))merged.pricePending=merged.pricePending===true;
   merged.fulfilmentMethod=normalizeFulfilmentMethod(inputQuote&&inputQuote.fulfilmentMethod);
   merged.fulfilmentChoiceRequired=!!(inputQuote&&inputQuote.fulfilmentChoiceRequired===true);
   merged.quoteStatus=normalizeQuoteStatus((inputQuote&&inputQuote.quoteStatus)||(inputQuote&&inputQuote.status));
@@ -9172,7 +9196,14 @@ async function startFreshQuoteForCustomer(record,options){
   const settings={origin:'customer',customerKey:'',...(options||{})};
   const next=newQuoteTemplate();
   applyCustomerFieldsToQuoteFromRecord(next,record);
-  if(settings.jobType)next.jobType=normalizeJobType(settings.jobType);
+  const requested=normalizeNewJobRequest(settings.jobType);
+  if(requested==='components'){
+    next.jobType='build';
+    next.jobKind='components';
+    next.pricePending=true;
+  }else if(settings.jobType){
+    next.jobType=requested;
+  }
   clearQuoteAutosaveTimer();
   closeCurrentBuildActionsMenu();
   clearActiveSavedBuildRef();
@@ -9225,7 +9256,7 @@ function runNewBuildStartAction(startAction){
 function startNewQuoteFlow(jobType){
   runNewBuildStartAction(()=>{
     // Set on every open, so a cancelled Repair start never carries over to a later New Build.
-    customerFinderNewJobType=normalizeJobType(jobType);
+    customerFinderNewJobType=normalizeNewJobRequest(jobType);
     openCustomerFinderSheet('new-build');
   });
 }
@@ -9235,6 +9266,10 @@ function startNewBuildFlow(){
 // Repair / Refurb: the same customer finder; the new job starts as the existing 'repair' job type.
 function startNewRepairFlow(){
   startNewQuoteFlow('repair');
+}
+// Components: the same customer finder; the new job is a Components job whose pricing starts pending.
+function startNewComponentsFlow(){
+  startNewQuoteFlow('components');
 }
 function lockModalLayer(openerEl){
   if(modalLockDepth===0){
@@ -11025,7 +11060,9 @@ function syncComponentRowEditorInputs(index){
   }
   const unitPriceInput=document.querySelector(`#quoteComponentsList [data-component-key="unitPrice"][data-component-index="${index}"]`);
   if(unitPriceInput && document.activeElement!==unitPriceInput){
-    unitPriceInput.value=String(numberOrZero(row.unitPrice));
+    const unknownPrice=quotePricePending() && numberOrZero(row.unitPrice)===0;
+    unitPriceInput.value=unknownPrice?'':String(numberOrZero(row.unitPrice));
+    if(unknownPrice)unitPriceInput.setAttribute('placeholder','To be confirmed');else unitPriceInput.removeAttribute('placeholder');
   }
   const subcategoryTrigger=document.querySelector(`#quoteComponentsList [data-component-action="open-subcategory-sheet"][data-component-index="${index}"] .quote-component-picker__value`);
   if(subcategoryTrigger){
@@ -11688,6 +11725,38 @@ function componentRowSummaryMetaParts(item){
   }
   return parts;
 }
+// While pricing is pending a $0 Sell Price is unknown, so it is shown blank as "To be confirmed", never as 0.
+function componentSellPriceInputAttributes(item){
+  const value=numberOrZero(item&&item.unitPrice);
+  return quotePricePending()&&value===0?'value="" placeholder="To be confirmed"':`value="${value}"`;
+}
+// Confirm Pricing: any line still at a $0.00 Sell Price is named and must be confirmed as deliberate first.
+function zeroPricedComponentLabels(){
+  return componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)===0)
+    .map((item)=>componentRowItemLabel(item)||'Component');
+}
+function confirmQuotePricing(){
+  if(!quotePricePending())return;
+  const zero=zeroPricedComponentLabels();
+  const message=zero.length
+    ?`These components still have a Sell Price of ${currency(0)}: ${zero.join(', ')}. Confirm they are deliberately ${currency(0)}?`
+    :'Confirm the pricing? The customer price will then be shown on documents, and invoices and payments become available.';
+  openConfirmDialog({title:'Confirm Pricing',message,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Pricing',kind:'primary'}]},(action)=>{
+    if(action!=='confirm' || !quotePricePending())return;
+    quote.pricePending=false;
+    saveQuoteCurrent();
+    markQuoteDirty();
+    renderQuoteComponents();
+    updateQuoteSummary();
+  });
+}
+// Invoices and payments are refused while pricing is pending (this app; the server separately refuses payments above the saved price).
+function blockedByPendingPricing(action){
+  if(!quotePricePending())return false;
+  openInfoDialog('Pricing To Be Confirmed',`Confirm Pricing in the Pricing section before ${action}.`);
+  return true;
+}
 function componentRowCostLabel(item){
   return '';
 }
@@ -11751,7 +11820,11 @@ function updateBuildPricingSummary(){
   // same helpers the open card uses; nothing here is stored or recalculated.
   const parts=[];
   try{parts.push(buildLifecycleLabel(currentBuildLifecycleStatus()));}catch(error){}
-  if(price>0){
+  const pendingBlock=$('quotePricePendingBlock');
+  if(pendingBlock)pendingBlock.hidden=!quotePricePending();
+  if(quotePricePending()){
+    parts.push('Price to be confirmed');
+  }else if(price>0){
     parts.push(currencyWithCode(price));
     try{
       const math=depositMaths();
@@ -11828,7 +11901,7 @@ function componentRowSizeFieldMarkup(item,index){
   return `<label class="quote-component-field quote-component-field--size quote-component-field--description"><span>Size</span><button class="quote-component-picker__trigger" type="button"${action} aria-haspopup="dialog"><span class="quote-component-picker__value">${escapeHtml(size||'Select size')}</span><b>&#9662;</b></button></label>`;
 }
 function componentRowEditorMarkup(item,index){
-  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields">${componentRowComponentFieldMarkup(item,index)}${componentRowSubcategoryFieldMarkup(item,index)}${componentRowDetailsFieldMarkup(item,index)}${componentRowAddDetailsMarkup(item,index)}${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" value="${numberOrZero(item.unitPrice)}" /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button" aria-label="Update Library Component"${libraryUpdatesInFlight.has(item)?' aria-disabled="true" aria-busy="true"':''}>Update Library</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button" aria-label="Delete Component">Delete</button></div>${libraryUpdateStatusMarkup(item,index)}</div>`;
+  return `<div class="quote-component-row__editor"><div class="quote-component-row__fields">${componentRowComponentFieldMarkup(item,index)}${componentRowSubcategoryFieldMarkup(item,index)}${componentRowDetailsFieldMarkup(item,index)}${componentRowAddDetailsMarkup(item,index)}${componentRowSizeFieldMarkup(item,index)}<div class="quote-component-field quote-component-field--quantity"><span>Quantity</span><div class="component-quantity"><button class="component-quantity__step" data-component-action="quantity-decrement" data-component-index="${index}" type="button" aria-label="Decrease quantity">&minus;</button><input class="component-quantity__value" data-component-index="${index}" data-component-key="quantity" type="number" inputmode="numeric" min="1" step="1" value="${componentRowQuantity(item)}" aria-label="Quantity" /><button class="component-quantity__step" data-component-action="quantity-increment" data-component-index="${index}" type="button" aria-label="Increase quantity">+</button></div></div><label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input data-component-index="${index}" data-component-key="cost" type="number" min="0" step="0.01" value="${numberOrZero(item.cost)}" /></label><label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input data-component-index="${index}" data-component-key="unitPrice" type="number" min="0" step="0.01" ${componentSellPriceInputAttributes(item)} /></label></div><div class="quote-component-row__actions"><button class="ghost-action" data-component-action="close-row" data-component-index="${index}" type="button">Done</button><button class="ghost-action quote-component-row__library" data-component-action="update-library-component" data-component-index="${index}" type="button" aria-label="Update Library Component"${libraryUpdatesInFlight.has(item)?' aria-disabled="true" aria-busy="true"':''}>Update Library</button><button class="ghost-action quote-component-row__delete" data-component-action="request-delete-row" data-component-index="${index}" type="button" aria-label="Delete Component">Delete</button></div>${libraryUpdateStatusMarkup(item,index)}</div>`;
 }
 function hideComponentRowMenu(){
   document.querySelectorAll('[data-component-row-menu]').forEach((menu)=>{menu.hidden=true;});
@@ -13953,7 +14026,7 @@ function savedBuildRowMarkup(entry){
   const source=escapeHtml(entry.source);
   const index=Number(entry.index);
   const menuOpen=isSavedBuildRowMenuOpen(entry.source,index);
-  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>${escapeHtml(jobTypeLabel(record.jobType))}</small><small>Edited ${escapeHtml(updatedAtText)}</small>${estimatedCompletionText?`<small>Est. completion ${escapeHtml(estimatedCompletionText)}</small>`:''}</div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
+  return `<article class="saved-build-card" data-build-row data-build-source="${source}" data-build-index="${index}"><button class="saved-build-card__open" type="button" data-build-action="open" data-build-source="${source}" data-build-index="${index}" aria-label="Open active build for ${escapeHtml(customerName)}"><div class="saved-build-card__head"><strong>${escapeHtml(customerName)}</strong>${buildNameMarkup}</div><div class="saved-build-card__meta">${statusMarkup}<small>${escapeHtml(jobTypeLabel(record.jobType,record.jobKind))}</small><small>Edited ${escapeHtml(updatedAtText)}</small>${estimatedCompletionText?`<small>Est. completion ${escapeHtml(estimatedCompletionText)}</small>`:''}</div></button><div class="saved-build-card__actions"><button class="ghost-action saved-build-card__menu-toggle" data-build-action="toggle-menu" data-build-source="${source}" data-build-index="${index}" type="button" aria-haspopup="menu" aria-expanded="${menuOpen?'true':'false'}" aria-label="Build actions">&hellip;</button>${menuOpen?savedBuildRowMenuMarkup(entry):''}</div></article>`;
 }
 function isBuildEntryInStatusFilter(entry){
   return buildLifecycleStatusKey(entry&&entry.record)===buildsStatusFilter;
@@ -14082,7 +14155,7 @@ function applyWorkshopBuildOverview(){
     statusEl.classList.toggle('saved-build-card__status--quote',lifecycle==='quote');
   }
   const jobTypeEl=$('quoteBuilderOverviewJobType');
-  if(jobTypeEl)jobTypeEl.textContent=`· ${jobTypeLabel(quote&&quote.jobType)}`;
+  if(jobTypeEl)jobTypeEl.textContent=`· ${jobTypeLabel(quote&&quote.jobType,quote&&quote.jobKind)}`;
   const dueEl=$('quoteBuilderOverviewDue');
   if(dueEl){
     const dueRaw=specificationValue(quote&&quote.estimatedCompletionDate);
@@ -14564,6 +14637,14 @@ function customerDocumentLabels(status,jobType){
     ?{key,title:'Build Confirmation',viewLabel:'View Build Confirmation',numberLabel:'Quote Reference',emailName:'Build Confirmation',subjectName:'Build Confirmation',ariaLabel:'Build confirmation',closeLabel:'Close build confirmation'}
     :{key:'quote',title:'Customer Quote',viewLabel:'View Quote',numberLabel:'Quote Number',emailName:'Quote',subjectName:'Custom Rod Build Quote',ariaLabel:'Customer quote',closeLabel:'Close customer quote'};
   const common={jobType:repair?'repair':'build',jobNoun:'Custom Rod Build',partsHeading:'Components Included',previewPartsHeading:'What your rod includes',defaultRodName:'Custom Rod Build'};
+  if(!repair && !jobType && isComponentsJob(typeof quote!=='undefined'?quote:null)){
+    const componentNames=base.key==='complete'
+      ?{title:'Order Summary',viewLabel:'View Order Summary',emailName:'Order Summary',subjectName:'Components Order Summary',ariaLabel:'Order summary',closeLabel:'Close order summary'}
+      :base.key==='active'
+      ?{title:'Order Confirmation',viewLabel:'View Order Confirmation',emailName:'Order Confirmation',subjectName:'Components Order Confirmation',ariaLabel:'Order confirmation',closeLabel:'Close order confirmation'}
+      :{title:'Components Quote',viewLabel:'View Quote',emailName:'Quote',subjectName:'Components Quote',ariaLabel:'Components quote',closeLabel:'Close components quote'};
+    return{...base,...common,...componentNames,jobType:'components',jobNoun:'Components Order',partsHeading:'Components',previewPartsHeading:'Components',defaultRodName:'Components'};
+  }
   if(!repair)return{...base,...common};
   const repairNames=base.key==='complete'
     ?{title:'Completed Repair Summary',viewLabel:'View Repair Summary',emailName:'Repair Summary',subjectName:'Completed Repair Summary',ariaLabel:'Completed repair summary',closeLabel:'Close repair summary'}
@@ -14580,6 +14661,13 @@ function customerDocumentConfirmationText(depositEnabled,status){
     return depositEnabled
       ?'Please check the proposed work, contact details and delivery details before confirming. Your repair will be confirmed and scheduled once the required deposit has been received.'
       :'Please check the proposed work, contact details and delivery details before confirming. Once confirmed, your repair will be scheduled.';
+  }
+  if(labels.jobType==='components'){
+    if(labels.key==='active')return 'Thank you for confirming your order. Please check the components, quantities, contact details and delivery details, and let us know promptly if anything needs to change.';
+    if(labels.key==='complete')return 'Your components order is complete. This summary shows the components supplied and payment status.';
+    return depositEnabled
+      ?'Please check the components, quantities, contact details and delivery details before confirming. Your order will be confirmed once the required deposit has been received.'
+      :'Please check the components, quantities, contact details and delivery details before confirming.';
   }
   if(labels.key==='active')return 'Thank you for confirming your build. Your custom rod build is now proceeding. Please check the build specification, contact details and delivery details, and let us know promptly if anything needs to change.';
   if(labels.key==='complete')return 'Your custom rod build is complete. This summary shows the final build specification and payment status.';
@@ -14600,13 +14688,16 @@ function customerQuoteSummaryMarkup(){
   const dueText=dueRaw?formatDateDisplay(dueRaw,{includeTime:false}):'To be confirmed';
   const deliveryBlock=customerQuoteDeliveryMarkup();
   const confirmationText=customerDocumentConfirmationText(math.depositOutstanding);
-  const totalRow=`<div><span>Total Price</span><strong>${currencyWithCode(math.total)}</strong></div>`;
+  const pricePending=quotePricePending();
+  const totalRow=`<div><span>Total Price</span><strong>${pricePending?'To be confirmed':currencyWithCode(math.total)}</strong></div>`;
   const shortfall=math.depositEnabled&&math.amountReceived>0&&math.depositOutstanding;
   const labels=customerDocumentLabels();
   const buildConfirmation=labels.key==='active'&&labels.jobType==='build';
   const showDepositRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total));
   const showDepositStillRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing));
-  const pricingRows=math.amountReceived>0
+  const pricingRows=pricePending
+    ?`${totalRow}${math.amountReceived>0?`<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>`:''}`
+    :math.amountReceived>0
     ?`${totalRow}${showDepositRequired?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${showDepositStillRequired?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>Balance Owing</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
     :math.depositEnabled
     ?`${totalRow}<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
@@ -14627,7 +14718,7 @@ function customerQuoteSummaryMarkup(){
       ${businessBlock}
       ${quoteNumber?`<div class="view-quote__row"><span>${customerDocumentLabels().numberLabel}</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}
       <div class="view-quote__row"><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
-      <div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>
+      ${labels.jobType==='components'?'':`<div class="view-quote__row"><span>Rod</span><strong>${escapeHtml(rodDescription)}</strong></div>`}
       ${specRows.length?`<div class="view-quote__specs">${specificationRowsMarkup(specRows)}</div>`:''}
       ${customerIncludedPartsMarkup(parts)}
       ${customerBuildNotesMarkup()}
@@ -14846,6 +14937,7 @@ function updateInvoicePreview(){
   sheet.querySelector('[data-invoice-preview-action="zoom"]').textContent=sheet.invoicePreviewActual?'Fit page':'Enlarge / Actual size';
 }
 function openInvoicePreview(){
+  if(!quote.issuedInvoice && blockedByPendingPricing('preparing a customer invoice'))return;
   let sheet=$('invoicePreviewSheet');
   if(sheet && !sheet.hidden)return;
   if(!sheet){
@@ -14909,6 +15001,7 @@ function openPaymentStatement(){
 }
 async function issueCustomerInvoice(){
   if(quote.issuedInvoice){openInfoDialog('Invoice Already Issued','The original invoice cannot be changed.');return;}
+  if(blockedByPendingPricing('issuing an invoice'))return;
   if(!quote.id){openInfoDialog('Save Build First','Save and synchronise this build before issuing an invoice.');return;}
   const invoiceQuote=quote;
   const account=window.KLABS_ACCOUNT_ID;
@@ -15146,6 +15239,8 @@ function customerEmailLines(){
   const docLabels=customerDocumentLabels();
   const isComplete=docLabels.key==='complete';
   const isRepair=docLabels.jobType==='repair';
+  const isComponents=docLabels.jobType==='components';
+  const pricePending=quotePricePending();
   const reference=quoteNumber||docLabels.emailName;
   const completedRaw=specificationValue(quote.completedAt);
   const completedDate=new Date(completedRaw);
@@ -15154,7 +15249,13 @@ function customerEmailLines(){
   const lines=[
     `Hi ${customerFirstName},`,
     '',
-    docLabels.key==='active'
+    isComponents
+      ?(docLabels.key==='active'
+        ?`Your components order${withBusiness} has been confirmed. Below is a summary of your order.`
+        :isComplete
+        ?`Your components order${withBusiness} is complete. Below is a summary of the components supplied.`
+        :`Thank you for your enquiry. Below are the components you asked for${pricePending?'; pricing will be confirmed shortly':' and their quotation'}.`)
+      :docLabels.key==='active'
       ?(isRepair
         ?`Your rod repair${withBusiness} has been confirmed. Below is a summary of the agreed work.`
         :`Your custom rod build${withBusiness} has been confirmed. Thank you for your order. Below are the agreed build details.`)
@@ -15168,9 +15269,15 @@ function customerEmailLines(){
     '',
     `${docLabels.jobNoun} — ${reference}`,
     '',
-    `Total: ${currencyWithCode(math.total)}`,
+    `Total: ${pricePending?'To be confirmed':currencyWithCode(math.total)}`,
   ];
-  if(isComplete){
+  if(pricePending){
+    if(math.amountReceived>0)lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
+    if(!isComplete){
+      const dueRaw=specificationValue(quote.estimatedCompletionDate);
+      lines.push(`Estimated completion: ${dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed'}`);
+    }
+  }else if(isComplete){
     if(math.amountReceived>0)lines.push(`Payments received: ${currencyWithCode(math.amountReceived)}`);
     lines.push(`Balance outstanding: ${currencyWithCode(math.balanceOwing)}`);
     if(hasCompletedDate)lines.push(`Completed: ${formatCustomerEmailLongDate(completedDate)}`);
@@ -15192,7 +15299,7 @@ function customerEmailLines(){
     lines.push('', docLabels.partsHeading, ...includedParts.map((part)=>`- ${part}`));
   }
   const buildNotes=customerBuildNotesText();
-  if(buildNotes)lines.push('', isRepair?'Repair Description':'Build Notes', ...buildNotes.split(/\r\n|\r|\n/));
+  if(buildNotes)lines.push('', isRepair?'Repair Description':isComponents?'Order Notes':'Build Notes', ...buildNotes.split(/\r\n|\r|\n/));
   const fulfilment=customerFulfilmentSection();
   if(fulfilment){
     lines.push('', fulfilment.heading);
@@ -15208,7 +15315,7 @@ function customerEmailLines(){
       `Reference: ${reference}`
     );
   }
-  if(docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':'build'} will be confirmed.`);
+  if(!pricePending && docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':isComponents?'order':'build'} will be confirmed.`);
   const signature=activeEmailIncludeSignature()?customerEmailSignatureLines():[];
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
@@ -15593,16 +15700,18 @@ function syncJobTypeSelector(){
   document.querySelectorAll('#quoteJobTypeGroup [data-job-type]').forEach((button)=>{
     button.setAttribute('aria-pressed',String(button.getAttribute('data-job-type')===jobType));
   });
+  const componentsKind=isComponentsJob(quote);
   const body=$('workshopBuildSpecsBody');
   if(body){
     body.setAttribute('data-job-type',jobType);
+    body.setAttribute('data-job-kind',componentsKind?'components':'');
     body.setAttribute('data-rod-specs-open',String(repair && workshopRodSpecsOpen));
   }
   const setText=(id,text)=>{const el=$(id);if(el)el.textContent=text;};
-  setText('buildDetailsGroupTitle',repair?'Repair':'Build');
-  setText('quoteNotesLabel',repair?'Repair Description \u00B7 Shown on Quote':'Build Note \u00B7 Shown on Quote');
+  setText('buildDetailsGroupTitle',componentsKind?'Components':repair?'Repair':'Build');
+  setText('quoteNotesLabel',componentsKind?'Order Notes \u00B7 Shown on Quote':repair?'Repair Description \u00B7 Shown on Quote':'Build Note \u00B7 Shown on Quote');
   const notes=$('quoteNotes');
-  if(notes)notes.setAttribute('placeholder',repair?'What needs repairing or refurbishing':'Thread, trim or finish requests');
+  if(notes)notes.setAttribute('placeholder',componentsKind?'What the customer has asked for':repair?'What needs repairing or refurbishing':'Thread, trim or finish requests');
   const rodField=$('quoteRodIdentificationField');
   if(rodField)rodField.hidden=!repair;
   const toggle=$('buildRodSpecsToggle');
@@ -15613,6 +15722,8 @@ function syncJobTypeSelector(){
   updateBuildSpecSummary();
 }
 function setQuoteJobType(value){
+  // A Components job's type is fixed at creation.
+  if(isComponentsJob(quote)){syncJobTypeSelector();return;}
   const next=normalizeJobType(value);
   if(normalizeJobType(quote.jobType)===next && quote.jobType===next){syncJobTypeSelector();return;}
   // The Job Type buttons stay put on screen while the form below them changes.
@@ -16593,7 +16704,7 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['viewPaymentStatementBtn',openPaymentStatement],['retryFinancialBtn',retryFinancialOperation]].forEach(([id,handler])=>{
+  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['confirmPricingBtn',confirmQuotePricing],['viewPaymentStatementBtn',openPaymentStatement],['retryFinancialBtn',retryFinancialOperation]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
@@ -16917,7 +17028,11 @@ function updateQuoteSummary(){
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.materialCost);
   if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=currency(math.exclusiveRevenue-math.materialCost-math.freightCost);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
-  if($('quoteTotal') && document.activeElement!==$('quoteTotal'))$('quoteTotal').value=numberOrZero(math.total).toFixed(2);
+  if($('quoteTotal') && document.activeElement!==$('quoteTotal')){
+    const unknownTotal=quotePricePending() && numberOrZero(math.total)===0;
+    $('quoteTotal').value=unknownTotal?'':numberOrZero(math.total).toFixed(2);
+    $('quoteTotal').setAttribute('placeholder',quotePricePending()?'To be confirmed':'0.00');
+  }
   // Required Profit/Margin are editable pricing targets (BUILD "pricingtarget103" restore) - never overwrite
   // the field the builder is actively typing into, same guard as Final Customer Price/Tax Rate above.
   if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.rodProfit).toFixed(2);
@@ -17022,6 +17137,7 @@ function closeBalanceReceivedForm(){
   if(error)error.textContent='';
 }
 function openBalanceReceivedForm(){
+  if(blockedByPendingPricing('recording a payment'))return;
   balanceCorrectionId='';
   const math=depositMaths();
   const amount=$('quoteBalanceReceivedAmount');
@@ -17085,6 +17201,7 @@ function updatePaymentBlock(){
   if(typeof updateBuildPricingSummary==='function')updateBuildPricingSummary();
 }
 function openDepositReceivedForm(){
+  if(blockedByPendingPricing('recording a deposit'))return;
   const math=depositMaths();
   const existing=math.depositPayment;
   const suggested=existing?math.depositReceivedAmount:math.depositAmount;
@@ -17100,6 +17217,7 @@ function openDepositReceivedForm(){
 }
 async function commitFinancialOperation(kind,data,retry=false){
   if(financialOperationInFlight)throw new Error('A financial operation is already in progress.');
+  if(quotePricePending())throw new Error('Confirm Pricing before recording payments or issuing invoices.');
   if(window.navigator?.onLine===false)throw new Error('Connect to record payments or issue invoices.');
   if(!window.KLABS_ACCOUNT_ID || !window.KLABS_BUILD_SYNC?.financialOperation)throw new Error('Sign in to record financial transactions.');
   const target=findCurrentSavedBuildTarget();

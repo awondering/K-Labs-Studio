@@ -17,8 +17,8 @@ function fn(name){
   const start=source.slice(Math.max(0,at-6),at)==='async '?at-6:at;
   return source.slice(start,source.indexOf('\n}',at)+2);
 }
-const FUNCTIONS=['normalizeJobType','applyCustomerFieldsToQuoteFromRecord','runNewBuildStartAction','startNewQuoteFlow','startNewBuildFlow',
-  'startNewRepairFlow','startFreshQuoteForCustomer','handleCustomerSelectionForNewBuild','commitCreateCustomerFromNewBuildForm'];
+const FUNCTIONS=['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','applyCustomerFieldsToQuoteFromRecord','runNewBuildStartAction','startNewQuoteFlow','startNewBuildFlow',
+  'startNewRepairFlow','startNewComponentsFlow','startFreshQuoteForCustomer','handleCustomerSelectionForNewBuild','commitCreateCustomerFromNewBuildForm'];
 
 function sandbox({unsavedDraft=false,confirm='start',savedJobs=[]}={}){
   const log={finderOpens:[],confirms:[],started:[],timers:[]};
@@ -117,8 +117,47 @@ test('a click event passed by an existing caller still starts a build',async()=>
   assert.equal(lastStarted(log).jobType,'build');
 });
 
+test('Components + existing customer: a Components job (jobType build, jobKind components) with pricing pending',async()=>{
+  const {ctx,log,settle}=sandbox({savedJobs:[{customerName:'Synthetic Customer',phone:'021 000',jobType:'repair',savedAt:'2026-11-01T00:00:00Z'}]});
+  ctx.startNewComponentsFlow();
+  assert.deepEqual(log.finderOpens,['new-build'],'the same customer finder, no extra menu');
+  ctx.handleCustomerSelectionForNewBuild('synthetic customer','Synthetic Customer');
+  await settle();
+  const job=lastStarted(log);
+  assert.equal(job.jobType,'build');
+  assert.equal(job.jobKind,'components');
+  assert.equal(job.pricePending,true);
+  assert.equal(job.phone,'021 000');
+});
+
+test('Components + new customer: a Components job with pricing pending',async()=>{
+  const {ctx,log,settle}=sandbox();
+  ctx.startNewComponentsFlow();
+  ctx.commitCreateCustomerFromNewBuildForm();
+  await settle();
+  const job=lastStarted(log);
+  assert.equal(job.jobKind,'components');
+  assert.equal(job.pricePending,true);
+});
+
+test('New Rod Build and Repair / Refurb never start pending or as Components, even after a cancelled Components start',async()=>{
+  for(const start of ['startNewBuildFlow','startNewRepairFlow']){
+    const {ctx,log,settle}=sandbox();
+    ctx.startNewComponentsFlow();               // cancelled
+    ctx[start]();
+    ctx.handleCustomerSelectionForNewBuild('nobody','Synthetic Walk-in');
+    await settle();
+    const job=lastStarted(log);
+    assert.equal('jobKind' in job,false,start);
+    assert.equal('pricePending' in job,false,start);
+  }
+});
+
 test('Home is NOT activated yet: signed-in Home still shows only the current START NEW BUILD button',()=>{
   assert.match(html,/<button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">START NEW BUILD<\/button>/);
   assert.doesNotMatch(html,/REPAIR \/ REFURB/);
+  const home=html.slice(html.indexOf('id="homeScreen"'),html.indexOf('id="workshopLandingScreen"'));
+  assert.doesNotMatch(home,/COMPONENTS|REPAIR/,'no new Home buttons yet');
   assert.doesNotMatch(source,/startNewRepairFlow\(\);/,'nothing in the app calls the Repair route yet');
+  assert.doesNotMatch(source,/startNewComponentsFlow\(\);/,'nothing in the app calls the Components route yet');
 });

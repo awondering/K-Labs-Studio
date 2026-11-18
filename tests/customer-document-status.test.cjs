@@ -15,7 +15,7 @@ function fn(name){
 function ctx(status){
   const c={currentBuildLifecycleStatus:()=>status};
   vm.createContext(c);
-  vm.runInContext(`${fn('normalizeJobType')}\n${fn('customerDocumentLabels')}\n${fn('customerQuoteConfirmationText')}\n${fn('customerDocumentConfirmationText')}`,c);
+  vm.runInContext(`${fn('normalizeJobType')}\n${fn('normalizeJobKind')}\n${fn('isComponentsJob')}\n${fn('quotePricePending')}\n${fn('customerDocumentLabels')}\n${fn('customerQuoteConfirmationText')}\n${fn('customerDocumentConfirmationText')}`,c);
   return c;
 }
 

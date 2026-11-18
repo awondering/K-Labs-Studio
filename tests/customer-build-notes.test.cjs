@@ -40,7 +40,7 @@ function harness({status,notes='',builderNotes=PRIVATE}){
   vm.createContext(c);
   vm.runInContext([
     'specificationValue','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerSafeText','customerRequestText',
-    'normalizeJobType','normalizeFulfilmentMethod','customerDocumentLabels','customerQuoteConfirmationText','customerDocumentConfirmationText',
+    'normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDocumentLabels','customerQuoteConfirmationText','customerDocumentConfirmationText',
     'customerIncludedPartsMarkup','customerBuildNotesText','customerBuildNotesMarkup','businessProfileHasPaymentDetails',
     'customerQuoteSummaryMarkup','customerEmailLines',
   ].map(fn).join('\n'),c);
