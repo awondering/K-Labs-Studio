@@ -290,7 +290,9 @@ test('confirmed order: an Order Confirmation with the real total, including a ge
 
 test('rod build and repair documents are unchanged (wording, rod row, deposit lines and total)',()=>{
   const {c,open}=app();
-  open(rodBuild());
+  // Priced, with a deposit required: since v249 a quote with no deposit required omits the deposit lines (tests/quote-email-deposit).
+  const withDeposit={priceAdjustment:0,depositEnabled:true,depositType:'percent',depositValue:30};
+  open(rodBuild(withDeposit));
   const doc=c.customerQuoteSummaryMarkup().replace(/\s+/g,' ');
   assert.match(doc,/<span>Rod<\/span>/);
   assert.match(doc,/<span>Total Price<\/span><strong>\$/);
@@ -298,7 +300,7 @@ test('rod build and repair documents are unchanged (wording, rod row, deposit li
   assert.match(text,/Custom Rod Build — Q-2002/);
   assert.match(text,/Deposit required: /);
   assert.match(text,/Once the deposit has been received, your build will be confirmed/);
-  open(rodBuild({jobType:'repair'}));
+  open(rodBuild({...withDeposit,jobType:'repair'}));
   assert.match(c.customerEmailLines().join('\n'),/Once the deposit has been received, your repair will be confirmed/);
   assert.equal(c.customerDocumentLabels().title,'Repair Quote');
 });

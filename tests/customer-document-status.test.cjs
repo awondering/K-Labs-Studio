@@ -50,6 +50,9 @@ test('email draft wording is status-aware and keeps the quote reference',()=>{
   assert.match(email,/\$\{docLabels\.jobNoun\} — \$\{reference\}/);
   assert.match(email,/const reference=quoteNumber\|\|docLabels\.emailName/);
   assert.match(email,/docLabels\.subjectName/);
-  assert.match(email,/docLabels\.key==='quote' && \(math\.amountReceived<=0/);
+  // The closing sentence is quote-only: the deposit sentence when a deposit is required, otherwise a request to confirm.
+  assert.match(email,/!isComponents && docLabels\.key==='quote'\)\{/);
+  assert.match(email,/depositRequired && \(math\.amountReceived<=0 \|\| math\.depositOutstanding\)\)lines\.push\('', `Once the deposit has been received/);
+  assert.match(email,/!depositRequired && math\.amountReceived<=0\)lines\.push\('', `Please reply to confirm you would like to proceed/);
   assert.match(email,/Reference: \$\{reference\}/);
 });

@@ -15300,6 +15300,8 @@ function customerEmailLines(){
   const completedDate=new Date(completedRaw);
   const hasCompletedDate=isComplete&&!!completedRaw&&!Number.isNaN(completedDate.getTime());
   const balanceDue=isComplete?math.balanceOwing>0:(math.amountReceived<=0||math.depositOutstanding||math.balanceOwing>0);
+  // A quote only asks for a deposit when Deposit Required is on and the amount is above zero.
+  const depositRequired=math.depositEnabled&&math.depositAmount>0;
   const lines=[
     `Hi ${customerFirstName},`,
     '',
@@ -15343,7 +15345,7 @@ function customerEmailLines(){
       lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
       if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing)))lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
       lines.push(`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
-    }else if(!isComponents&&(docLabels.key!=='active'||isRepair||math.depositEnabled)){
+    }else if(!isComponents&&(docLabels.key!=='active'||isRepair||math.depositEnabled)&&(docLabels.key!=='quote'||depositRequired)){
       lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`,`Balance remaining: ${currencyWithCode(math.remainingBalance)}`);
     }
     const dueRaw=specificationValue(quote.estimatedCompletionDate);
@@ -15369,7 +15371,11 @@ function customerEmailLines(){
       `Reference: ${reference}`
     );
   }
-  if(!pricePending && !isComponents && docLabels.key==='quote' && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${isRepair?'repair':isComponents?'order':'build'} will be confirmed.`);
+  if(!pricePending && !isComponents && docLabels.key==='quote'){
+    const work=isRepair?'repair':'build';
+    if(depositRequired && (math.amountReceived<=0 || math.depositOutstanding))lines.push('', `Once the deposit has been received, your ${work} will be confirmed.`);
+    else if(!depositRequired && math.amountReceived<=0)lines.push('', `Please reply to confirm you would like to proceed with your ${work}.`);
+  }
   const signature=activeEmailIncludeSignature()?customerEmailSignatureLines():[];
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
