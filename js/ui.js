@@ -14536,7 +14536,7 @@ function renderBuilds(){
   const isQuoteTab=buildsStatusFilter==='quote';
   const titleEl=$('buildsScreenTitle');
   const subtitleEl=$('buildsScreenSubtitle');
-  if(titleEl)titleEl.textContent=isQuoteTab?'Quotes':'Active Builds';
+  if(titleEl)titleEl.textContent=isQuoteTab?'Quotes':'Active Jobs';
   if(subtitleEl)subtitleEl.textContent=isQuoteTab?'Quotes waiting to be confirmed as active builds.':'Continue working on rods currently in progress.';
   const query=String(buildsSearch||'').trim();
   const terms=savedBuildSearchTerms(query);
