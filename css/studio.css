@@ -10342,11 +10342,12 @@ body.klabs-logged-out #app > :not(.topbar):not(#homeScreen),
 body.klabs-auth-open .bottom-nav {
   display:none !important;
 }
-body.klabs-logged-out #homeEnterRodBtn,
+body.klabs-logged-out .home-signed-in-entry,
 body:not(.klabs-logged-out) .home-public-entry {
   display:none;
 }
-.home-public-entry {
+.home-public-entry,
+.home-signed-in-entry {
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:10px 12px;
@@ -10354,7 +10355,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   justify-self:center;
   margin:0;
 }
-#homeScreen .home-public-entry .home-enter-rod-button {
+#homeScreen .home-public-entry .home-enter-rod-button,
+#homeScreen .home-signed-in-entry .home-enter-rod-button {
   display:grid;
   align-content:center;
   justify-items:center;
@@ -10368,7 +10370,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   box-shadow:inset 0 1px 0 rgba(255,244,240,.12),0 0 0 1px rgba(115,72,77,.12);
   grid-column:1 / -1;
 }
-#homeScreen .home-public-entry .home-enter-rod-button:hover {
+#homeScreen .home-public-entry .home-enter-rod-button:hover,
+#homeScreen .home-signed-in-entry .home-enter-rod-button:hover {
   background:linear-gradient(180deg,rgba(242,224,220,.07),transparent 16%),linear-gradient(180deg,#624047,#482d32 48%,#342227);
   border-color:rgba(194,151,153,.36);
 }
@@ -10509,7 +10512,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   outline-offset:2px;
 }
 @media (max-width:520px) {
-  .home-public-entry { width:100%; }
+  .home-public-entry,
+  .home-signed-in-entry { width:100%; }
   .public-discover-dialog { padding:24px; }
   .public-discover-dialog__features div {
     grid-template-columns:1fr;
@@ -12642,6 +12646,12 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 #workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}
 
+/* Components job (Job 9): job type fixed at creation; rod specifications not used. */
+#workshopScreen .build-details[data-job-kind="components"] > #quoteJobTypeGroup,
+#workshopScreen .build-details[data-job-kind="components"] > #buildRodSpecsToggle,
+#workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
+#workshopScreen .quote-price-pending{display:grid;gap:8px;justify-items:start}
+#workshopScreen .quote-price-pending[hidden]{display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
 #workshopScreen .build-details__rod-specs{display:contents}

@@ -89,7 +89,7 @@ function formHarness({jobType='build',specs={},notes='',due=''}={}){
     // the guide-based summary used by a New Build
     firstSavedComponentByCategory:()=>null,firstComponentByCategory:()=>null,buildGuideView:()=>null,guideOrientationMethodLabel:()=>'',
   });
-  vm.runInContext(['normalizeJobType','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','rodSpecsEnteredCount','syncRodSpecsToggleSummary','buildSpecSummaryData','updateBuildSpecSummary','syncJobTypeSelector','setQuoteJobType','toggleRodSpecsSection'].map(fn).join('\n')+'\nlet workshopRodSpecsOpen=false;',c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','rodSpecsEnteredCount','syncRodSpecsToggleSummary','buildSpecSummaryData','updateBuildSpecSummary','syncJobTypeSelector','setQuoteJobType','toggleRodSpecsSection'].map(fn).join('\n')+'\nlet workshopRodSpecsOpen=false;',c);
   return {c,els,buttons};
 }
 
@@ -172,7 +172,7 @@ test('repair summary line shows the job, due date and rod; a New Build summary i
 
 test('existing saved builds load unchanged: legacy quotes are New Builds and the new field defaults to empty',()=>{
   const ctx=vm.createContext({specificationValue:(v)=>String(v==null?'':v).trim(),normalizeBuildLayout:(l)=>l&&Object.keys(l).length?l:null});
-  vm.runInContext(`${specFields}\n${fn('normalizeBuildSpecifications')}${fn('normalizeJobType')}`,ctx);
+  vm.runInContext(`${specFields}\n${fn('normalizeBuildSpecifications')}${fn('normalizeJobType')}${fn('normalizeJobKind')}${fn('isComponentsJob')}${fn('quotePricePending')}`,ctx);
   const legacy={reelSeatPosition:'350 mm',rearGripLength:'280 mm',builderNotes:'old private note',layout:{rodLengthMm:2000}};
   const normalized=ctx.normalizeBuildSpecifications(legacy);
   assert.equal(normalized.reelSeatPosition,'350 mm');
@@ -210,7 +210,7 @@ function documentHarness(jobType,{notes='Replace the tip-top and re-wrap the gui
   };
   vm.createContext(c);
   vm.runInContext(`${specFields}\n`+['specificationValue','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerSafeText','customerRequestText','appendCustomerSpecRow','buildSpecMeasurementMm',
-    'normalizeJobType','normalizeFulfilmentMethod','customerDocumentLabels','customerQuoteConfirmationText','customerDocumentConfirmationText','customerIncludedPartsMarkup',
+    'normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDocumentLabels','customerQuoteConfirmationText','customerDocumentConfirmationText','customerIncludedPartsMarkup',
     'customerBuildNotesText','customerBuildNotesMarkup','customerSpecificationRows','businessProfileHasPaymentDetails','customerQuoteSummaryMarkup','customerEmailLines'].map((name)=>{
     try{return fn(name);}catch(error){return '';}
   }).join('\n'),c);

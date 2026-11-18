@@ -217,7 +217,7 @@ test('Tax disabled retains delivery recovery and legacy freight stays separately
 test('Saved legacy freight and modern delivery entry modes survive normalization',()=>{
   const context=pricingHarness();
   context.generateId=prefix=>prefix+'-test';
-  ['newQuoteTemplate','normalizeJobType','normalizeFulfilmentMethod','normalizePayments','normalizeQuote'].forEach(name=>vm.runInContext(extractFunction(name),context));
+  ['newQuoteTemplate','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','normalizePayments','normalizeQuote'].forEach(name=>vm.runInContext(extractFunction(name),context));
   assert.deepEqual({...context.deliveryAmounts({freightCost:5,freightCharge:8})},{cost:5,charge:8});
   const legacy=context.normalizeQuote({
     freightCost:5,
@@ -252,7 +252,7 @@ test('Saved legacy freight and modern delivery entry modes survive normalization
 test('normalizing saved builds preserves invalid deposit requirements for explicit review',()=>{
   const context=pricingHarness();
   context.generateId=prefix=>prefix+'-test';
-  ['newQuoteTemplate','normalizeJobType','normalizeFulfilmentMethod','normalizePayments','normalizeQuote']
+  ['newQuoteTemplate','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','normalizePayments','normalizeQuote']
     .forEach(name=>vm.runInContext(extractFunction(name),context));
   for(const depositValue of [29518.75,-1,'invalid']){
     const saved=context.normalizeQuote({depositType:'fixed',depositValue,
@@ -383,7 +383,7 @@ function confirmationHarness(saved){
     formatCustomerEmailLongDate:value=>String(value),
     escapeHtml:value=>String(value),
   });
-  ['newQuoteTemplate','normalizeJobType','normalizeFulfilmentMethod','normalizePayments','normalizeQuote',
+  ['newQuoteTemplate','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','normalizePayments','normalizeQuote',
     'customerDocumentLabels','customerQuoteSummaryMarkup','customerEmailLines']
     .forEach(name=>vm.runInContext(extractFunction(name),context));
   context.quote=context.normalizeQuote(JSON.parse(JSON.stringify(saved)));
