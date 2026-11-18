@@ -9,7 +9,7 @@ test('pricing and actions live in one collapsible section',()=>{
   assert.ok(!html.includes('id="workshopActionsSection"'));
   assert.ok(!html.includes('workshopBuildActionsBody'));
   assert.equal((sectionHtml.match(/data-collapsible-trigger/g)||[]).length,1);
-  for(const id of ['quoteLabourRate','quoteRecordDepositBtn','viewInvoicePreviewBtn','viewPaymentStatementBtn','workshopBuildLifecycleStatus','toggleCurrentBuildStatusBtn','viewQuoteBtn','emailQuoteBtn','workshopBuildActionsStatus','currentBuildActionsMenuBtn','confirmBuildBtn']){
+  for(const id of ['quoteLabourRate','quoteRecordPaymentBtn','viewInvoicePreviewBtn','workshopBuildLifecycleStatus','toggleCurrentBuildStatusBtn','viewQuoteBtn','emailQuoteBtn','workshopBuildActionsStatus','currentBuildActionsMenuBtn','confirmBuildBtn']){
     assert.ok(sectionHtml.includes(`id="${id}"`),id);
   }
 });

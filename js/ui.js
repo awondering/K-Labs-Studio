@@ -14109,6 +14109,7 @@ function updateWorkshopBuildActionsUi(){
     pricingSection.setAttribute('data-job-kind',componentsKind?'components':'');
     pricingSection.setAttribute('data-lifecycle',lifecycle);
     pricingSection.setAttribute('data-has-payments',String(Array.isArray(quote&&quote.payments)&&quote.payments.length>0));
+    syncPricingLayoutState(pricingSection,lifecycle);
   }
   const toggleButton=$('toggleCurrentBuildStatusBtn');
   if(toggleButton){
@@ -14251,7 +14252,29 @@ async function confirmCurrentBuildAsActive(){
     await setCurrentBuildLifecycle('active',{message:order?'Order confirmed \u2014 now Active':'Build confirmed \u2014 now Active'});
   });
 }
+// Pricing & Actions: whether an invoice exists and whether the pricing fields fold into one "Pricing" line.
+// Reads the job only; nothing is saved, synced or generated.
+function syncPricingLayoutState(section,lifecycle){
+  const issued=!!(quote&&quote.issuedInvoice);
+  // Folding the pricing into one line is for custom builds and repairs; Components jobs keep their pricing open as before.
+  const collapsible=!isComponentsJob(quote) && (issued || lifecycle==='complete');
+  section.setAttribute('data-invoice-issued',String(issued));
+  section.setAttribute('data-pricing-collapsible',String(collapsible));
+  section.setAttribute('data-pricing-collapsed',String(collapsible && !pricingSummaryOpen));
+  const toggle=$('quotePricingSummaryBtn');
+  if(toggle)toggle.setAttribute('aria-expanded',String(!collapsible || pricingSummaryOpen));
+}
+function toggleQuotePricingSummary(){
+  pricingSummaryOpen=!pricingSummaryOpen;
+  const section=$('workshopPricingSection');
+  if(section)syncPricingLayoutState(section,currentBuildLifecycleStatus());
+}
 function handleCurrentBuildAction(action){
+  if(action==='invoice' || action==='statement'){
+    closeCurrentBuildActionsMenu();
+    if(action==='invoice')openInvoicePreview();else openPaymentStatement();
+    return;
+  }
   if(action==='toggle-status'){
     toggleCurrentBuildLifecycle();
     closeCurrentBuildActionsMenu();
@@ -14757,7 +14780,7 @@ function paymentHistoryMarkup(showCorrections=false){
   return `<span>Payment history</span><ul>${payments.map((payment)=>{
     const type=payment&&payment.type==='balance'?'Balance':'Deposit';
     const date=payment&&payment.date?formatDateDisplay(`${payment.date}T00:00:00`):'Unknown';
-    const correct=showCorrections&&payment?.type==='balance'&&payment.id?` <button type="button" class="ghost-action" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button>`:'';
+    const correct=showCorrections&&payment?.id&&(payment.type==='balance'||payment.type==='deposit')?` <button type="button" class="ghost-action" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button>`:'';
     return `<li>${type}: ${escapeHtml(currencyWithCode(numberOrZero(payment&&payment.amount)))} &mdash; ${escapeHtml(date)}${correct}</li>`;
   }).join('')}</ul>`;
 }
@@ -15682,7 +15705,20 @@ function fulfilmentStudioNote(){
 function syncFulfilmentSelector(){
   const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
   const pricingSection=$('workshopPricingSection');
-  if(pricingSection)pricingSection.setAttribute('data-show-delivery',String(method==='shipping' || deliveryAmounts(quote||{}).charge>0));
+  if(pricingSection){
+    const charge=deliveryAmounts(quote||{}).charge;
+    // Components jobs keep their v245 rule: the fields show once Courier / Shipping is chosen or a charge exists, editable in place.
+    // The Collection summary line with Edit is for custom builds and repairs only.
+    const mode=isComponentsJob(quote)
+      ?(method==='shipping' || charge>0?'fields':'hidden')
+      :deliveryEditOpen?'fields':method==='collection'?(charge>0?'summary':'hidden'):'fields';
+    pricingSection.setAttribute('data-delivery',mode);
+    const summary=$('quoteDeliverySummaryText');
+    if(summary && mode==='summary'){
+      const taxed=quoteTaxAvailable() && quote.includeGst!==false;
+      summary.textContent=`Delivery included in price: ${currencyWithCode(charge)}${taxed?` incl. ${activeTaxName()}`:''}`;
+    }
+  }
   document.querySelectorAll('#quoteFulfilmentGroup [data-fulfilment-method]').forEach((button)=>{
     button.setAttribute('aria-pressed',String(button.getAttribute('data-fulfilment-method')===method));
   });
@@ -15692,6 +15728,19 @@ function syncFulfilmentSelector(){
     note.textContent=text;
     note.hidden=!text;
   }
+}
+// "Edit" reopens the delivery fields in place; they fold back once you leave them (never while one is selected).
+function openDeliveryEdit(){
+  deliveryEditOpen=true;
+  syncFulfilmentSelector();
+  const first=$('quoteFreight');
+  if(first && typeof first.focus==='function')first.focus();
+}
+function closeDeliveryEditOnLeave(event){
+  const fields=$('quoteDeliveryFields');
+  if(!deliveryEditOpen || (fields && event && event.relatedTarget && fields.contains(event.relatedTarget)))return;
+  deliveryEditOpen=false;
+  syncFulfilmentSelector();
 }
 function setQuoteFulfilmentMethod(value){
   const next=normalizeFulfilmentMethod(value);
@@ -16728,18 +16777,34 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordDepositBtn',openDepositReceivedForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteRecordBalanceBtn',openBalanceReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['viewPaymentStatementBtn',openPaymentStatement],['retryFinancialBtn',retryFinancialOperation]].forEach(([id,handler])=>{
+  [['quoteRecordPaymentBtn',openRecordPaymentForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['retryFinancialBtn',retryFinancialOperation],['quotePricingSummaryBtn',toggleQuotePricingSummary],['quoteDeliveryEditBtn',openDeliveryEdit]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
     el.addEventListener('click',handler);
   });
+  const paymentType=$('quotePaymentTypeField');
+  if(paymentType && paymentType.getAttribute('data-payment-bound')!=='true'){
+    paymentType.setAttribute('data-payment-bound','true');
+    paymentType.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-payment-type]');
+      if(button)setRecordPaymentType(button.getAttribute('data-payment-type'));
+    });
+  }
+  const deliveryFields=$('quoteDeliveryFields');
+  if(deliveryFields && deliveryFields.getAttribute('data-payment-bound')!=='true'){
+    deliveryFields.setAttribute('data-payment-bound','true');
+    deliveryFields.addEventListener('focusout',closeDeliveryEditOnLeave);
+  }
   const paymentHistory=$('quotePaymentHistory');
   if(paymentHistory && paymentHistory.getAttribute('data-payment-bound')!=='true'){
     paymentHistory.setAttribute('data-payment-bound','true');
     paymentHistory.addEventListener('click',(event)=>{
       const button=event.target.closest('[data-correct-payment]');
-      if(button)openBalanceCorrection(button.getAttribute('data-correct-payment'));
+      if(!button)return;
+      const id=button.getAttribute('data-correct-payment');
+      const isDeposit=(quote.payments||[]).some((item)=>item&&item.id===id&&item.type==='deposit');
+      if(isDeposit)openDepositReceivedForm();else openBalanceCorrection(id);
     });
   }
   bindBuildSpecificationInputs();
@@ -17136,19 +17201,26 @@ function updateQuoteSummary(){
 // Deposit Received is a recorded payment (not the configured deposit) and never touches status, price or costs.
 let paymentFormBuildKey='';
 let balanceCorrectionId='';
+// Pricing & Actions layout: screen-only state. Opening or closing these never changes the job, so nothing is saved or synced.
+let pricingSummaryOpen=false;     // the "Pricing" line, once an invoice is issued or the job is complete
+let deliveryEditOpen=false;       // the delivery fields reopened from "Delivery included in price … Edit" under Customer Collection
+let recordPaymentType='balance';  // the Deposit | Balance choice inside the Record Payment form
+let recordPaymentPrefill='';      // the amount the form filled in, so switching type never overwrites a typed amount
 let financialOperationInFlight=false;
 function closeDepositReceivedForm(){
   const form=$('quoteDepositReceivedForm');
   if(form)form.hidden=true;
-  const trigger=$('quoteRecordDepositBtn');
-  if(trigger)trigger.setAttribute('aria-expanded','false');
   const error=$('quoteDepositReceivedError');
   if(error)error.textContent='';
 }
 function closeBalanceReceivedForm(){
   const form=$('quoteBalanceReceivedForm');
   if(form)form.hidden=true;
-  const trigger=$('quoteRecordBalanceBtn');
+  recordPaymentType='balance';
+  recordPaymentPrefill='';
+  const choice=$('quotePaymentTypeField');
+  if(choice)choice.hidden=true;
+  const trigger=$('quoteRecordPaymentBtn');
   if(trigger)trigger.setAttribute('aria-expanded','false');
   const amount=$('quoteBalanceReceivedAmount');
   const date=$('quoteBalanceReceivedDate');
@@ -17172,8 +17244,43 @@ function openBalanceReceivedForm(){
   if(reason)reason.hidden=true;
   const error=$('quoteBalanceReceivedError');
   if(error)error.textContent='';
+  setRecordPaymentChoice(false);
+  closeDepositReceivedForm();
   $('quoteBalanceReceivedForm').hidden=false;
-  $('quoteRecordBalanceBtn').setAttribute('aria-expanded','true');
+  $('quoteRecordPaymentBtn')?.setAttribute('aria-expanded','true');
+}
+// Record Payment: one button, straight into the form. Deposit is selected when a deposit is required and none has
+// been recorded; otherwise Balance. Deposit | Balance can be switched in the same form while no deposit is recorded
+// (the server accepts one deposit). Switching only changes the form; Save records the payment exactly as before.
+function openRecordPaymentForm(){
+  if(blockedByPendingPricing('recording a payment'))return;
+  openBalanceReceivedForm();
+  const math=depositMaths();
+  const choice=!math.depositPayment && !isComponentsJob(quote);
+  setRecordPaymentChoice(choice);
+  setRecordPaymentType(choice && math.depositEnabled?'deposit':'balance',{force:true});
+}
+function recordPaymentSuggestedAmount(type){
+  const math=depositMaths();
+  const value=type==='deposit'?(math.depositEnabled?math.depositAmount:0):math.balanceOwing;
+  return value>0?roundMoney(value).toFixed(2):'';
+}
+function setRecordPaymentChoice(visible){
+  const field=$('quotePaymentTypeField');
+  if(field)field.hidden=!visible;
+  if(!visible)setRecordPaymentType('balance',{force:true,keepAmount:true});
+}
+function setRecordPaymentType(type,options={}){
+  const next=type==='deposit'?'deposit':'balance';
+  const amount=$('quoteBalanceReceivedAmount');
+  if(amount && !options.keepAmount && (options.force || amount.value==='' || amount.value===recordPaymentPrefill)){
+    recordPaymentPrefill=recordPaymentSuggestedAmount(next);
+    amount.value=recordPaymentPrefill;
+  }
+  recordPaymentType=next;
+  document.querySelectorAll('#quotePaymentTypeField [data-payment-type]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String(button.getAttribute('data-payment-type')===next));
+  });
 }
 function openBalanceCorrection(id){
   const payment=(quote.payments||[]).find((item)=>item.id===id && item.type==='balance');
@@ -17189,13 +17296,14 @@ function openBalanceCorrection(id){
 }
 function updatePaymentBlock(){
   const status=$('quoteDepositReceivedStatus');
-  const trigger=$('quoteRecordDepositBtn');
-  if(!status || !trigger)return;
+  if(!status)return;
   const buildKey=`${activeAccountKey()}:${String(quote.id||quote.buildNumber||'')}`;
   if(buildKey!==paymentFormBuildKey){
     paymentFormBuildKey=buildKey;
     closeDepositReceivedForm();
     closeBalanceReceivedForm();
+    pricingSummaryOpen=false;
+    deliveryEditOpen=false;
   }
   const math=depositMaths();
   const balanceInput=$('quoteBalanceReceivedAmount');
@@ -17217,10 +17325,20 @@ function updatePaymentBlock(){
     const partial=math.depositEnabled&&math.depositOutstanding;
     status.textContent=`Deposit received: ${currencyWithCode(math.depositReceivedAmount)} on ${formatDateDisplay(`${math.depositReceivedDate}T00:00:00`)}`
       +(partial?`. Deposit still required: ${currencyWithCode(math.depositStillRequired)} of ${currencyWithCode(math.depositAmount)}.`:'');
-    trigger.textContent='Edit Deposit Received';
   }else{
     status.textContent=math.depositEnabled?'Deposit not yet received.':'';
-    trigger.textContent='Record Deposit Received';
+  }
+  const section=$('workshopPricingSection');
+  if(section){
+    section.setAttribute('data-paid-in-full',String(math.total>0&&math.balanceOwing===0));
+    section.setAttribute('data-deposit-received',String(!!math.depositPayment));
+    section.setAttribute('data-has-payments',String(Array.isArray(quote.payments)&&quote.payments.length>0));
+    syncPricingLayoutState(section,currentBuildLifecycleStatus());
+  }
+  const pricingValue=$('quotePricingSummaryValue');
+  if(pricingValue){
+    const taxed=quoteTaxAvailable() && quote.includeGst!==false;
+    pricingValue.textContent=quotePricePending()?'To be confirmed':`${currencyWithCode(math.total)}${taxed?` incl. ${activeTaxName()}`:''}`;
   }
   if(typeof updateBuildPricingSummary==='function')updateBuildPricingSummary();
 }
@@ -17236,8 +17354,8 @@ function openDepositReceivedForm(){
   if(reason)reason.hidden=!existing;
   const reasonInput=$('quoteDepositCorrectionReason');
   if(reasonInput)reasonInput.value='';
+  closeBalanceReceivedForm();
   $('quoteDepositReceivedForm').hidden=false;
-  $('quoteRecordDepositBtn').setAttribute('aria-expanded','true');
 }
 async function commitFinancialOperation(kind,data,retry=false){
   if(financialOperationInFlight)throw new Error('A financial operation is already in progress.');
@@ -17291,7 +17409,8 @@ async function saveFinancialPayment(type,correctionId,amountId,dateId,reasonId,e
   if(correctionId)entry.reason=reason;
   try{
     await commitFinancialOperation(correctionId?'correct_payment':'add_payment',entry);
-    if(type==='deposit')closeDepositReceivedForm();else closeBalanceReceivedForm();
+    closeDepositReceivedForm();
+    closeBalanceReceivedForm();
   }catch(failure){error.textContent=failure.message;}
 }
 async function saveDepositReceived(){
@@ -17299,7 +17418,8 @@ async function saveDepositReceived(){
   await saveFinancialPayment('deposit',existing?.id||'','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositCorrectionReason','quoteDepositReceivedError');
 }
 async function saveBalanceReceived(){
-  await saveFinancialPayment('balance',balanceCorrectionId,'quoteBalanceReceivedAmount','quoteBalanceReceivedDate','quoteBalanceCorrectionReason','quoteBalanceReceivedError');
+  const type=!balanceCorrectionId && recordPaymentType==='deposit'?'deposit':'balance';
+  await saveFinancialPayment(type,balanceCorrectionId,'quoteBalanceReceivedAmount','quoteBalanceReceivedDate','quoteBalanceCorrectionReason','quoteBalanceReceivedError');
 }
 // Deposit fields are optional and independent of build status; kept in sync with the live pricing math.
 function updateDepositFields(){

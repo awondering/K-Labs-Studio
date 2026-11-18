@@ -350,16 +350,16 @@ test('every new hiding rule applies only to Components jobs, so rod builds and r
   const start=css.indexOf('/* Components job pricing:');
   const block=css.slice(start,css.indexOf('/* Build Details, Repair / Refurbishment:',start));
   const rules=block.replace(/\/\*[\s\S]*?\*\//g,'').split('}').map((r)=>r.trim()).filter(Boolean);
-  assert.equal(rules.length,3);
+  assert.equal(rules.length,2);
   for(const rule of rules){
     for(const selector of rule.slice(0,rule.indexOf('{')).split(/,(?![^(]*\))/)){
       assert.match(selector.trim(),/^#workshopPricingSection\[data-job-kind="components"\]/,selector);
     }
     assert.match(rule,/\{display:none$/);
   }
-  for(const id of ['quoteLabourRateField','quoteProfitField','quoteMarginPercentField','quoteEarningsSummary','quoteCostBeforeMarginField','quoteDepositEnabledField','quoteRecordDepositBtn','quoteTaxRateField'])
+  for(const id of ['quoteLabourRateField','quoteProfitField','quoteMarginPercentField','quoteEarningsSummary','quoteCostBeforeMarginField','quoteDepositEnabledField','quoteTaxRateField'])
     assert.match(block,new RegExp(`#${id}\\b`),id);
-  for(const id of ['quoteIncludeGstField','quoteGstField','quoteTotalField','quoteFulfilmentGroup','viewQuoteBtn','emailQuoteBtn','quoteRecordBalanceBtn','confirmBuildBtn'])
+  for(const id of ['quoteIncludeGstField','quoteGstField','quoteTotalField','quoteFulfilmentGroup','viewQuoteBtn','emailQuoteBtn','quoteRecordPaymentBtn','confirmBuildBtn'])
     assert.doesNotMatch(block,new RegExp(`#${id}\\b`),`${id} stays visible`);
 });
 
@@ -370,19 +370,22 @@ test('the Pricing section is marked with the job kind, stage and delivery choice
   const ctx={$:el,document:{querySelector:(q)=>q.includes('data-current-build-action="delete"')?el('deleteItem'):null,querySelectorAll:()=>[]},quote:null,
     buildLifecycleStatusKey:(r)=>r.quoteStatus,buildLifecycleLabel:(k)=>k,customerDocumentLabels:()=>({viewLabel:'View'}),
     normalizeJobType:(v)=>v==='repair'?'repair':'build',normalizeJobKind:(v)=>v==='components'?'components':'',
-    normalizeFulfilmentMethod:(v)=>v==='shipping'||v==='collection'?v:'',deliveryAmounts:(q)=>({charge:Number(q.freight)||0}),fulfilmentStudioNote:()=>''};
+    normalizeFulfilmentMethod:(v)=>v==='shipping'||v==='collection'?v:'',deliveryAmounts:(q)=>({charge:Number(q.freight)||0}),fulfilmentStudioNote:()=>'',
+    quoteTaxAvailable:()=>true,activeTaxName:()=>'GST',currencyWithCode:(v)=>`$${Number(v).toFixed(2)} NZD`,pricingSummaryOpen:false,deliveryEditOpen:false};
   vm.createContext(ctx);
-  vm.runInContext(['isComponentsJob','currentBuildLifecycleStatus','updateWorkshopBuildActionsUi','syncFulfilmentSelector'].map(fn).join('\n'),ctx);
+  vm.runInContext(['isComponentsJob','currentBuildLifecycleStatus','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState'].map(fn).join('\n'),ctx);
   const section=()=>el('workshopPricingSection').attrs;
   ctx.quote={jobType:'build',jobKind:'components',quoteStatus:'quote',payments:[]};
   ctx.updateWorkshopBuildActionsUi();ctx.syncFulfilmentSelector();
-  assert.deepEqual({...section()},{'data-job-kind':'components','data-lifecycle':'quote','data-has-payments':'false','data-show-delivery':'false'});
+  assert.equal(section()['data-job-kind'],'components');
+  assert.equal(section()['data-lifecycle'],'quote');
+  assert.equal(section()['data-delivery'],'hidden','Components: delivery fields wait for a fulfilment choice');
   assert.equal(el('confirmBuildBtn').textContent,'Confirm Order');
   assert.equal(el('deleteItem').textContent,'Delete Order');
   ctx.quote={...ctx.quote,fulfilmentMethod:'shipping'};ctx.syncFulfilmentSelector();
-  assert.equal(section()['data-show-delivery'],'true','Courier / Shipping reveals freight and packaging');
+  assert.equal(section()['data-delivery'],'fields','Courier / Shipping reveals freight and packaging');
   ctx.quote={...ctx.quote,fulfilmentMethod:'collection',freight:5};ctx.syncFulfilmentSelector();
-  assert.equal(section()['data-show-delivery'],'true','an existing delivery charge stays visible so it can be removed');
+  assert.equal(section()['data-delivery'],'fields','an existing delivery charge stays editable in place (unchanged from v245)');
   ctx.quote={jobType:'build',quoteStatus:'active',payments:[{amount:1}]};
   ctx.updateWorkshopBuildActionsUi();
   assert.equal(section()['data-job-kind'],'','rod build: no Components rules apply');

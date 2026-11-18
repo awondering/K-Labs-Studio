@@ -7997,6 +7997,33 @@ textarea::-moz-selection,
 #workshopScreen .workshop-build-actions-docs__label{color:var(--ds-text-muted);font-size:9px;letter-spacing:.09em;text-transform:uppercase}
 #workshopScreen .workshop-build-actions-docs__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 #workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:8px;padding-right:8px}
+/* Pricing & Actions, iPhone layout (custom builds and repairs). Screen-only: stage and job state come from attributes on
+   #workshopPricingSection set during the existing render; showing or hiding never saves, syncs or builds a document.
+   - Pricing fields fold into one "Pricing" line once an invoice is issued, and at Complete (Payment stays visible).
+   - Customer Collection: empty delivery fields are hidden; an included delivery charge shows as one line with Edit.
+   - Components jobs keep their own delivery rule, open pricing and Record Payment when paid (set in ui.js and below).
+   - One Record Payment button, hidden when paid in full; deposit settings hide once a deposit is received (after Quote).
+   - Documents: View and Email always; Customer Invoice on Active and Complete (under ••• at Quote);
+     Payment Statement under ••• once an invoice is issued. */
+#workshopPricingSection:not([data-pricing-collapsible="true"]) #quotePricingSummaryBtn{display:none}
+#workshopPricingSection[data-pricing-collapsed="true"] #workshopPricingFields > :not(#quotePricingSummaryBtn):not(#quotePaymentBlock){display:none}
+#workshopScreen .build-pricing .build-pricing__summary-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:0 12px;text-align:left}
+#workshopScreen .build-pricing .build-pricing__summary-toggle strong{margin-left:auto;font-variant-numeric:tabular-nums}
+#workshopScreen .build-pricing .build-pricing__summary-toggle::after{content:'\25B8';opacity:.6}
+#workshopScreen .build-pricing .build-pricing__summary-toggle[aria-expanded="true"]::after{content:'\25BE'}
+#workshopPricingSection:is([data-delivery="hidden"],[data-delivery="summary"]) #quoteDeliveryFields{display:none}
+#workshopPricingSection:not([data-delivery="summary"]) #quoteDeliverySummary{display:none}
+#workshopScreen .build-pricing .build-pricing__delivery-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+#workshopScreen .build-pricing .build-pricing__delivery-summary span{min-width:0;font-size:13px;font-variant-numeric:tabular-nums}
+#workshopScreen .build-pricing .build-pricing__delivery-summary .ghost-action{flex:0 0 auto;min-height:44px;padding:0 16px}
+#workshopPricingSection:not([data-lifecycle="quote"])[data-deposit-received="true"] :is(#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+#workshopPricingSection[data-paid-in-full="true"]:not([data-job-kind="components"]) #quoteRecordPaymentBtn{display:none}
+#workshopPricingSection[data-lifecycle="quote"][data-has-payments="false"] .quote-payment__summary{display:none}
+#workshopScreen .quote-payment__form .quote-payment__type{grid-column:1/-1}
+#workshopPricingSection[data-lifecycle="quote"] #viewInvoicePreviewBtn{display:none}
+#workshopScreen .workshop-build-actions-docs__grid #viewInvoicePreviewBtn{grid-column:1/-1}
+#workshopPricingSection[data-lifecycle]:not([data-lifecycle="quote"]) #currentBuildActionsMenu [data-current-build-action="invoice"],
+#workshopPricingSection:not([data-invoice-issued="true"]) #currentBuildActionsMenu [data-current-build-action="statement"]{display:none}
 #workshopScreen .workshop-build-actions-row.workshop-build-actions-row--status{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px}
 #workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-value{flex:0 1 auto;min-width:0;max-width:100%;min-height:26px;padding:0 12px;white-space:normal;overflow-wrap:anywhere}
 #workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-toggle{flex:0 0 auto;margin-left:auto;width:auto;min-width:132px;min-height:44px;padding:0 18px;white-space:nowrap}
@@ -12651,10 +12678,9 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .build-details[data-job-kind="components"] > #buildRodSpecsToggle,
 #workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
 /* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
-   per-job tax-rate controls are hidden; payments, invoice, statement and completion appear once the order is confirmed. */
-#workshopPricingSection[data-job-kind="components"] :is(#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField,#quoteRecordDepositBtn){display:none}
-#workshopPricingSection[data-job-kind="components"][data-show-delivery="false"] #quoteDeliveryFields{display:none}
-#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"] :is(#viewInvoicePreviewBtn,#viewPaymentStatementBtn),
+   per-job tax-rate controls are hidden; payments and the invoice appear once the order is confirmed. */
+#workshopPricingSection[data-job-kind="components"] :is(#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"] #currentBuildActionsMenu [data-current-build-action="invoice"],
 #workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock{display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
