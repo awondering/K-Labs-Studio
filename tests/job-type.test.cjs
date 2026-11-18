@@ -42,7 +42,7 @@ function ctx(status,jobType){
     updateBuildSpecSummary:()=>{},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
   return c;
 }
 
