@@ -1071,6 +1071,12 @@
                   <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
                   <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
                   <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
+                  <div id="quoteMoreDocumentsWrap" class="workshop-build-actions-more">
+                    <button id="quoteMoreDocumentsBtn" class="ghost-action workshop-build-actions-more__toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quoteMoreDocumentsMenu">More documents</button>
+                    <div id="quoteMoreDocumentsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="More documents" hidden>
+                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-more-document="invoice">Customer Invoice</button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="workshop-build-actions-row workshop-build-actions-row--status">
@@ -1085,7 +1091,6 @@
                   <div class="workshop-build-actions-menu-wrap">
                     <button id="currentBuildActionsMenuBtn" class="ghost-action saved-build-card__menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Build actions">&hellip;</button>
                     <div id="currentBuildActionsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="Build actions menu" hidden>
-                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="invoice">Customer Invoice</button>
                       <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="statement">Payment Statement</button>
                       <button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-current-build-action="delete">Delete Build</button>
                     </div>
