@@ -33,7 +33,7 @@ function harness(tax = true) {
     escapeHtml: value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
   });
-  for (const name of ['invoiceNumberForBuild', 'invoiceRodDescription', 'buildInvoiceSnapshot', 'invoiceDocumentMarkup']) {
+  for (const name of ['normalizeJobType', 'invoiceNumberForBuild', 'invoiceRodDescription', 'buildInvoiceSnapshot', 'invoiceDocumentMarkup']) {
     vm.runInContext(extract(name), context);
   }
   return { context, quote };
