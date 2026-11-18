@@ -385,7 +385,7 @@ test('the Pricing section is marked with the job kind, stage and delivery choice
   ctx.quote={...ctx.quote,fulfilmentMethod:'shipping'};ctx.syncFulfilmentSelector();
   assert.equal(section()['data-delivery'],'fields','Courier / Shipping reveals freight and packaging');
   ctx.quote={...ctx.quote,fulfilmentMethod:'collection',freight:5};ctx.syncFulfilmentSelector();
-  assert.equal(section()['data-delivery'],'summary','an included delivery charge stays visible, with Edit to change it');
+  assert.equal(section()['data-delivery'],'fields','an existing delivery charge stays editable in place (unchanged from v245)');
   ctx.quote={jobType:'build',quoteStatus:'active',payments:[{amount:1}]};
   ctx.updateWorkshopBuildActionsUi();
   assert.equal(section()['data-job-kind'],'','rod build: no Components rules apply');

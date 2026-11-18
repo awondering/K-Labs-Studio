@@ -14256,7 +14256,8 @@ async function confirmCurrentBuildAsActive(){
 // Reads the job only; nothing is saved, synced or generated.
 function syncPricingLayoutState(section,lifecycle){
   const issued=!!(quote&&quote.issuedInvoice);
-  const collapsible=issued || lifecycle==='complete';
+  // Folding the pricing into one line is for custom builds and repairs; Components jobs keep their pricing open as before.
+  const collapsible=!isComponentsJob(quote) && (issued || lifecycle==='complete');
   section.setAttribute('data-invoice-issued',String(issued));
   section.setAttribute('data-pricing-collapsible',String(collapsible));
   section.setAttribute('data-pricing-collapsed',String(collapsible && !pricingSummaryOpen));
@@ -15706,8 +15707,11 @@ function syncFulfilmentSelector(){
   const pricingSection=$('workshopPricingSection');
   if(pricingSection){
     const charge=deliveryAmounts(quote||{}).charge;
-    const hiddenUnchosen=isComponentsJob(quote) && !method && !(charge>0);
-    const mode=deliveryEditOpen?'fields':method==='collection'?(charge>0?'summary':'hidden'):hiddenUnchosen?'hidden':'fields';
+    // Components jobs keep their v245 rule: the fields show once Courier / Shipping is chosen or a charge exists, editable in place.
+    // The Collection summary line with Edit is for custom builds and repairs only.
+    const mode=isComponentsJob(quote)
+      ?(method==='shipping' || charge>0?'fields':'hidden')
+      :deliveryEditOpen?'fields':method==='collection'?(charge>0?'summary':'hidden'):'fields';
     pricingSection.setAttribute('data-delivery',mode);
     const summary=$('quoteDeliverySummaryText');
     if(summary && mode==='summary'){

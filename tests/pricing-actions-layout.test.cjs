@@ -94,7 +94,7 @@ test('the layout rules are screen-only and scoped to the Pricing & Actions secti
   assert.match(layoutCss,/\[data-lifecycle="quote"\] #viewInvoicePreviewBtn\{display:none\}/);
   assert.match(layoutCss,/\[data-lifecycle\]:not\(\[data-lifecycle="quote"\]\) #currentBuildActionsMenu \[data-current-build-action="invoice"\]/);
   assert.match(layoutCss,/:not\(\[data-invoice-issued="true"\]\) #currentBuildActionsMenu \[data-current-build-action="statement"\]/);
-  assert.match(layoutCss,/\[data-paid-in-full="true"\] #quoteRecordPaymentBtn\{display:none\}/);
+  assert.match(layoutCss,/\[data-paid-in-full="true"\]:not\(\[data-job-kind="components"\]\) #quoteRecordPaymentBtn\{display:none\}/);
   assert.match(layoutCss,/\[data-pricing-collapsed="true"\] #workshopPricingFields > :not\(#quotePricingSummaryBtn\):not\(#quotePaymentBlock\)\{display:none\}/,'Payment stays visible when pricing folds');
 });
 
@@ -229,4 +229,25 @@ test('rendering the section at every stage builds no document and makes no save 
     q.render();q.render();
     noSideEffects(q.spy,`${record.jobType} ${record.quoteStatus}`);
   }
+});
+
+// ---------- Components jobs keep their v245 behaviour ----------
+test('Components: Collection with a saved delivery charge keeps the fields editable in place (no summary line), as in v245',()=>{
+  const order=(extra)=>job({jobKind:'components',...extra});
+  assert.equal(app(order({fulfilmentMethod:'collection',freight:10,packaging:2})).attrs()['data-delivery'],'fields');
+  assert.equal(app(order({fulfilmentMethod:'shipping'})).attrs()['data-delivery'],'fields');
+  assert.equal(app(order({fulfilmentMethod:'collection'})).attrs()['data-delivery'],'hidden');
+  assert.equal(app(order({})).attrs()['data-delivery'],'hidden','no choice and no charge: hidden, as in v245');
+  assert.equal(app(order({freight:10})).attrs()['data-delivery'],'fields','a charge with no choice stays visible, as in v245');
+  // A custom build in the same situation gets the new summary line.
+  assert.equal(app(job({fulfilmentMethod:'collection',freight:10,packaging:2})).attrs()['data-delivery'],'summary');
+});
+
+test('Components: pricing never folds into one line, and Record Payment is not hidden by the paid-in-full rule',()=>{
+  for(const extra of [{quoteStatus:'complete'},{quoteStatus:'active',issuedInvoice:{number:'INV-1',total:100,payments:[]}}]){
+    const q=app(job({jobKind:'components',...extra}));
+    assert.equal(q.attrs()['data-pricing-collapsible'],'false');
+    assert.equal(q.attrs()['data-pricing-collapsed'],'false');
+  }
+  assert.match(layoutCss,/:not\(\[data-job-kind="components"\]\) #quoteRecordPaymentBtn/);
 });
