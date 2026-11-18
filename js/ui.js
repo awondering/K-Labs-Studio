@@ -14101,7 +14101,8 @@ function updateWorkshopBuildActionsUi(){
   const confirmBtn=$('confirmBuildBtn');
   if(confirmBtn)confirmBtn.hidden=!isQuote;
   const componentsKind=isComponentsJob(quote);
-  if(confirmBtn)confirmBtn.textContent=componentsKind?'Confirm Order':'Confirm Build';
+  const repairJob=normalizeJobType(quote&&quote.jobType)==='repair';
+  if(confirmBtn)confirmBtn.textContent=componentsKind?'Confirm Order':repairJob?'Confirm Repair':'Confirm Build';
   const deleteItem=document.querySelector('#currentBuildActionsMenu [data-current-build-action="delete"]');
   if(deleteItem)deleteItem.textContent=componentsKind?'Delete Order':'Delete Build';
   const pricingSection=$('workshopPricingSection');
@@ -14223,6 +14224,7 @@ async function toggleCurrentBuildLifecycle(){
 async function confirmCurrentBuildAsActive(){
   if(currentBuildLifecycleStatus()!=='quote')return;
   const order=isComponentsJob(quote);
+  const repair=normalizeJobType(quote&&quote.jobType)==='repair';
   if(order && !componentRowsForTotals().length){
     openInfoDialog('Confirm Order','Add the components before confirming the order.');
     return;
@@ -14234,6 +14236,10 @@ async function confirmCurrentBuildAsActive(){
       ?`Supplied at no charge (${currency(0)}): ${noCharge.join(', ')}. Confirm the order?`
       :'Confirm this order?',
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Order',kind:'primary'}]
+  }:repair?{
+    title:'Confirm Repair',
+    message:'Confirm this quote as an active repair?',
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'confirm',label:'Confirm Repair',kind:'primary'}]
   }:{
     title:'Confirm Build',
     message:'Confirm this quote as an active build?',
@@ -14249,7 +14255,7 @@ async function confirmCurrentBuildAsActive(){
         return;
       }
     }
-    await setCurrentBuildLifecycle('active',{message:order?'Order confirmed \u2014 now Active':'Build confirmed \u2014 now Active'});
+    await setCurrentBuildLifecycle('active',{message:order?'Order confirmed \u2014 now Active':repair?'Repair confirmed \u2014 now Active':'Build confirmed \u2014 now Active'});
   });
 }
 // Pricing & Actions: whether an invoice exists and whether the pricing fields fold into one "Pricing" line.
@@ -14853,11 +14859,15 @@ function invoiceRodDescription(){
       .map(([label,value])=>`${label} ${String(value).trim()}`);
     if(gripParts.length)fitted.push(`Grip: ${gripParts.join(', ')}`);
   }
-  return {
-    title:title||'Custom Fishing Rod',
-    details:[blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
-      measures.join(' · '),fitted.join(' · ')].filter(Boolean),
-  };
+  const details=[blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
+    measures.join(' · '),fitted.join(' · ')].filter(Boolean);
+  // Repair: the saved customer-facing Repair Description (as shown on the quote) describes the work; its first line is the
+  // title and any further lines follow. The rod's name, if entered, stays as a detail. Without a description: "Fishing Rod Repair".
+  if(normalizeJobType(quote.jobType)==='repair'){
+    const repairLines=customerBuildNotesText().split(/\r\n|\r|\n/).map((value)=>value.trim()).filter(Boolean);
+    return {title:repairLines[0]||'Fishing Rod Repair',details:[...repairLines.slice(1),title?`Rod: ${title}`:'',...details].filter(Boolean)};
+  }
+  return {title:title||'Custom Fishing Rod',details};
 }
 function buildInvoiceSnapshot(preview=false){
   const math=depositMaths();
