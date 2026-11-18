@@ -30,11 +30,12 @@ function harness({failWrites=false}={}){
     renderBuilds(){context.renders.push('builds');},
     renderCustomerFinder(){context.renders.push('finder');},
     openConfirmDialog(config,handler){context.dialogs.push({config,handler});},
+    openInfoDialog(){},
     console:{error(){}},
   };
   vm.createContext(context);
   vm.runInContext("const BUILDS_STORAGE_KEY='klabs-workshop-builds';const QUOTES_STORAGE_KEY='klabs-workshop-quotes';",context);
-  vm.runInContext(['accountScopedStorageKey','buildsStorageKey','quotesStorageKey','activeAccountKey','deleteSavedEntryBySource','deleteSavedEntryById','requestDeleteSavedBuildRecord'].map(functionSource).join('\n'),context);
+  vm.runInContext(['accountScopedStorageKey','buildsStorageKey','quotesStorageKey','activeAccountKey','deleteSavedEntryBySource','deleteSavedEntryById','normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','openIssuedInvoiceDeleteBlock','requestDeleteSavedBuildRecord'].map(functionSource).join('\n'),context);
   return context;
 }
 

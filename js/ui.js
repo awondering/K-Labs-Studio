@@ -8976,34 +8976,45 @@ function finalizeDeletedCurrentBuild(){
   renderCustomerFinder();
   goScreen('buildsScreen');
 }
+// Deletion wording by job type (wording only; the deletion rules are the same for every job type):
+// custom builds "Build", repairs "Repair", Components jobs "Order".
+function deletionNoun(record){
+  if(isComponentsJob(record))return 'Order';
+  return normalizeJobType(record&&record.jobType)==='repair'?'Repair':'Build';
+}
+function openIssuedInvoiceDeleteBlock(record){
+  const noun=deletionNoun(record);
+  openInfoDialog(`${noun} Cannot Be Deleted`,`This ${noun.toLowerCase()} contains an issued invoice and must be retained.`);
+}
 function requestDeleteCurrentBuild(){
   const target=findCurrentSavedBuildTarget();
   if(!target){
-    flashWorkshopStatus('Save the build before deleting',{pending:true,duration:2000});
+    flashWorkshopStatus(`Save the ${deletionNoun(quote).toLowerCase()} before deleting`,{pending:true,duration:2000});
     return;
   }
   if(target.record.issuedInvoice){
-    openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
+    openIssuedInvoiceDeleteBlock(target.record);
     return;
   }
-  const order=isComponentsJob(target.record);
-  const displayName=specificationValue(target.record&&target.record.buildName)||(order?'this order':'this build');
+  const noun=deletionNoun(target.record);
+  const nounLower=noun.toLowerCase();
+  const displayName=specificationValue(target.record&&target.record.buildName)||`this ${nounLower}`;
   openConfirmDialog({
-    title:order?'Delete Order':'Delete Build',
-    message:`Delete ${displayName}? This will permanently delete this saved ${order?'order':'build'} only.`,
-    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:order?'Delete Order':'Delete Build',kind:'danger'}]
+    title:`Delete ${noun}`,
+    message:`Delete ${displayName}? This will permanently delete this saved ${nounLower} only.`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:`Delete ${noun}`,kind:'danger'}]
   },(action)=>{
     if(action!=='delete')return;
     const records=savedBuildRecords();
     const targetId=specificationValue(target.record&&target.record.id);
     const targetIndex=records.findIndex((record)=>targetId && specificationValue(record&&record.id)===targetId);
     if(targetIndex<0){
-      flashWorkshopStatus('Build not found — nothing deleted',{pending:true,duration:3200});
+      flashWorkshopStatus(`${noun} not found — nothing deleted`,{pending:true,duration:3200});
       return;
     }
     const deletedRecord=records[targetIndex];
     if(deletedRecord.issuedInvoice){
-      openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
+      openIssuedInvoiceDeleteBlock(deletedRecord);
       return;
     }
     try{
@@ -9013,7 +9024,7 @@ function requestDeleteCurrentBuild(){
       if(deletedRecord?.id)window.KLABS_BUILD_SYNC?.confirmBuildDeleted?.(deletedRecord.id);
     }catch(error){
       console.error('[K-Labs Studio] Could not delete build:',error);
-      flashWorkshopStatus('Check the build and sync status',{pending:true,duration:3200});
+      flashWorkshopStatus(`Check the ${nounLower} and sync status`,{pending:true,duration:3200});
       return;
     }
     finalizeDeletedCurrentBuild();
@@ -14139,7 +14150,7 @@ function updateWorkshopBuildActionsUi(){
   const repairJob=normalizeJobType(quote&&quote.jobType)==='repair';
   if(confirmBtn)confirmBtn.textContent=componentsKind?'Confirm Order':repairJob?'Confirm Repair':'Confirm Build';
   const deleteItem=document.querySelector('#currentBuildActionsMenu [data-current-build-action="delete"]');
-  if(deleteItem)deleteItem.textContent=componentsKind?'Delete Order':'Delete Build';
+  if(deleteItem)deleteItem.textContent=`Delete ${deletionNoun(quote)}`;
   const pricingSection=$('workshopPricingSection');
   if(pricingSection){
     pricingSection.setAttribute('data-job-kind',componentsKind?'components':'');
@@ -14359,11 +14370,11 @@ function requestDeleteSavedBuildRecord(source,index,options){
   const rawRecord=Array.isArray(stored)?stored[Number(index)]:null;
   if(!rawRecord)return;
   if(source==='build' && rawRecord.issuedInvoice){
-    openInfoDialog('Build Cannot Be Deleted','This build contains an issued invoice and must be retained.');
+    openIssuedInvoiceDeleteBlock(rawRecord);
     return;
   }
   const recordId=specificationValue(rawRecord.id);
-  const settings={title:'Delete this build?',message:'This action cannot be undone.',confirmLabel:'Delete',...(options||{})};
+  const settings={title:`Delete this ${deletionNoun(rawRecord).toLowerCase()}?`,message:'This action cannot be undone.',confirmLabel:'Delete',...(options||{})};
   closeSavedBuildRowMenu();
   const present=(errorMessage)=>{
     openConfirmDialog({
