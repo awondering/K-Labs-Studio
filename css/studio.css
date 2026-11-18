@@ -10342,11 +10342,12 @@ body.klabs-logged-out #app > :not(.topbar):not(#homeScreen),
 body.klabs-auth-open .bottom-nav {
   display:none !important;
 }
-body.klabs-logged-out #homeEnterRodBtn,
+body.klabs-logged-out .home-signed-in-entry,
 body:not(.klabs-logged-out) .home-public-entry {
   display:none;
 }
-.home-public-entry {
+.home-public-entry,
+.home-signed-in-entry {
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:10px 12px;
@@ -10354,7 +10355,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   justify-self:center;
   margin:0;
 }
-#homeScreen .home-public-entry .home-enter-rod-button {
+#homeScreen .home-public-entry .home-enter-rod-button,
+#homeScreen .home-signed-in-entry .home-enter-rod-button {
   display:grid;
   align-content:center;
   justify-items:center;
@@ -10368,7 +10370,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   box-shadow:inset 0 1px 0 rgba(255,244,240,.12),0 0 0 1px rgba(115,72,77,.12);
   grid-column:1 / -1;
 }
-#homeScreen .home-public-entry .home-enter-rod-button:hover {
+#homeScreen .home-public-entry .home-enter-rod-button:hover,
+#homeScreen .home-signed-in-entry .home-enter-rod-button:hover {
   background:linear-gradient(180deg,rgba(242,224,220,.07),transparent 16%),linear-gradient(180deg,#624047,#482d32 48%,#342227);
   border-color:rgba(194,151,153,.36);
 }
@@ -10509,7 +10512,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   outline-offset:2px;
 }
 @media (max-width:520px) {
-  .home-public-entry { width:100%; }
+  .home-public-entry,
+  .home-signed-in-entry { width:100%; }
   .public-discover-dialog { padding:24px; }
   .public-discover-dialog__features div {
     grid-template-columns:1fr;

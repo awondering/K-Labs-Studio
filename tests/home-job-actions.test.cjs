@@ -153,11 +153,35 @@ test('New Rod Build and Repair / Refurb never start pending or as Components, ev
   }
 });
 
-test('Home is NOT activated yet: signed-in Home still shows only the current START NEW BUILD button',()=>{
-  assert.match(html,/<button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">START NEW BUILD<\/button>/);
-  assert.doesNotMatch(html,/REPAIR \/ REFURB/);
+test('signed-in Home: NEW ROD BUILD full width, then REPAIR / REFURB and COMPONENTS as identical secondary buttons, no subtitles',()=>{
   const home=html.slice(html.indexOf('id="homeScreen"'),html.indexOf('id="workshopLandingScreen"'));
-  assert.doesNotMatch(home,/COMPONENTS|REPAIR/,'no new Home buttons yet');
-  assert.doesNotMatch(source,/startNewRepairFlow\(\);/,'nothing in the app calls the Repair route yet');
-  assert.doesNotMatch(source,/startNewComponentsFlow\(\);/,'nothing in the app calls the Components route yet');
+  const signedIn=home.slice(home.indexOf('<div class="home-signed-in-entry">'),home.indexOf('<div class="home-public-entry">'));
+  assert.equal(signedIn.replace(/\s+/g,' ').trim(),'<div class="home-signed-in-entry"> '+
+    '<button id="homeEnterRodBtn" class="home-enter-rod-button primary-action" type="button">NEW ROD BUILD</button> '+
+    '<button id="homeRepairBtn" class="home-public-entry__secondary" type="button">REPAIR / REFURB</button> '+
+    '<button id="homeComponentsBtn" class="home-public-entry__secondary" type="button">COMPONENTS</button> </div>');
+  // Visitor Home unchanged.
+  assert.match(home,/<div class="home-public-entry">\s*<button id="publicExploreBtn"[\s\S]*?id="publicDiscoverBtn"[\s\S]*?id="publicSignInBtn"/);
+});
+
+test('signed-in Home reuses the visitor grid and button rules exactly (symmetry by construction)',()=>{
+  const css=fs.readFileSync(path.join(root,'css','studio.css'),'utf8');
+  assert.match(css,/\.home-public-entry,\s*\.home-signed-in-entry \{\s*display:grid;\s*grid-template-columns:repeat\(2,minmax\(0,1fr\)\);/);
+  assert.match(css,/#homeScreen \.home-signed-in-entry \.home-enter-rod-button \{[\s\S]*?grid-column:1 \/ -1;/,'primary spans both columns');
+  assert.doesNotMatch(css,/\.home-signed-in-entry [^{]*__secondary|#homeRepairBtn|#homeComponentsBtn/,'the two secondary buttons have no styling of their own');
+  assert.match(css,/body\.klabs-logged-out \.home-signed-in-entry,/,'hidden for visitors');
+});
+
+test('each Home action opens the existing customer finder with its job type',async()=>{
+  const start=source.indexOf('function bindHomeActions(');
+  const body=source.slice(start,source.indexOf('\n}',start)+2);
+  assert.match(body,/\['homeEnterRodBtn',startNewBuildFlow\],\['homeRepairBtn',startNewRepairFlow\],\['homeComponentsBtn',startNewComponentsFlow\]/);
+  const buttons={};
+  const opened=[];
+  const ctx={$:(id)=>buttons[id]||(buttons[id]={attrs:{},getAttribute(k){return this.attrs[k];},setAttribute(k,v){this.attrs[k]=v;},addEventListener(t,f){this.click=f;}}),
+    startNewBuildFlow:()=>opened.push('build'),startNewRepairFlow:()=>opened.push('repair'),startNewComponentsFlow:()=>opened.push('components')};
+  vm.createContext(ctx);vm.runInContext(body,ctx);
+  ctx.bindHomeActions();ctx.bindHomeActions();     // binding twice never doubles a click
+  ['homeEnterRodBtn','homeRepairBtn','homeComponentsBtn'].forEach((id)=>buttons[id].click());
+  assert.deepEqual(opened,['build','repair','components']);
 });

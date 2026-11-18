@@ -17621,14 +17621,14 @@ function bindBlankLibraryControls(){
     if(event.key==='Escape'){hideBlankRowMenu();}
   });
 }
+// Signed-in Home: each action opens the existing customer finder directly.
 function bindHomeActions(){
-  const enterBtn=$('homeEnterRodBtn');
-  if(enterBtn && enterBtn.getAttribute('data-home-bound')!=='true'){
-    enterBtn.setAttribute('data-home-bound','true');
-    enterBtn.addEventListener('click',()=>{
-      startNewBuildFlow();
-    });
-  }
+  [['homeEnterRodBtn',startNewBuildFlow],['homeRepairBtn',startNewRepairFlow],['homeComponentsBtn',startNewComponentsFlow]].forEach(([id,start])=>{
+    const button=$(id);
+    if(!button || button.getAttribute('data-home-bound')==='true')return;
+    button.setAttribute('data-home-bound','true');
+    button.addEventListener('click',()=>{start();});
+  });
 }
 function bindBuildsControls(){
   const returnStudioBtn=$('buildsReturnStudioBtn');
