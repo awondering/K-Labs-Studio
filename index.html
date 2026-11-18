@@ -976,6 +976,7 @@
           </button>
           <div id="workshopQuoteSummaryBody" class="quote-section__body">
             <div id="workshopPricingFields" class="quote-grid quote-grid--two build-pricing">
+            <button id="quotePricingSummaryBtn" class="ghost-action quote-grid__full build-pricing__summary-toggle" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span>Pricing</span><strong id="quotePricingSummaryValue"></strong></button>
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
             <div id="quoteFulfilmentGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Fulfilment Method">
@@ -991,6 +992,7 @@
               <label id="quotePackagingField"><span>Packaging</span><input id="quotePackaging" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
               <label id="quoteDeliveryTotalField"><span>Total</span><input id="quoteDeliveryTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             </div>
+            <div id="quoteDeliverySummary" class="quote-grid__full build-pricing__delivery-summary"><span id="quoteDeliverySummaryText"></span><button id="quoteDeliveryEditBtn" class="ghost-action" type="button">Edit</button></div>
             <details id="quoteDeliveryLegacyNote" class="quote-grid__full build-pricing__note" hidden>
               <summary>Legacy freight amounts</summary>
               <p id="quoteDeliveryLegacyText"></p>
@@ -1031,8 +1033,7 @@
                 <div id="quotePaymentHistory" class="quote-payment__history"></div>
               </details>
               <div class="quote-payment__actions">
-                <button id="quoteRecordDepositBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteDepositReceivedForm">Record Deposit Received</button>
-                <button id="quoteRecordBalanceBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Balance Received</button>
+                <button id="quoteRecordPaymentBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Payment</button>
                 <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Confirm Pending Transaction</button>
               </div>
               <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
@@ -1046,6 +1047,12 @@
                 </div>
               </div>
               <div id="quoteBalanceReceivedForm" class="quote-payment__form" hidden>
+                <div id="quotePaymentTypeField" class="quote-pricing-driver quote-payment__type" role="group" aria-label="Payment type" hidden>
+                  <div class="quote-pricing-driver__options">
+                    <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="deposit" aria-pressed="false">DEPOSIT</button>
+                    <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="balance" aria-pressed="true">BALANCE</button>
+                  </div>
+                </div>
                 <label><span>Amount Received</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
                 <label><span>Date Received</span><input id="quoteBalanceReceivedDate" type="date" /></label>
                 <label id="quoteBalanceCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteBalanceCorrectionReason" type="text" /></label>
@@ -1064,7 +1071,6 @@
                   <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
                   <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
                   <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
-                  <button id="viewPaymentStatementBtn" class="ghost-action" type="button">Payment Statement</button>
                 </div>
               </div>
               <div class="workshop-build-actions-row workshop-build-actions-row--status">
@@ -1079,6 +1085,8 @@
                   <div class="workshop-build-actions-menu-wrap">
                     <button id="currentBuildActionsMenuBtn" class="ghost-action saved-build-card__menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Build actions">&hellip;</button>
                     <div id="currentBuildActionsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="Build actions menu" hidden>
+                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="invoice">Customer Invoice</button>
+                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="statement">Payment Statement</button>
                       <button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-current-build-action="delete">Delete Build</button>
                     </div>
                   </div>

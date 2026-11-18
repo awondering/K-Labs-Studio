@@ -15,8 +15,9 @@ function extract(name){
 }
 function harness(){
   const elements={};
-  for(const id of ['quoteDepositReceivedStatus','quoteRecordDepositBtn','quoteDepositReceivedForm','quoteDepositReceivedError',
-    'quotePaymentTotalReceived','quotePaymentBalanceOwing','quotePaymentHistory','quoteRecordBalanceBtn',
+  for(const id of ['quoteDepositReceivedStatus','quoteRecordPaymentBtn','quoteDepositReceivedForm','quoteDepositReceivedError',
+    'quotePaymentTotalReceived','quotePaymentBalanceOwing','quotePaymentHistory','quotePaymentTypeField',
+    'workshopPricingSection','quotePricingSummaryBtn','quotePricingSummaryValue',
     'quoteBalanceReceivedForm','quoteBalanceReceivedAmount','quoteBalanceReceivedDate']){
     elements[id]={hidden:false,value:'',textContent:'',innerHTML:'',setAttribute(name,value){this[name]=value;}};
   }
@@ -24,7 +25,7 @@ function harness(){
     includeGst:true,payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-11-10'},{id:'p2',type:'balance',amount:100,date:'2026-11-12'}]};
   const context=vm.createContext({
     quote,elements,businessProfile:{businessName:'K-Labs',gstNumber:'123'},TextEncoder,
-    window:{KLABS_ACCOUNT_ID:'account-a'},
+    window:{KLABS_ACCOUNT_ID:'account-a'},document:{querySelectorAll:()=>[]},currentBuildLifecycleStatus:()=>'active',
     $:id=>elements[id]||null,
     numberOrZero:value=>Number(value)||0,
     currencyWithCode:value=>`$${Number(value).toFixed(2)} NZD`,
@@ -52,9 +53,9 @@ function harness(){
         depositReceivedDate:quote.payments[0]?.date||'',depositEnabled:false,depositOutstanding:false};
     },
   });
-  vm.runInContext("let paymentFormBuildKey='';",context);
+  vm.runInContext("let paymentFormBuildKey='';let balanceCorrectionId='';let pricingSummaryOpen=false;let deliveryEditOpen=false;let recordPaymentType='balance';let recordPaymentPrefill='';",context);
   for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','customerInvoicePreviewMarkup','closeDepositReceivedForm',
-    'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
+    'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','setRecordPaymentChoice','setRecordPaymentType','recordPaymentSuggestedAmount','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }
 

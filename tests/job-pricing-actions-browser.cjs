@@ -32,7 +32,9 @@ async function boot(browser,base,viewport){
   return {context,page,errors};
 }
 const BEFORE=fs.readFileSync(path.join(__dirname,'fixtures-job-pricing-actions-ids.txt'),'utf8').split('\n').filter(Boolean);
-const REMOVED=['workshopActionsSection','workshopBuildActionsBody'];
+// The two old card containers, plus the controls the iPhone layout replaced: one Record Payment button (Deposit | Balance in
+// its form) and Payment Statement under the ••• menu.
+const REMOVED=['workshopActionsSection','workshopBuildActionsBody','quoteRecordDepositBtn','quoteRecordBalanceBtn','viewPaymentStatementBtn'];
 const open=(page)=>page.evaluate(()=>{
   goScreen('workshopScreen');showStudioWorkflow();
   Object.assign(quote,{customerName:'Synthetic Customer',buildName:'Rod',status:'active',quoteStatus:'active'});
@@ -49,17 +51,17 @@ async function main(){
     await open(page);
     const present=await page.evaluate((ids)=>ids.filter((id)=>!document.getElementById(id)),BEFORE);
     ck('every control id from the old Job Pricing + Job Actions cards still exists',present.every((id)=>REMOVED.includes(id)),present);
-    ck('exactly the two old container ids are gone',present.length===REMOVED.length,present);
+    ck('exactly the replaced ids are gone',present.length===REMOVED.length,present);
     ck('one header toggle in the merged card',await page.locator('#workshopPricingSection [data-collapsible-trigger]').count()===1);
     ck('no separate Job Actions card',await page.locator('#workshopActionsSection').count()===0);
     const docs=await page.locator('.workshop-build-actions-docs__grid button').evaluateAll((b)=>b.map((x)=>x.id));
-    ck('Documents group holds the four document actions',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn','viewPaymentStatementBtn']),docs);
+    ck('Documents group holds View, Email and Customer Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn']),docs);
     const summary=await page.locator('#workshopBuildPricingSummaryText').textContent();
     ck('collapsed summary shows status, price and amount owing',/Active/.test(summary)&&/1,?250/.test(summary)&&/Owing/.test(summary),summary);
     const geo=await page.evaluate(()=>{
       const r=(id)=>document.getElementById(id).getBoundingClientRect();
       return {docW:document.documentElement.scrollWidth,vw:innerWidth,hs:r('workshopBuildLifecycleStatus'),tg:r('toggleCurrentBuildStatusBtn'),inv:r('viewInvoicePreviewBtn'),menu:r('currentBuildActionsMenuBtn'),sync:r('workshopBuildActionsStatus'),
-        pay:r('quoteRecordDepositBtn'),docsTop:document.querySelector('.workshop-build-actions-docs').getBoundingClientRect().top,payBottom:document.getElementById('quotePaymentBlock').getBoundingClientRect().bottom};
+        pay:r('quoteRecordPaymentBtn'),docsTop:document.querySelector('.workshop-build-actions-docs').getBoundingClientRect().top,payBottom:document.getElementById('quotePaymentBlock').getBoundingClientRect().bottom};
     });
     ck('no horizontal overflow at 390px',geo.docW<=geo.vw,geo);
     ck('status and Mark Complete share a row',Math.abs((geo.hs.top+geo.hs.height/2)-(geo.tg.top+geo.tg.height/2))<6,geo);
