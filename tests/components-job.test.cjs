@@ -375,7 +375,7 @@ test('the Pricing section is marked with the job kind, stage and delivery choice
     normalizeFulfilmentMethod:(v)=>v==='shipping'||v==='collection'?v:'',deliveryAmounts:(q)=>({charge:Number(q.freight)||0}),fulfilmentStudioNote:()=>'',
     quoteTaxAvailable:()=>true,activeTaxName:()=>'GST',currencyWithCode:(v)=>`$${Number(v).toFixed(2)} NZD`,pricingSummaryOpen:false,deliveryEditOpen:false};
   vm.createContext(ctx);
-  vm.runInContext(['isComponentsJob','currentBuildLifecycleStatus','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState'].map(fn).join('\n'),ctx);
+  vm.runInContext(['isComponentsJob','deletionNoun','currentBuildLifecycleStatus','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState'].map(fn).join('\n'),ctx);
   const section=()=>el('workshopPricingSection').attrs;
   ctx.quote={jobType:'build',jobKind:'components',quoteStatus:'quote',payments:[]};
   ctx.updateWorkshopBuildActionsUi();ctx.syncFulfilmentSelector();
@@ -393,4 +393,7 @@ test('the Pricing section is marked with the job kind, stage and delivery choice
   assert.equal(section()['data-job-kind'],'','rod build: no Components rules apply');
   assert.equal(el('confirmBuildBtn').textContent,'Confirm Build');
   assert.equal(el('deleteItem').textContent,'Delete Build');
+  ctx.quote={jobType:'repair',quoteStatus:'quote',payments:[]};
+  ctx.updateWorkshopBuildActionsUi();
+  assert.equal(el('deleteItem').textContent,'Delete Repair','repair: ••• says Delete Repair');
 });
