@@ -14537,7 +14537,7 @@ function renderBuilds(){
   const titleEl=$('buildsScreenTitle');
   const subtitleEl=$('buildsScreenSubtitle');
   if(titleEl)titleEl.textContent=isQuoteTab?'Quotes':'Active Jobs';
-  if(subtitleEl)subtitleEl.textContent=isQuoteTab?'Quotes waiting to be confirmed as active builds.':'Continue working on rods currently in progress.';
+  if(subtitleEl)subtitleEl.textContent=isQuoteTab?'Quotes waiting to be confirmed as active builds.':'Continue working on jobs in progress.';
   const query=String(buildsSearch||'').trim();
   const terms=savedBuildSearchTerms(query);
   const records=savedBuildRecords()
@@ -14569,7 +14569,7 @@ function renderBuilds(){
     }else{
       host.innerHTML=isQuoteTab
         ?'<section class="saved-builds-empty"><h3>No quotes yet.</h3><p>Quotes you create will appear here until confirmed.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>'
-        :'<section class="saved-builds-empty"><h3>No active builds yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
+        :'<section class="saved-builds-empty"><h3>No active jobs yet.</h3><p>Create a new build to start tracking workshop work.</p><button id="savedBuildsEmptyNewBuildBtn" class="primary-action" type="button">New Build</button></section>';
     }
     const emptyButton=$('savedBuildsEmptyNewBuildBtn');
     if(emptyButton){
