@@ -218,6 +218,7 @@ let quoteAutosaveInFlight=false;
 let quoteNumberAllocationPromise=null;
 let quoteStartInFlight=false;
 let currentBuildActionsMenuOpen=false;
+let moreDocumentsMenuOpen=false;
 let preserveWorkshopQuoteOnEntry=false;
 let studioScreenView='landing';
 let studioComponentsSearch='';
@@ -14062,8 +14063,42 @@ function closeCurrentBuildActionsMenu(){
   const menu=$('currentBuildActionsMenu');
   if(menuButton){menuButton.setAttribute('aria-expanded','false');}
   if(menu){menu.hidden=true;}
+  // Every place that closes the build actions menu (job change, navigation, delete) also closes More documents.
+  closeMoreDocumentsMenu();
+}
+// Quote stage "More documents" menu (Customer Invoice). Opening it only shows the menu: no save, sync or document.
+function openMoreDocumentsMenu(){
+  closeCurrentBuildActionsMenu();
+  moreDocumentsMenuOpen=true;
+  const menuButton=$('quoteMoreDocumentsBtn');
+  const menu=$('quoteMoreDocumentsMenu');
+  if(menuButton){menuButton.setAttribute('aria-expanded','true');}
+  if(menu){menu.hidden=false;}
+  window.requestAnimationFrame(positionMoreDocumentsMenu);
+}
+function closeMoreDocumentsMenu(){
+  moreDocumentsMenuOpen=false;
+  const menuButton=$('quoteMoreDocumentsBtn');
+  const menu=$('quoteMoreDocumentsMenu');
+  if(menuButton){menuButton.setAttribute('aria-expanded','false');}
+  if(menu){menu.hidden=true;}
+}
+function positionMoreDocumentsMenu(){
+  if(!moreDocumentsMenuOpen)return;
+  const trigger=$('quoteMoreDocumentsBtn');
+  const menu=$('quoteMoreDocumentsMenu');
+  if(!trigger || !menu || menu.hidden)return;
+  positionAnchoredActionMenu(menu,trigger);
+}
+function toggleMoreDocumentsMenu(){
+  if(moreDocumentsMenuOpen)closeMoreDocumentsMenu();else openMoreDocumentsMenu();
+}
+function handleMoreDocumentsAction(action){
+  closeMoreDocumentsMenu();
+  if(action==='invoice')openInvoicePreview();
 }
 function openCurrentBuildActionsMenu(){
+  closeMoreDocumentsMenu();
   currentBuildActionsMenuOpen=true;
   const menuButton=$('currentBuildActionsMenuBtn');
   const menu=$('currentBuildActionsMenu');
@@ -14276,9 +14311,9 @@ function toggleQuotePricingSummary(){
   if(section)syncPricingLayoutState(section,currentBuildLifecycleStatus());
 }
 function handleCurrentBuildAction(action){
-  if(action==='invoice' || action==='statement'){
+  if(action==='statement'){
     closeCurrentBuildActionsMenu();
-    if(action==='invoice')openInvoicePreview();else openPaymentStatement();
+    openPaymentStatement();
     return;
   }
   if(action==='toggle-status'){
@@ -17030,6 +17065,39 @@ function bindWorkshopQuoteBuilder(){
       const action=actionButton.getAttribute('data-current-build-action')||'';
       handleCurrentBuildAction(action);
     });
+  }
+  const moreDocumentsBtn=$('quoteMoreDocumentsBtn');
+  if(moreDocumentsBtn && moreDocumentsBtn.getAttribute('data-more-documents-bound')!=='true'){
+    moreDocumentsBtn.setAttribute('data-more-documents-bound','true');
+    moreDocumentsBtn.addEventListener('click',(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMoreDocumentsMenu();
+    });
+  }
+  const moreDocumentsMenu=$('quoteMoreDocumentsMenu');
+  if(moreDocumentsMenu && moreDocumentsMenu.getAttribute('data-more-documents-menu-bound')!=='true'){
+    moreDocumentsMenu.setAttribute('data-more-documents-menu-bound','true');
+    moreDocumentsMenu.addEventListener('click',(event)=>{
+      const item=event.target.closest('[data-more-document]');
+      if(item)handleMoreDocumentsAction(item.getAttribute('data-more-document')||'');
+    });
+  }
+  if(document.body.getAttribute('data-more-documents-dismiss-bound')!=='true'){
+    document.body.setAttribute('data-more-documents-dismiss-bound','true');
+    document.addEventListener('click',(event)=>{
+      if(!moreDocumentsMenuOpen || event.target.closest('#quoteMoreDocumentsWrap'))return;
+      closeMoreDocumentsMenu();
+    });
+    document.addEventListener('keydown',(event)=>{
+      if(event.key==='Escape' && moreDocumentsMenuOpen)closeMoreDocumentsMenu();
+    });
+    window.addEventListener('resize',positionMoreDocumentsMenu,{passive:true});
+    window.addEventListener('scroll',positionMoreDocumentsMenu,{passive:true});
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',positionMoreDocumentsMenu,{passive:true});
+      window.visualViewport.addEventListener('scroll',positionMoreDocumentsMenu,{passive:true});
+    }
   }
   if(document.body.getAttribute('data-current-build-menu-dismiss-bound')!=='true'){
     document.body.setAttribute('data-current-build-menu-dismiss-bound','true');

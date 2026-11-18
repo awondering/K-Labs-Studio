@@ -8003,7 +8003,7 @@ textarea::-moz-selection,
    - Customer Collection: empty delivery fields are hidden; an included delivery charge shows as one line with Edit.
    - Components jobs keep their own delivery rule, open pricing and Record Payment when paid (set in ui.js and below).
    - One Record Payment button, hidden when paid in full; deposit settings hide once a deposit is received (after Quote).
-   - Documents: View and Email always; Customer Invoice on Active and Complete (under ••• at Quote);
+   - Documents: View and Email always; Customer Invoice on Active and Complete, and under "More documents" at Quote;
      Payment Statement under ••• once an invoice is issued. */
 #workshopPricingSection:not([data-pricing-collapsible="true"]) #quotePricingSummaryBtn{display:none}
 #workshopPricingSection[data-pricing-collapsed="true"] #workshopPricingFields > :not(#quotePricingSummaryBtn):not(#quotePaymentBlock){display:none}
@@ -8022,7 +8022,13 @@ textarea::-moz-selection,
 #workshopScreen .quote-payment__form .quote-payment__type{grid-column:1/-1}
 #workshopPricingSection[data-lifecycle="quote"] #viewInvoicePreviewBtn{display:none}
 #workshopScreen .workshop-build-actions-docs__grid #viewInvoicePreviewBtn{grid-column:1/-1}
-#workshopPricingSection[data-lifecycle]:not([data-lifecycle="quote"]) #currentBuildActionsMenu [data-current-build-action="invoice"],
+/* Quote stage: a compact "More documents" menu holds Customer Invoice. Opening it only shows the menu. */
+#workshopPricingSection:not([data-lifecycle="quote"]) #quoteMoreDocumentsWrap{display:none}
+#workshopScreen .workshop-build-actions-docs__grid .workshop-build-actions-more{grid-column:1/-1;position:relative;min-width:0}
+#workshopScreen .workshop-build-actions-more .workshop-build-actions-more__toggle{width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
+#workshopScreen .workshop-build-actions-more .workshop-build-actions-more__toggle::after{content:'\25BE';opacity:.6}
+#workshopScreen .workshop-build-actions-more .workshop-build-actions-menu{min-width:168px}
+#workshopScreen .workshop-build-actions-more .workshop-build-actions-menu .saved-build-card__menu-item{min-height:44px;font-size:12px}
 #workshopPricingSection:not([data-invoice-issued="true"]) #currentBuildActionsMenu [data-current-build-action="statement"]{display:none}
 #workshopScreen .workshop-build-actions-row.workshop-build-actions-row--status{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px}
 #workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-value{flex:0 1 auto;min-width:0;max-width:100%;min-height:26px;padding:0 12px;white-space:normal;overflow-wrap:anywhere}
@@ -12680,7 +12686,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 /* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
    per-job tax-rate controls are hidden; payments and the invoice appear once the order is confirmed. */
 #workshopPricingSection[data-job-kind="components"] :is(#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
-#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"] #currentBuildActionsMenu [data-current-build-action="invoice"],
+#workshopPricingSection[data-job-kind="components"] #quoteMoreDocumentsWrap,
 #workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock{display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */

@@ -37,12 +37,13 @@ function makeDom(){
 
 function app(record,env={}){
   const dom=makeDom();
-  const spy={saves:0,dirty:0,persist:0,financial:[],documents:[],sync:[]};
+  const spy={saves:0,dirty:0,persist:0,financial:[],documents:[],sync:[],lifecycle:0};
   const doc=(name)=>(...args)=>{spy.documents.push(name);return '';};
   const sync=new Proxy({},{get:(t,name)=>name==='pendingFinancial'?()=>false:name==='getStatus'?()=>'synced':(...args)=>{spy.sync.push(name);}});
   const c=loadRecordFunctions(['normalizeQuote','updatePaymentBlock','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState',
     'toggleQuotePricingSummary','openDeliveryEdit','closeDeliveryEditOnLeave','openRecordPaymentForm','setRecordPaymentType','closeBalanceReceivedForm',
-    'openBalanceCorrection','closeDepositReceivedForm','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu'],{
+    'openBalanceCorrection','closeDepositReceivedForm','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu',
+    'toggleMoreDocumentsMenu','handleMoreDocumentsAction'],{
     $:dom.el,document:dom.document,Store:{get:(k,f)=>f,set:()=>true},
     window:{KLABS_ACCOUNT_ID:'acct',KLABS_BUILD_SYNC:sync,requestAnimationFrame:()=>{},crypto:{randomUUID:()=>'new-payment-id'}},
     activeAccountKey:()=>'acct',activeTaxEnabled:()=>env.tax!==false,formatDateDisplay:(v)=>String(v),localDateInputValue:()=>'2026-11-18',
@@ -52,7 +53,7 @@ function app(record,env={}){
     customerQuoteSummaryMarkup:doc('quote'),customerEmailLines:doc('email'),buildInvoiceSnapshot:doc('invoiceSnapshot'),
     invoiceDocumentMarkup:doc('invoiceMarkup'),customerInvoicePreviewMarkup:doc('invoicePreview'),
     openInvoicePreview:()=>spy.documents.push('openInvoicePreview'),openPaymentStatement:()=>spy.documents.push('openPaymentStatement'),
-    requestDeleteCurrentBuild:()=>{},toggleCurrentBuildLifecycle:()=>{},openInfoDialog:()=>{},updateBuildPricingSummary:()=>{},
+    requestDeleteCurrentBuild:()=>{},toggleCurrentBuildLifecycle:()=>{spy.lifecycle++;},openInfoDialog:()=>{},updateBuildPricingSummary:()=>{},
   });
   // The loader reads plain functions; the two async save steps are loaded from ui.js directly.
   vm.runInContext(asyncSource('saveFinancialPayment')+'\n'+asyncSource('saveBalanceReceived'),c);
@@ -79,20 +80,24 @@ test('one Record Payment button, a Deposit | Balance choice inside the payment f
   assert.match(form,/id="quotePaymentTypeField"[^>]*hidden[\s\S]*data-payment-type="deposit"[^>]*>DEPOSIT<[\s\S]*data-payment-type="balance"[^>]*>BALANCE</);
 });
 
-test('documents: View and Email, then Customer Invoice; Payment Statement and the Quote-stage invoice live under •••',()=>{
+test('documents: View and Email, Customer Invoice, then a More documents menu holding Customer Invoice; ••• keeps Payment Statement and Delete',()=>{
   const docs=section.slice(section.indexOf('workshop-build-actions-docs__grid'),section.indexOf('workshop-build-actions-row--status'));
-  assert.deepEqual([...docs.matchAll(/<button id="([^"]+)"/g)].map((m)=>m[1]),['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn']);
+  assert.deepEqual([...docs.matchAll(/<button id="([^"]+)"/g)].map((m)=>m[1]),['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn','quoteMoreDocumentsBtn']);
+  assert.match(docs,/id="quoteMoreDocumentsBtn"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*>More documents</);
+  const more=docs.slice(docs.indexOf('id="quoteMoreDocumentsMenu"'));
+  assert.match(more,/^id="quoteMoreDocumentsMenu"[^>]*role="menu"[^>]*hidden>/,'the menu starts closed');
+  assert.deepEqual([...more.matchAll(/data-more-document="([^"]+)">([^<]+)</g)].map((m)=>`${m[1]}:${m[2]}`),['invoice:Customer Invoice']);
   assert.doesNotMatch(section,/viewPaymentStatementBtn/);
   const menu=section.slice(section.indexOf('id="currentBuildActionsMenu"'));
   assert.deepEqual([...menu.matchAll(/data-current-build-action="([^"]+)">([^<]+)</g)].map((m)=>`${m[1]}:${m[2]}`),
-    ['invoice:Customer Invoice','statement:Payment Statement','delete:Delete Build']);
+    ['statement:Payment Statement','delete:Delete Build']);
 });
 
 test('the layout rules are screen-only and scoped to the Pricing & Actions section',()=>{
   const rules=layoutCss.replace(/\/\*[\s\S]*?\*\//g,'').split('}').map((r)=>r.trim()).filter(Boolean);
   for(const rule of rules)assert.match(rule,/^(#workshopPricingSection|#workshopScreen )/,rule.slice(0,80));
   assert.match(layoutCss,/\[data-lifecycle="quote"\] #viewInvoicePreviewBtn\{display:none\}/);
-  assert.match(layoutCss,/\[data-lifecycle\]:not\(\[data-lifecycle="quote"\]\) #currentBuildActionsMenu \[data-current-build-action="invoice"\]/);
+  assert.match(layoutCss,/#workshopPricingSection:not\(\[data-lifecycle="quote"\]\) #quoteMoreDocumentsWrap\{display:none\}/,'More documents is Quote-stage only');
   assert.match(layoutCss,/:not\(\[data-invoice-issued="true"\]\) #currentBuildActionsMenu \[data-current-build-action="statement"\]/);
   assert.match(layoutCss,/\[data-paid-in-full="true"\]:not\(\[data-job-kind="components"\]\) #quoteRecordPaymentBtn\{display:none\}/);
   assert.match(layoutCss,/\[data-pricing-collapsed="true"\] #workshopPricingFields > :not\(#quotePricingSummaryBtn\):not\(#quotePaymentBlock\)\{display:none\}/,'Payment stays visible when pricing folds');
@@ -215,11 +220,53 @@ test('••• opens and closes with no side effects; Customer Invoice and Paym
   q.c.openCurrentBuildActionsMenu();
   q.c.closeCurrentBuildActionsMenu();
   noSideEffects(q.spy,'••• menu');
-  q.c.handleCurrentBuildAction('invoice');
-  assert.deepEqual(q.spy.documents,['openInvoicePreview']);
   q.c.handleCurrentBuildAction('statement');
-  assert.deepEqual(q.spy.documents,['openInvoicePreview','openPaymentStatement']);
+  assert.deepEqual(q.spy.documents,['openPaymentStatement']);
   assert.equal(q.spy.saves+q.spy.dirty+q.spy.persist+q.spy.sync.length,0);
+});
+
+// ---------- Quote stage: More documents (F1) ----------
+for(const jobType of ['build','repair']){
+  test(`${jobType} quote: opening and closing More documents only shows and hides the menu`,()=>{
+    const q=app(job({jobType}));
+    const btn=q.el('quoteMoreDocumentsBtn'),menu=q.el('quoteMoreDocumentsMenu');
+    menu.hidden=true;
+    q.c.toggleMoreDocumentsMenu();
+    assert.equal(menu.hidden,false);assert.equal(btn.attrs['aria-expanded'],'true');
+    q.c.toggleMoreDocumentsMenu();
+    assert.equal(menu.hidden,true);assert.equal(btn.attrs['aria-expanded'],'false');
+    noSideEffects(q.spy,'More documents');
+    assert.equal(q.spy.lifecycle,0);assert.equal(q.c.quote.quoteStatus,'quote');
+  });
+
+  test(`${jobType} quote: Customer Invoice in More documents opens the draft preview once and leaves the job at Quote`,()=>{
+    const q=app(job({jobType}));
+    q.c.toggleMoreDocumentsMenu();
+    q.c.handleMoreDocumentsAction('invoice');
+    assert.deepEqual(q.spy.documents,['openInvoicePreview']);
+    assert.equal(q.el('quoteMoreDocumentsMenu').hidden,true,'the menu closes');
+    assert.equal(q.spy.saves+q.spy.dirty+q.spy.persist+q.spy.sync.length+q.spy.financial.length+q.spy.lifecycle,0);
+    assert.equal(q.c.quote.quoteStatus,'quote');
+  });
+}
+
+test('More documents and ••• close each other, and every ••• close point also closes More documents',()=>{
+  const q=app(job());
+  q.c.toggleMoreDocumentsMenu();
+  q.c.openCurrentBuildActionsMenu();
+  assert.equal(q.el('quoteMoreDocumentsMenu').hidden,true);
+  assert.equal(q.el('currentBuildActionsMenu').hidden,false);
+  q.c.toggleMoreDocumentsMenu();
+  assert.equal(q.el('currentBuildActionsMenu').hidden,true,'opening More documents closes •••');
+  q.c.closeCurrentBuildActionsMenu();
+  assert.equal(q.el('quoteMoreDocumentsMenu').hidden,true);
+  noSideEffects(q.spy,'menus');
+});
+
+test('More documents is hidden for Components jobs and outside the Quote stage',()=>{
+  assert.match(layoutCss,/#workshopPricingSection:not\(\[data-lifecycle="quote"\]\) #quoteMoreDocumentsWrap\{display:none\}/);
+  assert.match(css,/#workshopPricingSection\[data-job-kind="components"\] #quoteMoreDocumentsWrap,/);
+  assert.match(layoutCss,/\[data-lifecycle="quote"\] #viewInvoicePreviewBtn\{display:none\}/,'the full-width invoice button stays Active/Complete only');
 });
 
 test('rendering the section at every stage builds no document and makes no save or sync call',()=>{
