@@ -298,3 +298,9 @@ test('Components: pricing never folds into one line, and Record Payment is not h
   }
   assert.match(layoutCss,/:not\(\[data-job-kind="components"\]\) #quoteRecordPaymentBtn/);
 });
+
+test('the Pricing & Actions ••• button is a 44×44 px touch target, and its fallback menu keeps a gap above it',()=>{
+  assert.match(css,/#workshopScreen \.workshop-build-actions-menu-wrap \.saved-build-card__menu-toggle\{\s*min-width:44px;\s*min-height:44px;\s*\}/);
+  assert.match(css,/#workshopScreen \.workshop-build-actions-menu\{\s*top:auto;\s*bottom:50px;/);
+  assert.doesNotMatch(css,/menu-toggle\{\s*min-width:38px/);
+});

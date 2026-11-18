@@ -7946,7 +7946,7 @@ textarea::-moz-selection,
 
 #workshopScreen .workshop-build-actions-menu{
   top:auto;
-  bottom:44px;
+  bottom:50px;
   right:0;
   left:auto;
   min-width:136px;
@@ -7956,9 +7956,10 @@ textarea::-moz-selection,
   box-shadow:0 8px 16px rgba(0,0,0,.2);
 }
 
+/* Pricing & Actions •••: 44×44 px touch target (Apple's 44 pt minimum), matching the Builds list. */
 #workshopScreen .workshop-build-actions-menu-wrap .saved-build-card__menu-toggle{
-  min-width:38px;
-  min-height:38px;
+  min-width:44px;
+  min-height:44px;
 }
 
 #workshopScreen .workshop-build-actions-menu .saved-build-card__menu-item{
