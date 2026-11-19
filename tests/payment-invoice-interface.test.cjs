@@ -54,7 +54,7 @@ function harness(){
     },
   });
   vm.runInContext("let paymentFormBuildKey='';let balanceCorrectionId='';let pricingSummaryOpen=false;let deliveryEditOpen=false;let recordPaymentType='balance';let recordPaymentPrefill='';",context);
-  for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','customerInvoicePreviewMarkup','closeDepositReceivedForm',
+  for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup','closeDepositReceivedForm',
     'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','setRecordPaymentChoice','setRecordPaymentType','recordPaymentSuggestedAmount','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }

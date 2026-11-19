@@ -232,7 +232,8 @@
       if (!blob || blob.type !== 'application/pdf' || !blob.size) throw new Error('The PDF could not be created.');
       const draft = !!copy.querySelector('.invoice-document__draft');
       const statement = requireText(copy, '.invoice-document__heading h3') === 'Payment Statement';
-      const name = statement ? 'Payment-Statement.pdf' : draft ? 'Draft-Invoice.pdf' : 'Invoice.pdf';
+      const file = copy.getAttribute('data-invoice-file') || '';
+      const name = !draft && /^[A-Za-z0-9-]+$/.test(file) ? `${file}.pdf` : statement ? 'Payment-Statement.pdf' : draft ? 'Draft-Invoice.pdf' : 'Invoice.pdf';
       prepared = { markup, blob, name, file: typeof File === 'function' ? new File([blob], name, { type: 'application/pdf' }) : null };
       button.disabled = false;
       button.textContent = 'Print / Save as PDF';
