@@ -17,7 +17,7 @@ const job=(extra={})=>({id:'build-synthetic-repair',quoteNumber:'Q-3001',quoteSt
 
 function app(){
   const calls={confirm:[],lifecycle:[]};
-  const c=loadRecordFunctions(['normalizeQuote','buildInvoiceSnapshot','invoiceDocumentMarkup','depositMaths','customerDocumentLabels','zeroPricedComponentLabels','currency'],{
+  const c=loadRecordFunctions(['normalizeQuote','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','depositMaths','customerDocumentLabels','zeroPricedComponentLabels','currency'],{
     Store:{get:(k,f)=>f,set:()=>true},window:{KLABS_ACCOUNT_ID:ACCOUNT},TextEncoder,
     businessProfile:{businessName:'Synthetic Rods'},currentBuildLifecycleStatus:()=>c.quote.quoteStatus||'quote',currentBusinessLogo:()=>'',
     localDateInputValue:()=>'2026-11-18',

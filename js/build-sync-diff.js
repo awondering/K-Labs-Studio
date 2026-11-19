@@ -32,7 +32,7 @@
     if (key === "payments" && Array.isArray(value)) {
       return value.length ? value.map((p) => `${p?.type === "balance" ? "Balance" : "Deposit"} ${money(p?.amount || 0)} on ${p?.date || "unknown date"}`).join("; ") : "None";
     }
-    if (key === "issuedInvoice" && value && typeof value === "object") return `Invoice ${value.number || value.invoiceNumber || ""} ${value.total !== undefined ? money(value.total) : ""}`.trim();
+    if (key === "issuedInvoice" && value && typeof value === "object") return `Invoice ${(/^INV-\d{1,15}$/.test(String(value.displayNumber || "")) ? value.displayNumber : "") || value.number || value.invoiceNumber || ""} ${value.total !== undefined ? money(value.total) : ""}`.trim();
     if (typeof value === "boolean") return value ? "Yes" : "No";
     if (typeof value === "number") return /price|profit|cost|amount|total|rate|freight|packaging/i.test(key) ? money(value) : String(value);
     if (typeof value === "string") return value.length > 90 ? `${value.slice(0, 87)}…` : value;

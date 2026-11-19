@@ -14847,6 +14847,39 @@ function invoiceNumberForBuild(account,id){
   const bytes=new TextEncoder().encode(String(id));
   return `INV-${String(account).replace(/-/g,'')}-${Array.from(bytes,(byte)=>byte.toString(16).padStart(2,'0')).join('')}`;
 }
+// Q7: the readable invoice number shown to customers, INV- plus the job's server-issued quote sequence (Q-1042 -> INV-1042).
+// `number` stays the permanent internal identifier the server checks; this is an extra field added once, at issue. Returns ''
+// (the invoice keeps showing `number`) when the quote has no sequence digits or another issued invoice in this account
+// already uses the same sequence.
+function readableInvoiceNumberForJob(job,records){
+  const match=String(job&&job.quoteNumber||'').trim().match(/(?:^|\D)(\d{1,15})$/);
+  // Without the account's job list the duplicate check cannot run, so no readable number is assigned.
+  if(!match||!Array.isArray(records))return '';
+  const sequence=Number(match[1]);
+  if(!Number.isSafeInteger(sequence)||sequence<1)return '';
+  const id=String(job&&job.id||'');
+  const taken=records.some((record)=>{
+    if(!record||!record.issuedInvoice||String(record.id||'')===id)return false;
+    const other=String(invoiceDisplayNumber(record.issuedInvoice)).match(/^INV-(\d{1,15})$/);
+    return !!other&&Number(other[1])===sequence;
+  });
+  return taken?'':`INV-${match[1]}`;
+}
+// The invoice number to present: the readable number when the issued invoice carries a valid one, otherwise the original.
+function invoiceDisplayNumber(invoice){
+  const source=invoice&&typeof invoice==='object'?invoice:{};
+  const readable=String(source.displayNumber||'');
+  return /^INV-\d{1,15}$/.test(readable)?readable:String(source.number||'');
+}
+function issuedInvoiceRecordsForReadableNumber(){
+  try{
+    const records=[...savedBuildRecords(),...savedQuoteRecords()];
+    return quote&&!records.includes(quote)?[...records,quote]:records;
+  }catch(error){
+    console.warn('[K-Labs Studio] Job list unavailable; the invoice keeps its standard number.',error);
+    return null;
+  }
+}
 function invoiceRodDescription(){
   const clean=(value)=>{
     const text=customerSafeText(value);
@@ -14924,8 +14957,10 @@ function buildInvoiceSnapshot(preview=false){
   const registration=specificationValue(businessProfile.gstNumber);
   const businessLines=customerQuoteBusinessLines().filter((line)=>!registration || line!==`${activeTaxRegistrationLabel()}: ${registration}`);
   const description=invoiceRodDescription();
+  const displayNumber=preview?'':readableInvoiceNumberForJob(quote,issuedInvoiceRecordsForReadableNumber());
   return {
     number:preview?'':invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
+    ...(displayNumber?{displayNumber}:{}),
     issuedDate:preview?'':localDateInputValue(),
     businessName:specificationValue(businessProfile.businessName),
     brand:{logo:typeof currentBusinessLogo==='function'?currentBusinessLogo():''},
@@ -14947,9 +14982,13 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
   const line=(label,value,extra='')=>`<div class="invoice-document__amount-row ${extra}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(money(value))}</dd></div>`;
   const reference=invoice.buildReference||invoice.buildId;
   const brand=typeof invoiceBrand==='function'?invoiceBrand(invoice):{logo:'',legacy:false};
+  const shownNumber=invoiceDisplayNumber(invoice);
+  // File name for the saved PDF / print: Invoice-INV-1042, Payment-Statement-INV-1042; unchanged when there is no readable number.
+  const readable=/^INV-\d+$/.test(shownNumber)&&!preview?shownNumber:'';
+  const fileName=readable?`${statement?'Payment-Statement':'Invoice'}-${readable}`:'';
   const tax=invoice.tax?`${line(`Subtotal excluding ${invoice.tax.name}`,roundMoney(numberOrZero(invoice.total)-numberOrZero(invoice.tax.amount)))}
     ${line(`${invoice.tax.name} (${invoice.tax.rate}%)`,invoice.tax.amount)}`:'';
-  return `<article class="invoice-document" data-invoice-issued="${!preview}" data-invoice-number="${escapeHtml(invoice.number||'')}">
+  return `<article class="invoice-document" data-invoice-issued="${!preview}" data-invoice-number="${escapeHtml(invoice.number||'')}"${fileName?` data-invoice-file="${escapeHtml(fileName)}"`:''}>
     <header class="invoice-document__header">
       <div class="invoice-document__brand${brand.logo?'':' invoice-document__brand--text'}">${brand.logo?`<img src="${escapeHtml(brand.logo)}" alt="" class="klabs-brand-logo invoice-document__logo">`:''}<span>${escapeHtml(invoice.businessName||'')}</span></div>
       <div class="invoice-document__heading">${brand.legacy?'<p class="invoice-document__eyebrow">K-Labs Studio</p>':''}<h3>${statement?'Payment Statement':'Invoice'}</h3></div>
@@ -14958,7 +14997,7 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
     <section class="invoice-document__details">
       <div><h4 class="invoice-document__label">Bill to</h4><div class="invoice-document__address">${(invoice.customerLines||[]).map((item)=>`<p>${escapeHtml(item)}</p>`).join('')||'<p>Customer details not set</p>'}</div></div>
       <dl class="invoice-document__metadata">
-        ${invoice.number?`<div><dt>Invoice number</dt><dd>${escapeHtml(invoice.number)}</dd></div>`:''}
+        ${shownNumber?`<div><dt>Invoice number</dt><dd>${escapeHtml(shownNumber)}</dd></div>`:''}
         ${invoice.issuedDate?`<div><dt>Issue date</dt><dd>${escapeHtml(invoice.issuedDate)}</dd></div>`:''}
         ${statement?`<div><dt>Statement date</dt><dd>${escapeHtml(localDateInputValue())}</dd></div>`:''}
         ${reference?`<div><dt>Build reference</dt><dd>${escapeHtml(reference)}</dd></div>`:''}
@@ -15171,7 +15210,7 @@ function printInvoicePreview(){
     try{target.focus();target.print();}
     catch(error){frame.remove();openInfoDialog('Print Unavailable','Could not open the system print dialog.');}
   },{once:true});
-  frame.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><base href="${escapeHtml(document.baseURI)}"><title>Customer Invoice or Payment Statement</title><link rel="stylesheet" href="css/invoice-document.css"></head><body class="invoice-print">${documentNode.outerHTML}</body></html>`;
+  frame.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><base href="${escapeHtml(document.baseURI)}"><title>${escapeHtml(/^[A-Za-z0-9-]+$/.test(documentNode.getAttribute('data-invoice-file')||'')?documentNode.getAttribute('data-invoice-file'):'Customer Invoice or Payment Statement')}</title><link rel="stylesheet" href="css/invoice-document.css"></head><body class="invoice-print">${documentNode.outerHTML}</body></html>`;
   document.body.appendChild(frame);
 }
 function ensureViewQuoteSheet(){
