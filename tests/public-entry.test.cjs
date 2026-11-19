@@ -412,12 +412,117 @@ test('an unreachable server times out the entitlement request instead of holding
   const startup=h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{state=h.window.KLABS_ACCESS_STATE;});
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(signal,'the request carries an abort signal');
-  timeout=timers.find(item=>item.ms===8000);
-  assert.ok(timeout,'bounded at 8 seconds');
+  timeout=timers.find(item=>item.ms===3000);
+  assert.ok(timeout,'bounded at 3 seconds (Q16)');
   assert.equal(signal.aborted,false);
   timeout.fn();
   await startup;
   assert.equal(signal.aborted,true);
   assert.equal(state.offline,true);
   assert.equal(state.access_state,'paid');
+});
+
+// Q16: the account check gives up after 3 s instead of 8 s; everything else about access is unchanged.
+function q16Harness(id){
+  const h=harness();
+  const session={user:{id}};
+  h.setSession(session);
+  const timers=[];
+  const cleared=[];
+  h.window.setTimeout=(fn,ms)=>{timers.push({fn,ms});return timers.length;};
+  h.window.clearTimeout=(handle)=>{cleared.push(handle);};
+  const realRpc=h.window.KLABS_SUPABASE_CLIENT.rpc;
+  let answer=null;
+  let signal=null;
+  h.window.KLABS_SUPABASE_CLIENT.rpc=(name)=>{
+    if(name!=='get_account_entitlement')return realRpc(name);
+    const call=new Promise(resolve=>{answer=resolve;});
+    call.abortSignal=(value)=>{signal=value;value.addEventListener('abort',()=>answer({data:null,error:{message:'AbortError: signal is aborted without reason'},status:0}));return call;};
+    return call;
+  };
+  return {h,session,timers,cleared,answer:(value)=>answer(value),get signal(){return signal;}};
+}
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('Q16: the account-check limit is 3 seconds, set in one place and used only for that request',()=>{
+  assert.match(source,/const ENTITLEMENT_TIMEOUT_MS = 3000;/);
+  assert.equal((source.match(/ENTITLEMENT_TIMEOUT_MS/g)||[]).length,2,'declared once, used once');
+  assert.match(source,/rpc\("get_account_entitlement"\);[\s\S]{0,300}setTimeout\(\(\) => controller\.abort\(\), ENTITLEMENT_TIMEOUT_MS\)/);
+});
+
+test('Q16 normal start-up: a prompt answer is used, cached for offline use, and the 3 s timer is cleared',async()=>{
+  const t=q16Harness('q16-normal');
+  let state;
+  const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>{state=t.h.window.KLABS_ACCESS_STATE;});
+  await tick();
+  const serverTime=new Date().toISOString();
+  t.answer({data:{access_state:'paid',can_write:true,email_verified:true,server_time:serverTime},error:null,status:200});
+  await startup;
+  assert.equal(state.offline,undefined,'not treated as offline');
+  assert.equal(state.access_state,'paid');
+  assert.equal(t.signal.aborted,false,'never aborted');
+  assert.ok(t.cleared.includes(t.timers.findIndex(x=>x.ms===3000)+1),'timer cleared');
+  assert.equal(JSON.parse(t.h.window.localStorage.getItem('klabs-account-entitlement:q16-normal')).entitlement.access_state,'paid','saved access refreshed');
+});
+
+test('Q16 unresponsive connection: after 3 s the launch opens with the saved access, which is not overwritten',async()=>{
+  const t=q16Harness('q16-dead');
+  const saved={user_id:'q16-dead',saved_at:new Date().toISOString(),
+    entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:new Date().toISOString()}};
+  t.h.cache('klabs-account-entitlement:q16-dead',saved);
+  const before=t.h.window.localStorage.getItem('klabs-account-entitlement:q16-dead');
+  let state;
+  const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>{state=t.h.window.KLABS_ACCESS_STATE;});
+  await tick();
+  assert.equal(state,undefined,'nothing opens before the limit');
+  assert.ok(!t.h.scripts.includes('js/app.js'),'private app not run before the limit');
+  t.timers.find(x=>x.ms===3000).fn();
+  await startup;
+  assert.equal(t.signal.aborted,true);
+  assert.equal(state.offline,true);
+  assert.equal(state.access_state,'paid');
+  assert.equal(state.can_write,true);
+  assert.ok(t.h.scripts.includes('js/app.js'));
+  assert.equal(t.h.window.localStorage.getItem('klabs-account-entitlement:q16-dead'),before,'saved access unchanged');
+});
+
+test('Q16 fallback keeps trial/subscription expiry: an expired saved trial or subscription opens read-only',async()=>{
+  for(const [kind,extra] of [['trial',{trial_expires_at:new Date(Date.now()-60000).toISOString()}],['paid',{access_expires_at:new Date(Date.now()-60000).toISOString()}]]){
+    const id='q16-expired-'+kind;
+    const t=q16Harness(id);
+    const serverTime=new Date(Date.now()-3600000).toISOString();
+    t.h.cache('klabs-account-entitlement:'+id,{user_id:id,saved_at:serverTime,
+      entitlement:{access_state:kind,can_write:true,trial_available:false,email_verified:true,server_time:serverTime,...extra}});
+    let state;
+    const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>{state=t.h.window.KLABS_ACCESS_STATE;});
+    await tick();
+    t.timers.find(x=>x.ms===3000).fn();
+    await startup;
+    assert.equal(state.access_state,'expired',kind);
+    assert.equal(state.can_write,false,kind);
+  }
+});
+
+test('Q16 fallback without saved access stays view-only; saved access of another account is never used',async()=>{
+  const t=q16Harness('q16-none');
+  t.h.cache('klabs-account-entitlement:q16-none',{user_id:'someone-else',saved_at:new Date().toISOString(),
+    entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:new Date().toISOString()}});
+  let state;
+  const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>{state=t.h.window.KLABS_ACCESS_STATE;});
+  await tick();
+  t.timers.find(x=>x.ms===3000).fn();
+  await startup;
+  assert.equal(state.access_state,'offline_readonly');
+  assert.equal(state.can_write,false);
+});
+
+test('Q16 a server refusal that arrives within the limit is still a refusal, never the saved access',async()=>{
+  const t=q16Harness('q16-refused');
+  t.h.cache('klabs-account-entitlement:q16-refused',{user_id:'q16-refused',saved_at:new Date().toISOString(),
+    entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:new Date().toISOString()}});
+  const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>assert.fail('must not open Studio'));
+  await tick();
+  t.answer({data:null,error:{message:'permission denied',code:'42501'},status:403});
+  await assert.rejects(startup,(error)=>error.code==='42501');
+  assert.ok(!t.h.scripts.includes('js/app.js'));
 });
