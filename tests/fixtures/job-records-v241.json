@@ -1,5 +1,5 @@
 {
-  "note": "Synthetic job records and their v241 (build148-v241, main 506ba6f) saved at-rest form (what the app stores after open + save; unchanged by further open/save). Regression snapshot for Job 9: later stages must keep producing exactly this output.",
+  "note": "Synthetic job records and their v241 (build148-v241, main 506ba6f) saved at-rest form (what the app stores after open + save; unchanged by further open/save). Regression snapshot for Job 9: later stages must keep producing exactly this output. Q5 (19 Nov 2026, build148-v258): the three records saved without a guide layout now keep guideCount, firstGuideMm and targetStripperMm empty (null); v241-v257 wrongly stored them as 5 / 50 / 500 (Number(null) is 0, clamped to the minimums). Nothing else in this snapshot changed.",
   "raw": {
     "rodBuildInvoiced": {
       "id": "build-synthetic-rod-1",
@@ -433,9 +433,9 @@
         "rodIdentification": ""
       },
       "guideSpecification": {
-        "guideCount": 5,
-        "firstGuideMm": 50,
-        "targetStripperMm": 500,
+        "guideCount": null,
+        "firstGuideMm": null,
+        "targetStripperMm": null,
         "spiralMethod": "",
         "spiralDirection": "",
         "spiralOffsetStartAngle": 0,
@@ -535,9 +535,9 @@
         "rodIdentification": "Example 12ft surf, two piece"
       },
       "guideSpecification": {
-        "guideCount": 5,
-        "firstGuideMm": 50,
-        "targetStripperMm": 500,
+        "guideCount": null,
+        "firstGuideMm": null,
+        "targetStripperMm": null,
         "spiralMethod": "",
         "spiralDirection": "",
         "spiralOffsetStartAngle": 0,
@@ -630,9 +630,9 @@
         "rodIdentification": ""
       },
       "guideSpecification": {
-        "guideCount": 5,
-        "firstGuideMm": 50,
-        "targetStripperMm": 500,
+        "guideCount": null,
+        "firstGuideMm": null,
+        "targetStripperMm": null,
         "spiralMethod": "",
         "spiralDirection": "",
         "spiralOffsetStartAngle": 0,

@@ -99,15 +99,40 @@ test('a repair stays a repair with its rod identification and description',()=>{
   assert.equal(saved.notes,'Replace broken tip top and rewrap two guides');
 });
 
-test('FINDING (documented, pre-existing v241 behaviour, not changed here): empty Guide Setup values become 5 / 50 mm / 500 mm on the next open',()=>{
+// Q5 (fixed in build148-v258): v241-v257 turned an empty Guide Setup into 5 / 50 mm / 500 mm, because Number(null) is 0 and
+// was clamped to the minimums. Empty stays empty; real layouts and already-saved values are unchanged.
+const guideTriple=(record)=>[record.guideSpecification.guideCount,record.guideSpecification.firstGuideMm,record.guideSpecification.targetStripperMm];
+test('Q5: a new job without a guide layout keeps its Guide Setup empty through repeated open and save',()=>{
   const {c}=recordHarness();
-  const once=plain(c.normalizeQuote({id:'g',components:[]}));
-  assert.deepEqual([once.guideSpecification.guideCount,once.guideSpecification.firstGuideMm,once.guideSpecification.targetStripperMm],[null,null,null]);
-  const twice=plain(c.normalizeQuote(once));
-  assert.deepEqual([twice.guideSpecification.guideCount,twice.guideSpecification.firstGuideMm,twice.guideSpecification.targetStripperMm],[5,50,500]);
-  // A new quote is created from the template (which holds nulls) and normalised once, so saved records already carry the defaults.
-  const fresh=plain(c.normalizeQuote(c.newQuoteTemplate()));
-  assert.equal(fresh.guideSpecification.guideCount,5);
+  let record=plain(c.normalizeQuote(c.newQuoteTemplate()));
+  for(let i=0;i<4;i+=1){
+    assert.deepEqual(guideTriple(record),[null,null,null],'pass '+i);
+    record=plain(c.quoteForPersistence(c.normalizeQuote(record)));
+  }
+  assert.deepEqual(guideTriple(plain(c.normalizeQuote({id:'g',components:[]}))),[null,null,null]);
+});
+test('Q5: empty strings and missing values are empty, not 5 / 50 / 500',()=>{
+  const {c}=recordHarness();
+  for(const spec of [{guideCount:null,firstGuideMm:null,targetStripperMm:null},{guideCount:'',firstGuideMm:'',targetStripperMm:' '},{},undefined]){
+    assert.deepEqual(guideTriple(plain(c.normalizeQuote({id:'g',components:[],guideSpecification:spec}))),[null,null,null],JSON.stringify(spec));
+  }
+  const partial=plain(c.normalizeQuote({id:'g',components:[],guideSpecification:{guideCount:9,firstGuideMm:null,targetStripperMm:''}}));
+  assert.deepEqual(guideTriple(partial),[9,null,null],'a real count keeps the other fields empty');
+});
+test('Q5: real guide layouts are unchanged, including clamping of out-of-range numbers',()=>{
+  const {c}=recordHarness();
+  const spec=(g,f,t)=>({id:'g',components:[],guideSpecification:{guideCount:g,firstGuideMm:f,targetStripperMm:t}});
+  assert.deepEqual(guideTriple(plain(c.normalizeQuote(spec(9,105,1260)))),[9,105,1260]);
+  assert.deepEqual(guideTriple(plain(c.normalizeQuote(spec('7','90','1100')))),[7,90,1100],'numeric strings still count');
+  assert.deepEqual(guideTriple(plain(c.normalizeQuote(spec(3,20,9000)))),[5,50,2500],'out-of-range numbers clamp as before');
+  assert.deepEqual(guideTriple(plain(c.normalizeQuote(spec(0,0,0)))),[5,50,500],'a stored zero is a number and clamps as before');
+});
+test('Q5: jobs already saved with 5 / 50 / 500 keep those values (no silent change to existing data)',()=>{
+  const {c}=recordHarness();
+  const saved={id:'old',components:[],guideSpecification:{guideCount:5,firstGuideMm:50,targetStripperMm:500,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:0,spiralAngles:[]}};
+  const {saved:reSaved}=olderClientOpenAndSave(saved);
+  assert.deepEqual(guideTriple(reSaved),[5,50,500]);
+  assert.deepEqual(plain(c.normalizeQuote(saved)).guideSpecification,saved.guideSpecification);
 });
 
 // ---------- 2. Older clients keep the new top-level Components fields ----------

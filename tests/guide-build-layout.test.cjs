@@ -58,7 +58,7 @@ function harness({persist}={}){
   vm.createContext(c);
   vm.runInContext([
     'save','clearLayoutEntryOrigin','applyGuideLayoutDefaults','captureLiveGuideState','beginBuildGuideEdit',
-    'endBuildGuideEdit','buildGuideView','captureGuideSpecificationSnapshot','normalizeGuideSpecification',
+    'endBuildGuideEdit','buildGuideView','captureGuideSpecificationSnapshot','hasGuideNumber','normalizeGuideSpecification',
     'applyGuideSpecificationSnapshot','returnToOriginatingBuildFromGuideLayout',
   ].map(fn).join('\n'),c);
   return {c,writes,calls,workshop};
@@ -74,6 +74,18 @@ test('new build: no layout is assigned and nothing is captured from Workshop',()
   assert.equal(c.quote.guideSpecification,null);
   assert.equal(c.buildGuideView(),null);
   assert.doesNotMatch(fn('quoteForPersistence'),/captureGuideSpecificationSnapshot/);
+});
+
+test('Q5: a job saved with an empty Guide Setup still shows no layout after it is normalised again (not 5 guides at 50 / 500 mm)',()=>{
+  const {c}=harness();
+  const empty={guideCount:null,firstGuideMm:null,targetStripperMm:null,spiralMethod:'',spiralDirection:'',spiralOffsetStartAngle:null,spiralAngles:[]};
+  c.quote.guideSpecification=c.normalizeGuideSpecification(c.normalizeGuideSpecification(empty));
+  assert.equal(c.quote.guideSpecification.guideCount,null);
+  assert.equal(c.buildGuideView(),null,'Studio shows Configure Guide Layout, no guide rows');
+  c.beginBuildGuideEdit(c.quote.guideSpecification);
+  assert.equal(c.state.guideCount,9,'Guide Setup opens on the neutral defaults, not the minimums');
+  assert.equal(c.state.firstGuide,105);
+  assert.equal(c.state.targetStripper,1260);
 });
 
 test('existing build loads and displays its own saved layout, not Workshop values',()=>{
