@@ -16274,6 +16274,17 @@ function rodLayoutModel(){
   const exceeds=rodLength!==null && (itemEnds.some((mm)=>mm>rodLength) || items.some((item)=>item.startMm<0) || guides.some((guide)=>guide.atMm<0));
   return {rodLength,seatLength,seatRef,items,guides,prompts,waiting,scaleMm,exceeds,overlaps,approximateOverlap,guideView};
 }
+// Side view of a guide from its saved orientation. 0 deg is the reel side (on top for casting or no rod style, underneath for
+// spinning, as in Guide Setup's end view) and 180 deg the opposite side; the stem shows the up/down part of the angle, so a
+// spiral visibly turns around the blank. vertical: -1 straight up ... +1 straight down. A guide without a saved angle is
+// drawn on the reel side. Display only: no guide position, angle or saved value is changed.
+function rodLayoutGuidePose(guide,guideView){
+  const angle=guide&&guide.guide?clampSpiralAngle(guide.guide.angleDeg):0;
+  const reelSideDown=normalizeRodStyle(guideView&&guideView.rodStyle)==='spinning';
+  const towardsReelSide=Math.cos((angle*Math.PI)/180);
+  if(Math.abs(towardsReelSide)<0.26)return {angle,vertical:0,sideways:true};
+  return {angle,vertical:(reelSideDown?1:-1)*towardsReelSide,sideways:false};
+}
 function rodLayoutSvg(model,options){
   const detail=!!(options&&options.detail);
   const width=detail?options.width:1000;
@@ -16334,13 +16345,26 @@ function rodLayoutSvg(model,options){
   model.guides.forEach((guide)=>{
     if(guide.atMm<0)return;
     const cx=x(guide.atMm);
-    const top=mid-(guide.isStripper?17:13);
-    const body=`<line class="rl-guide${guide.isStripper?' rl-guide--stripper':''}" x1="${n(cx)}" y1="${mid}" x2="${n(cx)}" y2="${top}"></line><line class="rl-guide${guide.isStripper?' rl-guide--stripper':''}" x1="${n(cx-3)}" y1="${top}" x2="${n(cx+3)}" y2="${top}"></line>`
-      +(detail?`<text class="rl-label rl-label--guide" x="${n(cx)}" y="${top-5}" text-anchor="middle">G${guide.number}</text>`:'');
+    const cls=`rl-guide${guide.isStripper?' rl-guide--stripper':''}`;
+    const pose=rodLayoutGuidePose(guide,model.guideView);
+    let body;
+    if(pose.sideways){
+      // Pointing straight towards or away from the viewer: the guide ring is seen face-on on the blank.
+      body=`<circle class="${cls}" cx="${n(cx)}" cy="${mid}" r="3.2" fill="none"></circle>`
+        +(detail?`<text class="rl-label rl-label--guide" x="${n(cx)}" y="${mid-8}" text-anchor="middle">G${guide.number}</text>`:'');
+    }else{
+      const end=mid+(pose.vertical*(guide.isStripper?17:13));
+      const down=pose.vertical>0;
+      body=`<line class="${cls}" x1="${n(cx)}" y1="${mid}" x2="${n(cx)}" y2="${n(end)}"></line><line class="${cls}" x1="${n(cx-3)}" y1="${n(end)}" x2="${n(cx+3)}" y2="${n(end)}"></line>`
+        +(detail?`<text class="rl-label rl-label--guide" x="${n(cx)}" y="${n(down?end+10:end-5)}" text-anchor="middle">G${guide.number}</text>`:'');
+    }
     parts.push(group(guide,cx,body,pointHit(cx)));
   });
+  // The tip-top label normally sits under the blank; move it above when the guide nearest the tip is drawn below.
+  const nearTip=model.guides.find((guide)=>guide.atMm>=0 && guide.number===1);
+  const tipLabelAbove=!!(nearTip && rodLayoutGuidePose(nearTip,model.guideView).vertical>0);
   const tipX=x(model.rodLength);
-  parts.push(group({key:'tipTop',label:'Tip Top'},tipX,`<line class="rl-tip" x1="${n(tipX)}" y1="${mid-6}" x2="${n(tipX)}" y2="${mid+6}"></line>`+(detail?`<text class="rl-label" x="${n(tipX)}" y="${mid+17}" text-anchor="end">TIP TOP</text>`:''),pointHit(tipX)));
+  parts.push(group({key:'tipTop',label:'Tip Top'},tipX,`<line class="rl-tip" x1="${n(tipX)}" y1="${mid-6}" x2="${n(tipX)}" y2="${mid+6}"></line>`+(detail?`<text class="rl-label" x="${n(tipX)}" y="${tipLabelAbove?mid-11:mid+17}" text-anchor="end">TIP TOP</text>`:''),pointHit(tipX)));
   const sizing=detail?`width="${width}" height="${height}"`:'preserveAspectRatio="none"';
   return `<svg viewBox="0 0 ${width} ${height}" ${sizing} role="group" aria-label="${detail?'Rod build layout detail':'Rod build layout overview'}">${parts.join('')}</svg>`;
 }
