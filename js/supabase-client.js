@@ -1,6 +1,26 @@
+// Q17: supabase-js renews an expired sign-in with no time limit of its own. Only that renewal request is bounded
+// (10 s, inside Supabase's refresh-token reuse window, so a slow answer is not mistaken for a reused token); every
+// other request passes straight through unchanged.
+const KLABS_RENEWAL_REQUEST_TIMEOUT_MS = 10000;
+function klabsFetch(input, init) {
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (!/\/auth\/v1\/token\?(?:.*&)?grant_type=refresh_token(?:&|$)/.test(url) || typeof AbortController !== "function") {
+    return window.fetch(input, init);
+  }
+  const controller = new AbortController();
+  const outer = init?.signal;
+  if (outer) {
+    if (outer.aborted) controller.abort();
+    else outer.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  const timer = window.setTimeout(() => controller.abort(), KLABS_RENEWAL_REQUEST_TIMEOUT_MS);
+  return window.fetch(input, { ...(init || {}), signal: controller.signal })
+    .finally(() => window.clearTimeout(timer));
+}
 window.KLABS_SUPABASE_CLIENT = window.supabase.createClient(
   window.KLABS_SUPABASE.url,
-  window.KLABS_SUPABASE.publishableKey
+  window.KLABS_SUPABASE.publishableKey,
+  { global: { fetch: klabsFetch } }
 );
 let klabsReadOnlyObserver = null;
 
@@ -33,8 +53,54 @@ function klabsApplyReadOnlyControls() {
   }
 }
 
+// Q17: how long a launch waits for an expired sign-in to be renewed before opening the saved records view-only.
+const KLABS_SESSION_RENEWAL_WAIT_MS = 3000;
+// supabase-js renews a stored session this close to (or past) its expiry before returning it.
+const KLABS_SESSION_RENEWAL_MARGIN_MS = 90 * 1000;
+
+// The signed-in account stored on this device, only when its session needs renewal now. Holds the account id and
+// email only - never the tokens, so nothing built from it can be used against the server.
+function klabsStoredSessionNeedingRenewal() {
+  try {
+    const key = window.KLABS_SUPABASE_CLIENT?.auth?.storageKey;
+    if (typeof key !== "string" || !key) return null;
+    const stored = JSON.parse(window.localStorage.getItem(key) || "null");
+    const id = stored?.user?.id;
+    if (typeof id !== "string" || !id || typeof stored.refresh_token !== "string" || !stored.refresh_token
+      || typeof stored.access_token !== "string" || !Number.isFinite(stored.expires_at)) return null;
+    if (stored.expires_at * 1000 - Date.now() >= KLABS_SESSION_RENEWAL_MARGIN_MS) return null;
+    return { user: { id, email: typeof stored.user.email === "string" ? stored.user.email : "" } };
+  } catch (error) {
+    return null;
+  }
+}
+
+// supabase-js marks "could not reach the server" (failed or aborted fetch, 5xx) as AuthRetryableFetchError. Every
+// other renewal failure (revoked or invalid refresh token, 4xx) is a real rejection and is never treated as offline.
+function klabsIsRenewalNetworkFailure(error) {
+  return error?.name === "AuthRetryableFetchError";
+}
+window.KLABS_IS_RENEWAL_NETWORK_FAILURE = klabsIsRenewalNetworkFailure;
+
 async function klabsCheckLogin() {
-  const { data, error } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
+  const pending = window.KLABS_PUBLIC_ENTRY?.applyOfflineSession ? klabsStoredSessionNeedingRenewal() : null;
+  const request = window.KLABS_SUPABASE_CLIENT.auth.getSession();
+  let outcome;
+  if (pending) {
+    let timer = null;
+    outcome = await Promise.race([
+      request,
+      new Promise((resolve) => { timer = window.setTimeout(() => resolve({ renewalTimedOut: true }), KLABS_SESSION_RENEWAL_WAIT_MS); })
+    ]);
+    window.clearTimeout(timer);
+    if (outcome?.renewalTimedOut || (!outcome?.data?.session && klabsIsRenewalNetworkFailure(outcome?.error))) {
+      await window.KLABS_PUBLIC_ENTRY.applyOfflineSession(pending, klabsApplyAuthState, request);
+      return;
+    }
+  } else {
+    outcome = await request;
+  }
+  const { data, error } = outcome;
   if (error) throw error;
   if (window.KLABS_PUBLIC_ENTRY) {
     await window.KLABS_PUBLIC_ENTRY.applySession(data.session, klabsApplyAuthState);
@@ -69,7 +135,9 @@ function klabsApplyAuthState(session) {
       notice.hidden = !readOnly;
       const noticeText = notice.querySelector("span");
       if (noticeText) {
-        noticeText.textContent = window.KLABS_ACCESS_STATE?.offline
+        noticeText.textContent = window.KLABS_ACCESS_STATE?.offline_session
+          ? "You are offline and your sign-in could not be renewed. Your saved records are view-only until you reconnect."
+          : window.KLABS_ACCESS_STATE?.offline
           ? "You are offline and account access could not be verified. Your saved records are view-only until you reconnect."
           : "Your trial has ended. Your records remain available, but changes cannot be saved.";
       }
@@ -85,6 +153,12 @@ function klabsApplyAuthState(session) {
     if (accountEmail) accountEmail.textContent = "Signed out";
   }
 
+  // Q17: a view-only launch whose sign-in could not be renewed makes no Supabase calls - no sync, no owner check -
+  // until the page reloads with a renewed session.
+  if (session && window.KLABS_ACCESS_STATE?.offline_session) {
+    document.body.classList.remove("klabs-auth-resolving");
+    return;
+  }
   const syncOutcome = window.KLABS_SYNC?.onAuthStateChanged?.(session);
   Promise.resolve(window.KLABS_ADMIN_ACCESS?.onAuthStateChanged?.(session)).catch((error) => {
     console.error("[K-Labs Studio] Owner access check failed:", error);
@@ -251,11 +325,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const control = event.target.closest("#app button, #app [role='button'], #app input[type='submit']");
     if (!control || control.matches("[data-nav], [data-collapsible-trigger], [data-builds-status-filter]")) return;
     const label = `${control.textContent || ""} ${control.getAttribute("aria-label") || ""} ${control.id || ""}`;
-    if (!/\b(add|new|save|delete|remove|duplicate|edit|update|confirm|complete|mark|record|send|email|print|export|import|rename|copy|reset|clear|create|quote|price)\b/i.test(label)) return;
+    // Q17: with an unrenewed sign-in no customer document can be produced either (invoices, statements, PDFs).
+    const offlineSession = document.body.classList.contains("klabs-offline-session");
+    const blockedOffline = offlineSession && (
+      control.closest(".workshop-build-actions-surface, [data-current-build-action], [data-more-document], #currentBuildActionsMenu")
+      || /\b(invoice|statement|documents?|pdf|share|download|issue|payment|deposit|generate|template)\b/i.test(label));
+    if (!blockedOffline && !/\b(add|new|save|delete|remove|duplicate|edit|update|confirm|complete|mark|record|send|email|print|export|import|rename|copy|reset|clear|create|quote|price)\b/i.test(label)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const notice = document.getElementById("readOnlyAccessNotice");
-    if (notice) notice.querySelector("span").textContent = "This account is read-only. You can view your records, but cannot edit, save, or create customer documents.";
+    if (notice) notice.querySelector("span").textContent = offlineSession
+      ? "You are offline and your sign-in could not be renewed. You can view your saved records, but cannot edit, save, or create customer documents until you reconnect."
+      : "This account is read-only. You can view your records, but cannot edit, save, or create customer documents.";
   }, true);
   document.addEventListener("submit", (event) => {
     if (!document.body.classList.contains("klabs-read-only") || !event.target.closest("#app")) return;
@@ -299,6 +380,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   window.KLABS_SUPABASE_CLIENT.auth.onAuthStateChange?.((event, session) => {
+    // Q17: the sign-in was renewed (or ended) while the saved records were open view-only - restart normally.
+    if (window.KLABS_ACCESS_STATE?.offline_session && (session?.user?.id || event === "SIGNED_OUT")) {
+      window.location.reload();
+      return;
+    }
     if (!window.KLABS_UI && !window.KLABS_PUBLIC_ENTRY?.isLoading()) return;
     if (event === "SIGNED_OUT" || (window.KLABS_ACCOUNT_ID && session?.user?.id && session.user.id !== window.KLABS_ACCOUNT_ID)) {
       window.location.reload();

@@ -19,6 +19,7 @@
   let currentEntitlement = null;
   let trialExpiryTimer = null;
   let blockedCheckInFlight = false;
+  let renewalCheckInFlight = false;
 
   function setVisible(id, visible) {
     const element = document.getElementById(id);
@@ -29,6 +30,7 @@
     if (currentSession?.user?.id && !window.KLABS_BUILD_TAB_LOCK?.owns(currentSession.user.id)) return false;
     const access = window.KLABS_ACCESS_STATE;
     if (!access) return true;
+    if (access.offline_session) return false;
     if (access.can_write !== true) return false;
     const deadline = Number(access.local_expires_at);
     if (Number.isFinite(deadline) && deadline > 0 && Date.now() >= deadline) {
@@ -77,6 +79,7 @@
     currentSession = null;
     currentEntitlement = null;
     window.KLABS_ACCESS_STATE = null;
+    document.body.classList.remove("klabs-offline-session");
     document.getElementById("authScreen").style.display = "none";
     setVisible("accountAccessScreen", false);
     setVisible("exploreDemoScreen", false);
@@ -180,18 +183,39 @@
     }
   }
 
+  // The access record this device saved the last time the server answered for this account, with its expiry applied
+  // as of now. null when there is none for exactly this account.
+  function cachedEntitlementFor(userId) {
+    const key = `klabs-account-entitlement:${userId || ""}`;
+    let cached;
+    try {
+      cached = JSON.parse(window.localStorage.getItem(key) || "null");
+    } catch {
+      cached = null;
+    }
+    if (!cached || !userId || cached.user_id !== userId || !cached.entitlement || !cached.saved_at) return null;
+    const elapsed = Math.max(0, Date.now() - Date.parse(cached.saved_at));
+    const access = { ...cached.entitlement, offline: true };
+    const cachedServerTime = Date.parse(access.server_time);
+    if (!Number.isFinite(cachedServerTime) || !Number.isFinite(elapsed)) {
+      throw new Error("Your saved account access is invalid. Connect to the internet and try again.");
+    }
+    access.server_time = new Date(cachedServerTime + elapsed).toISOString();
+    const expiry = access.access_state === "trial" ? access.trial_expires_at : access.access_expires_at;
+    if (expiry && Date.parse(expiry) <= Date.parse(access.server_time)) {
+      access.access_state = "expired";
+      access.can_write = false;
+      access.trial_available = false;
+    }
+    return access;
+  }
+
   async function refreshEntitlement() {
     const { data, error, status } = await requestEntitlement();
     if (error) {
       if (!isNetworkFailure(error, status)) throw error;
-      const key = `klabs-account-entitlement:${currentSession?.user?.id || ""}`;
-      let cached;
-      try {
-        cached = JSON.parse(window.localStorage.getItem(key) || "null");
-      } catch {
-        cached = null;
-      }
-      if (!cached || cached.user_id !== currentSession?.user?.id || !cached.entitlement || !cached.saved_at) {
+      const access = cachedEntitlementFor(currentSession?.user?.id || "");
+      if (!access) {
         return {
           access_state: "offline_readonly",
           can_write: false,
@@ -200,19 +224,6 @@
           offline: true,
           server_time: new Date().toISOString()
         };
-      }
-      const elapsed = Math.max(0, Date.now() - Date.parse(cached.saved_at));
-      const access = { ...cached.entitlement, offline: true };
-      const cachedServerTime = Date.parse(access.server_time);
-      if (!Number.isFinite(cachedServerTime) || !Number.isFinite(elapsed)) {
-        throw new Error("Your saved account access is invalid. Connect to the internet and try again.");
-      }
-      access.server_time = new Date(cachedServerTime + elapsed).toISOString();
-      const expiry = access.access_state === "trial" ? access.trial_expires_at : access.access_expires_at;
-      if (expiry && Date.parse(expiry) <= Date.parse(access.server_time)) {
-        access.access_state = "expired";
-        access.can_write = false;
-        access.trial_available = false;
       }
       return access;
     }
@@ -252,7 +263,39 @@
     document.getElementById("authMessage").textContent = "This account has been blocked. Contact K-Labs Studio for assistance.";
   }
 
+  // Q17: while the saved records are open view-only, retry the sign-in renewal (an auth request only, no data
+  // request). Restart normally once it succeeds or is refused; keep waiting while the server cannot be reached.
+  function reloadAfterRenewal(result, nothingOpened = false) {
+    // Nothing could be opened offline: only a successful renewal is worth a restart.
+    if (nothingOpened) {
+      if (result?.data?.session?.user?.id && !window.KLABS_ACCESS_STATE) window.location.reload();
+      return;
+    }
+    if (!window.KLABS_ACCESS_STATE?.offline_session) return;
+    const networkFailure = typeof window.KLABS_IS_RENEWAL_NETWORK_FAILURE === "function"
+      && window.KLABS_IS_RENEWAL_NETWORK_FAILURE(result?.error);
+    if (result?.data?.session?.user?.id || !networkFailure) window.location.reload();
+  }
+  function watchRenewal(request, nothingOpened = false) {
+    Promise.resolve(request).then((result) => reloadAfterRenewal(result, nothingOpened), () => {});
+  }
+  async function retryOfflineRenewal() {
+    if (renewalCheckInFlight || window.navigator?.onLine === false) return;
+    renewalCheckInFlight = true;
+    try {
+      reloadAfterRenewal(await window.KLABS_SUPABASE_CLIENT.auth.getSession());
+    } catch (error) {
+      console.warn("[K-Labs Studio] Could not renew the sign-in:", error);
+    } finally {
+      renewalCheckInFlight = false;
+    }
+  }
+
   async function verifyCurrentAccountBlock() {
+    if (window.KLABS_ACCESS_STATE?.offline_session) {
+      await retryOfflineRenewal();
+      return;
+    }
     if (!currentSession?.user?.id || blockedCheckInFlight || window.navigator?.onLine === false) return;
     blockedCheckInFlight = true;
     try {
@@ -390,6 +433,46 @@
     }
   }
 
+  // Q17: the stored sign-in has expired and the server cannot be reached to renew it. Open this account's saved records
+  // strictly view-only from its own saved access record - no Supabase data calls, no sync, no documents - and restart
+  // normally as soon as the renewal succeeds or is refused. Without a valid saved record for this exact account,
+  // nothing opens.
+  async function applyOfflineSession(stored, applyAuthState, renewal) {
+    const userId = stored?.user?.id;
+    const access = typeof userId === "string" && userId ? cachedEntitlementFor(userId) : null;
+    const openable = ["trial", "expired", "grandfathered", "complimentary", "paid"];
+    if (!access || !openable.includes(access.access_state) || typeof access.email_verified !== "boolean"
+      || (access.access_state === "trial" && !access.trial_expires_at)) {
+      watchRenewal(renewal, true);
+      throw new Error("Could not restore your session. Check your connection and try again.");
+    }
+    currentSession = { user: { id: userId, email: typeof stored.user.email === "string" ? stored.user.email : "" } };
+    document.body.classList.add("klabs-auth-resolving");
+    preloadPrivateApp();
+    try {
+      await window.KLABS_BUILD_TAB_LOCK.acquire(userId);
+      currentEntitlement = { ...access, can_write: false, trial_available: false, offline: true, offline_session: true };
+      window.KLABS_ACCESS_STATE = { ...currentEntitlement };
+      setVisible("accountAccessScreen", false);
+      setVisible("exploreDemoScreen", false);
+      document.body.classList.remove("klabs-entry-choice", "klabs-explore-demo");
+      document.body.classList.add("klabs-offline-session");
+      await loadPrivateApp();
+      applyAuthState(currentSession);
+    } catch (error) {
+      window.KLABS_BUILD_TAB_LOCK?.release();
+      window.KLABS_ACCESS_STATE = null;
+      document.body.classList.remove("klabs-auth-resolving", "klabs-offline-session");
+      document.getElementById("app").style.display = "none";
+      document.getElementById("authScreen").style.display = "flex";
+      document.body.classList.add("klabs-auth-open");
+      throw error;
+    }
+    document.body.classList.remove("klabs-auth-open");
+    pendingDestination = "";
+    watchRenewal(renewal);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("online", () => {
       if (window.KLABS_ACCESS_STATE?.offline) window.location.reload();
@@ -486,5 +569,5 @@
 
   if (hasStoredSession()) preloadPrivateApp();
 
-  window.KLABS_PUBLIC_ENTRY = { applySession, showHome, isLoading: () => !!loadPromise };
+  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, showHome, isLoading: () => !!loadPromise };
 })();

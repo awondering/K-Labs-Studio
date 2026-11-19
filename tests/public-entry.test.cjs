@@ -78,7 +78,7 @@ function harness({storage={}}={}){
     }};
   vm.runInNewContext(source,{window,document,Promise,Error,Date,JSON,console,AbortController});
   events.DOMContentLoaded();
-  return {window,document,elements,classes,scripts,preloads,setEntitlementHook(fn){entitlementHook=fn;},demoViews,demoPanels,setSession(value){session=value;},setEntitlement(value){entitlement=value;},setRpcError(value){rpcError=value;},cache(key,value){cachedValues.set(key,JSON.stringify(value));},trialStarts:()=>trialStarts,reloads:()=>reloads,failScript(value){failScript=value;},holdScript(value){heldScripts.add(value);},releaseScript(value){heldScripts.delete(value);heldScriptCallbacks.get(value)?.();heldScriptCallbacks.delete(value);}};
+  return {window,document,elements,classes,scripts,preloads,events,setEntitlementHook(fn){entitlementHook=fn;},demoViews,demoPanels,setSession(value){session=value;},setEntitlement(value){entitlement=value;},setRpcError(value){rpcError=value;},cache(key,value){cachedValues.set(key,JSON.stringify(value));},trialStarts:()=>trialStarts,reloads:()=>reloads,failScript(value){failScript=value;},holdScript(value){heldScripts.add(value);},releaseScript(value){heldScripts.delete(value);heldScriptCallbacks.get(value)?.();heldScriptCallbacks.delete(value);}};
 }
 
 test('public markup does not load private application scripts',()=>{
@@ -525,4 +525,120 @@ test('Q16 a server refusal that arrives within the limit is still a refusal, nev
   t.answer({data:null,error:{message:'permission denied',code:'42501'},status:403});
   await assert.rejects(startup,(error)=>error.code==='42501');
   assert.ok(!t.h.scripts.includes('js/app.js'));
+});
+
+// Q17: an expired sign-in that cannot be renewed opens the saved records strictly view-only, for this account only.
+const Q17_USER='q17-user';
+function q17Harness({cache=true,entitlement}={}){
+  const h=harness();
+  const rpcCalls=[];
+  const realRpc=h.window.KLABS_SUPABASE_CLIENT.rpc;
+  h.window.KLABS_SUPABASE_CLIENT.rpc=(name)=>{rpcCalls.push(name);return realRpc(name);};
+  let renewal=()=>new Promise(()=>{});
+  let sessionReads=0;
+  h.window.KLABS_SUPABASE_CLIENT.auth.getSession=()=>{sessionReads++;return renewal();};
+  h.window.KLABS_IS_RENEWAL_NETWORK_FAILURE=(error)=>error?.name==='AuthRetryableFetchError';
+  const serverTime=new Date().toISOString();
+  if(cache)h.cache(`klabs-account-entitlement:${Q17_USER}`,{user_id:Q17_USER,saved_at:entitlement?.server_time&&Number.isFinite(Date.parse(entitlement.server_time))?entitlement.server_time:serverTime,
+    entitlement:entitlement||{access_state:'paid',can_write:true,email_verified:true,server_time:serverTime}});
+  const stored={user:{id:Q17_USER,email:'q17@example.test'}};
+  return {h,rpcCalls,stored,sessionReads:()=>sessionReads,setRenewal(fn){renewal=fn;}};
+}
+const q17Tick=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('Q17: an account-matched saved access record opens Studio strictly view-only, with no Supabase data calls',async()=>{
+  const t=q17Harness();
+  let applied=null;
+  await t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,(session)=>{applied={session,state:t.h.window.KLABS_ACCESS_STATE};},new Promise(()=>{}));
+  assert.equal(applied.session.user.id,Q17_USER);
+  assert.equal(applied.session.access_token,undefined,'no token is invented or reused');
+  assert.equal(applied.state.access_state,'paid');
+  assert.equal(applied.state.offline,true);
+  assert.equal(applied.state.offline_session,true);
+  assert.equal(applied.state.can_write,false,'view-only even though the saved access can write');
+  assert.equal(t.h.window.KLABS_CAN_WRITE(),false);
+  t.h.window.KLABS_ACCESS_STATE.can_write=true;
+  assert.equal(t.h.window.KLABS_CAN_WRITE(),false,'stays view-only even if can_write is flipped');
+  assert.ok(t.h.classes.has('klabs-offline-session'));
+  assert.ok(t.h.scripts.includes('js/app.js'));
+  assert.deepEqual(t.rpcCalls,[],'no account, entitlement or block RPC');
+  assert.equal(t.sessionReads(),0,'does not wait on the stalled renewal again');
+});
+
+test('Q17: trial and subscription expiry still apply to the saved access record',async()=>{
+  for(const [kind,extra] of [['trial',{trial_expires_at:new Date(Date.now()-60000).toISOString()}],['paid',{access_expires_at:new Date(Date.now()-60000).toISOString()}]]){
+    const serverTime=new Date(Date.now()-3600000).toISOString();
+    const t=q17Harness({entitlement:{access_state:kind,can_write:true,email_verified:true,server_time:serverTime,...extra}});
+    let state;
+    await t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,()=>{state=t.h.window.KLABS_ACCESS_STATE;},new Promise(()=>{}));
+    assert.equal(state.access_state,'expired',kind);
+    assert.equal(state.can_write,false,kind);
+  }
+});
+
+test('Q17: no saved record, another account\'s record, an unusable record or a trial-eligible account opens nothing',async()=>{
+  const now=new Date().toISOString();
+  const cases=[
+    ['no record',q17Harness({cache:false})],
+    ['trial eligible',q17Harness({entitlement:{access_state:'trial_eligible',can_write:false,email_verified:true,server_time:now}})],
+    ['unknown state',q17Harness({entitlement:{access_state:'blocked',can_write:false,email_verified:true,server_time:now}})],
+    ['bad time',q17Harness({entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:'not a time'}})],
+  ];
+  const other=q17Harness({cache:false});
+  other.h.cache(`klabs-account-entitlement:${Q17_USER}`,{user_id:'someone-else',saved_at:now,entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:now}});
+  other.h.cache('klabs-account-entitlement:someone-else',{user_id:'someone-else',saved_at:now,entitlement:{access_state:'paid',can_write:true,email_verified:true,server_time:now}});
+  cases.push(['other account',other]);
+  for(const [name,t] of cases){
+    await assert.rejects(t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,()=>assert.fail(name),new Promise(()=>{})),undefined,name);
+    assert.ok(!t.h.scripts.includes('js/app.js'),name+': private app not run');
+    assert.equal(t.h.window.KLABS_ACCESS_STATE??null,null,name);
+    assert.ok(!t.h.classes.has('klabs-offline-session'),name);
+  }
+  await assert.rejects(q17Harness().h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession({user:{id:''}},()=>assert.fail('empty id'),null));
+});
+
+test('Q17 recovery: a renewal that later succeeds, or is refused, restarts Studio; a network failure keeps waiting',async()=>{
+  for(const [name,result,reload] of [
+    ['renewed',{data:{session:{user:{id:Q17_USER}}},error:null},1],
+    ['refused',{data:{session:null},error:{name:'AuthApiError',status:400}},1],
+    ['still offline',{data:{session:null},error:{name:'AuthRetryableFetchError',status:0}},0],
+  ]){
+    const t=q17Harness();
+    let finish;
+    await t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,()=>{},new Promise(resolve=>{finish=resolve;}));
+    assert.equal(t.h.reloads(),0);
+    finish(result);await q17Tick();
+    assert.equal(t.h.reloads(),reload,name);
+  }
+  const none=q17Harness({cache:false});
+  let finish;
+  await assert.rejects(none.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(none.stored,()=>{},new Promise(resolve=>{finish=resolve;})));
+  finish({data:{session:{user:{id:Q17_USER}}},error:null});await q17Tick();
+  assert.equal(none.h.reloads(),1,'nothing opened: a later renewal restarts normally');
+});
+
+test('Q17: the periodic account check retries only the sign-in renewal while view-only, never the block RPC',async()=>{
+  const t=q17Harness();
+  await t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,()=>{},new Promise(()=>{}));
+  t.h.document.visibilityState='visible';
+  t.setRenewal(async()=>({data:{session:null},error:{name:'AuthRetryableFetchError',status:0}}));
+  await t.h.events.visibilitychange();await q17Tick();
+  assert.equal(t.sessionReads(),1);
+  assert.deepEqual(t.rpcCalls,[],'klabs_account_is_blocked is not called with an unrenewed sign-in');
+  assert.equal(t.h.reloads(),0);
+  t.setRenewal(async()=>({data:{session:{user:{id:Q17_USER}}},error:null}));
+  await t.h.events.visibilitychange();await q17Tick();
+  assert.equal(t.h.reloads(),1,'renewed: restart with normal authentication and sync');
+});
+
+test('Q17: a valid sign-in is unaffected - normal start-up still verifies access with the server and may write',async()=>{
+  const h=harness();
+  const session={user:{id:'q17-valid'}};
+  h.setSession(session);
+  h.setEntitlement({access_state:'paid',can_write:true,email_verified:true,server_time:new Date().toISOString()});
+  let state;
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{state=h.window.KLABS_ACCESS_STATE;});
+  assert.equal(state.offline_session,undefined);
+  assert.equal(h.window.KLABS_CAN_WRITE(),true);
+  assert.ok(!h.classes.has('klabs-offline-session'));
 });
