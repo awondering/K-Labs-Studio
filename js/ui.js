@@ -1352,13 +1352,16 @@ function captureGuideSpecificationSnapshot(){
     ...(normalizeRodStyle(spiral.rodStyle)?{rodStyle:normalizeRodStyle(spiral.rodStyle)}:{}),
   };
 }
+// A saved guide value counts only when it is a real number: Number(null) and Number('') are 0, which would otherwise turn
+// an empty Guide Setup into the minimums (5 guides, 50 mm, 500 mm) whenever a new or reopened job is saved.
+function hasGuideNumber(value){return value!==null && value!==undefined && String(value).trim()!=='' && Number.isFinite(Number(value));}
 function normalizeGuideSpecification(inputSpec){
   const spec=inputSpec&&typeof inputSpec==='object'?inputSpec:{};
-  const hasGuideCount=Number.isFinite(Number(spec.guideCount));
+  const hasGuideCount=hasGuideNumber(spec.guideCount);
   return {
     guideCount:hasGuideCount?clampValue(spec.guideCount,5,20):null,
-    firstGuideMm:Number.isFinite(Number(spec.firstGuideMm))?clampMeasurementValue(spec.firstGuideMm,50,300):null,
-    targetStripperMm:Number.isFinite(Number(spec.targetStripperMm))?clampMeasurementValue(spec.targetStripperMm,500,2500):null,
+    firstGuideMm:hasGuideNumber(spec.firstGuideMm)?clampMeasurementValue(spec.firstGuideMm,50,300):null,
+    targetStripperMm:hasGuideNumber(spec.targetStripperMm)?clampMeasurementValue(spec.targetStripperMm,500,2500):null,
     spiralMethod:spec.spiralMethod?normalizeSpiralMethod(spec.spiralMethod):'',
     spiralDirection:spec.spiralDirection?normalizeSpiralDirection(spec.spiralDirection):'',
     spiralOffsetStartAngle:Number.isFinite(Number(spec.spiralOffsetStartAngle))?clampSpiralStripperAngle(spec.spiralOffsetStartAngle):null,
