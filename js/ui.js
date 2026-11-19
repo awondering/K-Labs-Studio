@@ -4316,7 +4316,14 @@ function customerFulfilmentCheck(){
 }
 function runWithFulfilmentCheck(proceed){
   const check=customerFulfilmentCheck();
-  if(check.block){openInfoDialog('Fulfilment Method Needed',check.block);return;}
+  if(check.block){
+    openConfirmDialog({title:'Fulfilment Method Needed',message:check.block,
+      actions:[{id:'choose',label:'Choose Fulfilment Method',kind:'primary'},{id:'ok',label:'OK',kind:'ghost'}]},(action)=>{
+      // After the dialog closes it returns focus to its opener; reveal the selector once that has happened.
+      if(action==='choose')window.setTimeout(revealFulfilmentSelector,0);
+    });
+    return;
+  }
   if(check.warn){
     openConfirmDialog({title:'Delivery Details Needed',message:check.warn,actions:[{id:'cancel',label:'Go Back',kind:'ghost'},{id:'continue',label:'Continue',kind:'primary'}]},(action)=>{if(action==='continue')proceed();});
     return;
@@ -15845,6 +15852,21 @@ function closeDeliveryEditOnLeave(event){
   if(!deliveryEditOpen || (fields && event && event.relatedTarget && fields.contains(event.relatedTarget)))return;
   deliveryEditOpen=false;
   syncFulfilmentSelector();
+}
+// Q14: opens Job Pricing & Actions, brings the Fulfilment Method selector into view and focuses it. Display only.
+function revealFulfilmentSelector(){
+  const group=$('quoteFulfilmentGroup');
+  if(!group)return;
+  const section=$('workshopPricingSection');
+  if(section)section.hidden=false;
+  setWorkshopSectionCollapsed('workshopQuoteSummaryBody',false,{instant:true});
+  const target=group.querySelector('[data-fulfilment-method][aria-pressed="true"]')||group.querySelector('[data-fulfilment-method]');
+  try{group.scrollIntoView({block:'center',behavior:'smooth'});}catch{group.scrollIntoView();}
+  if(target)try{target.focus({preventScroll:true});}catch{}
+  group.classList.remove('is-attention');
+  void group.offsetWidth;
+  group.classList.add('is-attention');
+  window.setTimeout(()=>group.classList.remove('is-attention'),1800);
 }
 function setQuoteFulfilmentMethod(value){
   const next=normalizeFulfilmentMethod(value);
