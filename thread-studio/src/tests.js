@@ -129,4 +129,5 @@ require('./tests-chevron.js')(ok, near);
 require('./tests-weave.js')(ok, near);
 require('./tests-lettering.js')(ok, near);
 require('./tests-custom.js')(ok, near);
+require('./tests-clipart.js')(ok, near);
 console.log('\n' + pass + '/' + (pass + fail) + ' passed'); process.exit(fail ? 1 : 0);
