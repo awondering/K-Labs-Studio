@@ -10759,6 +10759,30 @@ body:not(.klabs-logged-out) .home-public-entry {
 .readonly-access-notice strong { flex:none;color:#dfc4c0;font-size:10px;letter-spacing:.12em; }
 .readonly-access-notice[hidden] { display:none !important; }
 .build-sync-notice { justify-content:space-between; }
+/* Q18 Demo Mode: one slim bar identifies the demonstration and offers the way out; account, sync, recovery and
+   administration controls are not part of the demonstration. */
+.demo-mode-bar { gap:10px;padding:6px 6px 6px 14px;border-color:rgba(200,169,106,.3);background:linear-gradient(90deg,rgba(84,68,38,.28),rgba(20,21,21,.75)); }
+.demo-mode-bar strong { color:#d8c08c; }
+.demo-mode-bar span { flex:1 1 auto;min-width:0;line-height:1.35; }
+.demo-mode-bar__exit { flex:none;min-height:44px;padding:0 14px;white-space:nowrap; }
+html.klabs-demo #settingsAccountCard,
+html.klabs-demo #settingsRecoveryCard,
+html.klabs-demo #settingsAdminEntry,
+html.klabs-demo #adminAccessScreen,
+html.klabs-demo #buildSyncNotice,
+html.klabs-demo #componentSyncStatusLine,
+html.klabs-demo #readOnlyAccessNotice { display:none !important; }
+/* Step (+/-) controls enter values with press-and-hold, which the read-only click guard cannot see. */
+html.klabs-demo #app .layout-control-card__button,
+html.klabs-demo #app .component-quantity__step,
+html.klabs-demo #app [data-spiral-angle-action] { opacity:.5;pointer-events:none; }
+@media (max-width:620px) {
+  .readonly-access-notice.demo-mode-bar { flex-direction:row;align-items:center;gap:10px; }
+  .demo-mode-bar span { font-size:11.5px; }
+  .demo-mode-bar__exit { padding:0 12px; }
+}
+.home-public-entry__notice { margin:4px 0 0;color:#c8c0b7;font-size:12px;line-height:1.5;text-align:center; }
+.home-public-entry__notice[hidden] { display:none; }
 .build-sync-review { width:min(920px,94vw);max-height:85vh;overflow:auto;background:#17191a;color:#ddd;border:1px solid #6b5152;border-radius:8px; }
 .build-sync-review::backdrop { background:rgba(0,0,0,.75); }
 .build-sync-review__versions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }

@@ -4846,7 +4846,11 @@ function normalizeQuote(inputQuote){
 }
 function updateQuoteActionPriority(){
   const statusEl=$('workshopBuildActionsStatus');
-  if(statusEl){
+  // Q18: nothing in Demo Mode is saved or synced.
+  if(statusEl && window.KLABS_ACCESS_STATE?.demo){
+    statusEl.textContent='Demonstration — not saved';
+    statusEl.classList.toggle('is-pending',false);
+  }else if(statusEl){
     const syncStatus=window.KLABS_BUILD_SYNC?.getStatus?.();
     if(syncStatus==='error'){
       statusEl.textContent='NOT SYNCED — REVIEW REQUIRED';
@@ -18976,6 +18980,13 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
 window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
+// Q18 Demo Mode: open a saved job by its id (the demonstration lands on its completed example build).
+window.KLABS_UI.openSavedJobById=(id)=>{
+  const entry=savedBuildEntries().find((item)=>item&&item.record&&item.record.id===id);
+  if(!entry)return false;
+  openSavedBuildRecord(entry.source,entry.index,{openAtTop:true,origin:'builds'});
+  return true;
+};
 window.KLABS_UI.refreshBusinessLogoControls=syncBusinessLogoControls;
 window.KLABS_UI.readRecoveryDraft=()=>({
   quote:JSON.parse(JSON.stringify(quote)),

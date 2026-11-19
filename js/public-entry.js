@@ -6,6 +6,15 @@
     "js/quote-number-allocator.js", "js/app.js"
   ];
   const adminScript = "js/admin-panel.js";
+  // Q18 Demo Mode runs the real interface without an account. Sync, owner administration, the quote-number allocator
+  // and the recovery export are never loaded there, and js/storage.js is replaced by the in-memory store from
+  // js/demo-mode.js. The demonstration data is loaded first.
+  const demoExcludedScripts = new Set([
+    "js/storage.js", "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js",
+    "js/build-sync-diff.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js", "js/quote-number-allocator.js"
+  ]);
+  const demoScripts = ["js/demo-data.js", ...privateScripts.filter((src) => !demoExcludedScripts.has(src))];
+  const DEMO_UNAVAILABLE_HASH = "#demo-unavailable";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
   // times the measured round trip on a weak mobile connection (Q16: an unanswered launch waited 8.2 s, now 3.2 s).
@@ -338,15 +347,18 @@
     }, remaining);
   }
 
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Could not load ${src}. Reload and try again.`));
+      document.head.appendChild(script);
+    });
+  }
+
   function loadPrivateApp() {
     if (!loadPromise) {
-      const loadScript = (src) => new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error(`Could not load ${src}. Reload and try again.`));
-        document.head.appendChild(script);
-      });
       const adminPanelPromise = loadScript(adminScript);
       const privateAppPromise = privateScripts.reduce(
         (previous, src) => previous.then(() => loadScript(src)),
@@ -433,6 +445,46 @@
     }
   }
 
+  // Q18: open the real interface with the fictional demonstration data. Only on a demo page (js/demo-mode.js decides
+  // before anything else runs). No account, session, entitlement, sync or administration is involved; the access
+  // state is view-only. If the isolation guards could not be confirmed, or anything fails while opening, the visitor
+  // is returned to the normal public entry screen with a short notice and nothing is shown.
+  async function startDemo(applyAuthState) {
+    const demo = window.KLABS_DEMO;
+    if (!demo?.active) return false;
+    document.body.classList.add("klabs-auth-resolving");
+    document.getElementById("authScreen").style.display = "none";
+    setVisible("accountAccessScreen", false);
+    setVisible("exploreDemoScreen", false);
+    try {
+      if (!demo.isolated) throw new Error(demo.failure || "Demo Mode isolation could not be confirmed.");
+      window.KLABS_ACCESS_STATE = { access_state: "demo", can_write: false, trial_available: false, email_verified: false, demo: true };
+      // Local stand-in for the quote-number service (js/quote-number-allocator.js is not loaded): it reports the
+      // demonstration business's next number and never allocates one.
+      window.KLABS_QUOTE_NUMBERS = {
+        peek: async () => ({ userId: demo.accountId, nextNumber: null }),
+        allocate: async () => { throw new Error("Quote numbers are not allocated in Demo Mode."); }
+      };
+      for (const src of demoScripts) {
+        await loadScript(src);
+        if (src === "js/demo-data.js") demo.seed(window.KLABS_DEMO_DATA);
+      }
+      if (window.Store !== demo.store || window.KLABS_ACCOUNT_ID !== demo.accountId || window.KLABS_SUPABASE_CLIENT
+        || window.KLABS_BUILD_SYNC || window.KLABS_SYNC || window.KLABS_SETTINGS_SYNC || window.KLABS_ADMIN_ACCESS) {
+        throw new Error("Demo Mode isolation changed while opening.");
+      }
+      applyAuthState({ user: { id: demo.accountId, email: "Demonstration" } });
+      setVisible("demoModeBar", true);
+      const example = window.KLABS_DEMO_DATA?.exampleJobId;
+      if (example) window.KLABS_UI?.openSavedJobById?.(example);
+      return true;
+    } catch (error) {
+      console.warn("[K-Labs Studio] Demo Mode could not open safely:", error);
+      window.location.replace(demo.exitUrl() + DEMO_UNAVAILABLE_HASH);
+      return false;
+    }
+  }
+
   // Q17: the stored sign-in has expired and the server cannot be reached to renew it. Open this account's saved records
   // strictly view-only from its own saved access record - no Supabase data calls, no sync, no documents - and restart
   // normally as soon as the renewal succeeds or is refused. Without a valid saved record for this exact account,
@@ -495,14 +547,21 @@
       leds.appendChild(led);
     });
     rod.classList.add("is-ready");
-    document.getElementById("publicExploreBtn").addEventListener("click", () => showAuth("workshopScreen"));
+    // Q18: Explore opens Demo Mode (a separate page load), without signing in.
+    const enterDemo = () => window.KLABS_DEMO?.enter();
+    document.getElementById("publicExploreBtn").addEventListener("click", enterDemo);
+    document.getElementById("demoModeExitBtn").addEventListener("click", () => window.KLABS_DEMO?.exit());
+    if (!window.KLABS_DEMO?.active && window.location.hash === DEMO_UNAVAILABLE_HASH) {
+      setVisible("publicDemoUnavailable", true);
+      try { window.history.replaceState(null, "", window.location.pathname + window.location.search); } catch (error) { /* notice stays */ }
+    }
     document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));
     document.getElementById("authBackHome").addEventListener("click", showHome);
     document.getElementById("publicDiscoverBtn").addEventListener("click", () => dialog.showModal());
     document.getElementById("publicDiscoverClose").addEventListener("click", () => dialog.close());
     document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
       dialog.close();
-      showAuth("workshopScreen");
+      enterDemo();
     });
     document.getElementById("startTrialBtn").addEventListener("click", async (event) => {
       const button = event.currentTarget;
@@ -561,7 +620,7 @@
       event.stopImmediatePropagation();
       showAuth(nav.dataset.nav);
     }, true);
-    if (!window.KLABS_SUPABASE_CLIENT) {
+    if (!window.KLABS_SUPABASE_CLIENT && !window.KLABS_DEMO?.active) {
       showHome();
       document.getElementById("authMessage").textContent = "Sign in is unavailable. Check your connection and reload.";
     }
@@ -569,5 +628,5 @@
 
   if (hasStoredSession()) preloadPrivateApp();
 
-  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, showHome, isLoading: () => !!loadPromise };
+  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, startDemo, showHome, isLoading: () => !!loadPromise };
 })();

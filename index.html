@@ -160,6 +160,11 @@
       <strong>READ-ONLY ACCESS</strong>
       <span>Your trial has ended. Your records remain available, but changes cannot be saved.</span>
     </div>
+    <div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" hidden>
+      <strong>DEMO</strong>
+      <span id="demoModeMessage">Fictional data. Nothing here is saved, sent or synced.</span>
+      <button id="demoModeExitBtn" type="button" class="ghost-action demo-mode-bar__exit">Exit demo</button>
+    </div>
     <div id="buildSyncNotice" class="readonly-access-notice build-sync-notice" role="status" hidden>
       <strong>NOT SYNCED — REVIEW REQUIRED</strong>
       <button id="buildSyncReviewButton" type="button" class="ghost-action">Review</button>
@@ -222,6 +227,7 @@
           </button>
           <button id="publicDiscoverBtn" class="home-public-entry__secondary" type="button">DISCOVER K-LABS STUDIO</button>
           <button id="publicSignInBtn" class="home-public-entry__signin" type="button">SIGN IN</button>
+          <p id="publicDemoUnavailable" class="home-public-entry__notice" role="status" hidden>The demonstration could not open safely in this browser. Nothing was changed.</p>
         </div>
       </div>
     </section>
@@ -1528,6 +1534,7 @@
       <button id="publicDiscoverClose" class="public-discover-dialog__close" type="button">CLOSE</button>
     </div>
   </dialog>
+  <script src="js/demo-mode.js"></script>
   <script src="js/build-tab-lock.js"></script>
   <script src="js/public-entry.js"></script>
   <script src="js/vendor/supabase-2.119.0.js"></script>

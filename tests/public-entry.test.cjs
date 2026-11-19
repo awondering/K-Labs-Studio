@@ -61,6 +61,7 @@ function harness({storage={}}={}){
     sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},
     setTimeout(fn){window.expiryCallback=fn;return 1;},clearTimeout(){},
     location:{reload(){reloads++;}},KLABS_UI:{startNewBuildFlow(){}},
+    KLABS_DEMO:{active:false,entered:0,enter(){this.entered++;},exit(){}},
     KLABS_SUPABASE_CLIENT:{
       auth:{getSession:async()=>({data:{session},error:null}),signOut:async()=>({error:null})},
       rpc:async(name)=>{
@@ -109,14 +110,18 @@ test('signed-out entry and public interactions do not initialize private scripts
   assert.equal(h.elements.publicDiscoverDialog.open,true);
   h.elements.publicDiscoverClose.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,false);
+  // Q18: Explore opens Demo Mode (a separate page load) without signing in; nothing private loads on this page.
   h.elements.publicExploreBtn.listeners.click();
-  assert.equal(h.elements.authScreen.style.display,'flex');
+  assert.equal(h.window.KLABS_DEMO.entered,1);
+  assert.notEqual(h.elements.authScreen.style.display,'flex');
   assert.deepEqual(h.scripts,[]);
+  h.elements.publicSignInBtn.listeners.click();
+  assert.equal(h.elements.authScreen.style.display,'flex');
   h.elements.authBackHome.listeners.click();
   assert.equal(h.elements.authScreen.style.display,'none');
 });
 
-test('Discover sheet presents accurate features and its Explore action opens sign-in',()=>{
+test('Discover sheet presents accurate features and its Explore action opens Demo Mode',()=>{
   assert.match(html,/DESIGN &amp; MANAGE/);
   assert.match(html,/Build specifications, components and pricing\./);
   assert.match(html,/PRESENT WITH CONFIDENCE/);
@@ -131,7 +136,8 @@ test('Discover sheet presents accurate features and its Explore action opens sig
   assert.equal(h.elements.publicDiscoverDialog.open,true);
   h.elements.publicDiscoverExploreBtn.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,false);
-  assert.equal(h.elements.authScreen.style.display,'flex');
+  assert.equal(h.window.KLABS_DEMO.entered,1);
+  assert.notEqual(h.elements.authScreen.style.display,'flex');
   assert.deepEqual(h.scripts,[]);
 });
 

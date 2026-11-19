@@ -74,7 +74,8 @@ function scheduleServiceWorkerUpdateChecks(registration){
 	window.addEventListener('focus',runCheck);
 }
 
-if('serviceWorker' in navigator){
+// Q18: a Demo Mode page registers no service worker and caches nothing.
+if('serviceWorker' in navigator && !window.KLABS_DEMO?.active){
 	let hadControllerBeforeRegistration=false;
 	let serviceWorkerStarted=false;
 	const startServiceWorker=()=>{
