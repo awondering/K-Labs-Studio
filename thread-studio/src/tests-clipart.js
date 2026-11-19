@@ -6,7 +6,7 @@
 // Run with the suite (node tests.js), or print the comparison table: node tests-clipart.js
 const T = require('./engine.js'); require('./art.js'); const A = T.art;
 
-const BLK = [20, 20, 20], WHT = [255, 255, 255], RED = [220, 30, 30], GRN = [0, 150, 60], YEL = [250, 215, 30], BLU = [30, 70, 200];
+const BLK = [20, 20, 20], WHT = [255, 255, 255], RED = [220, 30, 30], GRN = [0, 150, 60], YEL = [250, 215, 30], BLU = [30, 70, 200], ORA = [245, 140, 20];
 const star = (u, v) => { const x = u - .5, y = v - .5, r = Math.hypot(x, y), a = Math.atan2(y, x) + Math.PI / 2, seg = 2 * Math.PI / 5, k = ((a % seg) + seg) % seg - seg / 2, t = Math.abs(k) / (seg / 2); return r < .19 + .29 * (1 - t) * .95; };
 const heart = (u, v) => { const x = (u - .5) * 2.4, y = (.55 - v) * 2.4; return Math.pow(x * x + y * y - 1, 3) - x * x * y * y * y <= 0; };
 const r0 = (u, v) => Math.hypot(u - .5, v - .5);
@@ -16,6 +16,13 @@ const triOutline = (u, v, w) => { const inside = (m) => v > .06 + m && v < .94 -
 const eye = (u, v) => Math.hypot(u - .62, v - .4) < .07;
 const sqHole = (u, v) => Math.abs(u - .5) < .45 && Math.abs(v - .5) < .45 && !(Math.abs(u - .3) < .055 && Math.abs(v - .3) < .055);
 const dotAndBar = (u, v) => (u > .05 && u < .95 && v > .55 && v < .95) || Math.hypot(u - .5, v - .2) < .07;
+// multi-colour clip art (coloured fills with dark line work, several flat colours)
+const disc = (u, v, cx, cy, r) => Math.hypot(u - cx, v - cy) < r;
+const sunLine = (u, v) => r0(u, v) < .47 && r0(u, v) >= .40;
+const faceFeat = (u, v) => disc(u, v, .36, .4, .06) || disc(u, v, .64, .4, .06) || (v > .62 && v < .68 && Math.abs(u - .5) < .18);
+const logo3 = (u, v) => disc(u, v, .3, .35, .2) ? RED : disc(u, v, .7, .35, .2) ? BLU : disc(u, v, .5, .7, .2) ? YEL : null;
+const fishE = (u, v) => (u - .5) ** 2 / .16 + (v - .5) ** 2 / .06, fishEye = (u, v) => disc(u, v, .68, .45, .045);
+const leafE = (u, v) => (u - .5) ** 2 / .18 + (v - .5) ** 2 / .05, vein = (u, v) => Math.abs(v - .5) < .03;
 
 // each case: f(u,v) -> colour or null (transparent); ideal(u,v) -> ink?; gh = grid rows; maxDiff = allowed share of cells
 // that differ from the ideal; keep = cells (x,y as fractions of the grid) that must be ink; clear = cells that must be background.
@@ -33,6 +40,15 @@ const CASES = [
   { id: 'K11', name: 'diagonal lines: thin X (4% strokes) on white', f: (u, v) => xs(u, v, .03) ? BLK : WHT, ideal: (u, v) => xs(u, v, .03), maxDiff: .05, keep: [[.06, .06], [.94, .94], [.94, .06], [.06, .94]] },
   { id: 'K12', name: 'small enclosed detail: square with a small window', f: (u, v) => sqHole(u, v) ? BLK : WHT, ideal: sqHole, maxDiff: .05, clear: [[.3, .3]] },
   { id: 'K13', name: 'small separate detail: bar with a dot above it', f: (u, v) => dotAndBar(u, v) ? BLK : WHT, ideal: dotAndBar, maxDiff: .05, keep: [[.5, .2]] },
+  // multi-colour: dark outlines and details are kept by default; lighter fills become background; merged colours are reported
+  { id: 'M1', name: 'multi-colour: yellow sun with black outline on white', f: (u, v) => sunLine(u, v) ? BLK : r0(u, v) < .40 ? YEL : WHT, ideal: sunLine, maxDiff: .06, clear: [[.5, .5]], colours: true },
+  { id: 'M2', name: 'multi-colour: cartoon face, yellow, black eyes and mouth', f: (u, v) => r0(u, v) >= .46 ? WHT : faceFeat(u, v) ? BLK : YEL, ideal: faceFeat, maxDiff: .06, keep: [[.36, .4], [.64, .4], [.5, .65]], clear: [[.5, .52]], colours: true },
+  { id: 'M3', name: 'multi-colour: cartoon face with a black outline', f: (u, v) => r0(u, v) >= .47 ? WHT : r0(u, v) >= .41 || faceFeat(u, v) ? BLK : YEL, ideal: (u, v) => (r0(u, v) < .47 && r0(u, v) >= .41) || faceFeat(u, v), maxDiff: .06, keep: [[.36, .4], [.64, .4]], clear: [[.5, .52]], colours: true },
+  { id: 'M4', name: 'multi-colour: red, blue and yellow logo on white', f: (u, v) => logo3(u, v) || WHT, ideal: (u, v) => { const c = logo3(u, v); return c === RED || c === BLU; }, maxDiff: .06, keep: [[.3, .3], [.7, .3]], colours: true },
+  { id: 'M5', name: 'multi-colour: red, blue and yellow logo, transparent', f: logo3, ideal: (u, v) => { const c = logo3(u, v); return c === RED || c === BLU; }, maxDiff: .06, keep: [[.3, .3], [.7, .3]], colours: true },
+  { id: 'M6', name: 'multi-colour: orange fish, black outline, white eye, transparent', f: (u, v) => fishE(u, v) > 1 ? null : fishEye(u, v) ? WHT : fishE(u, v) > .7 ? BLK : ORA, ideal: (u, v) => fishE(u, v) <= 1 && fishE(u, v) > .7, maxDiff: .08, clear: [[.5, .5]], colours: true },
+  { id: 'M7', name: 'multi-colour: green leaf with a yellow vein, transparent', f: (u, v) => leafE(u, v) > 1 ? null : vein(u, v) ? YEL : GRN, ideal: (u, v) => leafE(u, v) <= 1 && !vein(u, v), maxDiff: .06, clear: [[.3, .5], [.7, .5]] },   // green = design, yellow = background: nothing merged
+  { id: 'M8', name: 'multi-colour: red, white and blue flag (stripes to the edge)', f: (u, v) => v < .33 ? RED : v < .66 ? WHT : BLU, ideal: (u, v) => v < .33 || v >= .66, maxDiff: .06, colours: true },
 ];
 // detail too fine for the grid: the builder must be told it was lost
 const LOST = { id: 'K14', name: 'too fine: hairline X (1% strokes) must be reported as lost', f: (u, v) => xs(u, v, .006) || r0(u, v) > .44 && r0(u, v) < .48 ? BLK : WHT };
@@ -64,12 +80,17 @@ function measure(c) {
 module.exports = function (ok) {
   for (const c of CASES) {
     const m = measure(c);
-    ok('CA ' + c.id + ' ' + c.name + ': within ' + Math.round(c.maxDiff * 100) + '% of the ideal' + (c.keep ? ', fine detail kept' : '') + (c.clear ? ', enclosed detail kept clear' : ''),
-      m.share <= c.maxDiff && m.keepOk && m.clearOk, Math.round(m.share * 100) + '% differ; keep ' + m.keepOk + '; clear ' + m.clearOk);
+    const warned = m.r.report.warn.some(w => w.id === 'colours');
+    ok('CA ' + c.id + ' ' + c.name + ': within ' + Math.round(c.maxDiff * 100) + '% of the ideal' + (c.keep ? ', fine detail kept' : '') + (c.clear ? ', enclosed detail kept clear' : '') + (c.colours ? ', merged colours reported' : ', no merged-colour warning'),
+      m.share <= c.maxDiff && m.keepOk && m.clearOk && warned === !!c.colours, Math.round(m.share * 100) + '% differ; keep ' + m.keepOk + '; clear ' + m.clearOk + '; colours warning ' + warned);
   }
   const lost = A.convert(source(LOST), { gh: 16 });
   ok('CA ' + LOST.id + ' ' + LOST.name, lost.report.warn.some(w => w.id === 'lost' && /lost/.test(w.text)) && lost.report.lost > 0, JSON.stringify(lost.report.warn.map(w => w.id)));
   // controls and compatibility
+  const sun = source(CASES.find(c => c.id === 'M1')), sunWhole = A.convert(sun, { gh: 16, shape: true }), face = source(CASES.find(c => c.id === 'M2')), faceWhole = A.convert(face, { gh: 16, shape: true });
+  ok('CA K21 opaque artwork: Whole shape gives the filled silhouette (sun and face become solid discs)', A.get(sunWhole.art, 8, 8) && A.get(faceWhole.art, 8, 8) && A.ink(sunWhole.art) > 2 * A.ink(A.convert(sun, { gh: 16 }).art) && !sunWhole.report.split);
+  const mc = A.convert(sun, { gh: 16 }).report.warn.find(w => w.id === 'colours');
+  ok('CA K22 the merged-colour warning says how many colours the artwork has and how to choose differently', !!mc && mc.level === 'warn' && /3 colours/.test(mc.text) && /two/.test(mc.text) && /Whole shape/.test(mc.text));
   const sticker = source(CASES.find(c => c.id === 'K4')), split = A.convert(sticker, { gh: 16 }), whole = A.convert(sticker, { gh: 16, shape: true });
   ok('CA K16 transparent artwork: Whole shape brings back the filled silhouette; the default reports that light areas are background',
     split.report.split && split.report.warn.some(w => w.id === 'lightbg') && !whole.report.split && !whole.report.warn.some(w => w.id === 'lightbg') && A.ink(whole.art) > 2 * A.ink(split.art) && A.get(whole.art, 8, 8) && !A.get(split.art, 8, 8));
@@ -88,9 +109,9 @@ module.exports.CASES = CASES; module.exports.measure = measure;
 
 if (require.main === module) {   // comparison table
   const pad = (s, n) => String(s).padEnd(n);
-  console.log(pad('case', 6) + pad('description', 62) + pad('grid', 8) + pad('cells wrong', 13) + 'detail checks');
-  for (const c of CASES) { const m = measure(c); console.log(pad(c.id, 6) + pad(c.name, 62) + pad(m.art.w + 'x' + m.art.h, 8) + pad(m.diff + ' (' + Math.round(m.share * 100) + '%)', 13) + (c.keep || c.clear ? (m.keepOk && m.clearOk ? 'kept' : 'LOST') : '-')); }
+  console.log(pad('case', 6) + pad('description', 66) + pad('grid', 8) + pad('cells wrong', 13) + pad('detail checks', 15) + 'colours warning');
+  for (const c of CASES) { const m = measure(c), w = (m.r.report.warn || []).some(x => x.id === 'colours'); console.log(pad(c.id, 6) + pad(c.name, 66) + pad(m.art.w + 'x' + m.art.h, 8) + pad(m.diff + ' (' + Math.round(m.share * 100) + '%)', 13) + pad(c.keep || c.clear ? (m.keepOk && m.clearOk ? 'kept' : 'LOST') : '-', 15) + (w ? 'yes' : 'no') + (c.colours ? ' (expected yes)' : '')); }
   const lost = A.convert(source(LOST), { gh: 16 }).report;
-  console.log(pad(LOST.id, 6) + pad(LOST.name, 62) + pad('', 8) + pad('', 13) + 'warnings: ' + (lost.warn.map(w => w.id).join(',') || 'none'));
+  console.log(pad(LOST.id, 6) + pad(LOST.name, 66) + pad('', 8) + pad('', 13) + 'warnings: ' + (lost.warn.map(w => w.id).join(',') || 'none'));
   if (process.argv.includes('--grids')) for (const c of CASES) { const m = measure(c); console.log('\n' + c.id + ' ' + c.name + '\n  result' + ' '.repeat(Math.max(1, m.art.w - 4)) + 'ideal'); m.art.rows.forEach((row, y) => console.log('  ' + row.replace(/1/g, '#').replace(/0/g, '·') + '  ' + m.ideal[y].replace(/1/g, '#').replace(/0/g, '·'))); }
 }

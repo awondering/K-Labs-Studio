@@ -92,22 +92,47 @@
       const n = new Map(); border.forEach(i => n.set(col(i), (n.get(col(i)) || 0) + 1)); let best = -1, bc = 0; n.forEach((v, k) => { if (v > bc) { bc = v; best = k; } });
       const R = lab(best), near = border.filter(i => dE(lab(col(i)), R) < 12).length; if (near >= 0.6 * border.length) bgRef = best;
     }
+    // pixels whose 4 neighbours are the same colour (so not anti-aliased edges): only these count as a real colour area
+    const interior = i => { const x = i % W, y = (i / W) | 0; if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return false; const c = lab(col(i)); return [i - 1, i + 1, i - W, i + W].every(j => lev[j] >= 0 && dE(lab(col(j)), c) < 10); };
+    const minN = Math.max(4, 0.005 * opaque);
+    // tone split: among the pattern colours, a clearly darker group with real area (outlines, eyes, mouths, lettering) is kept
+    // and the lighter fills become background (on a dark background the lighter group is kept). Whole shape keeps them all.
+    const toneSplit = bgL => {
+      const idx = []; for (let i = 0; i < N; i++) if (ink[i]) idx.push(i); if (!idx.length) return false;
+      const L = i => lab(col(i))[0], hb = new Array(16).fill(0); idx.forEach(i => hb[clamp(Math.floor(L(i) / 6.25), 0, 15)]++);
+      const t = otsu(hb, idx.length); let sd = 0, nd = 0, sl = 0, nl = 0, id = 0, il = 0;
+      idx.forEach(i => { const dark = Math.floor(L(i) / 6.25) < t, inn = interior(i); if (dark) { sd += L(i); nd++; if (inn) id++; } else { sl += L(i); nl++; if (inn) il++; } });
+      if (!nd || !nl || id < minN || il < minN || sl / nl - sd / nd < 25) return false;
+      const keepDark = Math.abs(sd / nd - bgL) >= Math.abs(sl / nl - bgL);
+      idx.forEach(i => { if ((Math.floor(L(i) / 6.25) < t) !== keepDark) ink[i] = 0; });
+      return true;
+    };
     if (col && hasAlpha) {
       mode = 'transparent'; const { q, hq } = diffLevels(WHITE);
       let t = otsu(hq, opaque || 1), lo = 0, hi = 0, nl = 0, nh = 0; for (let k = 0; k < 16; k++) { if (k < t) { lo += k * hq[k]; nl += hq[k]; } else { hi += k * hq[k]; nh += hq[k]; } }
-      const minN = Math.max(4, 0.005 * opaque); split = !o.shape && nl >= minN && nh >= minN && hi / nh - lo / nl >= 4;
+      split = !o.shape && nl >= minN && nh >= minN && hi / nh - lo / nl >= 4;
       if (split && manual != null) t = 16 - manual;
       cut = 16 - t; for (let i = 0; i < N; i++) ink[i] = q[i] < 0 ? 0 : (!split || q[i] >= t) ? 1 : 0;
+      if (!o.shape && toneSplit(100)) split = true;
     } else if (bgRef != null) {
       mode = 'colour'; const { q, hq } = diffLevels(bgRef);
       const t = manual != null ? 16 - manual : otsu(hq, opaque || 1); cut = 16 - t;
       for (let i = 0; i < N; i++) ink[i] = q[i] >= t ? 1 : 0;
       autoInverted = lab(bgRef)[0] < 40;   // reported so the editor can say a dark background was taken as background
+      if (!o.shape && toneSplit(lab(bgRef)[0])) split = true;
     } else {
       cut = manual != null ? manual : otsu(hist, opaque || 1);
       // a dark border means a dark background: flip automatically (independent of the cut-off, so the slider never makes it jump)
       if (!hasAlpha) { let bs = 0, bn = 0; border.forEach(i => { bs += lev[i]; bn++; }); autoInverted = bn > 0 && bs / bn < 5; }
       for (let i = 0; i < N; i++) { let v = lev[i] < 0 ? 0 : hasAlpha ? 1 : (lev[i] < cut ? 1 : 0); if (autoInverted) v = 1 - v; ink[i] = v; }
+    }
+    // colours merged into two: group the artwork's colour areas (transparency is not a colour; an opaque image's own background
+    // colour is) and see whether the design or the background now holds two or more of them
+    let colours = 0, mergedColours = false;
+    if (col) {
+      const groups = []; for (let i = 0; i < N; i++) { if (lev[i] < 0 || !interior(i)) continue; const c = lab(col(i)); let g = groups.find(k => dE(k.c, c) < 20); if (!g) groups.push(g = { c, n: 0, ink: 0 }); g.n++; if (ink[i]) g.ink++; }
+      const real = groups.filter(g => g.n >= minN); colours = real.length;
+      const inDesign = real.filter(g => g.ink * 2 >= g.n).length; mergedColours = inDesign >= 2 || real.length - inDesign >= 2;
     }
     if (o.invert) for (let i = 0; i < N; i++) ink[i] = 1 - ink[i];
     let x0 = 0, y0 = 0, x1 = W, y1 = H;
@@ -148,11 +173,12 @@
       if (comps > 10 || busy > 0.35 || removed > Math.max(3, 0.12 * inkN)) warn.push({ id: 'detail', level: 'warn', text: 'This artwork is too detailed to weave faithfully (' + comps + ' separate shapes). It has been simplified. Try a lower detail, a bolder image, or tidy it on the grid.' });
       if (lostShapes || lostGaps) { const parts = []; if (lostShapes) parts.push(lostShapes + (lostShapes === 1 ? ' fine line or small shape' : ' fine lines or small shapes') + ' could not be woven at this size'); if (lostGaps) parts.push(lostGaps + (lostGaps === 1 ? ' small gap was' : ' small gaps were') + ' filled in');
         warn.push({ id: 'lost', level: 'warn', text: 'Some detail was lost: ' + parts.join(' and ') + '. Increase the Detail, use bolder artwork, or add it back on the grid.' }); }
-      if (split) warn.push({ id: 'lightbg', level: 'info', text: 'Light areas inside the artwork are treated as background, so outlines and inner details show. Choose Whole shape to fill them in.' });
+      if (mergedColours) warn.push({ id: 'colours', level: 'warn', text: 'This artwork has ' + colours + ' colours, but a woven design has two: the design colour and the background. Some colours were merged, so the result may look different from your image. Check the grid; Whole shape, Invert and the Cut-off change which parts are kept.' });
+      if (split) warn.push({ id: 'lightbg', level: 'info', text: 'Fills inside the artwork are treated as background, so outlines and details show. Choose Whole shape to fill them in.' });
       if (frac > 0.9) warn.push({ id: 'full', level: 'warn', text: 'Almost every cell is filled. Try Invert, or move the Cut-off towards Less.' });
       if (gw * gh < 40) warn.push({ id: 'tiny', level: 'info', text: 'The pattern is very small. Increase the detail for a clearer shape.' });
     }
-    return { art, report: { components: comps, busy, removed, filled, lost: lostShapes + lostGaps, lostShapes, lostGaps, ink: inkN, fraction: frac, hasAlpha, autoInverted, split, mode, cut, srcW: W, srcH: H, crop: [x0, y0, x1, y1], warn } };
+    return { art, report: { components: comps, busy, removed, filled, lost: lostShapes + lostGaps, lostShapes, lostGaps, colours, mergedColours, ink: inkN, fraction: frac, hasAlpha, autoInverted, split, mode, cut, srcW: W, srcH: H, crop: [x0, y0, x1, y1], warn } };
   };
   // build a complete custom design's art from a source and options (what the editor stores)
   A.fromSource = function (src, conv) {

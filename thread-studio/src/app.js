@@ -117,7 +117,7 @@ ${saved.length ? `<h2 style="margin-top:18px">My Designs</h2><div class="tiles">
     S.upErr = '';
     try {
       const src = await loadArt(file), art = T.art.fromSource(src, { gh: 16 }), nm = (file.name || 'Artwork').replace(/\.[^.]+$/, '').slice(0, 30) || 'Artwork';
-      open(T.createDesign('wovencustom', { art, name: nm }), art.report.autoInverted ? 'Artwork converted. It looked light on dark, so it was inverted. Use Invert if that’s wrong.' : art.report.split ? 'Artwork converted. Light areas inside it are treated as background, so outlines and details show. Use Whole shape to fill them in.' : 'Artwork converted to a weave pattern. Refine it on the grid.');
+      open(T.createDesign('wovencustom', { art, name: nm }), art.report.autoInverted ? 'Artwork converted. It looked light on dark, so it was inverted. Use Invert if that’s wrong.' : 'Artwork converted to a weave pattern. Refine it on the grid.');
     } catch (e) { S.upErr = e.message || 'That image could not be used.'; if (S.screen === 'custom') custom(); }
   }
   const gridCard = () => `<section class="card" id="gridcard"><h2>Draw</h2><div class="gridwrap"><canvas id="gridc" role="img" aria-label="Pattern grid. Tap or drag to add or remove cells."></canvas></div>
@@ -194,7 +194,7 @@ ${d.pattern === 'wovencustom' ? gridCard() : ''}
     document.querySelector('[data-st="gw-"]').disabled = a.w <= T.art.MINW; document.querySelector('[data-st="gw+"]').disabled = a.w >= T.art.MAXW;
     document.querySelector('[data-st="gh-"]').disabled = a.h <= T.art.MINH; document.querySelector('[data-st="gh+"]').disabled = a.h >= T.art.MAXH;
     const ab = $('#artbox'); ab.style.display = a.src ? '' : 'none';
-    if (a.src) { const cv = a.conv || {}, thr = cv.thr == null ? Math.round((a.report && a.report.cut || 8) / 16 * 100) : cv.thr; $('#athr').value = thr; $('#athv').textContent = cv.thr == null ? 'auto' : thr + '%'; $('#ainv').setAttribute('aria-pressed', !!cv.invert); $('#acrop').setAttribute('aria-pressed', cv.crop !== false); $('#ashape').hidden = !(a.report && a.report.mode === 'transparent'); $('#ashape').setAttribute('aria-pressed', !!cv.shape); $('#vcg').innerHTML = (cv.gh || 16) + ' cells';
+    if (a.src) { const cv = a.conv || {}, thr = cv.thr == null ? Math.round((a.report && a.report.cut || 8) / 16 * 100) : cv.thr; $('#athr').value = thr; $('#athv').textContent = cv.thr == null ? 'auto' : thr + '%'; $('#ainv').setAttribute('aria-pressed', !!cv.invert); $('#acrop').setAttribute('aria-pressed', cv.crop !== false); $('#ashape').hidden = !(a.report && (a.report.mode === 'transparent' || a.report.mode === 'colour')); $('#ashape').setAttribute('aria-pressed', !!cv.shape); $('#vcg').innerHTML = (cv.gh || 16) + ' cells';
       document.querySelector('[data-st="cg-"]').disabled = (cv.gh || 16) <= T.art.MINH; document.querySelector('[data-st="cg+"]').disabled = (cv.gh || 16) >= T.art.MAXH;
       $('#artnote').textContent = a.edited ? 'You have edited the grid. Changing these settings converts the artwork again and replaces those edits (Undo brings them back).' : 'Adjust these until the shape on the grid looks right, then refine it by hand.'; }
     const dn = $('#dname'); if (dn && document.activeElement !== dn && dn.value !== (d.name || 'My design')) dn.value = d.name || 'My design';
