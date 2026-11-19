@@ -352,7 +352,8 @@ test('sync (documented): pricePending is already protected as a price field by t
 test('Stage 2: sync treats jobKind as a price-linked field (never merged field by field)',{todo:true},()=>{
   assert.match(read('build-sync.js').match(/const PRICING_KEYS = new Set\(\[([\s\S]*?)\]\)/)[1],/"jobKind"/);
 });
-test('Stage 2: the server refuses to issue an invoice or record a payment while pricePending is set',{todo:true},()=>{
+// Done (Q6): supabase/migrations/20261120000000_financial_pricing_pending.sql; behaviour in tests/financial-pricing-pending-isolated.cjs.
+test('Stage 2: the server refuses to issue an invoice or record a payment while pricePending is set',()=>{
   const migrations=fs.readdirSync(path.join(__dirname,'..','supabase','migrations')).map((f)=>fs.readFileSync(path.join(__dirname,'..','supabase','migrations',f),'utf8')).join('\n');
   assert.match(migrations,/pricePending/);
 });
