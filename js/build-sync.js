@@ -142,6 +142,29 @@
     if (record) window.KLABS_UI?.refreshOpenBuild?.(id, record);
     window.KLABS_UI?.refreshBuildViews?.();
   }
+  // Applies a whole sync run's local changes (retired jobs removed, downloaded jobs saved) in one write and one redraw.
+  // The resulting list is exactly what calling putLocal once per job would give: retired jobs removed, then each downloaded
+  // job moved to the front in turn (so the last downloaded is first), the rest keeping their order. All or nothing: if the
+  // save fails nothing is written and the caller stores no journal change, so the next run repeats it.
+  function putLocalBatch(ctx, retire, hydrate) {
+    if (!retire.length && !hydrate.length) return;
+    if (!current(ctx)) throw new Error("The signed-in account changed.");
+    // the same steps putLocal takes per job, replayed in memory (cheap) instead of in storage
+    let list = records();
+    for (const id of retire) list = list.filter((item) => String(item.id) !== id);
+    for (const [id, record] of hydrate) {
+      list = list.filter((item) => String(item.id) !== id);
+      if (record) list.unshift(record);
+    }
+    const old = window.KLABS_SYNC_HYDRATION;
+    window.KLABS_SYNC_HYDRATION = true;
+    try {
+      if (window.saveBuildRecords(list) === false) throw new Error("Could not save the local build.");
+    }
+    finally { window.KLABS_SYNC_HYDRATION = old; }
+    for (const [id, record] of hydrate) if (record) window.KLABS_UI?.refreshOpenBuild?.(id, record);
+    window.KLABS_UI?.refreshBuildViews?.();
+  }
   function addConflict(state, id, local, cloud, revision, reason) {
     const old = state.conflicts[id];
     const history = old?.history || [];
@@ -370,8 +393,7 @@
       }
     }
     // The local copies are brought up to date first: if that fails nothing is recorded as done and the next run repeats it.
-    for (const id of retire) putLocal(ctx, null, id);
-    for (const [id, record] of hydrate) putLocal(ctx, record, id);
+    putLocalBatch(ctx, retire, hydrate);
     store(ctx, state);
     return state;
   }
