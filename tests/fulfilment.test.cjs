@@ -45,7 +45,7 @@ function ctx(over={},status='quote'){
     document:{querySelectorAll:()=>[]},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','revealFulfilmentSelector','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
   return c;
 }
 const full={addressLine1:'5 River Rd',cityTown:'Taupo',postcode:'3330'};
@@ -67,11 +67,13 @@ test('record fields: new jobs require a choice; legacy records are not assumed o
   assert.ok(!/fulfilmentMethod/.test(fn('applyCustomerFieldsToQuoteFromRecord')),'customer change must not touch method');
 });
 
-test('selector markup exists with both options inside the pricing delivery area',()=>{
+test('selector markup exists with both options, directly above the Documents actions (Q14)',()=>{
   assert.match(html,/id="quoteFulfilmentGroup"/);
   assert.match(html,/data-fulfilment-method="collection"/);
   assert.match(html,/data-fulfilment-method="shipping"/);
-  assert.ok(html.indexOf('quoteFulfilmentGroup')<html.indexOf('id="quoteDeliveryFields"'));
+  const group=html.indexOf('id="quoteFulfilmentGroup"');
+  assert.ok(group>html.indexOf('id="quoteDeliveryFields"'),'after the pricing/delivery fields');
+  assert.ok(group<html.indexOf('aria-label="Documents"'),'before the Documents actions');
 });
 
 test('collection: shows business name, no address, no Delivery section, build and repair',()=>{
@@ -137,8 +139,16 @@ test('new job without a method is blocked before a document or email',()=>{
   const c=ctx({fulfilmentChoiceRequired:true});
   let ran=false;c.runWithFulfilmentCheck(()=>{ran=true;});
   assert.ok(!ran);
-  assert.equal(c.dialogs[0].type,'info');
-  assert.match(c.dialogs[0].m,/Fulfilment Method/);
+  assert.equal(c.dialogs[0].type,'confirm');
+  assert.equal(c.dialogs[0].o.title,'Fulfilment Method Needed');
+  assert.match(c.dialogs[0].o.message,/Fulfilment Method/);
+  // Q14: the warning offers a way to the selector; OK just closes. Neither creates the document.
+  assert.equal(c.dialogs[0].o.actions.map((a)=>a.id).join(','),'choose,ok');
+  assert.equal(c.dialogs[0].o.actions[0].label,'Choose Fulfilment Method');
+  const scheduled=[];c.window={setTimeout:(f)=>scheduled.push(f)};
+  c.confirmCb('ok');assert.equal(scheduled.length,0);assert.ok(!ran);
+  c.confirmCb('choose');assert.equal(scheduled.length,1);assert.ok(!ran);
+  assert.equal(scheduled[0].name,'revealFulfilmentSelector');
 });
 
 test('shipping with incomplete address warns; continuing proceeds, going back does not',()=>{

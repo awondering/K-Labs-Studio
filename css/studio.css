@@ -12679,6 +12679,10 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .quote-job-type__options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 #workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 #workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}
+/* Q14: Fulfilment Method sits above the Documents actions (outside the pricing fields), visible for every job type. */
+#workshopScreen #quoteFulfilmentGroup .build-pricing__note{color:var(--titanium);font-size:11px;line-height:1.35;margin:0}
+#workshopScreen #quoteFulfilmentGroup{border-radius:12px;transition:box-shadow .3s ease}
+#workshopScreen #quoteFulfilmentGroup.is-attention{box-shadow:0 0 0 2px rgba(186,31,44,.55)}
 
 /* Components job (Job 9): job type fixed at creation; rod specifications not used. */
 #workshopScreen .build-details[data-job-kind="components"] > #quoteJobTypeGroup,
