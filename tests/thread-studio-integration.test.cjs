@@ -154,7 +154,7 @@ test('the served bundle thread-studio/index.html is current with its source',()=
 test('the studio\'s own engine and geometry suite passes (all calculations unchanged)',()=>{
   const r=spawnSync(process.execPath,[path.join(root,'thread-studio','src','tests.js')],{encoding:'utf8',cwd:path.join(root,'thread-studio','src')});
   assert.equal(r.status,0,r.stdout.split('\n').filter((l)=>/^FAIL/.test(l)).join('\n'));
-  assert.match(r.stdout,/308\/308 passed/);
+  assert.match(r.stdout,/338\/338 passed/);   // 308 engine checks + 30 artwork conversion (clip-art) checks
 });
 
 test('every new style rule is scoped to the Thread Design Studio card so other Workshop tools are untouched',()=>{

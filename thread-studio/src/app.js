@@ -122,8 +122,8 @@ ${saved.length ? `<h2 style="margin-top:18px">My Designs</h2><div class="tiles">
   }
   const gridCard = () => `<section class="card" id="gridcard"><h2>Draw</h2><div class="gridwrap"><canvas id="gridc" role="img" aria-label="Pattern grid. Tap or drag to add or remove cells."></canvas></div>
 <p class="mut" id="gridnote" style="margin:6px 2px"></p><div class="bar"><button class="btn sm" data-act="gclear">Clear</button><button class="btn sm" data-act="save" id="savebtn">Save to My Designs</button></div>
-<details id="artbox" style="margin-top:10px"><summary>Artwork conversion</summary><div class="in"><span class="field">Darkness cut-off</span><input type="range" id="athr" min="5" max="95" step="1" aria-label="Darkness cut-off"><div class="mut" style="display:flex;justify-content:space-between"><span>Less</span><span id="athv"></span><span>More</span></div>
-<div class="bar" style="margin-top:10px"><button class="btn sm" data-act="aauto">Auto</button><button class="btn sm" data-act="ainv" id="ainv">Invert</button><button class="btn sm" data-act="acrop" id="acrop">Crop to artwork</button></div>
+<details id="artbox" style="margin-top:10px"><summary>Artwork conversion</summary><div class="in"><span class="field">Cut-off</span><input type="range" id="athr" min="5" max="95" step="1" aria-label="Cut-off"><div class="mut" style="display:flex;justify-content:space-between"><span>Less</span><span id="athv"></span><span>More</span></div>
+<div class="bar" style="margin-top:10px"><button class="btn sm" data-act="aauto">Auto</button><button class="btn sm" data-act="ainv" id="ainv">Invert</button><button class="btn sm" data-act="acrop" id="acrop">Crop to artwork</button><button class="btn sm" data-act="ashape" id="ashape" hidden>Whole shape</button></div>
 <span class="field" style="margin-top:12px">Detail (cells round the rod)</span>${stepper('cg', 'Detail')}<p class="note" id="artnote"></p></div></details></section>`;
   // ---------- editor ----------
   const stepper = (id, label, cap) => `<div class="stp"><button data-st="${id}-" aria-label="${label} smaller">−</button><div class="val" id="v${id}"></div><button data-st="${id}+" aria-label="${label} larger">+</button></div>${cap ? `<div class="mut" style="display:flex;justify-content:space-between;margin:2px 6px 0"><span>${cap[0]}</span><span>${cap[1]}</span></div>` : ''}`;
@@ -194,7 +194,7 @@ ${d.pattern === 'wovencustom' ? gridCard() : ''}
     document.querySelector('[data-st="gw-"]').disabled = a.w <= T.art.MINW; document.querySelector('[data-st="gw+"]').disabled = a.w >= T.art.MAXW;
     document.querySelector('[data-st="gh-"]').disabled = a.h <= T.art.MINH; document.querySelector('[data-st="gh+"]').disabled = a.h >= T.art.MAXH;
     const ab = $('#artbox'); ab.style.display = a.src ? '' : 'none';
-    if (a.src) { const cv = a.conv || {}, thr = cv.thr == null ? Math.round((a.report && a.report.cut || 8) / 16 * 100) : cv.thr; $('#athr').value = thr; $('#athv').textContent = cv.thr == null ? 'auto' : thr + '%'; $('#ainv').setAttribute('aria-pressed', !!cv.invert); $('#acrop').setAttribute('aria-pressed', cv.crop !== false); $('#vcg').innerHTML = (cv.gh || 16) + ' cells';
+    if (a.src) { const cv = a.conv || {}, thr = cv.thr == null ? Math.round((a.report && a.report.cut || 8) / 16 * 100) : cv.thr; $('#athr').value = thr; $('#athv').textContent = cv.thr == null ? 'auto' : thr + '%'; $('#ainv').setAttribute('aria-pressed', !!cv.invert); $('#acrop').setAttribute('aria-pressed', cv.crop !== false); $('#ashape').hidden = !(a.report && (a.report.mode === 'transparent' || a.report.mode === 'colour')); $('#ashape').setAttribute('aria-pressed', !!cv.shape); $('#vcg').innerHTML = (cv.gh || 16) + ' cells';
       document.querySelector('[data-st="cg-"]').disabled = (cv.gh || 16) <= T.art.MINH; document.querySelector('[data-st="cg+"]').disabled = (cv.gh || 16) >= T.art.MAXH;
       $('#artnote').textContent = a.edited ? 'You have edited the grid. Changing these settings converts the artwork again and replaces those edits (Undo brings them back).' : 'Adjust these until the shape on the grid looks right, then refine it by hand.'; }
     const dn = $('#dname'); if (dn && document.activeElement !== dn && dn.value !== (d.name || 'My design')) dn.value = d.name || 'My design';
@@ -295,6 +295,7 @@ ${st.next ? `<p class="next"><b>Next</b> ${esc(st.next.replace(/^Next:\s*/, ''))
     if (a === 'gmx' || a === 'gmy') return commit(Object.assign(T.clone(S.d), { art: T.art.mirror(S.d.art, a === 'gmx' ? 'x' : 'y') }));
     if (a === 'ainv') return reconvert({ invert: !(S.d.art.conv || {}).invert });
     if (a === 'acrop') return reconvert({ crop: (S.d.art.conv || {}).crop === false });
+    if (a === 'ashape') return reconvert({ shape: !(S.d.art.conv || {}).shape });
     if (a === 'aauto') return reconvert({ thr: null });
     if (a === 'save') { if (!S.d.id) S.d.id = T.art.newId(); const ok = lib.set(T.art.libUpsert(lib.get(), S.d)); store.set(S.d); S.note = ok ? 'Saved to My Designs. Find it under Create Your Own Design.' : 'Could not save: this browser’s storage is full or blocked.'; return paint(); }
     if (a === 'text') return open(T.createDesign('wovenletters'));
