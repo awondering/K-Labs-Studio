@@ -7,8 +7,9 @@
   ];
   const adminScript = "js/admin-panel.js";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
-  // own long network timeout; after this the cached entitlement is used, exactly as when offline.
-  const ENTITLEMENT_TIMEOUT_MS = 8000;
+  // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
+  // times the measured round trip on a weak mobile connection (Q16: an unanswered launch waited 8.2 s, now 3.2 s).
+  const ENTITLEMENT_TIMEOUT_MS = 3000;
   // Visitors who are not signed in never reach any of this. These are the same static files the server already
   // publishes; fetching them early changes when they download, not who may run them.
   let preloadStarted = false;
