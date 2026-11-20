@@ -10796,23 +10796,46 @@ html.klabs-demo .component-sheet .component-sheet__panel { max-height:min(100%,v
 .demo-player__chapter-label { color:#d8c08c;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase; }
 .demo-player__controls { display:flex;align-items:center;gap:6px; }
 .demo-player__button { flex:none;min-width:72px;min-height:38px;padding:0 12px; }
+.demo-player__button[hidden] { display:none; }
 .demo-player__chapters { display:flex;flex:1 1 auto;gap:4px;min-width:0;margin:0;padding:0;list-style:none;overflow-x:auto;scrollbar-width:none; }
 .demo-player__chapters li { flex:none; }
 .demo-player__chapter { display:flex;align-items:center;gap:6px;min-height:38px;padding:0 10px;border:1px solid rgba(200,169,106,.25);border-radius:999px;background:rgba(255,255,255,.03);color:#bdb6aa;font:inherit;font-size:12px;cursor:pointer; }
 .demo-player__chapter b { font-weight:700;color:#d8c08c; }
 .demo-player__chapter[aria-current="step"] { border-color:#c8a96a;background:rgba(200,169,106,.18);color:#ece6d8; }
 .demo-player__chapter[data-done="true"] b::after { content:" \2713"; }
+/* Q18 2B: ten chapters - each shows its number, and the chapter playing shows its name too. */
+.demo-player__chapter span { display:none; }
+.demo-player__chapter[aria-current="step"] span { display:inline; }
+.demo-player__tag,
+.demo-player__exit { display:none; }
+/* Q18 2B: iPhone strip. While playing, the strip is a caption (at most two short lines) above one slim row: DEMO, Pause,
+   Replay, the chapters and Exit demo. Before Start and after the end the DEMO bar with Exit demo shows as before. */
 @media (max-width:620px) {
   .demo-dock__message { font-size:11px; }
-  html.klabs-demo .demo-dock[data-playing="true"] .demo-dock__message { display:none; }
-  .demo-player__caption { font-size:13px; }
-  .demo-player__button { min-width:0;padding:0 10px; }
-  .demo-player__chapter { min-width:38px;justify-content:center;padding:0; }
-  .demo-player__chapter span { display:none; }
+  html.klabs-demo .demo-dock[data-player-open="true"] { padding-top:calc(4px + env(safe-area-inset-top,0px));padding-bottom:5px; }
+  html.klabs-demo .demo-dock[data-player-open="true"] .demo-dock__bar { display:none; }
+  html.klabs-demo .demo-dock[data-player-open="true"] .demo-player { margin-top:0; }
+  html.klabs-demo .demo-dock[data-player-open="true"] .demo-player__caption { display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;min-height:2.6em;margin:0 0 4px;overflow:hidden;font-size:12.5px;line-height:1.3; }
+  html.klabs-demo .demo-dock[data-player-open="true"] .demo-player__tag { display:block;flex:none;color:#d8c08c;font-size:9px;letter-spacing:.12em; }
+  html.klabs-demo .demo-dock[data-player-open="true"] .demo-player__exit { display:block;flex:none;min-height:30px;padding:0 9px;font-size:11px;white-space:nowrap; }
+  .demo-player__controls { gap:4px; }
+  .demo-player__button { min-width:0;min-height:30px;padding:0 9px;font-size:11px; }
+  .demo-player__chapters { gap:3px; }
+  .demo-player__chapter { min-width:30px;min-height:30px;justify-content:center;padding:0 7px;font-size:11px; }
+  .demo-player__chapter[aria-current="step"] span { display:none; }
+  .demo-player__chapter[data-done="true"] b::after { content:""; }
+  .demo-player__chapter[data-done="true"] { background:rgba(200,169,106,.1); }
 }
+/* end iPhone strip */
 /* Q18 2A: the customer quote shown in the demonstration carries a DEMO watermark and a banner (Demo Mode only). */
 html.klabs-demo .view-quote { position:relative;overflow:hidden; }
 html.klabs-demo .view-quote::before { content:"DEMONSTRATION QUOTE - FICTIONAL, NOT A REAL OFFER";display:block;margin:0 0 12px;padding:6px 10px;border:1px dashed rgba(200,169,106,.55);border-radius:6px;color:#d8c08c;font-size:10px;font-weight:700;letter-spacing:.12em;text-align:center; }
+/* Q18 2B: the completed build summary, and the invoice preview (watermark on the page, banner above it). */
+html.klabs-demo #viewQuoteSheet [aria-label="Build summary"] .view-quote::before { content:"DEMONSTRATION BUILD SUMMARY - FICTIONAL, NOT A REAL DOCUMENT"; }
+html.klabs-demo #viewQuoteSheet [aria-label="Build confirmation"] .view-quote::before { content:"DEMONSTRATION BUILD CONFIRMATION - FICTIONAL, NOT A REAL DOCUMENT"; }
+html.klabs-demo #invoicePreviewSheet .invoice-preview__page { position:relative; }
+html.klabs-demo #invoicePreviewSheet .invoice-preview__page::after { content:"DEMO";position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;color:rgba(160,120,50,.22);font-size:clamp(64px,18vw,140px);font-weight:800;letter-spacing:.12em;transform:rotate(-24deg);pointer-events:none; }
+html.klabs-demo #invoicePreviewSheet .invoice-preview__page::before { content:"DEMONSTRATION INVOICE - FICTIONAL, NOT A REAL INVOICE";position:absolute;bottom:0;left:0;right:0;z-index:3;padding:4px 8px;background:rgba(32,30,26,.88);color:#d8c08c;font-size:9px;font-weight:700;letter-spacing:.1em;line-height:1.3;text-align:center;pointer-events:none; }
 html.klabs-demo .view-quote::after { content:"DEMO";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(200,169,106,.16);font-size:clamp(72px,22vw,150px);font-weight:800;letter-spacing:.12em;transform:rotate(-24deg);pointer-events:none; }
 .demo-intro { position:fixed;inset:0;z-index:2147483200;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px));background:rgba(6,7,8,.8);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px); }
 .demo-intro[hidden] { display:none; }

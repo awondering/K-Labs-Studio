@@ -1,4 +1,4 @@
-// Q18 Phase 2A: the demonstration player and the scripted journey (steps 1-5).
+// Q18 Phase 2A/2B: the demonstration player and the scripted journey (steps 1-10).
 // Runs js/demo-director.js against a small stand-in page with a virtual clock; the real screens, the live figures
 // against quoteMaths() and the watermark are checked in tests/demo-playback-browser.cjs (WebKit).
 const assert = require('node:assert/strict');
@@ -17,6 +17,8 @@ const ui = read('js/ui.js');
 // everything the director does are recorded. Time is virtual: a wait of N ms advances the clock by N at once.
 function stage({ search = '?demo' } = {}) {
   const log = [];
+  const busy = { studio: 0, writes: 0 };
+  const slow = { turns: 0 };
   const elements = new Map();
   let clock = 0;
   const make = (key) => {
@@ -49,13 +51,31 @@ function stage({ search = '?demo' } = {}) {
   // The journey's "wait until" checks: after the customer is created the new build shows Jordan Ellis and a quote
   // number; the expanded/collapsed state of sections follows what the director tapped.
   get('#quoteCustomerName').value = 'Jordan Ellis';
+  get('#workshopBuildLifecycleStatus').textContent = 'Quote';
+  // 2B: what Studio does on screen when the director taps through steps 6-10 (sheets and forms opening and closing,
+  // the job's status changing, the invoice being issued).
+  const show = (key, on) => { get(key).hidden = !on; };
+  const reactions = {
+    '#viewQuoteBtn': () => show('#viewQuoteSheet', true),
+    '#viewQuoteCloseBtn': () => show('#viewQuoteSheet', false),
+    '#confirmBuildBtn': () => show('#confirmSheet', true),
+    '#confirmSheet [data-confirm-action="confirm"]': () => { show('#confirmSheet', false); get('#workshopBuildLifecycleStatus').textContent = 'Active'; },
+    '#quoteRecordPaymentBtn': () => show('#quoteBalanceReceivedForm', true),
+    '#quoteBalanceReceivedSave': () => show('#quoteBalanceReceivedForm', false),
+    '#toggleCurrentBuildStatusBtn': () => { get('#workshopBuildLifecycleStatus').textContent = 'Complete'; },
+    '#viewInvoicePreviewBtn': () => show('#invoicePreviewSheet', true),
+    '#invoicePreviewSheet [data-invoice-preview-action="issue"]': () => show('#confirmSheet', true),
+    '#confirmSheet [data-confirm-action="issue"]': () => { show('#confirmSheet', false); get('#invoicePreviewBody .invoice-document[data-invoice-issued="true"]').textContent = 'Invoice INV-1046'; },
+    '#invoicePreviewSheet .invoice-preview__actions [data-invoice-preview-action="close"]': () => show('#invoicePreviewSheet', false),
+  };
+  for (const [key, react] of Object.entries(reactions)) get(key).listeners.click = [react];
   // Every caption the visitor is shown is recorded.
   const captionEl = get('#demoCaption');
   let captionText = '';
   Object.defineProperty(captionEl, 'textContent', { get: () => captionText, set: (v) => { captionText = String(v); log.push(['caption', captionText]); } });
   // As in index.html and ui.js: the introduction, the player and Studio's sheets start hidden.
-  for (const key of ['#demoIntro', '#demoPlayer', '#choicePickerSheet', '#customerFinderSheet']) get(key).hidden = true;
-  const chapterButtons = [1, 2, 3, 4, 5].map((n) => { const b = get(`chapter-${n}`); b.attributes['data-demo-chapter'] = String(n); return b; });
+  for (const key of ['#demoIntro', '#demoPlayer', '#choicePickerSheet', '#customerFinderSheet', '#viewQuoteSheet', '#confirmSheet', '#quoteBalanceReceivedForm', '#invoicePreviewSheet']) get(key).hidden = true;
+  const chapterButtons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => { const b = get(`chapter-${n}`); b.attributes['data-demo-chapter'] = String(n); return b; });
   const document = {
     getElementById: (id) => get(`#${id}`),
     querySelector: (selector) => get(selector),
@@ -68,9 +88,22 @@ function stage({ search = '?demo' } = {}) {
     document,
     location: { search, pathname: '/', replace(u) { replaced.push(u); } },
     history: { replaceState() {} },
-    setTimeout: (fn, ms) => { clock += Math.max(0, Number(ms) || 0); setImmediate(fn); return 1; },
+    setTimeout: (fn, ms) => {
+      clock += Math.max(0, Number(ms) || 0);
+      // slowDirector: the director's own pause-point waits (its wait()) are held back for that many turns, so it runs a
+      // long time between pause points; each one is logged when it fires.
+      if (slow.turns > 0 && /\bat wait \(/.test(new Error().stack) && !/closeWindowWhenSettled/.test(new Error().stack)) {
+        let turns = slow.turns;
+        const later = () => { if (--turns > 0) setImmediate(later); else { log.push(['director-wait']); fn(); } };
+        setImmediate(later);
+      } else setImmediate(fn);
+      return 1;
+    },
     clearTimeout() {},
-    KLABS_DEMO: { exit() { log.push(['exit']); }, enterUrl: () => '/?demo' },
+    // writeCount: how many changes the demo Store has accepted (a test can add some while a pause is settling).
+    KLABS_DEMO: { exit() { log.push(['exit']); }, enterUrl: () => '/?demo', writeCount: () => busy.writes },
+    // Studio's own "still saving" signal (an autosave in hand); a test can hold it busy.
+    KLABS_UI: { readRecoveryDraft: () => ({ quote: { id: 'build-1' } }), hasUnsavedEdits: () => busy.studio > 0 && busy.studio-- > 0 },
     ResizeObserver: class { observe() {} },
     console: { warn: (...a) => log.push(['warn', a.map(String).join(' ')]), error() {} },
   };
@@ -79,23 +112,34 @@ function stage({ search = '?demo' } = {}) {
     InputEvent: class { constructor(type, o) { this.type = type; Object.assign(this, o); } }, Promise, Error, Date, String, Number, Math, Object, Array, JSON, Set, Map, setImmediate, console: window.console });
   vm.runInContext(directorSource, context);
   let inStep = 0;
+  let suspended = false;
   const steps = [];
-  const director = Object.freeze({ async run(fn) { inStep += 1; steps.push('open'); try { return await fn(); } finally { inStep -= 1; steps.push('close'); } } });
-  return { window, document, get, log, replaced, steps, director, chapterButtons, clock: () => clock, inStep: () => inStep };
+  const director = Object.freeze({
+    async run(fn) { inStep += 1; steps.push('open'); try { return await fn(); } finally { inStep -= 1; steps.push('close'); } },
+    suspend() { suspended = true; steps.push('suspend'); log.push(['suspend']); },
+    resume() { suspended = false; steps.push('resume'); log.push(['resume']); },
+  });
+  return { window, document, get, log, replaced, steps, director, chapterButtons, busy, slow, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
 }
 const settle = async (h, untilFn, limit = 200000) => { for (let i = 0; i < limit && !untilFn(); i++) await new Promise((r) => setImmediate(r)); };
 const player = (h) => h.window.KLABS_DEMO_PLAYER;
-const finished = (h) => /Jordan's quote is ready/.test(h.get('#demoCaption').textContent) || /stopped/i.test(h.get('#demoCaption').textContent);
+// 2B change: the demonstration now finishes after the final invoice and build summary (was: on the customer quote).
+const FINISHED = /from enquiry to paid in full/;
+const finished = (h) => FINISHED.test(h.get('#demoCaption').textContent) || /stopped/i.test(h.get('#demoCaption').textContent);
+const flatJourney = (h) => player(h).journey.flatMap((c, i) => c.steps.map((s) => ({ chapter: i + 1, step: s })));
 
-test('Q18 2A: the journey has five chapters in workflow order, each with short plain-language captions', () => {
+test('Q18 2A/2B: the journey has ten chapters in workflow order, each with short plain-language captions', () => {
   const h = stage();
   const journey = player(h).journey;
-  assert.deepEqual(JSON.parse(JSON.stringify(journey.map((c) => c.title))), ['Enquiry', 'Rod spec', 'Components', 'Pricing', 'Quote']);
+  // 2B change: five more chapters (was: the first five only).
+  assert.deepEqual(JSON.parse(JSON.stringify(journey.map((c) => c.title))), ['Enquiry', 'Rod spec', 'Components', 'Pricing', 'Quote',
+    'Accepted', 'Deposit', 'Workshop', 'Final payment', 'Invoice']);
   for (const chapter of journey) {
     const captions = chapter.steps.filter((s) => s[0] === 'caption').map((s) => s[1]);
     assert.ok(captions.length >= 2, `${chapter.title} has captions`);
     for (const text of captions) {
-      assert.ok(text.length <= 120, `short caption: ${text}`);
+      // 2B change: at most 90 characters (was 120), so a caption fits the slimmer iPhone strip in two short lines.
+      assert.ok(text.length <= 90, `short caption (${text.length}): ${text}`);
       assert.doesNotMatch(text, /\b(click|DOM|director|script|selector|field id|input event|quoteMaths|API)\b/i, `workshop language: ${text}`);
     }
   }
@@ -119,14 +163,17 @@ test('Q18 2A: the director works the real Studio controls in workflow order: cus
   assert.ok(order.every((i) => i >= 0), JSON.stringify(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'workflow order');
   assert.deepEqual(order.map((i) => flat[i].chapter), [1, 1, 1, 2, 3, 3, 4, 5]);
+  // 2B: every control the later chapters use is checked below too.
+  assert.ok(flat.length > 100);
   // Every control exists on the real page (index.html) or is built by Studio's own interface (ui.js).
   for (const { step } of flat) {
-    if (!['tap', 'type', 'open', 'until', 'scroll'].includes(step[0])) continue;
+    if (!['tap', 'type', 'open', 'until', 'untilHidden', 'untilText', 'untilValue', 'scroll'].includes(step[0])) continue;
     const selector = step[1];
-    const id = /^#([A-Za-z0-9]+)/.exec(selector);
-    if (id) assert.ok(html.includes(`id="${id[1]}"`) || ui.includes(`id="${id[1]}"`) || ui.includes(`'${id[1]}'`), `${selector} exists`);
-    const attr = /\[([a-z-]+)="([^"]+)"\]/.exec(selector);
-    if (attr) assert.ok(html.includes(`${attr[1]}="${attr[2]}"`) || ui.includes(`${attr[1]}="${attr[2]}"`), `${selector} exists`);
+    for (const id of selector.matchAll(/#([A-Za-z0-9]+)/g)) assert.ok(html.includes(`id="${id[1]}"`) || ui.includes(`id="${id[1]}"`) || ui.includes(`'${id[1]}'`), `${selector} exists`);
+    for (const attr of selector.matchAll(/\[([a-z-]+)="([^"]+)"\]/g)) {
+      // Studio writes some of these from a value (data-invoice-issued="${!preview}"): the attribute itself must exist.
+      assert.ok(html.includes(`${attr[1]}="${attr[2]}"`) || ui.includes(`${attr[1]}="${attr[2]}"`) || ui.includes(`id:'${attr[2]}'`) || ui.includes(`${attr[1]}="\${`), `${selector} exists`);
+    }
   }
   // Components come from the demonstration library by category, subcategory and name - and the parts are ordinary.
   const context = vm.createContext({ window: {} });
@@ -150,7 +197,7 @@ test('Q18 2A: field values are typed one character at a time, visibly - never fi
     const expected = [...text].map((_, i) => [...text].slice(0, i + 1).join(''));
     assert.deepEqual(inputs.slice(-expected.length), expected, `${selector} typed as ${JSON.stringify(text)}`);
   }
-  assert.equal(h.get('#demoCaption').textContent.includes("Jordan's quote is ready"), true, `reaches the quote: ${h.get('#demoCaption').textContent} ${JSON.stringify(h.log.filter((e) => e[0] === 'warn'))}`);
+  assert.match(h.get('#demoCaption').textContent, FINISHED, `reaches the end: ${h.get('#demoCaption').textContent} ${JSON.stringify(h.log.filter((e) => e[0] === 'warn'))}`);
   assert.ok(h.clock() > 60000, `watchable pacing (${h.clock()} ms of playback)`);
   assert.deepEqual(h.steps, ['open', 'close'], 'one director step for the whole playback; the write window closes at the end');
 });
@@ -171,9 +218,11 @@ test('Q18 2A: Pause stops the director mid-chapter (even mid-word) and Play carr
   h.get('#demoStartBtn').click();
   await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewCustomerName' && e[2] === 'Jor'));
   h.get('#demoPlayPauseBtn').click();
-  const before = h.log.length;
+  // 2B change: the write window closing a moment into the pause (logged as 'suspend') is not the director doing something.
+  const acts = () => h.log.filter((e) => e[0] !== 'suspend' && e[0] !== 'resume').length;
+  const before = acts();
   await settle(h, () => false, 3000);
-  assert.equal(h.log.length, before, 'nothing happens while paused');
+  assert.equal(acts(), before, 'nothing happens while paused');
   assert.match(h.get('#demoPlayPauseBtn').textContent, /Play/);
   assert.match(h.get('#demoCaption').textContent, /Paused/);
   h.get('#demoPlayPauseBtn').click();
@@ -211,7 +260,8 @@ test('Q18 2A: a chapter jump skips quickly through the earlier chapters on the r
   assert.ok(captionsOf(3).every((c) => shown.includes(c)), 'the chosen chapter plays with all its captions');
   assert.ok([0, 1, 2].every((i) => captionsOf(i).every((c) => !shown.includes(c))), 'skipped chapters show no captions');
   assert.ok(h.clock() - skipping > 8000, 'the chosen chapter plays at watchable pace');
-  for (const bad of ['?demo&chapter=9', '?demo&chapter=x', '?demo&chapter=0']) {
+  // 2B change: chapter 9 now exists, so 11 is the first chapter that does not (was: 9).
+  for (const bad of ['?demo&chapter=11', '?demo&chapter=x', '?demo&chapter=0', '?demo&chapter=100']) {
     const other = stage({ search: bad });
     player(other).open(other.director);
     assert.equal(other.get('#demoIntro').hidden, false, `${bad} shows the introduction`);
@@ -222,4 +272,182 @@ test('Q18 2A: no separate demonstration maths and no direct data changes - figur
   const code = directorSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(code, /quoteMaths|finalCustomerPrice|labourRate\s*\*|unitPrice|unitCost|Store\.set|localStorage|innerHTML/);
   assert.doesNotMatch(code, /\bquote\.[a-zA-Z]+\s*=/, 'never writes the build directly');
+});
+
+// ---- Phase 2B
+
+test('Q18 2B: courier delivery - Freight and Packaging are typed in, and the caption says delivery is added separately with the rod\'s target profit unchanged', () => {
+  const h = stage();
+  const flat = flatJourney(h);
+  const pricing = flat.filter(({ chapter }) => chapter === 4).map(({ step }) => step);
+  assert.ok(!flat.some(({ step }) => step[0] === 'tap' && /collection/.test(step[1])), 'no Customer Collection any more');
+  const at = (pred) => pricing.findIndex(pred);
+  const margin = at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent');
+  const courier = at((s) => s[0] === 'tap' && s[1] === '[data-fulfilment-method="shipping"]');
+  const freight = at((s) => s[0] === 'type' && s[1] === '#quoteFreight' && /^\d+$/.test(s[2]));
+  const packaging = at((s) => s[0] === 'type' && s[1] === '#quotePackaging' && /^\d+$/.test(s[2]));
+  const explained = at((s) => s[0] === 'caption' && /delivery/i.test(s[1]) && /separately/i.test(s[1]) && /target profit/i.test(s[1]) && /same|unchanged/i.test(s[1]));
+  assert.ok(margin >= 0 && margin < courier && courier < freight && freight < packaging && packaging < explained, JSON.stringify({ margin, courier, freight, packaging, explained }));
+  assert.equal(pricing[explained + 1][0], 'hold', 'a short hold on "delivery added separately"');
+});
+
+test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposit, workshop, final payment and complete, invoice and summary', () => {
+  const h = stage();
+  const flat = flatJourney(h);
+  const at = (pred, from = 0) => flat.findIndex((entry, i) => i >= from && pred(entry.step));
+  const tapOf = (selector) => (s) => s[0] === 'tap' && s[1] === selector;
+  const marks = {};
+  marks.confirm = at(tapOf('#confirmBuildBtn'));
+  marks.confirmed = at(tapOf('#confirmSheet [data-confirm-action="confirm"]'));
+  marks.active = at((s) => s[0] === 'untilText' && s[1] === '#workshopBuildLifecycleStatus' && s[2] === 'Active');
+  marks.depositForm = at(tapOf('#quoteRecordPaymentBtn'));
+  marks.depositType = at(tapOf('#quotePaymentTypeField [data-payment-type="deposit"]'));
+  marks.depositAmount = at((s) => s[0] === 'type' && s[1] === '#quoteBalanceReceivedAmount' && s[2] === '300');
+  marks.depositSave = at(tapOf('#quoteBalanceReceivedSave'));
+  marks.activeJobs = at(tapOf('[data-studio-action="open-builds"]'));
+  marks.openJob = at(tapOf('#buildsScreen [data-build-action="open"]'));
+  marks.notes = at((s) => s[0] === 'type' && s[1] === '#quoteSpecBuilderNotes');
+  marks.balanceForm = at(tapOf('#quoteRecordPaymentBtn'), marks.notes);
+  marks.balanceSave = at(tapOf('#quoteBalanceReceivedSave'), marks.balanceForm);
+  marks.complete = at(tapOf('#toggleCurrentBuildStatusBtn'));
+  marks.completed = at((s) => s[0] === 'untilText' && s[1] === '#workshopBuildLifecycleStatus' && s[2] === 'Complete');
+  marks.invoice = at(tapOf('#viewInvoicePreviewBtn'));
+  marks.issue = at(tapOf('#invoicePreviewSheet [data-invoice-preview-action="issue"]'));
+  marks.issued = at(tapOf('#confirmSheet [data-confirm-action="issue"]'));
+  marks.summary = at(tapOf('#viewQuoteBtn'), marks.issued);
+  const order = Object.values(marks);
+  assert.ok(order.every((i) => i >= 0), JSON.stringify(marks));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, `workflow order ${JSON.stringify(marks)}`);
+  assert.deepEqual(Object.fromEntries(Object.entries(marks).map(([k, i]) => [k, flat[i].chapter])), {
+    confirm: 6, confirmed: 6, active: 6, depositForm: 7, depositType: 7, depositAmount: 7, depositSave: 7, activeJobs: 8, openJob: 8, notes: 8,
+    balanceForm: 9, balanceSave: 9, complete: 9, completed: 9, invoice: 10, issue: 10, issued: 10, summary: 10 });
+  // The final payment is Studio's own figure for the balance owing: the director never types it.
+  const typedAmounts = flat.filter(({ step }) => step[0] === 'type' && step[1] === '#quoteBalanceReceivedAmount');
+  assert.equal(typedAmounts.length, 1, 'only the deposit amount is typed');
+  // Holds on the key moments: live pricing, delivery, the quote, the final invoice.
+  const holdAfter = (index) => flat.slice(index + 1, index + 4).some(({ step }) => step[0] === 'hold' && step[1] >= 1500);
+  assert.ok(holdAfter(at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent')), 'hold on live pricing');
+  assert.ok(holdAfter(at((s) => s[0] === 'scroll' && /viewQuoteSheet/.test(s[1]))), 'hold on the quote');
+  assert.ok(flat.slice(marks.issued, marks.summary).some(({ step }) => step[0] === 'hold' && step[1] >= 2000), 'hold on the final invoice');
+});
+
+test('Q18 2B: the whole journey plays from Start to the final invoice and summary through those controls', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  assert.match(h.get('#demoCaption').textContent, FINISHED, JSON.stringify(h.log.filter((e) => e[0] === 'warn')));
+  const clicks = h.log.filter((e) => e[0] === 'click').map((e) => e[1]);
+  for (const selector of ['#confirmBuildBtn', '#confirmSheet [data-confirm-action="confirm"]', '#quotePaymentTypeField [data-payment-type="deposit"]', '#toggleCurrentBuildStatusBtn',
+    '#invoicePreviewSheet [data-invoice-preview-action="issue"]', '#confirmSheet [data-confirm-action="issue"]']) {
+    assert.ok(clicks.includes(selector), selector);
+  }
+  assert.equal(clicks.filter((c) => c === '#quoteBalanceReceivedSave').length, 2, 'two payments: the deposit and the balance');
+  assert.deepEqual(h.steps, ['open', 'close'], 'one director step for the whole playback');
+});
+
+test('Q18 2B: at the end the Pause button becomes Replay, and pressing it restarts at chapter 1 in Demo Mode', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'click'));
+  assert.equal(h.get('#demoPlayPauseBtn').textContent, 'Pause');
+  await settle(h, () => finished(h));
+  const button = h.get('#demoPlayPauseBtn');
+  assert.equal(button.textContent, 'Replay');
+  assert.equal(button.disabled, false, 'it can be pressed');
+  assert.equal(h.get('#demoReplayBtn').hidden, true, 'one Replay button, not two');
+  button.click();
+  assert.deepEqual(h.replaced, ['/?demo&chapter=1']);
+  assert.equal(h.log.some((e) => e[0] === 'exit'), false, 'never exits');
+});
+
+test('Q18 2B: Pause closes the director\'s write window once Studio has finished saving, and Play reopens it before anything moves', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewCustomerName' && e[2] === 'Jor'));
+  assert.equal(h.writable(), true, 'open while playing');
+  h.busy.studio = 3; // Studio is still saving the last change
+  h.get('#demoPlayPauseBtn').click();
+  assert.equal(h.writable(), true, 'not closed in the middle of Studio saving');
+  await settle(h, () => h.steps.includes('suspend'), 5000);
+  assert.equal(h.busy.studio, 0, 'closed only after Studio was no longer saving');
+  assert.equal(h.writable(), false, 'closed while paused');
+  const before = h.log.length;
+  await settle(h, () => false, 3000);
+  assert.equal(h.log.length, before, 'nothing happens while paused');
+  assert.equal(h.writable(), false, 'stays closed for the whole pause');
+  h.get('#demoPlayPauseBtn').click();
+  assert.equal(h.writable(), true, 'reopened by Play');
+  await settle(h, () => h.log.length > before + 3);
+  const resumed = h.log.findIndex((e) => e[0] === 'resume');
+  assert.ok(resumed >= 0 && resumed === h.log.findIndex((e, i) => i >= before && e[0] !== 'caption' && e[1] !== '#demoPlayPauseBtn'), `reopened before the director moves again ${JSON.stringify(h.log.slice(before - 2, before + 4))}`);
+  // A quick Pause and Play before Studio settles leaves the window open, and never closes it after Play.
+  h.busy.studio = 2;
+  h.get('#demoPlayPauseBtn').click();
+  h.get('#demoPlayPauseBtn').click();
+  await settle(h, () => false, 300);
+  assert.equal(h.inStep(), 1, `still playing: ${h.get('#demoCaption').textContent} ${JSON.stringify(h.log.filter((e) => e[0] === 'warn'))}`);
+  assert.equal(h.writable(), true, 'left open after Play');
+  assert.equal(h.steps.filter((s) => s === 'suspend').length, 1);
+  await settle(h, () => finished(h));
+  assert.deepEqual(h.steps, ['open', 'suspend', 'resume', 'close']);
+});
+
+test('Q18 2B: the player will not open without a director that can close its write window', () => {
+  const h = stage();
+  assert.throws(() => player(h).open(Object.freeze({ run: async (f) => f() })), /director is unavailable/);
+});
+
+test('Q18 2B: brisk routine typing and moves; the iPhone strip has its own Exit demo', async () => {
+  const h = stage();
+  const pace = player(h).pace;
+  assert.ok(Object.isFrozen(pace));
+  // 2A was key 70, field 450, tap 650, captionBase 1400, captionPerChar 30, chapter 900 ms.
+  assert.ok(pace.key <= 45 && pace.field <= 300 && pace.tap <= 420 && pace.captionBase <= 1200 && pace.captionPerChar <= 25 && pace.chapter <= 600, JSON.stringify(pace));
+  assert.ok(pace.key >= 25, 'still readable as typing');
+  player(h).open(h.director);
+  h.get('#demoPlayerExitBtn').click();
+  assert.ok(h.log.some((e) => e[0] === 'exit'));
+});
+
+test('Q18 2B: Pause closes the window only once the director has stopped and Studio has made no change for a moment (a save in flight is never cut off)', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewPhone'));
+  h.get('#demoPlayPauseBtn').click();
+  // Studio keeps saving for a while after the pause (each settle step it makes another change).
+  let changes = 0;
+  const startClock = h.clock();
+  await settle(h, () => { if (changes < 12) { changes += 1; h.busy.writes += 1; } return h.steps.includes('suspend'); }, 50000);
+  assert.ok(h.steps.includes('suspend'), 'closes in the end');
+  assert.equal(changes, 12, 'not while Studio was still making changes');
+  assert.ok(h.clock() - startClock >= 800, `a quiet moment first (${h.clock() - startClock} ms)`);
+  h.get('#demoPlayPauseBtn').click();
+  await settle(h, () => finished(h));
+  assert.deepEqual(h.steps, ['open', 'suspend', 'resume', 'close']);
+});
+
+test('Q18 2B: the write window closes only after the director has actually stopped, even when it runs a long time between pause points', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewPhone'));
+  h.slow.turns = 40; // eight quiet settle checks (800 ms) would fit five times over inside one of the director's waits
+  await settle(h, () => h.log.some((e) => e[0] === 'director-wait'));
+  await settle(h, () => true); // the director has set its next (held-back) wait
+  h.get('#demoPlayPauseBtn').click();
+  const from = h.log.length;
+  const seen = () => h.log.slice(from).map((e) => e[0]);
+  await settle(h, () => seen().includes('suspend') && seen().includes('director-wait'), 50000);
+  const after = seen();
+  assert.ok(after.includes('suspend'), 'closes in the end');
+  assert.ok(after.includes('director-wait'), 'the director was still mid-wait when Pause was pressed');
+  assert.ok(after.lastIndexOf('director-wait') < after.indexOf('suspend'), `closed only after the director's last wait finished (${after.join(',')})`);
+  h.slow.turns = 0;
+  h.get('#demoPlayPauseBtn').click();
+  await settle(h, () => finished(h));
+  assert.deepEqual(h.steps, ['open', 'suspend', 'resume', 'close']);
 });

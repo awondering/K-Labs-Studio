@@ -25,6 +25,11 @@ window.KLABS_SUPABASE_CLIENT = window.KLABS_DEMO?.active ? null : window.supabas
 );
 let klabsReadOnlyObserver = null;
 let klabsDemoMessageTimer = null;
+// Q18: the Studio controls the demonstration director may use in Demo Mode (see the click guard below).
+const DEMO_DIRECTOR_CONTROLS = ["#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
+  "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quotePaymentTypeField [data-payment-type]", "#quoteBalanceReceivedSave",
+  "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
+  "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]"].join(", ");
 
 function klabsApplyReadOnlyControls() {
   const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;
@@ -341,15 +346,18 @@ document.addEventListener("DOMContentLoaded", () => {
       control.closest(".workshop-build-actions-surface, [data-current-build-action], [data-more-document], #currentBuildActionsMenu")
       || /\b(invoice|statement|documents?|pdf|share|download|issue|payment|deposit|generate|template)\b/i.test(label));
     const blockedDemo = demo && (
-      control.closest("#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice")
+      control.closest("#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice, #retryFinancialBtn")
       || control.matches(".layout-control-card__button, .component-quantity__step, [data-spiral-angle-action]")
       || /\b(log ?out|sign ?out|sync|admin|upload|logo|increase|decrease|e-?mail|print|export|send)\b/i.test(label));
-    // Q18 2A: the demonstration chooses how the job is fulfilled and shows its customer quote on screen (View Quote and
-    // the sheet's Close). Printing, email drafts, invoices, statements, PDFs and every other build action stay blocked;
-    // the visitor cannot press anything on Studio at all (js/demo-mode.js).
-    const demoJourneyControl = demo && control.matches("#viewQuoteBtn, #viewQuoteCloseBtn, #quoteFulfilmentGroup [data-fulfilment-method]");
+    // Q18 2A/2B: the demonstration director (never a person: the visitor's own taps are not trusted to reach Studio at
+    // all - js/demo-mode.js) may use the journey's controls: View Quote and its Close, the fulfilment choice, Confirm
+    // Build, the payment form, Mark Complete, the invoice preview's Issue and Close, and Studio's own confirmation.
+    // Printing, email drafts, statements, More documents, the retry of a payment and every other build action stay blocked.
+    // A person's tap on one of them is refused here too, as a second layer behind the shield.
+    const demoJourneyControl = demo && !event.isTrusted && control.matches(DEMO_DIRECTOR_CONTROLS);
+    const demoVisitorOnJourney = demo && event.isTrusted && control.matches(DEMO_DIRECTOR_CONTROLS);
     if (demo) {
-      if (demoJourneyControl || (!blockedOffline && !blockedDemo)) return;
+      if (demoJourneyControl || (!demoVisitorOnJourney && !blockedOffline && !blockedDemo)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       const bar = document.getElementById("demoModeMessage");

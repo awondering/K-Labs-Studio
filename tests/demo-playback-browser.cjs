@@ -1,11 +1,14 @@
-// Q18 Phase 2A: full playback of the scripted demonstration on the real screens, Start -> customer quote.
+// Q18 Phase 2A/2B: full playback of the scripted demonstration on the real screens, Start -> final invoice and build summary.
 // Run with: PLAYWRIGHT_MODULE=/path/to/playwright node tests/demo-playback-browser.cjs   (WebKit; DEMO_BROWSER=chromium to override)
 // Serves the repository from a local HTTP server with every other request refused. Synthetic demonstration data only.
-// Checks, at Mac and iPhone 13 sizes: no autoplay; every figure Studio shows while pricing and on the quote matches
-// Studio's own quoteMaths(); the parts' prices come from the demonstration library; the quote carries the DEMO watermark
-// and a local quote number with no "Connect to allocate" notice; Pause holds everything and Play carries on; the
-// visitor's own clicks, taps and typing change nothing; sheets are never covered by the dock; Replay and the chapter
-// controls restart without leaving Demo Mode.
+// Checks, at Mac and iPhone 13 sizes: no autoplay; every figure Studio shows while pricing, on the quote, in the payment
+// status, on the invoice and on the build summary matches Studio's own quoteMaths()/depositMaths(); the parts' prices
+// come from the demonstration library; courier delivery is added separately and leaves the rod's target profit unchanged;
+// every document carries the DEMO watermark; the quote and invoice use local demonstration numbers with no "Connect to
+// allocate" notice; the invoice balance is paid in full; Pause holds everything (and closes the write window) and Play
+// carries on; the visitor's own clicks, taps and typing change nothing; sheets are never covered by the dock; the
+// iPhone strip is slim; Replay (including the Pause button once finished) and the chapter controls restart without
+// leaving Demo Mode.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -19,6 +22,7 @@ const ck = (name, cond, detail) => { assert.ok(cond, `${name}${detail === undefi
 // The parts the demonstration picks, with the demonstration library's cost prices (js/demo-data.js).
 const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Split Grip': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
 const LABOUR = { rate: 85, hours: 5 };
+const DELIVERY = { freight: 18, packaging: 12 };
 
 function serve() {
   const server = http.createServer((req, res) => {
@@ -45,9 +49,11 @@ async function figures(page) {
       shown: { componentsCost: v('quoteCostBeforeMargin'), customerPrice: v('quoteTotal'), profit: v('quoteProfit'), margin: v('quoteMarginPercent'), gst: v('quoteGst'),
         earnings: v('quoteEstimatedEarnings'), summary: v('quotePricingSummaryValue'), headline: v('workshopBuildPricingSummaryText'), labourRate: v('quoteLabourRate'), labourHours: v('quoteLabourHours') },
       maths: { materialCost: maths.materialCost, labourCost: maths.labourCost, total: maths.total, gst: maths.gst, rodProfit: maths.rodProfit, rodMarginPercent: maths.rodMarginPercent,
-        earnings: maths.exclusiveRevenue - maths.materialCost - maths.freightCost, balanceOwing: maths.balanceOwing },
+        earnings: maths.exclusiveRevenue - maths.materialCost - maths.freightCost, balanceOwing: maths.balanceOwing, amountReceived: maths.amountReceived,
+        deliveryCost: maths.freightCost, deliveryCharge: maths.freightCharge },
       parts: quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).map((c) => ({ name: c.category, libraryId: c.libraryComponentId || '', cost: componentRowLineCost(c) })),
       rate: quote.labourRate, hours: quote.labourHours, quoteNumber: quote.quoteNumber, prefix: businessProfile.quotePrefix,
+      fulfilment: quote.fulfilmentMethod, freight: quote.freight, packaging: quote.packaging, lifecycle: currentBuildLifecycleStatus(), payments: JSON.parse(JSON.stringify(quote.payments || [])),
     };
   });
 }
@@ -89,8 +95,8 @@ async function boot(browser, base, contextOptions, search = '?demo') {
 }
 const caption = (page) => page.evaluate(() => document.getElementById('demoCaption').textContent);
 const chapterLabel = (page) => page.evaluate(() => document.getElementById('demoChapterLabel').textContent);
-const waitChapter = (page, n, timeout = 120000) => page.waitForFunction((n) => (document.getElementById('demoChapterLabel').textContent || '').startsWith(`${n}/`) || (n === 6 && /Finished/.test(document.getElementById('demoChapterLabel').textContent)), n, { timeout });
-const finished = (page, timeout = 240000) => page.waitForFunction(() => /Jordan's quote is ready|stopped/i.test(document.getElementById('demoCaption').textContent), null, { timeout });
+const waitChapter = (page, n, timeout = 120000) => page.waitForFunction((n) => (document.getElementById('demoChapterLabel').textContent || '').startsWith(`${n}/`) || (n === 11 && /Finished/.test(document.getElementById('demoChapterLabel').textContent)), n, { timeout });
+const finished = (page, timeout = 300000) => page.waitForFunction(() => /from enquiry to paid in full|stopped/i.test(document.getElementById('demoCaption').textContent), null, { timeout });
 const visitorPress = async (page, selector, touch) => {
   const box = await page.locator(selector).first().boundingBox().catch(() => null);
   if (!box) return false;
@@ -121,7 +127,9 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: nothing plays until the visitor presses Start`, idle.player === true && idle.label === '' && !idle.sheet, idle);
   await visitorPress(page, '#demoStartBtn', touch);
   await waitChapter(page, 1, 20000);
-  ck(`${label}: Start shows the player with chapter 1`, (await chapterLabel(page)).startsWith('1/5 Enquiry'));
+  ck(`${label}: Start shows the player with chapter 1`, (await chapterLabel(page)).startsWith('1/10 Enquiry'));
+  const strip = await page.evaluate(() => Math.round(document.getElementById('demoModeBar').getBoundingClientRect().height));
+  if (label === 'iphone') ck(`${label}: the strip is slim while playing (${strip} px; 2A was about 210 px)`, strip <= 110, strip);
 
   // Sheets stay clear of the dock: customer sheet, component library, quote.
   await page.waitForSelector('#customerFinderNewForm:not([hidden])', { timeout: 30000 });
@@ -172,56 +180,172 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: the customer price changes live on screen as the margin is typed (${live.size} different prices seen)`, live.size >= 2, [...live]);
   const mismatched = samples.filter((s) => !near(Number(s.shown.customerPrice), s.maths.total) || !near(money(s.shown.componentsCost), s.maths.materialCost));
   ck(`${label}: every live sample (${samples.length}) matches quoteMaths()`, mismatched.length === 0, mismatched.slice(0, 2));
+  // Before delivery: the rod alone at a 25% margin.
+  await page.waitForFunction(() => /couriered/.test(document.getElementById('demoCaption').textContent), null, { timeout: 60000 });
+  const rodOnly = await figures(page);
+  checkFigures(`${label} rod price`, rodOnly);
+  ck(`${label}: a 25% margin was set by typing it`, near(rodOnly.maths.rodMarginPercent, 25, 0.01), rodOnly.maths.rodMarginPercent);
+  ck(`${label}: no delivery charge yet`, near(rodOnly.maths.deliveryCharge, 0), rodOnly.maths.deliveryCharge);
   await waitChapter(page, 5, 120000);
   const priced = await figures(page);
   checkFigures(`${label} pricing`, priced);
   const partsCost = Object.values(PART_COSTS).reduce((a, b) => a + b, 0);
   ck(`${label}: the six parts came from the demonstration library at its prices`, priced.parts.length === 6 && priced.parts.every((p) => PART_COSTS[p.name] === p.cost && p.libraryId.startsWith('comp-')) && near(priced.maths.materialCost, partsCost), priced.parts);
   ck(`${label}: labour is the workshop rate times the hours typed`, Number(priced.rate) === LABOUR.rate && Number(priced.hours) === LABOUR.hours && near(priced.maths.labourCost, LABOUR.rate * LABOUR.hours), [priced.rate, priced.hours, priced.maths.labourCost]);
-  ck(`${label}: a 25% margin was set by typing it`, near(priced.maths.rodMarginPercent, 25, 0.01), priced.maths.rodMarginPercent);
+  // Courier delivery: Freight + Packaging typed in, added to the price separately; the rod's target profit is unchanged.
+  ck(`${label}: courier delivery chosen, with Freight 18 and Packaging 12 typed in`, priced.fulfilment === 'shipping' && Number(priced.freight) === DELIVERY.freight && Number(priced.packaging) === DELIVERY.packaging, [priced.fulfilment, priced.freight, priced.packaging]);
+  ck(`${label}: the delivery charge is quoteMaths()'s (cost ${priced.maths.deliveryCost}, charged ${priced.maths.deliveryCharge} incl. GST)`, near(priced.maths.deliveryCost, DELIVERY.freight + DELIVERY.packaging) && near(priced.maths.deliveryCharge, Math.round((DELIVERY.freight + DELIVERY.packaging) * 115) / 100), priced.maths);
+  ck(`${label}: delivery is added to the price separately (rod ${rodOnly.maths.total} + delivery ${priced.maths.deliveryCharge} = ${priced.maths.total})`, near(priced.maths.total, rodOnly.maths.total + priced.maths.deliveryCharge), [rodOnly.maths.total, priced.maths.deliveryCharge, priced.maths.total]);
+  ck(`${label}: the rod's target profit and margin are unchanged by delivery`, near(priced.maths.rodProfit, rodOnly.maths.rodProfit, 0.0051) && near(priced.maths.rodMarginPercent, 25, 0.01), [rodOnly.maths.rodProfit, priced.maths.rodProfit, priced.maths.rodMarginPercent]);
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-3-pricing.png`) });
 
   // Chapter 5: the customer quote, watermarked, with the same figures.
-  await finished(page);
-  const end = await page.evaluate(() => {
-    const sheet = document.getElementById('viewQuoteSheet');
-    const doc = sheet && sheet.querySelector('.view-quote');
-    const after = doc ? getComputedStyle(doc, '::after') : null;
-    const before = doc ? getComputedStyle(doc, '::before') : null;
-    const rows = doc ? [...doc.querySelectorAll('.view-quote__pricing div, .view-quote__row')].map((r) => [r.querySelector('span')?.textContent, r.querySelector('strong')?.textContent]) : [];
-    const outgoing = ['viewQuoteEmailBtn', 'emailQuoteBtn'].map((id) => { const el = document.getElementById(id); return el ? { id, shown: el.getClientRects().length > 0, disabled: el.disabled } : { id, absent: true }; });
-    return { open: !!sheet && !sheet.hidden, watermark: after && after.content, banner: before && before.content, rows, text: doc ? doc.innerText : '', outgoing,
-      caption: document.getElementById('demoCaption').textContent, label: document.getElementById('demoChapterLabel').textContent, play: document.getElementById('demoPlayPauseBtn').disabled };
-  });
-  ck(`${label}: the demonstration finishes on the customer quote`, end.open && /Jordan's quote is ready/.test(end.caption) && end.label === 'Finished' && end.play === true, end.caption);
-  ck(`${label}: the quote carries the DEMO watermark and banner`, end.watermark === '"DEMO"' && /DEMONSTRATION QUOTE/.test(end.banner || ''), [end.watermark, end.banner]);
-  const total = end.rows.find((r) => r[0] === 'Total Price');
+  await page.waitForFunction(() => /marked DEMO and goes nowhere/.test(document.getElementById('demoCaption').textContent), null, { timeout: 120000 });
+  const quoteDoc = await documentShown(page, '#viewQuoteSheet');
+  ck(`${label}: the customer quote is open`, quoteDoc.open && quoteDoc.title === 'Customer Quote', quoteDoc.title);
+  ck(`${label}: the quote carries the DEMO watermark and banner`, quoteDoc.watermark === '"DEMO"' && /DEMONSTRATION QUOTE/.test(quoteDoc.banner || ''), [quoteDoc.watermark, quoteDoc.banner]);
+  const total = quoteDoc.rows.find((r) => r[0] === 'Total Price');
   ck(`${label}: the quote's Total Price = quoteMaths() total`, total && near(money(total[1]), priced.maths.total), total);
-  const quoteNumberRow = end.rows.find((r) => /Quote/i.test(r[0] || '') && /\d/.test(r[1] || ''));
+  const deliveryRow = quoteDoc.rows.find((r) => /^Delivery/.test(r[0] || '') && /\d/.test(r[1] || ''));
+  ck(`${label}: the quote shows the delivery charge = quoteMaths()`, deliveryRow && near(money(deliveryRow[1]), priced.maths.deliveryCharge), deliveryRow);
+  const quoteNumberRow = quoteDoc.rows.find((r) => /Quote/i.test(r[0] || '') && /\d/.test(r[1] || ''));
   ck(`${label}: the quote shows the local demonstration number`, quoteNumberRow && quoteNumberRow[1] === `${priced.prefix}1046`, quoteNumberRow);
-  ck(`${label}: the quote names Jordan Ellis and the business`, /Jordan Ellis/.test(end.text) && /Harbourline Custom Rods/.test(end.text), end.text.slice(0, 200));
-  ck(`${label}: Open Email Draft and other outgoing controls are hidden and disabled`, end.outgoing.every((o) => o.absent || (!o.shown && o.disabled)), end.outgoing);
+  ck(`${label}: the quote names Jordan Ellis and the business`, /Jordan Ellis/.test(quoteDoc.text) && /Harbourline Custom Rods/.test(quoteDoc.text), quoteDoc.text.slice(0, 200));
+  ck(`${label}: Open Email Draft and other outgoing controls are hidden and disabled`, quoteDoc.outgoing.every((o) => o.absent || (!o.shown && o.disabled)), quoteDoc.outgoing);
   const quoteSheet = await sheetsClear(page);
   ck(`${label}: the quote sheet title and close button are not covered by the dock`, quoteSheet.length > 0 && quoteSheet.every((s) => s.clear), quoteSheet);
   checkFigures(`${label} at the quote`, await figures(page));
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-4-quote.png`) });
 
+  // Chapter 6, paused: the write window closes, and the visitor's taps on the quote's Close, Confirm Build, the
+  // fulfilment choice and their typing change nothing. Play carries on and the director confirms the build.
+  await waitChapter(page, 6, 60000);
+  const refusedBefore = await page.evaluate(() => window.KLABS_DEMO.refused.length);
+  await visitorPress(page, '#demoPlayPauseBtn', touch);
+  // The probe: tried every 1.2 s until refused. Probes accepted before the window closes are Studio still settling (each
+  // restarts the 800 ms quiet time, hence not more often); the probe's key is the only refused write the checks ignore.
+  await page.waitForFunction(() => window.Store.set('klabs-demo-pause-probe', 2) === false, null, { timeout: 12000, polling: 1200 });
+  const probeAtClose = await page.evaluate(() => window.Store.get('klabs-demo-pause-probe', null));
+  // Self-check of the check below (DEMO_PLANT=1 only): a Studio write while paused, not the probe's - the run must fail.
+  if (process.env.DEMO_PLANT) await page.evaluate(() => window.Store.set('klabs-workshop-builds:klabs-demo', []));
+  ck(`${label}: while paused the write window is closed (a write is refused)`, true);
+  for (const target of ['#viewQuoteCloseBtn', '#confirmBuildBtn', '[data-fulfilment-method="collection"]', '#viewQuoteSheet .component-sheet__close']) await visitorPress(page, target, touch);
+  await page.keyboard.type('9');
+  await page.waitForTimeout(1500);
+  const pausedState = await page.evaluate(() => ({ sheet: !document.getElementById('viewQuoteSheet').hidden, lifecycle: currentBuildLifecycleStatus(), fulfilment: quote.fulfilmentMethod, button: document.getElementById('demoPlayPauseBtn').textContent }));
+  ck(`${label}: paused in chapter 6, the visitor's taps on Close, Confirm Build and Customer Collection do nothing`, pausedState.sheet && pausedState.lifecycle === 'quote' && pausedState.fulfilment === 'shipping' && pausedState.button === 'Play', pausedState);
+  await visitorPress(page, '#demoPlayPauseBtn', touch);
+  await page.waitForFunction(() => currentBuildLifecycleStatus() === 'active', null, { timeout: 60000 });
+  const accepted = await figures(page);
+  ck(`${label}: Confirm Build makes the same job Active with the same quote number and price`, accepted.lifecycle === 'active' && accepted.quoteNumber === `${accepted.prefix}1046` && near(accepted.maths.total, priced.maths.total), [accepted.lifecycle, accepted.quoteNumber, accepted.maths.total]);
+
+  // Chapter 7: the deposit, through Studio's Record Payment form. The visitor's taps and typing in the form do nothing.
+  await page.waitForSelector('#quoteBalanceReceivedForm:not([hidden])', { timeout: 60000 });
+  for (const target of ['[data-payment-type="balance"]', '#quoteBalanceReceivedCancel', '#quoteBalanceReceivedSave', '#quoteBalanceReceivedAmount']) await visitorPress(page, target, touch);
+  await page.keyboard.type('9999');
+  await page.waitForFunction(() => (quote.payments || []).length === 1, null, { timeout: 60000 });
+  const deposit = await figures(page);
+  ck(`${label}: the deposit of $300 is recorded (the visitor's typing in the form changed nothing)`, deposit.payments.length === 1 && deposit.payments[0].type === 'deposit' && deposit.payments[0].amount === 300, deposit.payments);
+  ck(`${label}: the balance owing after the deposit = depositMaths()`, near(deposit.maths.balanceOwing, priced.maths.total - 300) && near(money(await page.evaluate(() => document.getElementById('quotePaymentBalanceOwing').textContent)), deposit.maths.balanceOwing), deposit.maths.balanceOwing);
+
+  // Chapter 8: workshop progress on the real screens - Active Jobs, the job, private workshop notes.
+  await waitChapter(page, 8, 60000);
+  await page.waitForSelector('#buildsScreen.active', { timeout: 60000 });
+  await visitorPress(page, '[data-nav="homeScreen"]', touch);
+  await page.waitForTimeout(400);
+  ck(`${label}: Jordan's job is in Active Jobs, and the visitor's tap on Home does not leave it`, await page.evaluate(() => document.getElementById('buildsScreen').classList.contains('active') && /Jordan Ellis/.test(document.getElementById('buildsScreen').innerText)));
+  await page.waitForFunction(() => /Grip and reel seat fitted/.test(document.getElementById('quoteSpecBuilderNotes')?.value || ''), null, { timeout: 60000 });
+  ck(`${label}: private workshop notes typed on the job`, true);
+
+  // Chapter 9: the final payment is Studio's own balance figure; then Mark Complete.
+  await waitChapter(page, 9, 60000);
+  await visitorPress(page, '#toggleCurrentBuildStatusBtn', touch);
+  await page.waitForTimeout(300);
+  ck(`${label}: the visitor's tap on Mark Complete does nothing`, (await page.evaluate(() => currentBuildLifecycleStatus())) === 'active');
+  await page.waitForFunction(() => currentBuildLifecycleStatus() === 'complete', null, { timeout: 60000 });
+  const complete = await figures(page);
+  ck(`${label}: the final payment is the balance owing worked out by Studio (${complete.payments[1] && complete.payments[1].amount})`, complete.payments.length === 2 && complete.payments[1].type === 'balance' && near(complete.payments[1].amount, priced.maths.total - 300), complete.payments);
+  ck(`${label}: paid in full = depositMaths() (received ${complete.maths.amountReceived}, owing ${complete.maths.balanceOwing})`, near(complete.maths.amountReceived, priced.maths.total) && near(complete.maths.balanceOwing, 0), complete.maths);
+  ck(`${label}: Payment Status shows PAID IN FULL`, /PAID IN FULL/.test(await page.evaluate(() => document.getElementById('quotePaymentBalanceOwing').textContent)));
+
+  // Chapter 10: the final invoice, issued through the local stand-in, watermarked and paid in full; then the summary.
+  await page.waitForFunction(() => /ready to print or send/.test(document.getElementById('demoCaption').textContent), null, { timeout: 120000 });
+  const invoice = await page.evaluate(() => {
+    const sheet = document.getElementById('invoicePreviewSheet');
+    const doc = document.querySelector('#invoicePreviewBody .invoice-document');
+    const pageEl = sheet.querySelector('.invoice-preview__page');
+    const amounts = [...doc.querySelectorAll('.invoice-document__amount-row')].map((r) => [r.querySelector('dt')?.textContent.trim(), r.querySelector('dd')?.textContent.trim()]);
+    const print = sheet.querySelector('[data-invoice-preview-action="print"]');
+    return { open: !sheet.hidden, issued: doc.getAttribute('data-invoice-issued'), number: doc.getAttribute('data-invoice-number'), text: doc.innerText, amounts,
+      watermark: getComputedStyle(pageEl, '::after').content, banner: getComputedStyle(pageEl, '::before').content, record: quote.issuedInvoice,
+      print: { shown: print.getClientRects().length > 0, disabled: print.disabled }, more: document.getElementById('quoteMoreDocumentsWrap').getClientRects().length };
+  });
+  ck(`${label}: the final invoice is issued and open`, invoice.open && invoice.issued === 'true' && !!invoice.record, invoice.issued);
+  ck(`${label}: the invoice carries the DEMO watermark and banner`, invoice.watermark === '"DEMO"' && /DEMONSTRATION INVOICE/.test(invoice.banner), [invoice.watermark, invoice.banner]);
+  ck(`${label}: the invoice uses the local demonstration number INV-1046`, invoice.record.displayNumber === 'INV-1046' && /INV-1046/.test(invoice.text), invoice.record.displayNumber);
+  const row = (re) => invoice.amounts.find((r) => re.test(r[0] || ''));
+  ck(`${label}: invoice total = quoteMaths() total`, near(invoice.record.total, priced.maths.total) && near(money(row(/^Total including/)[1]), priced.maths.total), row(/^Total including/));
+  ck(`${label}: invoice GST = quoteMaths() GST`, near(money(row(/^GST/)[1]), priced.maths.gst, 0.0051), [row(/^GST/), priced.maths.gst]);
+  ck(`${label}: invoice received = both payments = the total`, near(money(row(/^Total received/)[1]), priced.maths.total) && invoice.record.payments.length === 2, row(/^Total received/));
+  // Studio writes "Paid in full" (shown in capitals) in the balance row once nothing is owing.
+  ck(`${label}: invoice balance = Paid in full, 0.00`, !!row(/^Paid in full$/i) && near(money(row(/^Paid in full$/i)[1]), 0) && !row(/^Balance owing$/i), invoice.amounts);
+  ck(`${label}: Print / Save as PDF and More documents are hidden`, !invoice.print.shown && invoice.print.disabled && invoice.more === 0, [invoice.print, invoice.more]);
+  const invoiceSheet = await sheetsClear(page);
+  ck(`${label}: the invoice sheet title and close button are not covered by the dock`, invoiceSheet.length > 0 && invoiceSheet.every((s) => s.clear), invoiceSheet);
+  if (shots) await page.screenshot({ path: path.join(shots, `${label}-5-invoice.png`) });
+
+  await finished(page);
+  const summary = await documentShown(page, '#viewQuoteSheet');
+  ck(`${label}: the demonstration finishes on the completed Build Summary`, summary.open && summary.title === 'Build Summary', summary.title);
+  ck(`${label}: the build summary carries the DEMO watermark and banner`, summary.watermark === '"DEMO"' && /DEMONSTRATION BUILD SUMMARY/.test(summary.banner || ''), [summary.watermark, summary.banner]);
+  const summaryRow = (re) => summary.rows.find((r) => re.test(r[0] || ''));
+  ck(`${label}: the summary's Total Price = quoteMaths() total, Balance Owing 0.00`, near(money(summaryRow(/^Total Price/)[1]), priced.maths.total) && near(money(summaryRow(/^Balance Owing/)[1]), 0), summary.rows);
+  const end = await page.evaluate(() => ({ caption: document.getElementById('demoCaption').textContent, label: document.getElementById('demoChapterLabel').textContent,
+    play: { text: document.getElementById('demoPlayPauseBtn').textContent, disabled: document.getElementById('demoPlayPauseBtn').disabled }, replay: document.getElementById('demoReplayBtn').getClientRects().length }));
+  ck(`${label}: at the end the Pause button reads Replay (and the separate Replay steps aside)`, end.label === 'Finished' && end.play.text === 'Replay' && !end.play.disabled && end.replay === 0, end);
+  if (label === 'iphone') {
+    const endStrip = await page.evaluate(() => Math.round(document.getElementById('demoModeBar').getBoundingClientRect().height));
+    ck(`${label}: the strip stays slim after the end (${endStrip} px)`, endStrip <= 110, endStrip);
+  }
+  const summarySheet = await sheetsClear(page);
+  ck(`${label}: the summary sheet is not covered by the dock`, summarySheet.length > 0 && summarySheet.every((s) => s.clear), summarySheet);
+  if (shots) await page.screenshot({ path: path.join(shots, `${label}-6-summary.png`) });
+
   const notices = await page.evaluate(() => window.__notices);
   ck(`${label}: no "Connect to allocate" notice at any point`, notices.length === 0, notices);
   ck(`${label}: no console errors`, errors.length === 0, errors);
   ck(`${label}: nothing requested from anywhere but this site, and only reads`, offsite.length === 0, offsite);
-  const records = await page.evaluate(() => (window.Store.get('klabs-workshop-builds:klabs-demo', []) || []).map((b) => b.customerName));
-  ck(`${label}: the only records are the director's (customer + build for Jordan Ellis)`, records.length === 2 && records.every((n) => n === 'Jordan Ellis'), records);
+  const refusedAfter = await page.evaluate((from) => window.KLABS_DEMO.refused.slice(from).filter((r) => r.detail !== 'klabs-demo-pause-probe'), refusedBefore);
+  ck(`${label}: Studio never had a change refused while the director was working (steps 6-10)`, refusedAfter.length === 0, refusedAfter);
+  const records = await page.evaluate(() => (window.Store.get('klabs-workshop-builds:klabs-demo', []) || []).map((b) => ({ name: b.customerName, type: b.recordType || 'build', status: b.buildStatus || b.lifecycleStatus || b.status || '', invoice: !!b.issuedInvoice, payments: (b.payments || []).length })));
+  ck(`${label}: the only records are the director's (customer + build for Jordan Ellis, invoiced, two payments)`, records.length === 2 && records.every((r) => r.name === 'Jordan Ellis') && records.some((r) => r.invoice && r.payments === 2), records);
+  ck(`${label}: the probe write refused while paused was never stored (value unchanged since the window closed)`, (await page.evaluate(() => window.Store.get('klabs-demo-pause-probe', null))) === probeAtClose
+    && (await page.evaluate(() => window.KLABS_DEMO.refused.some((r) => r.detail === 'klabs-demo-pause-probe'))));
   return { context, page, errors, offsite, priced };
+}
+
+// The document open in a sheet: title, watermark/banner, rows and outgoing controls.
+function documentShown(page, sheetSelector) {
+  return page.evaluate((selector) => {
+    const sheet = document.querySelector(selector);
+    const doc = sheet && sheet.querySelector('.view-quote');
+    const after = doc ? getComputedStyle(doc, '::after') : null;
+    const before = doc ? getComputedStyle(doc, '::before') : null;
+    const rows = doc ? [...doc.querySelectorAll('.view-quote__pricing div, .view-quote__row, .view-quote__delivery div')].map((r) => [r.querySelector('span')?.textContent, r.querySelector('strong')?.textContent]) : [];
+    const outgoing = ['viewQuoteEmailBtn', 'emailQuoteBtn'].map((id) => { const el = document.getElementById(id); return el ? { id, shown: el.getClientRects().length > 0, disabled: el.disabled } : { id, absent: true }; });
+    return { open: !!sheet && !sheet.hidden, title: sheet && sheet.querySelector('h2')?.textContent, watermark: after && after.content, banner: before && before.content, rows, text: doc ? doc.innerText : '', outgoing };
+  }, sheetSelector);
 }
 
 async function replayAndChapters(base, page, label, touch, expectedTotal) {
   console.log(`\n== Replay and chapters: ${label} ==`);
-  await visitorPress(page, '#demoReplayBtn', touch);
+  await visitorPress(page, '#demoPlayPauseBtn', touch); // reads Replay once finished
   await page.waitForFunction(() => (document.getElementById('demoChapterLabel').textContent || '').startsWith('1/'), null, { timeout: 30000 });
   const replay = await page.evaluate(() => ({ url: location.pathname + location.search, intro: document.getElementById('demoIntro').hidden, demo: !!window.KLABS_DEMO.active,
     builds: (window.Store.get('klabs-workshop-builds:klabs-demo', []) || []).length, current: (window.Store.get('klabs-workshop-quote-current:klabs-demo', null) || {}).customerName || '' }));
   ck(`${label}: Replay restarts at chapter 1 in Demo Mode, without the introduction, from fresh data`, replay.url === '/?demo' && replay.intro === true && replay.demo && replay.builds === 0 && replay.current === '', replay);
+  // On a phone the chapter row scrolls sideways: bring chapter 4 into view first, as the visitor would by swiping.
+  await page.evaluate(() => { const b = document.querySelector('[data-demo-chapter="4"]'); const list = b.closest('ol'); list.scrollLeft = b.offsetLeft - list.offsetLeft - 8; });
   await visitorPress(page, '[data-demo-chapter="4"]', touch);
   await page.waitForFunction(() => /Skipping ahead to chapter 4/.test(document.getElementById('demoCaption').textContent), null, { timeout: 30000 });
   const started = Date.now();
@@ -230,7 +354,8 @@ async function replayAndChapters(base, page, label, touch, expectedTotal) {
   ck(`${label}: chapter 4 is reached quickly through the real screens (${skipSeconds.toFixed(1)} s)`, skipSeconds < 45);
   await finished(page);
   const after = await figures(page);
-  ck(`${label}: after a chapter jump the quote total is the same`, near(after.maths.total, expectedTotal) && after.quoteNumber === `${after.prefix}1046`, [after.maths.total, expectedTotal, after.quoteNumber]);
+  ck(`${label}: after a chapter jump the total, quote number and paid-in-full invoice are the same`, near(after.maths.total, expectedTotal) && after.quoteNumber === `${after.prefix}1046`
+    && after.payments.length === 2 && near(after.maths.balanceOwing, 0) && after.lifecycle === 'complete', [after.maths.total, expectedTotal, after.quoteNumber, after.payments.length, after.maths.balanceOwing]);
   const builds = await page.evaluate(() => (window.Store.get('klabs-workshop-builds:klabs-demo', []) || []).map((b) => `${b.recordType === 'customer' ? 'customer' : 'build'}:${b.customerName}`).sort());
   ck(`${label}: nothing carried over between runs (one customer and one build, both Jordan Ellis)`, JSON.stringify(builds) === JSON.stringify(['build:Jordan Ellis', 'customer:Jordan Ellis']), builds);
 }

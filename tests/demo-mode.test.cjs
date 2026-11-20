@@ -304,12 +304,16 @@ test('Q18: account, sign-out, sync, recovery export, administration and customer
   // The demonstration is editable (for the director), so these controls are blocked in Demo Mode whether or not the
   // page is read-only, and for every click - visitor or director.
   assert.match(clientSource, /if \(!demo && !document\.body\.classList\.contains\("klabs-read-only"\)\) return;/);
-  // 2A: the director chooses the fulfilment method and opens the customer quote on screen (View Quote and its Close);
-  // every other document and build action stays blocked.
-  assert.match(clientSource, /const demoJourneyControl = demo && control\.matches\("#viewQuoteBtn, #viewQuoteCloseBtn, #quoteFulfilmentGroup \[data-fulfilment-method\]"\);/);
-  assert.match(clientSource, /if \(demo\) \{\s*if \(demoJourneyControl \|\| \(!blockedOffline && !blockedDemo\)\) return;/);
-  assert.doesNotMatch(clientSource.slice(clientSource.indexOf('if (demo) {'), clientSource.indexOf('if (demo) {') + 200), /viewInvoicePreviewBtn|invoice/,
-    'invoices, statements and PDFs remain blocked');
+  // 2B change (was: a fixed list of View Quote, Close and the fulfilment choice, for any click, with invoices blocked):
+  // the journey's controls - now including Confirm Build, the payment form, Mark Complete, the invoice preview's Issue
+  // and Close and Studio's own confirmation - are allowed for the director only (a person's click is never allowed);
+  // printing, email, statements, More documents and every other build action stay blocked. Behaviour is tested in
+  // tests/demo-shield.test.cjs.
+  assert.match(clientSource, /const demoJourneyControl = demo && !event\.isTrusted && control\.matches\(DEMO_DIRECTOR_CONTROLS\);/);
+  assert.match(clientSource, /if \(demo\) \{\s*if \(demoJourneyControl \|\| \(!demoVisitorOnJourney && !blockedOffline && !blockedDemo\)\) return;/);
+  const allowed = /const DEMO_DIRECTOR_CONTROLS = \[([\s\S]*?)\]\.join/.exec(clientSource);
+  assert.ok(allowed, 'one list of the director\'s controls');
+  assert.doesNotMatch(allowed[1], /print|email|Email|statement|more-document|MoreDocuments|delete|retry/i, 'printing, email, statements and More documents are never allowed');
 });
 
 test('Q18 2A: one dock at the top identifies Demo Mode, holds the player and the way out, and never covers Studio\'s sheets', () => {
@@ -318,7 +322,8 @@ test('Q18 2A: one dock at the top identifies Demo Mode, holds the player and the
   assert.match(dock, /<strong class="demo-dock__tag">DEMO<\/strong>\s*<span id="demoModeMessage" class="demo-dock__message">Fictional data\. Nothing here is saved, sent or synced\.<\/span>\s*<button id="demoModeExitBtn" type="button" class="ghost-action demo-dock__exit">Exit demo<\/button>/);
   assert.match(dock, /<div id="demoPlayer" class="demo-player" hidden>/);
   for (const id of ['demoCaption', 'demoChapterLabel', 'demoPlayPauseBtn', 'demoReplayBtn']) assert.match(dock, new RegExp(`id="${id}"`), id);
-  for (const n of [1, 2, 3, 4, 5]) assert.match(dock, new RegExp(`data-demo-chapter="${n}"`), `chapter ${n}`);
+  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) assert.match(dock, new RegExp(`data-demo-chapter="${n}"`), `chapter ${n}`);
+  assert.doesNotMatch(dock, /data-demo-chapter="11"/);
   assert.ok(html.indexOf('<div id="demoModeBar"') > html.indexOf('</main>') || html.indexOf('<div id="demoModeBar"') > html.lastIndexOf('id="app"'), 'outside the app layout');
   assert.match(entrySource, /getElementById\("demoModeExitBtn"\)\.addEventListener\("click", \(\) => window\.KLABS_DEMO\?\.exit\(\)\)/);
   // Fixed at the top; the page and every sheet are moved down by the dock's height so titles and close buttons stay clear.
@@ -364,4 +369,127 @@ test('Q18 amendment: demonstration data is fictional and holds supporting data o
   assert.match(store['klabs-business-profile:'].phone, / 555 /);
   assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, 'no real account ids');
   assert.ok(store['klabs-workshop-component-library:'].length >= 50, 'component library');
+});
+
+// ---- Phase 2B
+
+// The payment stand-in, with Studio's saved builds in memory (window.savedBuildRecords / saveBuildRecords, as ui.js).
+async function financial() {
+  const h = entry();
+  await h.window.KLABS_PUBLIC_ENTRY.startDemo(() => {});
+  let builds = [{ id: 'build-1', customerName: 'Jordan Ellis', finalCustomerPrice: 1155.37, payments: [] }, { id: 'other', customerName: 'Someone' }];
+  const saves = [];
+  h.window.savedBuildRecords = () => JSON.parse(JSON.stringify(builds));
+  h.window.saveBuildRecords = (list) => { saves.push(list); builds = JSON.parse(JSON.stringify(list)); return true; };
+  const refreshed = [];
+  h.window.KLABS_UI = { refreshBuildViews: () => refreshed.push('views'), refreshOpenBuild: () => refreshed.push('open') };
+  return { h, sync: h.window.KLABS_BUILD_SYNC, builds: () => builds, saves, refreshed };
+}
+const pay = (id, type, amount, date = '2026-11-20') => ({ id, type, amount, date });
+
+test('Q18 2B: deposits and payments go to a local demo-only stand-in for the payment service - frozen, in memory, no server', async () => {
+  const f = await financial();
+  assert.ok(f.sync && f.sync.demo === true, 'the stand-in is in place once Demo Mode is open');
+  assert.equal(Object.isFrozen(f.sync), true);
+  assert.deepEqual(Object.keys(f.sync).sort(), ['busy', 'demo', 'financialOperation', 'pendingFinancial', 'retryFinancial']);
+  assert.equal(Reflect.set(f.h.window, 'KLABS_BUILD_SYNC', {}), false, 'cannot be overwritten');
+  assert.equal(Reflect.deleteProperty(f.h.window, 'KLABS_BUILD_SYNC'), false, 'cannot be removed');
+  assert.equal(f.h.window.KLABS_BUILD_SYNC, f.sync, 'cannot be replaced');
+  assert.equal(f.sync.pendingFinancial(), null, 'never an unconfirmed transaction');
+  await assert.rejects(f.sync.retryFinancial(), /no unconfirmed transaction/);
+  const result = await f.sync.financialOperation('build-1', 'add_payment', pay('p1', 'deposit', 300));
+  assert.equal(result.conflict, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.record.payments)), [pay('p1', 'deposit', 300)]);
+  assert.deepEqual(f.builds()[0].payments, [pay('p1', 'deposit', 300)], 'kept with the saved build, like the real service');
+  assert.equal(f.builds()[0].id, 'build-1');
+  assert.equal(f.builds().length, 2, 'other builds untouched');
+  assert.deepEqual(f.refreshed, ['views'], 'the lists redraw; the open build is left to Studio');
+  const block = entrySource.slice(entrySource.indexOf('function demoFinancialService'), entrySource.indexOf('// end demoFinancialService'));
+  assert.ok(block.length > 200, 'the stand-in is one function in public-entry.js');
+  assert.doesNotMatch(block, /fetch|rpc|supabase|localStorage|XMLHttpRequest|sendBeacon/i, 'no server and no device storage');
+});
+
+test('Q18 2B: the stand-in keeps the payment service\'s rules - one deposit, no duplicates, never more than the price, valid amounts and dates', async () => {
+  const f = await financial();
+  await f.sync.financialOperation('build-1', 'add_payment', pay('p1', 'deposit', 300));
+  const refusals = [
+    [['build-1', 'add_payment', pay('p2', 'deposit', 100)], /deposit is already recorded/],
+    [['build-1', 'add_payment', pay('p1', 'balance', 100)], /already recorded/],
+    [['build-1', 'add_payment', pay('p3', 'deposit', 300)], /already recorded|deposit is already/],
+    [['build-1', 'add_payment', pay('p4', 'balance', 855.38)], /cannot exceed/],
+    [['build-1', 'add_payment', pay('p5', 'balance', 0)], /valid payment/],
+    [['build-1', 'add_payment', pay('p6', 'balance', 10.123)], /valid payment/],
+    [['build-1', 'add_payment', pay('p7', 'balance', 10, '2026-02-30')], /valid payment/],
+    [['build-1', 'add_payment', pay('p8', 'refund', 10)], /valid payment/],
+    [['build-1', 'add_payment', pay('', 'balance', 10)], /valid payment/],
+    [['missing', 'add_payment', pay('p9', 'balance', 10)], /Save this build/],
+    [['build-1', 'correct_payment', { ...pay('p1', 'deposit', 200), reason: 'typo' }], /not part of the demonstration/],
+  ];
+  for (const [args, message] of refusals) await assert.rejects(f.sync.financialOperation(...args), message, JSON.stringify(args));
+  assert.deepEqual(f.builds()[0].payments, [pay('p1', 'deposit', 300)], 'nothing changed by a refusal');
+  const paid = await f.sync.financialOperation('build-1', 'add_payment', pay('p10', 'balance', 855.37));
+  assert.equal(paid.record.payments.reduce((sum, p) => sum + p.amount, 0), 1155.37, 'paid in full exactly');
+  assert.equal(f.sync.busy(), false);
+});
+
+test('Q18 2B: the final invoice is issued once, only when it matches the saved build (price and payments)', async () => {
+  const f = await financial();
+  await f.sync.financialOperation('build-1', 'add_payment', pay('p1', 'deposit', 300));
+  await f.sync.financialOperation('build-1', 'add_payment', pay('p2', 'balance', 855.37));
+  const payments = f.builds()[0].payments;
+  const invoice = { number: 'INV-klabsdemo-6275696c642d31', displayNumber: 'INV-1046', issuedDate: '2026-11-20', total: 1155.37, payments };
+  for (const [bad, why] of [[{ ...invoice, total: 1000 }, 'price'], [{ ...invoice, payments: payments.slice(0, 1) }, 'payments'], [{ ...invoice, issuedDate: '' }, 'date'], [null, 'missing']]) {
+    await assert.rejects(f.sync.financialOperation('build-1', 'issue_invoice', { invoice: bad }), /does not match/, why);
+  }
+  // Same payments with their fields in another order still match (the service compares content, not layout).
+  const reordered = { ...invoice, payments: payments.map((p) => ({ date: p.date, amount: p.amount, type: p.type, id: p.id })) };
+  const issued = await f.sync.financialOperation('build-1', 'issue_invoice', { invoice: reordered });
+  assert.equal(issued.record.issuedInvoice.displayNumber, 'INV-1046', 'the invoice keeps Studio\'s own demo number');
+  assert.equal(f.builds()[0].issuedInvoice.total, 1155.37);
+  await assert.rejects(f.sync.financialOperation('build-1', 'issue_invoice', { invoice }), /already been issued/);
+  await assert.rejects(f.sync.financialOperation('build-1', 'add_payment', pay('p3', 'balance', 1)), /cannot exceed/, 'nothing can be paid beyond the invoice');
+});
+
+test('Q18 2B: one transaction at a time, and the stand-in reports when it is busy (so a pause waits for it)', async () => {
+  const f = await financial();
+  const first = f.sync.financialOperation('build-1', 'add_payment', pay('p1', 'deposit', 300));
+  assert.equal(f.sync.busy(), true);
+  await assert.rejects(f.sync.financialOperation('build-1', 'add_payment', pay('p2', 'balance', 10)), /already in progress/);
+  await first;
+  assert.equal(f.sync.busy(), false);
+  f.h.window.saveBuildRecords = () => false;
+  await assert.rejects(f.sync.financialOperation('build-1', 'add_payment', pay('p3', 'balance', 10)), /could not record/);
+  assert.equal(f.sync.busy(), false, 'not left busy after a refusal');
+});
+
+test('Q18 2B: the stand-in is put in place only after the isolation check (a real sync module still stops Demo Mode)', () => {
+  const start = entrySource.slice(entrySource.indexOf('async function startDemo'), entrySource.indexOf('// Q17: the stored sign-in has expired'));
+  const check = start.indexOf('throw new Error("Demo Mode isolation changed while opening.")');
+  const install = start.indexOf('Object.defineProperty(window, "KLABS_BUILD_SYNC"');
+  assert.ok(check > 0 && install > check, 'installed after the check');
+  assert.ok(install < start.indexOf('applyAuthState('), 'before Studio is shown');
+  assert.match(start, /if \(window\.KLABS_BUILD_SYNC !== demoFinancial\) throw new Error\("Demo Mode isolation changed while opening\."\);/);
+});
+
+test('Q18 2B: every document shown in the demonstration carries a DEMO watermark: quote, build summary and the invoice', () => {
+  assert.match(css, /html\.klabs-demo \.view-quote::after \{[^}]*content:"DEMO";/);
+  assert.match(css, /html\.klabs-demo #viewQuoteSheet \[aria-label="Build summary"\] \.view-quote::before \{[^}]*content:"DEMONSTRATION BUILD SUMMARY[^"]*";/);
+  assert.match(css, /html\.klabs-demo #invoicePreviewSheet \.invoice-preview__page::after \{[^}]*content:"DEMO";/);
+  assert.match(css, /html\.klabs-demo #invoicePreviewSheet \.invoice-preview__page \{[^}]*position:relative;/);
+  assert.match(css, /html\.klabs-demo #invoicePreviewSheet \.invoice-preview__page::before \{[^}]*content:"DEMONSTRATION INVOICE[^"]*";/);
+  assert.doesNotMatch(css.replace(/html\.klabs-demo [^{]*\{[^}]*\}/g, ''), /content:"DEMO/, 'nothing outside Demo Mode');
+});
+
+test('Q18 2B: the iPhone strip is slim while playing - caption above one row of controls (DEMO, Pause, Replay, chapters, Exit demo)', () => {
+  const dock = html.slice(html.indexOf('<div id="demoModeBar"'), html.indexOf('<!-- /demoModeBar -->'));
+  const controls = dock.slice(dock.indexOf('<div class="demo-player__controls">'));
+  assert.match(controls, /<strong class="demo-player__tag"[^>]*>DEMO<\/strong>/);
+  assert.match(controls, /<button id="demoPlayerExitBtn" type="button" class="ghost-action demo-player__exit">Exit demo<\/button>/);
+  const phone = css.slice(css.indexOf('/* Q18 2B: iPhone strip'));
+  assert.ok(phone.length > 0);
+  const block = phone.slice(0, phone.indexOf('/* end iPhone strip */'));
+  assert.match(block, /@media \(max-width:620px\)/);
+  assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-dock__bar \{ display:none; \}/);
+  assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-player__caption \{[^}]*-webkit-line-clamp:2;/);
+  assert.match(read('js/demo-director.js'), /dock\.setAttribute\("data-player-open", "true"\)/, 'from Start, and still after the end');
 });

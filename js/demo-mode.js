@@ -215,6 +215,8 @@
   const memory = new Map();
   let seeding = false;
   let directorSteps = 0;
+  let directorSuspended = false;
+  let writes = 0;
   let directorClaimed = false;
   const memoryStore = {
     get(key, fallback) {
@@ -223,21 +225,26 @@
     },
     set(key, value) {
       const canWrite = typeof window.KLABS_CAN_WRITE === "function" ? window.KLABS_CAN_WRITE() : window.KLABS_ACCESS_STATE?.can_write !== false;
-      if (!seeding && (directorSteps === 0 || !canWrite)) {
+      if (!seeding && (directorSteps === 0 || directorSuspended || !canWrite)) {
         if (window.KLABS_ACCESS_STATE) window.KLABS_ACCESS_STATE.writeBlocked = true;
         refuse("store", key);
         return false;
       }
       memory.set(key, JSON.stringify(value));
+      if (!seeding) writes += 1;
       return true;
     }
   };
   api.store = memoryStore;
   api.storeKeys = () => [...memory.keys()];
+  // How many changes the Store has accepted: the player waits for this to stand still before closing the write window.
+  api.writeCount = () => writes;
 
   // The director channel: the only way to change demo data. It can be claimed once per page (public-entry.js hands it
   // straight to the demonstration player); a step's write window stays open until the step has fully finished,
-  // including anything it waits for, and closes even if the step fails.
+  // including anything it waits for, and closes even if the step fails. While the visitor has paused the
+  // demonstration the window is closed (suspend) and Play reopens it (resume); a pause never outlives the step, and
+  // resuming outside a step opens nothing.
   api.claimDirector = function () {
     if (directorClaimed) throw new Error("The demonstration director is already in use.");
     directorClaimed = true;
@@ -248,8 +255,11 @@
           return await step();
         } finally {
           directorSteps -= 1;
+          if (directorSteps === 0) directorSuspended = false;
         }
-      }
+      },
+      suspend() { if (directorSteps > 0) directorSuspended = true; },
+      resume() { directorSuspended = false; }
     });
   };
 
@@ -262,11 +272,13 @@
   const SHIELD_EVENTS = ["click", "dblclick", "auxclick", "contextmenu", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend",
     "keydown", "keyup", "keypress", "beforeinput", "input", "change", "paste", "cut", "drop", "dragstart", "submit"];
   const DOWNLOAD_LINKS = 'a[download], a[href^="blob:"], a[href^="data:"], a[href^="mailto:"]';
-  // Controls that would take something out of the app - an email draft, printing or a PDF, a file, an external page.
-  // In Demo Mode they are hidden and disabled (not only guarded), including those Studio builds later, such as the
-  // customer quote sheet's Open Email Draft and the invoice preview's Print / Save as PDF.
+  // Controls that would take something out of the app - an email draft, printing or a PDF, a file, an external page -
+  // and More documents. In Demo Mode they are hidden and disabled (not only guarded), including those Studio builds
+  // later, such as the customer quote sheet's Open Email Draft and the invoice preview's Print / Save as PDF, and those
+  // Studio shows again by itself (Print / Save as PDF once an invoice is issued).
   const OUTPUT_CONTROLS = ['#emailQuoteBtn', '#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
-    '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]'];
+    '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]',
+    '#quoteMoreDocumentsWrap'];
   function lockOutputControls(doc) {
     const selector = OUTPUT_CONTROLS.join(", ");
     if (!doc.head || typeof doc.createElement !== "function" || typeof doc.querySelectorAll !== "function" || typeof window.MutationObserver !== "function") {
@@ -276,16 +288,17 @@
     style.setAttribute("data-demo-output-lock", "");
     style.textContent = `${selector} { display: none !important; }`;
     doc.head.appendChild(style);
+    // Only what is not locked yet is changed, so locking never sets the observer off again.
     const lock = () => {
       doc.querySelectorAll(selector).forEach((control) => {
-        control.hidden = true;
-        control.disabled = true;
-        control.tabIndex = -1;
-        control.setAttribute("aria-hidden", "true");
+        if (control.hidden !== true) control.hidden = true;
+        if (control.disabled !== true) control.disabled = true;
+        if (control.tabIndex !== -1) control.tabIndex = -1;
+        if (typeof control.getAttribute !== "function" || control.getAttribute("aria-hidden") !== "true") control.setAttribute("aria-hidden", "true");
       });
     };
     lock();
-    new window.MutationObserver(lock).observe(doc.documentElement, { childList: true, subtree: true });
+    new window.MutationObserver(lock).observe(doc.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "disabled"] });
   }
   function installShield(doc) {
     if (api.shielded) return true;

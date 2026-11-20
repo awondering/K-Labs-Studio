@@ -447,6 +447,81 @@
     }
   }
 
+  // Q18 2B: local stand-in for Studio's payment service (js/build-sync.js is not loaded in Demo Mode). Studio's own Record
+  // Payment and Issue Invoice screens hand it the deposit, the final payment and the final invoice exactly as they
+  // would hand them to the server; it applies the same rules as the server (one deposit, no duplicates, valid amounts
+  // and dates, never more than the saved price, one invoice that matches the saved build) and keeps the result with the
+  // saved build in the demonstration's in-memory Store, through Studio's own saveBuildRecords - so, like everything
+  // else, only while the demonstration director is running. Nothing is sent anywhere or kept on the device.
+  function demoFinancialService() {
+    let inFlight = false;
+    const clone = (value) => JSON.parse(JSON.stringify(value));
+    const canonical = (value) => {
+      if (Array.isArray(value)) return value.map(canonical);
+      if (value && typeof value === "object") return Object.keys(value).sort().reduce((out, key) => { out[key] = canonical(value[key]); return out; }, {});
+      return value;
+    };
+    const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+    const validDate = (text) => /^\d{4}-\d{2}-\d{2}$/.test(String(text || "")) && !Number.isNaN(Date.parse(`${text}T00:00:00Z`))
+      && new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) === text;
+    const cents = (value) => Math.round(Number(value) * 100);
+    function nextPayments(record, data) {
+      const payments = Array.isArray(record.payments) ? clone(record.payments) : [];
+      const amountText = String(data && data.amount);
+      if (!data || !String(data.id || "") || !validDate(data.date) || !/^[0-9]+(\.[0-9]{1,2})?$/.test(amountText)
+        || !(Number(amountText) > 0) || !["deposit", "balance"].includes(data.type)) {
+        throw new Error("Enter a valid payment amount and date.");
+      }
+      const payment = { id: String(data.id), type: data.type, amount: Number(amountText), date: data.date };
+      if (payments.some((item) => item.id === payment.id
+        || (item.type === payment.type && item.date === payment.date && cents(item.amount) === cents(payment.amount)))) {
+        throw new Error("This payment is already recorded; review payment history.");
+      }
+      if (payment.type === "deposit" && payments.some((item) => item.type === "deposit")) throw new Error("A deposit is already recorded; correct it instead.");
+      const total = cents(record.issuedInvoice ? record.issuedInvoice.total : record.finalCustomerPrice);
+      const received = [...payments, payment].reduce((sum, item) => sum + cents(item.amount), 0);
+      if (!(total > 0) || received > total) throw new Error("Payments cannot exceed the saved customer price.");
+      return [...payments, payment];
+    }
+    function issuedInvoice(record, data) {
+      if (record.issuedInvoice) throw new Error("An invoice has already been issued for this build.");
+      const invoice = data && data.invoice;
+      if (!invoice || typeof invoice !== "object" || typeof invoice.total !== "number" || !validDate(invoice.issuedDate)
+        || !same(invoice.payments, Array.isArray(record.payments) ? record.payments : []) || cents(invoice.total) !== cents(record.finalCustomerPrice)) {
+        throw new Error("Invoice does not match the saved build.");
+      }
+      return clone(invoice);
+    }
+    return Object.freeze({
+      demo: true,
+      busy: () => inFlight,
+      pendingFinancial: () => null,
+      retryFinancial: async () => { throw new Error("There is no unconfirmed transaction in the demonstration."); },
+      async financialOperation(buildId, kind, data) {
+        if (inFlight) throw new Error("A financial operation is already in progress.");
+        inFlight = true;
+        try {
+          await Promise.resolve();
+          const id = String(buildId);
+          const list = typeof window.savedBuildRecords === "function" ? window.savedBuildRecords() : [];
+          const record = list.find((item) => item && String(item.id) === id);
+          if (!record) throw new Error("Save this build before recording a payment.");
+          const next = clone(record);
+          if (kind === "add_payment") next.payments = nextPayments(record, data);
+          else if (kind === "issue_invoice") next.issuedInvoice = issuedInvoice(record, data);
+          else throw new Error("This transaction is not part of the demonstration.");
+          if (window.saveBuildRecords([next, ...list.filter((item) => !item || String(item.id) !== id)]) === false) {
+            throw new Error("The demonstration could not record this.");
+          }
+          window.KLABS_UI?.refreshBuildViews?.();
+          return { operation: { id: `demo-${kind}`, buildId: id, kind }, record: clone(next), conflict: false };
+        } finally {
+          inFlight = false;
+        }
+      }
+    });
+  } // end demoFinancialService
+
   // Q18: open the real interface with the fictional demonstration data. Only on a demo page (js/demo-mode.js decides
   // before anything else runs). No account, session, entitlement, sync or administration is involved. The visitor
   // shield is installed before any Studio script runs; Studio is then editable, but only the demonstration director
@@ -484,6 +559,10 @@
         || window.KLABS_BUILD_SYNC || window.KLABS_SYNC || window.KLABS_SETTINGS_SYNC || window.KLABS_ADMIN_ACCESS) {
         throw new Error("Demo Mode isolation changed while opening.");
       }
+      // 2B: the payment stand-in, put in place only now that no real sync module is present; it cannot be replaced.
+      const demoFinancial = demoFinancialService();
+      Object.defineProperty(window, "KLABS_BUILD_SYNC", { value: demoFinancial, writable: false, configurable: false, enumerable: true });
+      if (window.KLABS_BUILD_SYNC !== demoFinancial) throw new Error("Demo Mode isolation changed while opening.");
       if (typeof window.KLABS_DEMO_PLAYER?.open !== "function") throw new Error("The demonstration player is unavailable.");
       const director = demo.claimDirector();
       applyAuthState({ user: { id: demo.accountId, email: "Demonstration" } });

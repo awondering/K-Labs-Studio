@@ -203,7 +203,9 @@ test('Q18 amendment: only the director may change demo data, and only while it i
 });
 
 const OUTPUT_SELECTORS = ['#emailQuoteBtn', '#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
-  '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]'];
+  '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]',
+  // 2B: More documents (hidden, not just blocked).
+  '#quoteMoreDocumentsWrap'];
 
 test('Q18 2A: controls that leave the app (email draft, print/PDF, share, external links) are hidden and disabled, not just guarded', () => {
   const p = page();
@@ -221,7 +223,9 @@ test('Q18 2A: controls that leave the app (email draft, print/PDF, share, extern
   for (const selector of OUTPUT_SELECTORS) assert.ok(p.queried.some((q) => q.includes(selector)), `${selector} is looked for`);
   // Studio builds some of these later (the customer quote sheet, the invoice preview): they are caught as they appear.
   assert.equal(p.observers.length, 1);
-  assert.deepEqual({ ...p.observers[0].options }, { childList: true, subtree: true });
+  // 2B change: the observer also watches the hidden/disabled attributes (was: added elements only), because Studio
+  // shows the invoice's Print / Save as PDF again by itself once an invoice is issued.
+  assert.deepEqual(JSON.parse(JSON.stringify(p.observers[0].options)), { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled'] });
   const later = p.outputControl('viewQuoteEmailBtn');
   p.outputControls.splice(0, p.outputControls.length, later);
   p.observers[0].fn([]);
@@ -251,4 +255,156 @@ test('Q18 amendment: introduction screen explains the demonstration and starts i
   assert.ok(z('.demo-intro') > z('.demo-shield'));
   assert.ok(z('html.klabs-demo #demoModeBar') > z('.demo-shield'), 'Exit demo stays reachable');
   assert.match(css, /\.demo-shield \{[^}]*position:fixed;[^}]*inset:0;/);
+});
+
+// ---- Phase 2B
+
+test('Q18 2B: an outgoing control Studio shows again by itself (the issued invoice\'s Print / Save as PDF) is hidden and disabled again at once', () => {
+  const p = page();
+  p.window.KLABS_DEMO.installShield(p.document);
+  const print = p.outputControls[0];
+  assert.equal(print.hidden, true);
+  print.hidden = false;
+  print.disabled = false;
+  p.observers[0].fn([{ type: 'attributes', target: print, attributeName: 'hidden' }]);
+  assert.equal(print.hidden, true);
+  assert.equal(print.disabled, true);
+  // Locking an already locked control changes nothing, so the observer never sets itself off again.
+  let writes = 0;
+  const locked = p.outputControls[1];
+  for (const key of ['hidden', 'disabled', 'tabIndex']) {
+    let value = locked[key];
+    Object.defineProperty(locked, key, { get: () => value, set: (v) => { writes++; value = v; } });
+  }
+  const setAttribute = locked.setAttribute;
+  locked.getAttribute = (n) => locked.attributes[n] ?? null;
+  locked.setAttribute = function (n, v) { writes++; setAttribute.call(this, n, v); };
+  p.observers[0].fn([]);
+  assert.equal(writes, 0);
+});
+
+test('Q18 2B: the director\'s write window closes while the demonstration is paused and reopens on Play', async () => {
+  const p = page();
+  const w = p.window;
+  w.KLABS_DEMO.seed({ store: {} });
+  w.KLABS_ACCESS_STATE = { can_write: true, demo: true };
+  const director = w.KLABS_DEMO.claimDirector();
+  assert.equal(typeof director.suspend, 'function');
+  assert.equal(typeof director.resume, 'function');
+  const results = [];
+  await director.run(async () => {
+    results.push(w.Store.set('k', 1));
+    director.suspend();
+    results.push(w.Store.set('k', 2));
+    await Promise.resolve();
+    results.push(w.Store.set('k', 3));
+    director.suspend();
+    director.resume();
+    results.push(w.Store.set('k', 4));
+    director.suspend();
+  });
+  assert.deepEqual(results, [true, false, false, true], 'refused while paused, accepted again after Play');
+  assert.equal(w.Store.get('k', null), 4);
+  // A pause never outlives the step (the step above ended paused, with no Play), and resuming outside a step opens nothing.
+  assert.equal(await director.run(async () => w.Store.set('k', 6)), true, 'a new step starts with the window open');
+  director.resume();
+  assert.equal(w.Store.set('k', 5), false);
+  assert.equal(w.KLABS_DEMO.refused.filter((r) => r.kind === 'store').length, 3);
+  // Only accepted changes are counted (the player waits for this count to stand still before closing the window).
+  assert.equal(w.KLABS_DEMO.writeCount(), 3);
+  assert.equal(w.Store.set('k', 7), false);
+  assert.equal(w.KLABS_DEMO.writeCount(), 3);
+});
+
+// Visitor taps on the controls the director is allowed to use - View Quote, the quote's Close, the fulfilment choice,
+// and in 2B Confirm Build, Record Payment, Mark Complete, Customer Invoice and Issue Invoice - are turned away like
+// any other tap on Studio; only the demonstration's own controls respond to the visitor.
+const DIRECTOR_CONTROLS = ['viewQuoteBtn', 'viewQuoteCloseBtn', 'fulfilmentCollection', 'fulfilmentShipping', 'confirmBuildBtn', 'confirmSheetConfirm',
+  'quoteRecordPaymentBtn', 'paymentTypeDeposit', 'quoteBalanceReceivedSave', 'toggleCurrentBuildStatusBtn', 'viewInvoicePreviewBtn', 'invoiceIssue', 'invoiceClose'];
+test('Q18 2B: the shield turns away visitor taps on View Quote, Close, the fulfilment choice and every control the director uses in steps 6-10', () => {
+  const p = page();
+  p.window.KLABS_DEMO.installShield(p.document);
+  for (const id of DIRECTOR_CONTROLS) {
+    const control = { id, nodeType: 1, closest: () => null, blur() {} };
+    for (const type of ['pointerdown', 'mousedown', 'touchstart', 'touchend', 'mouseup', 'click', 'keydown']) {
+      const event = p.dispatch(type, control);
+      assert.equal(event.stopped, true, `visitor ${type} on ${id}`);
+    }
+    assert.equal(p.dispatch('click', control, { isTrusted: false }).stopped, false, `the director's tap on ${id} goes through`);
+  }
+});
+
+// js/supabase-client.js's Demo Mode click guard, run on its own: a second layer behind the shield.
+function clickGuard() {
+  const source = read('js/supabase-client.js');
+  const handlers = {};
+  const message = { textContent: '' };
+  const document = {
+    addEventListener(type, fn) { (handlers[type] ||= []).push(fn); },
+    getElementById: (id) => (id === 'demoModeMessage' ? message : null),
+    body: { classList: { contains: () => false, toggle() {} } },
+  };
+  const window = { KLABS_DEMO: { active: true }, KLABS_SUPABASE: {}, KLABS_ACCESS_STATE: { demo: true, can_write: true }, setTimeout() {}, clearTimeout() {}, location: {} };
+  vm.runInNewContext(source, { window, document, console: { error() {}, warn() {} }, AbortController, Promise });
+  handlers.DOMContentLoaded.forEach((fn) => fn());
+  const click = handlers.click[0];
+  // A control: its own simple selectors, its ancestors' selectors, and its label.
+  const control = (simple, ancestors, label) => {
+    const el = {
+      textContent: label, id: (simple.find((s) => s.startsWith('#')) || '').slice(1), getAttribute: () => null,
+      matches(selector) { return selector.split(/,(?![^(]*\))/).map((s) => s.trim()).some((part) => { const tokens = part.split(/\s+/); const own = tokens.pop(); return simple.includes(own) && tokens.every((t) => ancestors.includes(t)); }); },
+      closest(selector) {
+        const parts = selector.split(/,(?![^(]*\))/).map((s) => s.trim());
+        if (parts.some((part) => /^button:not\(/.test(part))) return el;
+        return parts.some((part) => simple.includes(part) || ancestors.includes(part)) ? el : null;
+      },
+    };
+    return el;
+  };
+  const press = (el, isTrusted) => {
+    const event = { target: el, isTrusted, prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; } };
+    click(event);
+    return event.prevented;
+  };
+  return { control, press, message };
+}
+const surface = ['.workshop-build-actions-surface'];
+const GUARDED = {
+  viewQuote: [['#viewQuoteBtn', 'button'], surface, 'View Quote'],
+  viewQuoteClose: [['#viewQuoteCloseBtn', 'button'], ['#viewQuoteSheet'], 'Close'],
+  fulfilment: [['[data-fulfilment-method]', 'button'], ['#quoteFulfilmentGroup', ...surface], 'Courier / Shipping'],
+  confirmBuild: [['#confirmBuildBtn', 'button'], surface, 'Confirm Build'],
+  confirmSheet: [['[data-confirm-action]', 'button'], ['#confirmSheet'], 'Issue Invoice'],
+  recordPayment: [['#quoteRecordPaymentBtn', 'button'], ['#quotePaymentBlock'], 'Record Payment'],
+  paymentType: [['[data-payment-type]', 'button'], ['#quotePaymentTypeField'], 'DEPOSIT'],
+  paymentSave: [['#quoteBalanceReceivedSave', 'button'], ['#quoteBalanceReceivedForm'], 'Save'],
+  markComplete: [['#toggleCurrentBuildStatusBtn', 'button'], surface, 'Mark Complete'],
+  invoice: [['#viewInvoicePreviewBtn', 'button'], surface, 'Customer Invoice'],
+  invoiceIssue: [['[data-invoice-preview-action="issue"]', 'button'], ['#invoicePreviewSheet'], 'Issue Invoice'],
+  invoiceClose: [['[data-invoice-preview-action="close"]', 'button'], ['#invoicePreviewSheet'], 'Close'],
+};
+test('Q18 2B: behind the shield, the click guard lets only the director (never a person) use the journey\'s controls', () => {
+  const g = clickGuard();
+  for (const [name, [simple, ancestors, label]] of Object.entries(GUARDED)) {
+    const el = g.control(simple, ancestors, label);
+    assert.equal(g.press(el, false), false, `the director can use ${name}`);
+    assert.equal(g.press(el, true), true, `a visitor's tap on ${name} is refused even if it got past the shield`);
+  }
+});
+
+test('Q18 2B: everything else stays blocked for the director too - email, print/PDF, statements, More documents, account and sync', () => {
+  const g = clickGuard();
+  const blocked = {
+    email: [['#emailQuoteBtn', 'button'], surface, 'Open Email Draft'],
+    print: [['[data-invoice-preview-action="print"]', 'button'], ['#invoicePreviewSheet'], 'Print / Save as PDF'],
+    statement: [['[data-current-build-action="statement"]', 'button'], ['[data-current-build-action]', '#currentBuildActionsMenu'], 'Payment Statement'],
+    moreDocuments: [['#quoteMoreDocumentsBtn', 'button'], surface, 'More documents'],
+    moreInvoice: [['[data-more-document="invoice"]', 'button'], ['[data-more-document]', ...surface], 'Customer Invoice'],
+    deleteBuild: [['[data-current-build-action="delete"]', 'button'], ['[data-current-build-action]', '#currentBuildActionsMenu'], 'Delete Build'],
+    signOut: [['#settingsSignOut', 'button'], ['#settingsAccountCard'], 'Sign out'],
+    retry: [['#retryFinancialBtn', 'button'], ['#quotePaymentBlock'], 'Confirm Pending Transaction'],
+  };
+  for (const [name, [simple, ancestors, label]] of Object.entries(blocked)) {
+    assert.equal(g.press(g.control(simple, ancestors, label), false), true, `${name} is blocked for the director`);
+  }
 });
