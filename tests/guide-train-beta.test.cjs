@@ -62,7 +62,7 @@ test('Guide Train remains Beta while the other Workshop launchers stay visible',
   assert.match(worker,/'js\/guide-train\.js'/);
 });
 
-test('service worker cache identifies the current app-shell build as build148-v268',()=>{
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v268';/);
+test('service worker cache identifies the current app-shell build as build148-v269',()=>{
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v269';/);
   assert.equal((worker.match(/build148-v\d+/g)||[]).length,1);
 });
