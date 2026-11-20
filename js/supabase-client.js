@@ -324,25 +324,30 @@ async function klabsSignUp() {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("click", (event) => {
-    if (!document.body.classList.contains("klabs-read-only")) return;
-    const control = event.target.closest("#app button, #app [role='button'], #app input[type='submit']");
+    // Q18: Demo Mode is editable for the demonstration director (visitors are stopped by the shield in
+    // js/demo-mode.js), so its blocked controls below apply whether or not the page is read-only.
+    const demo = !!window.KLABS_ACCESS_STATE?.demo;
+    if (!demo && !document.body.classList.contains("klabs-read-only")) return;
+    const control = event.target.closest(demo
+      ? "button:not([data-demo-player] *), [role='button']:not([data-demo-player] *), input[type='submit']"
+      : "#app button, #app [role='button'], #app input[type='submit']");
     if (!control || control.matches("[data-nav], [data-collapsible-trigger], [data-builds-status-filter]")) return;
     const label = `${control.textContent || ""} ${control.getAttribute("aria-label") || ""} ${control.id || ""}`;
     // Q17: with an unrenewed sign-in no customer document can be produced either (invoices, statements, PDFs).
     const offlineSession = document.body.classList.contains("klabs-offline-session");
-    // Q18: Demo Mode blocks the same documents, plus account, sign-out, sync, recovery and administration controls.
-    const demo = !!window.KLABS_ACCESS_STATE?.demo;
+    // Q18: Demo Mode blocks the same documents, plus account, sign-out, sync, recovery and administration controls,
+    // for every click - visitor or director.
     const blockedOffline = (offlineSession || demo) && (
       control.closest(".workshop-build-actions-surface, [data-current-build-action], [data-more-document], #currentBuildActionsMenu")
       || /\b(invoice|statement|documents?|pdf|share|download|issue|payment|deposit|generate|template)\b/i.test(label));
     const blockedDemo = demo && (
       control.closest("#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice")
       || control.matches(".layout-control-card__button, .component-quantity__step, [data-spiral-angle-action]")
-      || /\b(log ?out|sign ?out|sync|admin|upload|logo|increase|decrease)\b/i.test(label));
-    if (!blockedOffline && !blockedDemo && !/\b(add|new|save|delete|remove|duplicate|edit|update|confirm|complete|mark|record|send|email|print|export|import|rename|copy|reset|clear|create|quote|price)\b/i.test(label)) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+      || /\b(log ?out|sign ?out|sync|admin|upload|logo|increase|decrease|e-?mail|print|export|send)\b/i.test(label));
     if (demo) {
+      if (!blockedOffline && !blockedDemo) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       const bar = document.getElementById("demoModeMessage");
       if (bar) {
         const resting = "Fictional data. Nothing here is saved, sent or synced.";
@@ -352,6 +357,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       return;
     }
+    if (!blockedOffline && !/\b(add|new|save|delete|remove|duplicate|edit|update|confirm|complete|mark|record|send|email|print|export|import|rename|copy|reset|clear|create|quote|price)\b/i.test(label)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
     const notice = document.getElementById("readOnlyAccessNotice");
     if (notice) notice.querySelector("span").textContent = offlineSession
       ? "You are offline and your sign-in could not be renewed. You can view your saved records, but cannot edit, save, or create customer documents until you reconnect."

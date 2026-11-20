@@ -6,10 +6,15 @@
  *    this device is read, and nothing written survives the page;
  *  - IndexedDB, cookies, beacons, WebSockets and EventSource are unavailable;
  *  - the network is limited to reading this site's own files (same-origin GET/HEAD) - nothing can be sent anywhere;
- *  - window.Store (the app's only storage path) is an in-memory store seeded with the demonstration data;
+ *  - window.Store (the app's only storage path) is an in-memory store seeded with the demonstration data. It accepts
+ *    a change only while the demonstration director is running a step (claimDirector, below);
+ *  - printing, sharing, new windows and file downloads are unavailable;
  *  - the Supabase client, sync, owner administration and the service worker are never started (see
- *    supabase-client.js, public-entry.js and app.js).
- * If any of the guards cannot be confirmed, Demo Mode does not open (KLABS_DEMO.isolated stays false).
+ *    supabase-client.js, public-entry.js and app.js);
+ *  - once the page is ready, the visitor shield (installShield) turns away every action a person makes on Studio:
+ *    the visitor watches, and only the demonstration's own controls (Start, Exit demo) respond.
+ * If any of the guards cannot be confirmed, Demo Mode does not open (KLABS_DEMO.isolated stays false, or
+ * installShield throws and public-entry.js returns to the public entry screen).
  * Outside Demo Mode this file only publishes KLABS_DEMO = { active: false, ... } and changes nothing. */
 (function () {
   "use strict";
@@ -38,7 +43,9 @@
     exitUrl,
     enter() { window.location.assign(enterUrl()); },
     exit() { window.location.assign(exitUrl()); },
-    frameGuardScript: ""
+    frameGuardScript: "",
+    shielded: false,
+    installShield() { throw new Error("Demo Mode is not active on this page."); }
   };
   window.KLABS_DEMO = api;
   if (!active) return;
@@ -167,6 +174,19 @@
     });
   }
 
+  // Printing, sharing and new windows are unavailable to everyone on a demo page, the director included.
+  function blockOutputs(win, record) {
+    win.print = function () { record("output", "print"); };
+    win.open = function (url) { record("output", `open ${url}`); return null; };
+    if (win.navigator) {
+      Object.defineProperty(win.navigator, "share", { configurable: true, value: () => {
+        record("output", "share");
+        return Promise.reject(new win.DOMException("Sharing is disabled in Demo Mode.", "NotAllowedError"));
+      } });
+      Object.defineProperty(win.navigator, "canShare", { configurable: true, value: () => false });
+    }
+  }
+
   // Embedded tools in Demo Mode show their own example values; visitors cannot type their own (same rule as the
   // app's read-only controls: text fields read-only, every other control disabled).
   function lockFrameInputs(win) {
@@ -187,10 +207,14 @@
   // If the guards cannot be installed there, the embedded document is stopped and blanked instead of running unguarded.
   api.frameGuardScript = `(function(){try{var r=function(){};(${memoryStorageGuard.toString()})(window);(${blockPersistence.toString()})(window,r);(${blockNetwork.toString()})(window,r);(${lockFrameInputs.toString()})(window);if(window.indexedDB!==undefined)throw new Error("indexedDB");window.__KLABS_DEMO_FRAME_ISOLATED__=true;}catch(e){try{window.stop();}catch(x){}document.open();document.write("<p>This tool is unavailable in Demo Mode on this browser.</p>");document.close();throw e;}})();`;
 
-  // ---- In-memory Store (the app's only storage path; js/storage.js is not loaded in Demo Mode). Like js/storage.js it
-  // refuses writes while the access state is view-only, so the demonstration behaves exactly like a read-only account
-  // and its data stays as seeded.
+  // ---- In-memory Store (the app's only storage path; js/storage.js is not loaded in Demo Mode). Studio is editable in
+  // Demo Mode, but the Store accepts a change only while the demonstration director is running a step (and, like
+  // js/storage.js, never while the access state is view-only). Anything else - including anything a visitor could
+  // somehow cause - is refused, so the data changes only as the script makes it change.
   const memory = new Map();
+  let seeding = false;
+  let directorSteps = 0;
+  let directorClaimed = false;
   const memoryStore = {
     get(key, fallback) {
       if (!memory.has(key)) return fallback;
@@ -198,17 +222,77 @@
     },
     set(key, value) {
       const canWrite = typeof window.KLABS_CAN_WRITE === "function" ? window.KLABS_CAN_WRITE() : window.KLABS_ACCESS_STATE?.can_write !== false;
-      if (!canWrite && !seeding) {
+      if (!seeding && (directorSteps === 0 || !canWrite)) {
         if (window.KLABS_ACCESS_STATE) window.KLABS_ACCESS_STATE.writeBlocked = true;
+        refuse("store", key);
         return false;
       }
       memory.set(key, JSON.stringify(value));
       return true;
     }
   };
-  let seeding = false;
   api.store = memoryStore;
   api.storeKeys = () => [...memory.keys()];
+
+  // The director channel: the only way to change demo data. It can be claimed once per page (public-entry.js hands it
+  // straight to the demonstration player); a step's write window stays open until the step has fully finished,
+  // including anything it waits for, and closes even if the step fails.
+  api.claimDirector = function () {
+    if (directorClaimed) throw new Error("The demonstration director is already in use.");
+    directorClaimed = true;
+    return Object.freeze({
+      async run(step) {
+        directorSteps += 1;
+        try {
+          return await step();
+        } finally {
+          directorSteps -= 1;
+        }
+      }
+    });
+  };
+
+  // ---- Visitor shield. Installed by public-entry.js before any Studio script runs, so its listeners on window are the
+  // first to see every event. Actions made by a person (isTrusted) on anything outside the demonstration's own
+  // controls ([data-demo-player]) are stopped before Studio sees them and lose their default effect (focus, typing,
+  // submitting, text selection); a touch may still scroll the page. Actions performed by the director are not made by
+  // a person and pass through to the real controls. Focus never stays on Studio, so no keyboard opens. File downloads
+  // are refused for every click. The #demoShield overlay covers the page as a second, visible layer.
+  const SHIELD_EVENTS = ["click", "dblclick", "auxclick", "contextmenu", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend",
+    "keydown", "keyup", "keypress", "beforeinput", "input", "change", "paste", "cut", "drop", "dragstart", "submit"];
+  const DOWNLOAD_LINKS = 'a[download], a[href^="blob:"], a[href^="data:"], a[href^="mailto:"]';
+  function installShield(doc) {
+    if (api.shielded) return true;
+    const overlay = doc.getElementById("demoShield");
+    if (!overlay) throw new Error("The visitor shield is missing from this page.");
+    const element = (target) => (target && target.nodeType === 3 ? target.parentElement : target);
+    const inPlayer = (target) => !!(target && typeof target.closest === "function" && target.closest("[data-demo-player]"));
+    const shield = (event) => {
+      const target = element(event.target);
+      if (event.type === "click" && target && typeof target.closest === "function" && target.closest(DOWNLOAD_LINKS)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        refuse("output", "download");
+        return;
+      }
+      if (!event.isTrusted || inPlayer(target)) return;
+      if (event.type !== "touchstart") event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    SHIELD_EVENTS.forEach((type) => window.addEventListener(type, shield, { capture: true, passive: false }));
+    window.addEventListener("focusin", (event) => {
+      const target = element(event.target);
+      if (!target || target === doc.body || target === doc.documentElement || inPlayer(target)) return;
+      if (typeof target.blur === "function") target.blur();
+    }, true);
+    overlay.hidden = false;
+    const style = typeof window.getComputedStyle === "function" ? window.getComputedStyle(overlay) : null;
+    if (!style || style.position !== "fixed" || style.pointerEvents === "none") {
+      throw new Error("The visitor shield does not cover the page.");
+    }
+    api.shielded = true;
+    return true;
+  }
 
   // Seeds the in-memory Store from KLABS_DEMO_DATA (js/demo-data.js). Keys ending in ":" are per-account and get the
   // demonstration account id; every other key is used as written.
@@ -259,17 +343,21 @@
     document.cookie = `${probe}=1`;
     if (document.cookie !== "") throw new Error("Cookies are still writable.");
     if (window.Store !== memoryStore) throw new Error("The in-memory store is not active.");
+    if (window.navigator && typeof window.navigator.canShare === "function" && window.navigator.canShare({})) throw new Error("Sharing is still available.");
+    if (window.open("about:blank") !== null) throw new Error("New windows are still available.");
   }
 
   try {
     memoryStorageGuard(window);
     blockPersistence(window, refuse);
     blockNetwork(window, refuse);
+    blockOutputs(window, refuse);
     window.Store = memoryStore;
     window.KLABS_ACCOUNT_ID = DEMO_ACCOUNT_ID;
     verify();
     api.refused.length = 0;
     api.isolated = true;
+    api.installShield = installShield;
   } catch (error) {
     api.isolated = false;
     api.failure = error && error.message ? error.message : String(error);

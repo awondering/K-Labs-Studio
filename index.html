@@ -160,7 +160,7 @@
       <strong>READ-ONLY ACCESS</strong>
       <span>Your trial has ended. Your records remain available, but changes cannot be saved.</span>
     </div>
-    <div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" hidden>
+    <div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" data-demo-player hidden>
       <strong>DEMO</strong>
       <span id="demoModeMessage">Fictional data. Nothing here is saved, sent or synced.</span>
       <button id="demoModeExitBtn" type="button" class="ghost-action demo-mode-bar__exit">Exit demo</button>
@@ -1534,6 +1534,21 @@
       <button id="publicDiscoverClose" class="public-discover-dialog__close" type="button">CLOSE</button>
     </div>
   </dialog>
+  <!-- Q18 Demo Mode: the visitor shield (a second, visible layer; js/demo-mode.js stops the visitor's own actions) and
+       the demonstration's introduction screen. Both stay hidden outside Demo Mode. -->
+  <div id="demoShield" class="demo-shield" hidden aria-hidden="true"></div>
+  <section id="demoIntro" class="demo-intro" role="dialog" aria-modal="true" aria-labelledby="demoIntroTitle" data-demo-player hidden>
+    <div class="demo-intro__card">
+      <p class="demo-intro__eyebrow">K-LABS STUDIO DEMONSTRATION</p>
+      <h2 id="demoIntroTitle">Watch Studio take on a new customer</h2>
+      <p>Studio will work through a customer job on its real screens, as a rod builder would: a new enquiry arrives, the customer is added and a new rod build is opened for them.</p>
+      <p>You watch while the demonstration does the tapping and typing. The customer and business are fictional, and nothing is saved or sent.</p>
+      <div class="demo-intro__actions">
+        <button id="demoStartBtn" type="button" class="primary-action demo-intro__start">START DEMONSTRATION</button>
+        <button id="demoIntroExitBtn" type="button" class="ghost-action demo-intro__exit">Exit demo</button>
+      </div>
+    </div>
+  </section>
   <script src="js/demo-mode.js"></script>
   <script src="js/build-tab-lock.js"></script>
   <script src="js/public-entry.js"></script>

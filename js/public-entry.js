@@ -8,12 +8,14 @@
   const adminScript = "js/admin-panel.js";
   // Q18 Demo Mode runs the real interface without an account. Sync, owner administration, the quote-number allocator
   // and the recovery export are never loaded there, and js/storage.js is replaced by the in-memory store from
-  // js/demo-mode.js. The demonstration data is loaded first.
+  // js/demo-mode.js. The demonstration data is loaded first; the demonstration player (js/demo-director.js) after
+  // Studio's interface and before app.js.
   const demoExcludedScripts = new Set([
     "js/storage.js", "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js",
     "js/build-sync-diff.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js", "js/quote-number-allocator.js"
   ]);
   const demoScripts = ["js/demo-data.js", ...privateScripts.filter((src) => !demoExcludedScripts.has(src))];
+  demoScripts.splice(demoScripts.indexOf("js/app.js"), 0, "js/demo-director.js");
   const DEMO_UNAVAILABLE_HASH = "#demo-unavailable";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
@@ -446,9 +448,11 @@
   }
 
   // Q18: open the real interface with the fictional demonstration data. Only on a demo page (js/demo-mode.js decides
-  // before anything else runs). No account, session, entitlement, sync or administration is involved; the access
-  // state is view-only. If the isolation guards could not be confirmed, or anything fails while opening, the visitor
-  // is returned to the normal public entry screen with a short notice and nothing is shown.
+  // before anything else runs). No account, session, entitlement, sync or administration is involved. The visitor
+  // shield is installed before any Studio script runs; Studio is then editable, but only the demonstration director
+  // can change anything (the Store refuses every other write). The visitor lands on the demonstration's introduction
+  // screen, not on a saved job. If the isolation guards or the shield could not be confirmed, or anything fails while
+  // opening, the visitor is returned to the normal public entry screen with a short notice and nothing is shown.
   async function startDemo(applyAuthState) {
     const demo = window.KLABS_DEMO;
     if (!demo?.active) return false;
@@ -458,7 +462,8 @@
     setVisible("exploreDemoScreen", false);
     try {
       if (!demo.isolated) throw new Error(demo.failure || "Demo Mode isolation could not be confirmed.");
-      window.KLABS_ACCESS_STATE = { access_state: "demo", can_write: false, trial_available: false, email_verified: false, demo: true };
+      demo.installShield(document);
+      window.KLABS_ACCESS_STATE = { access_state: "demo", can_write: true, trial_available: false, email_verified: false, demo: true };
       // Local stand-in for the quote-number service (js/quote-number-allocator.js is not loaded): it reports the
       // demonstration business's next number and never allocates one.
       window.KLABS_QUOTE_NUMBERS = {
@@ -473,10 +478,11 @@
         || window.KLABS_BUILD_SYNC || window.KLABS_SYNC || window.KLABS_SETTINGS_SYNC || window.KLABS_ADMIN_ACCESS) {
         throw new Error("Demo Mode isolation changed while opening.");
       }
+      if (typeof window.KLABS_DEMO_PLAYER?.open !== "function") throw new Error("The demonstration player is unavailable.");
+      const director = demo.claimDirector();
       applyAuthState({ user: { id: demo.accountId, email: "Demonstration" } });
       setVisible("demoModeBar", true);
-      const example = window.KLABS_DEMO_DATA?.exampleJobId;
-      if (example) window.KLABS_UI?.openSavedJobById?.(example);
+      window.KLABS_DEMO_PLAYER.open(director);
       return true;
     } catch (error) {
       console.warn("[K-Labs Studio] Demo Mode could not open safely:", error);

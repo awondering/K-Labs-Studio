@@ -19,6 +19,7 @@ const APP_SHELL_ASSETS=[
 	'css/admin-access.css',
 	'js/demo-mode.js',
 	'js/demo-data.js',
+	'js/demo-director.js',
 	'js/build-tab-lock.js',
 	'js/public-entry.js',
 	'js/vendor/supabase-2.119.0.js',

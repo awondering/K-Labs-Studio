@@ -114,7 +114,7 @@ test('Q18: IndexedDB, cookies, beacons and sockets are unavailable; only same-or
   assert.ok(w.KLABS_DEMO.refused.length >= 6, 'refusals are recorded');
 });
 
-test('Q18: the in-memory Store holds the seeded data, refuses writes while view-only, and keeps nothing on the device', () => {
+test('Q18: the in-memory Store holds the seeded data, refuses every write outside a director step, and keeps nothing on the device', () => {
   const b = browser('?demo');
   const w = b.window;
   assert.equal(w.Store, w.KLABS_DEMO.store);
@@ -126,12 +126,13 @@ test('Q18: the in-memory Store holds the seeded data, refuses writes while view-
   assert.equal(jobs[0].payments[0].date, '2026-11-01');
   assert.equal(jobs[0].note, '2026-11-20 is text', 'only whole date values move');
   assert.equal(w.Store.get('klabs-build-seq', 0), 901);
-  w.KLABS_ACCESS_STATE = { can_write: false, demo: true };
-  assert.equal(w.Store.set('klabs-workshop-builds:klabs-demo', []), false, 'view-only: refused');
-  assert.equal(w.Store.get('klabs-workshop-builds:klabs-demo', []).length, 1);
-  assert.equal(w.KLABS_ACCESS_STATE.writeBlocked, true);
-  w.KLABS_ACCESS_STATE.can_write = true;
-  assert.equal(w.Store.set('k', { a: 1 }), true);
+  for (const can_write of [false, true]) {
+    w.KLABS_ACCESS_STATE = { can_write, demo: true };
+    assert.equal(w.Store.set('klabs-workshop-builds:klabs-demo', []), false, `can_write ${can_write}, no director step: refused`);
+    assert.equal(w.Store.get('klabs-workshop-builds:klabs-demo', []).length, 1);
+    assert.equal(w.KLABS_ACCESS_STATE.writeBlocked, true);
+  }
+  assert.ok(w.KLABS_DEMO.refused.some((r) => r.kind === 'store'), 'refused writes are recorded');
   assert.deepEqual(b.nativeWrites, []);
 });
 
@@ -176,7 +177,7 @@ for (const [file, global] of [['js/thread-studio-host.js', 'KLabsThreadStudioHos
 }
 
 // public-entry.js startDemo with a minimal document.
-function entry({ isolated = true, extraGlobal = '' } = {}) {
+function entry({ isolated = true, extraGlobal = '', shield = 'ok', player = true } = {}) {
   const scripts = [];
   const elements = {};
   const el = (id) => elements[id] || (elements[id] = { id, hidden: true, style: {}, listeners: {}, textContent: '', addEventListener(e, f) { this.listeners[e] = f; }, focus() {}, setAttribute() {}, removeAttribute() {} });
@@ -184,8 +185,12 @@ function entry({ isolated = true, extraGlobal = '' } = {}) {
   const store = { get() {}, set() { return false; } };
   const seeded = [];
   const opened = [];
+  const order = [];
+  const director = Object.freeze({ run: async (f) => f() });
   const window = {
-    KLABS_DEMO: { active: true, isolated, failure: isolated ? '' : 'probe failed', accountId: 'klabs-demo', store, exitUrl: () => '/', seed: (d) => seeded.push(d) },
+    KLABS_DEMO: { active: true, isolated, failure: isolated ? '' : 'probe failed', accountId: 'klabs-demo', store, exitUrl: () => '/', seed: (d) => seeded.push(d),
+      installShield: () => { order.push('shield'); if (shield === 'fail') throw new Error('The visitor shield could not be installed.'); return true; },
+      claimDirector: () => { order.push('director'); if (shield === 'claimed') throw new Error('The demonstration director is already in use.'); return director; } },
     location: { hash: '', pathname: '/', replace(u) { this.replaced = u; } },
     navigator: { onLine: true }, addEventListener() {}, setInterval() {}, setTimeout() {}, clearTimeout() {}, scrollTo() {},
     localStorage: { length: 0, key: () => null }, KLABS_SUPABASE_CLIENT: null,
@@ -199,17 +204,19 @@ function entry({ isolated = true, extraGlobal = '' } = {}) {
     head: { appendChild(s) {
       if (s.rel === 'preload') return;
       scripts.push(s.src);
-      if (s.src === 'js/demo-data.js') window.KLABS_DEMO_DATA = { store: {}, exampleJobId: 'demo-build-coastal' };
+      order.push(s.src);
+      if (s.src === 'js/demo-data.js') window.KLABS_DEMO_DATA = { store: {} };
       if (s.src === 'js/ui.js') window.KLABS_UI = { openSavedJobById: (id) => opened.push(id) };
+      if (s.src === 'js/demo-director.js' && player) window.KLABS_DEMO_PLAYER = { open: (d) => { order.push('player'); opened.push(d); } };
       if (extraGlobal && s.src === 'js/app.js') window[extraGlobal] = {};
       queueMicrotask(s.onload);
     } },
   };
   vm.runInNewContext(entrySource, { window, document, Promise, Error, Date, JSON, console: { warn() {}, error() {} }, AbortController, queueMicrotask, Set });
-  return { window, scripts, elements, classes, seeded, opened };
+  return { window, scripts, elements, classes, seeded, opened, order, director };
 }
 
-test('Q18: Demo Mode opens the real interface with no sign-in, no sync, no administration and no server quote numbers', async () => {
+test('Q18: Demo Mode opens the real, editable interface behind the shield - no sign-in, sync, administration or server quote numbers', async () => {
   const h = entry();
   let applied = null;
   assert.equal(await h.window.KLABS_PUBLIC_ENTRY.startDemo((s) => { applied = s; }), true);
@@ -221,10 +228,14 @@ test('Q18: Demo Mode opens the real interface with no sign-in, no sync, no admin
   }
   assert.equal(h.seeded.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(applied)), { user: { id: 'klabs-demo', email: 'Demonstration' } });
-  assert.equal(h.window.KLABS_ACCESS_STATE.can_write, false);
+  assert.equal(h.window.KLABS_ACCESS_STATE.can_write, true, 'Studio is editable; the shield and director-only writes protect it');
   assert.equal(h.window.KLABS_ACCESS_STATE.demo, true);
+  assert.equal(h.order[0], 'shield', 'the shield is in place before any Studio script runs');
+  assert.ok(h.scripts.includes('js/demo-director.js'));
+  assert.ok(h.scripts.indexOf('js/demo-director.js') > h.scripts.indexOf('js/ui.js'));
+  assert.deepEqual(h.order.slice(-2), ['director', 'player'], 'the director channel goes straight to the player');
+  assert.deepEqual([...h.opened], [h.director], 'no saved job is opened; the player (introduction screen) is given the director');
   assert.equal(h.elements.demoModeBar.hidden, false);
-  assert.deepEqual([...h.opened], ['demo-build-coastal'], 'lands on the completed example build');
   await assert.rejects(h.window.KLABS_QUOTE_NUMBERS.allocate(1), /not allocated/);
   assert.deepEqual({ ...(await h.window.KLABS_QUOTE_NUMBERS.peek()) }, { userId: 'klabs-demo', nextNumber: null });
   assert.equal(h.window.location.replaced, undefined);
@@ -238,6 +249,20 @@ test('Q18: fails safe - without confirmed isolation nothing loads and the visito
   assert.equal(applied, false);
   assert.equal(h.window.location.replaced, '/#demo-unavailable');
   assert.equal(h.elements.demoModeBar, undefined, 'the demo bar is never shown');
+});
+
+test('Q18 amendment: fails safe if the shield cannot be installed, the director is already taken or the player is missing', async () => {
+  for (const options of [{ shield: 'fail' }, { shield: 'claimed' }, { player: false }]) {
+    const h = entry(options);
+    let applied = false;
+    assert.equal(await h.window.KLABS_PUBLIC_ENTRY.startDemo(() => { applied = true; }), false, JSON.stringify(options));
+    assert.equal(h.window.location.replaced, '/#demo-unavailable');
+    if (options.shield === 'fail') {
+      assert.deepEqual(h.scripts, [], 'no Studio script runs without the shield');
+      assert.equal(applied, false);
+    }
+    assert.equal(h.opened.length, 0, 'the player is never opened');
+  }
 });
 
 test('Q18: fails safe if a sync or administration module appears while opening', async () => {
@@ -260,40 +285,39 @@ test('Q18: demo page wiring - no Supabase client, no sign-in restore, no service
   const worker = read('service-worker.js');
   assert.match(worker, /'js\/demo-mode\.js',/);
   assert.match(worker, /'js\/demo-data\.js',/);
+  assert.match(worker, /'js\/demo-director\.js',/);
 });
 
-test('Q18: account, sign-out, sync, recovery export and administration are not part of the demonstration', () => {
+test('Q18: account, sign-out, sync, recovery export, administration and customer documents are not part of the demonstration', () => {
   for (const id of ['settingsAccountCard', 'settingsRecoveryCard', 'settingsAdminEntry', 'adminAccessScreen', 'buildSyncNotice', 'componentSyncStatusLine', 'readOnlyAccessNotice']) {
     assert.match(css, new RegExp(`html\\.klabs-demo #${id}[,\\s]`), id);
   }
   assert.match(clientSource, /#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice/);
-  assert.match(clientSource, /log \?out\|sign \?out\|sync\|admin\|upload\|logo\|increase\|decrease/);
+  assert.match(clientSource, /log \?out\|sign \?out\|sync\|admin\|upload\|logo\|increase\|decrease\|e-\?mail\|print\|export\|send/);
   assert.match(clientSource, /const blockedOffline = \(offlineSession \|\| demo\) && \(/, 'customer documents blocked as when offline');
+  // The demonstration is editable (for the director), so these controls are blocked in Demo Mode whether or not the
+  // page is read-only, and for every click - visitor or director.
+  assert.match(clientSource, /if \(!demo && !document\.body\.classList\.contains\("klabs-read-only"\)\) return;/);
+  assert.match(clientSource, /if \(demo\) \{\s*if \(!blockedOffline && !blockedDemo\) return;/);
 });
 
 test('Q18: one compact bar identifies Demo Mode and offers the way out', () => {
-  assert.match(html, /<div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" hidden>\s*<strong>DEMO<\/strong>\s*<span id="demoModeMessage">Fictional data\. Nothing here is saved, sent or synced\.<\/span>\s*<button id="demoModeExitBtn" type="button" class="ghost-action demo-mode-bar__exit">Exit demo<\/button>/);
+  assert.match(html, /<div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" data-demo-player hidden>\s*<strong>DEMO<\/strong>\s*<span id="demoModeMessage">Fictional data\. Nothing here is saved, sent or synced\.<\/span>\s*<button id="demoModeExitBtn" type="button" class="ghost-action demo-mode-bar__exit">Exit demo<\/button>/);
   assert.match(css, /\.readonly-access-notice\.demo-mode-bar \{ flex-direction:row;/);
   assert.match(entrySource, /getElementById\("demoModeExitBtn"\)\.addEventListener\("click", \(\) => window\.KLABS_DEMO\?\.exit\(\)\)/);
 });
 
-test('Q18: demonstration data is fictional and complete', () => {
+test('Q18 amendment: demonstration data is fictional and holds supporting data only - no jobs, customers or finished build', () => {
   const context = vm.createContext({ window: {} });
   vm.runInContext(read('js/demo-data.js'), context);
   const data = context.window.KLABS_DEMO_DATA;
   const store = data.store;
-  const jobs = store['klabs-workshop-builds:'];
-  assert.deepEqual(JSON.parse(JSON.stringify(jobs.map((j) => [j.id, j.jobType, j.quoteStatus]).sort())), [
-    ['demo-build-coastal', 'build', 'complete'], ['demo-build-softbait', 'build', 'active'], ['demo-quote-jig', 'build', 'quote'], ['demo-repair-guide', 'repair', 'active']]);
-  assert.equal(data.exampleJobId, 'demo-build-coastal');
-  const example = jobs.find((j) => j.id === data.exampleJobId);
-  assert.equal(example.issuedInvoice.displayNumber, 'INV-1042');
-  assert.equal(example.issuedInvoice.total, example.finalCustomerPrice);
-  const paid = Math.round(example.payments.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-  assert.equal(paid, example.finalCustomerPrice, 'paid in full');
-  const text = JSON.stringify(store);
-  for (const email of text.match(/[\w.+-]+@[\w.-]+/g)) assert.match(email, /@example\.com$/, email);
-  for (const job of jobs) assert.match(job.phone, /^021 555 01\d\d$/);
+  assert.deepEqual(Object.keys(store).sort(), ['klabs-business-profile:', 'klabs-studio-settings:', 'klabs-studio-starter-components-v1', 'klabs-studio-starter-suppliers-v1',
+    'klabs-workshop-component-library:', 'klabs-workshop-component-taxonomy:', 'klabs-workshop-custom-suppliers'], 'business profile, settings and component library only');
+  assert.equal(data.exampleJobId, undefined, 'the demonstration no longer opens on a finished build');
+  const text = JSON.stringify(data);
+  assert.doesNotMatch(text, /INV-1042|demo-build-coastal|Jordan Ellis|Priya Nair|Tom Hughes|Mere Walker/, 'no pre-made jobs or customers');
+  for (const email of text.match(/[\w.+-]+@[\w.-]+/g) || []) assert.match(email, /@example\.com$/, email);
   assert.equal(store['klabs-business-profile:'].businessName, 'Harbourline Custom Rods');
   assert.match(store['klabs-business-profile:'].phone, / 555 /);
   assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, 'no real account ids');
