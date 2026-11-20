@@ -249,7 +249,8 @@ test('Q18 amendment: introduction screen explains the demonstration and starts i
   assert.match(intro, /nothing is saved/i);
   assert.match(intro, /<button id="demoStartBtn" type="button" class="primary-action[^"]*">START DEMONSTRATION<\/button>/);
   assert.match(intro, /<button id="demoIntroExitBtn" type="button"/);
-  assert.match(html, /<div id="demoModeBar" class="demo-dock" data-demo-player hidden>/);
+  // Phase 3 review change: the dock also carries the demonstration files' build (data-demo-build), checked at start-up.
+  assert.match(html, /<div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v\d+" hidden>/);
   const z = (selector) => Number(new RegExp(`${selector.replace(/[.#]/g, '\\$&')} \\{[^}]*z-index:(\\d+)`).exec(css)?.[1]);
   assert.ok(z('.demo-shield') > 1000, 'above every Studio layer');
   assert.ok(z('.demo-intro') > z('.demo-shield'));

@@ -176,11 +176,19 @@ for (const [file, global] of [['js/thread-studio-host.js', 'KLabsThreadStudioHos
   });
 }
 
+// Phase 3 review: the build every demonstration file carries is the app shell's (service-worker.js).
+const BUILD = /const APP_SHELL_VERSION='([^']+)'/.exec(read('service-worker.js'))[1];
+const OLD = 'build148-v100';
 // public-entry.js startDemo with a minimal document.
-function entry({ isolated = true, extraGlobal = '', shield = 'ok', player = true } = {}) {
+// Phase 3 review change (harness): each demonstration file reports its build (stale: which one is an older copy);
+// search: the page address; a service-worker registration records update() (was: no builds, no service worker).
+function entry({ isolated = true, extraGlobal = '', shield = 'ok', player = true, stale = '', search = '?demo' } = {}) {
   const scripts = [];
   const elements = {};
-  const el = (id) => elements[id] || (elements[id] = { id, hidden: true, style: {}, listeners: {}, textContent: '', addEventListener(e, f) { this.listeners[e] = f; }, focus() {}, setAttribute() {}, removeAttribute() {} });
+  const build = (part) => (stale === part ? OLD : BUILD);
+  const el = (id) => elements[id] || (elements[id] = { id, hidden: true, style: {}, listeners: {}, textContent: '', addEventListener(e, f) { this.listeners[e] = f; }, focus() {}, setAttribute() {}, removeAttribute() {},
+    getAttribute: (name) => (id === 'demoModeBar' && name === 'data-demo-build' ? build('page') : null) });
+  const sw = { updates: 0 };
   const classes = new Set();
   const store = { get() {}, set() { return false; } };
   const seeded = [];
@@ -188,11 +196,11 @@ function entry({ isolated = true, extraGlobal = '', shield = 'ok', player = true
   const order = [];
   const director = Object.freeze({ run: async (f) => f() });
   const window = {
-    KLABS_DEMO: { active: true, isolated, failure: isolated ? '' : 'probe failed', accountId: 'klabs-demo', store, exitUrl: () => '/', seed: (d) => seeded.push(d),
+    KLABS_DEMO: { active: true, isolated, failure: isolated ? '' : 'probe failed', accountId: 'klabs-demo', store, exitUrl: () => '/', enterUrl: () => '/?demo', build: build('guard'), seed: (d) => seeded.push(d),
       installShield: () => { order.push('shield'); if (shield === 'fail') throw new Error('The visitor shield could not be installed.'); return true; },
       claimDirector: () => { order.push('director'); if (shield === 'claimed') throw new Error('The demonstration director is already in use.'); return director; } },
-    location: { hash: '', pathname: '/', replace(u) { this.replaced = u; } },
-    navigator: { onLine: true }, addEventListener() {}, setInterval() {}, setTimeout() {}, clearTimeout() {}, scrollTo() {},
+    location: { hash: '', pathname: '/', search, replace(u) { this.replaced = u; } },
+    navigator: { onLine: true, serviceWorker: { getRegistration: async () => ({ update: async () => { sw.updates += 1; } }), addEventListener() {} } }, addEventListener() {}, setInterval() {}, setTimeout() {}, clearTimeout() {}, scrollTo() {},
     localStorage: { length: 0, key: () => null }, KLABS_SUPABASE_CLIENT: null,
   };
   window.Store = store;
@@ -205,15 +213,15 @@ function entry({ isolated = true, extraGlobal = '', shield = 'ok', player = true
       if (s.rel === 'preload') return;
       scripts.push(s.src);
       order.push(s.src);
-      if (s.src === 'js/demo-data.js') window.KLABS_DEMO_DATA = { store: {} };
+      if (s.src === 'js/demo-data.js') window.KLABS_DEMO_DATA = { store: {}, build: build('data') };
       if (s.src === 'js/ui.js') window.KLABS_UI = { openSavedJobById: (id) => opened.push(id) };
-      if (s.src === 'js/demo-director.js' && player) window.KLABS_DEMO_PLAYER = { open: (d) => { order.push('player'); opened.push(d); } };
+      if (s.src === 'js/demo-director.js' && player) window.KLABS_DEMO_PLAYER = { build: build('player'), open: (d) => { order.push('player'); opened.push(d); } };
       if (extraGlobal && s.src === 'js/app.js') window[extraGlobal] = {};
       queueMicrotask(s.onload);
     } },
   };
   vm.runInNewContext(entrySource, { window, document, Promise, Error, Date, JSON, console: { warn() {}, error() {} }, AbortController, queueMicrotask, Set });
-  return { window, scripts, elements, classes, seeded, opened, order, director };
+  return { window, scripts, elements, classes, seeded, opened, order, director, sw };
 }
 
 test('Q18: Demo Mode opens the real, editable interface behind the shield - no sign-in, sync, administration or server quote numbers', async () => {
@@ -318,7 +326,8 @@ test('Q18: account, sign-out, sync, recovery export, administration and customer
 
 test('Q18 2A: one dock at the top identifies Demo Mode, holds the player and the way out, and never covers Studio\'s sheets', () => {
   const dock = html.slice(html.indexOf('<div id="demoModeBar"'), html.indexOf('<!-- /demoModeBar -->'));
-  assert.match(dock, /^<div id="demoModeBar" class="demo-dock" data-demo-player hidden>/);
+  // Phase 3 review change: the dock also carries the demonstration files' build (data-demo-build), checked at start-up.
+  assert.match(dock, /^<div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v\d+" hidden>/);
   assert.match(dock, /<strong class="demo-dock__tag">DEMO<\/strong>\s*<span id="demoModeMessage" class="demo-dock__message">Fictional data\. Nothing here is saved, sent or synced\.<\/span>\s*<button id="demoModeExitBtn" type="button" class="ghost-action demo-dock__exit">Exit demo<\/button>/);
   assert.match(dock, /<div id="demoPlayer" class="demo-player" hidden>/);
   for (const id of ['demoCaption', 'demoChapterLabel', 'demoPlayPauseBtn', 'demoReplayBtn']) assert.match(dock, new RegExp(`id="${id}"`), id);
@@ -512,4 +521,49 @@ test('Q18 Phase 3: the control the director is using is highlighted (a visible o
   assert.match(rule[1], /outline:3px solid/);
   assert.match(rule[1], /box-shadow:/);
   assert.doesNotMatch(css.replace(rule[0], ''), /(^|[^-\w])\[data-demo-highlight\]/m, 'not used outside Demo Mode');
+});
+
+// ---- Phase 3 review: no mixed demonstration files.
+
+test('Q18 Phase 3 review: every demonstration file and the page carry the same build as the app shell', () => {
+  const builds = {
+    page: /<div id="demoModeBar"[^>]*\sdata-demo-build="([^"]+)"/.exec(html)?.[1],
+    guard: /\bbuild: "([^"]+)"/.exec(demoSource)?.[1],
+    entry: /const DEMO_BUILD = "([^"]+)";/.exec(entrySource)?.[1],
+    data: /\bbuild: "([^"]+)"/.exec(read('js/demo-data.js'))?.[1],
+    player: /const DEMO_BUILD = "([^"]+)";/.exec(read('js/demo-director.js'))?.[1],
+  };
+  assert.deepEqual(builds, { page: BUILD, guard: BUILD, entry: BUILD, data: BUILD, player: BUILD });
+});
+
+test('Q18 Phase 3 review: an older copy of any demonstration file is never run with the others - the page refreshes once, after asking for the new version', async () => {
+  for (const part of ['page', 'guard', 'data', 'player']) {
+    const h = entry({ stale: part });
+    let applied = false;
+    assert.equal(await h.window.KLABS_PUBLIC_ENTRY.startDemo(() => { applied = true; }), false, part);
+    assert.equal(h.window.location.replaced, '/?demo&fresh=1', `${part}: one fresh reload`);
+    assert.equal(h.sw.updates, 1, `${part}: the new version was asked for first`);
+    assert.equal(applied, false, part);
+    assert.equal(h.opened.length, 0, `${part}: the player is never opened`);
+    assert.notEqual(h.elements.demoModeBar?.hidden, false, `${part}: the dock is never shown`);
+    if (part === 'page' || part === 'guard') assert.deepEqual(h.scripts, [], `${part}: nothing is loaded`);
+    if (part === 'data') {
+      assert.deepEqual(h.scripts, ['js/demo-data.js'], 'no Studio script runs after older data');
+      assert.equal(h.seeded.length, 0, 'older data is never used');
+    }
+  }
+});
+
+test('Q18 Phase 3 review: still mixed after the fresh reload - the visitor returns safely to the public entry with the notice (no reload loop)', async () => {
+  for (const part of ['page', 'guard', 'data', 'player']) {
+    const h = entry({ stale: part, search: '?demo&fresh=1' });
+    assert.equal(await h.window.KLABS_PUBLIC_ENTRY.startDemo(() => {}), false, part);
+    assert.equal(h.window.location.replaced, '/#demo-unavailable', part);
+    assert.equal(h.opened.length, 0, part);
+  }
+  // Matching files after the fresh reload: the demonstration opens normally.
+  const ok = entry({ search: '?demo&fresh=1' });
+  assert.equal(await ok.window.KLABS_PUBLIC_ENTRY.startDemo(() => {}), true);
+  assert.deepEqual([...ok.opened], [ok.director]);
+  assert.equal(ok.window.location.replaced, undefined);
 });

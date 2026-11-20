@@ -10,7 +10,10 @@
 // iPhone strip is slim; Replay (including the Pause button once finished) and the chapter controls restart without
 // leaving Demo Mode. Phase 3: every tap and typed character the demonstration makes lands on a highlighted control that
 // is fully in view; the courier choice, delivery total and unchanged profit and margin are highlighted in view; no
-// caption or player message is cut off; the Mac dock is slim.
+// caption or player message is cut off; the Mac dock is slim. Phase 3 review: pricing by a margin, then by the profit
+// wanted, recalculated live; after Courier the page does not jump back up to the delivery fields (Mac: no scroll at all;
+// iPhone: a small nudge); an older cached demonstration file is refreshed once, or the visitor is returned safely; a
+// step that cannot finish ends calmly in "Demonstration paused. Press Replay" and nothing changes after it.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -25,6 +28,9 @@ const ck = (name, cond, detail) => { assert.ok(cond, `${name}${detail === undefi
 const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Split Grip': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
 const LABOUR = { rate: 85, hours: 5 };
 const DELIVERY = { freight: 18, packaging: 12 };
+// Phase 3 review: the profit typed after the margin (Required Profit, $).
+const PROFIT = 280;
+const STOPPED = /^Demonstration paused\. Press Replay/;
 
 function serve() {
   const server = http.createServer((req, res) => {
@@ -118,7 +124,7 @@ async function boot(browser, base, contextOptions, search = '?demo') {
       if (event.isTrusted || !(el instanceof Element) || el.closest('[data-demo-player]')) return;
       const lit = el.closest('[data-demo-highlight]');
       const outline = lit ? getComputedStyle(lit) : null;
-      window.__acts.push({ kind: event.type, el: name(el), lit: !!lit && outline.outlineStyle !== 'none' && parseFloat(outline.outlineWidth) >= 2, view: inView(el) });
+      window.__acts.push({ kind: event.type, el: name(el), lit: !!lit && outline.outlineStyle !== 'none' && parseFloat(outline.outlineWidth) >= 2, view: inView(el), y: Math.round(scrollY) });
     };
     document.addEventListener('click', record, true);
     document.addEventListener('input', record, true);
@@ -136,7 +142,8 @@ async function boot(browser, base, contextOptions, search = '?demo') {
 const caption = (page) => page.evaluate(() => document.getElementById('demoCaption').textContent);
 const chapterLabel = (page) => page.evaluate(() => document.getElementById('demoChapterLabel').textContent);
 const waitChapter = (page, n, timeout = 120000) => page.waitForFunction((n) => (document.getElementById('demoChapterLabel').textContent || '').startsWith(`${n}/`) || (n === 11 && /Finished/.test(document.getElementById('demoChapterLabel').textContent)), n, { timeout });
-const finished = (page, timeout = 300000) => page.waitForFunction(() => /from enquiry to paid in full|stopped/i.test(document.getElementById('demoCaption').textContent), null, { timeout });
+// Phase 3 review change: the stopped state now reads "Demonstration paused. Press Replay..." (was "...stopped...").
+const finished = (page, timeout = 300000) => page.waitForFunction(() => /from enquiry to paid in full|^Demonstration paused\. Press Replay/.test(document.getElementById('demoCaption').textContent), null, { timeout });
 const visitorPress = async (page, selector, touch) => {
   const box = await page.locator(selector).first().boundingBox().catch(() => null);
   if (!box) return false;
@@ -221,11 +228,30 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: the customer price changes live on screen as the margin is typed (${live.size} different prices seen)`, live.size >= 2, [...live]);
   const mismatched = samples.filter((s) => !near(Number(s.shown.customerPrice), s.maths.total) || !near(money(s.shown.componentsCost), s.maths.materialCost));
   ck(`${label}: every live sample (${samples.length}) matches quoteMaths()`, mismatched.length === 0, mismatched.slice(0, 2));
-  // Before delivery: the rod alone at a 25% margin.
+  // Phase 3 review change: the margin is checked just before the profit is typed (was: once the courier caption showed,
+  // when the margin was still the driver).
+  await page.waitForFunction(() => document.getElementById('quoteProfit').hasAttribute('data-demo-highlight'), null, { timeout: 60000 });
+  const atMargin = await figures(page);
+  checkFigures(`${label} rod price at a 25% margin`, atMargin);
+  ck(`${label}: a 25% margin was set by typing it`, near(atMargin.maths.rodMarginPercent, 25, 0.01), atMargin.maths.rodMarginPercent);
+  // Then by the profit wanted: Required Profit typed in, and the price and margin recalculate live.
+  const profitSamples = [];
+  const profitDeadline = Date.now() + 20000;
+  while (Date.now() < profitDeadline) {
+    const f = await figures(page);
+    profitSamples.push(f);
+    if (Number(f.shown.profit) === PROFIT && !(await page.evaluate(() => document.getElementById('quoteProfit').hasAttribute('data-demo-highlight')))) break;
+    await page.waitForTimeout(120);
+  }
+  const profitPrices = new Set(profitSamples.map((f) => Number(f.shown.customerPrice).toFixed(2)));
+  ck(`${label}: typing the profit changes the price live (${profitPrices.size} different prices seen)`, profitPrices.size >= 2, [...profitPrices]);
+  const profitMismatch = profitSamples.filter((f) => !near(Number(f.shown.customerPrice), f.maths.total) || !near(Number(f.shown.margin), f.maths.rodMarginPercent, 0.051));
+  ck(`${label}: every sample while the profit is typed (${profitSamples.length}) matches quoteMaths()`, profitMismatch.length === 0, profitMismatch.slice(0, 2));
+  // Before delivery: the rod alone, priced by the profit wanted.
   await page.waitForFunction(() => /couriered/.test(document.getElementById('demoCaption').textContent), null, { timeout: 60000 });
   const rodOnly = await figures(page);
   checkFigures(`${label} rod price`, rodOnly);
-  ck(`${label}: a 25% margin was set by typing it`, near(rodOnly.maths.rodMarginPercent, 25, 0.01), rodOnly.maths.rodMarginPercent);
+  ck(`${label}: a Required Profit of $${PROFIT} was set by typing it; the margin and price were worked out by Studio`, near(rodOnly.maths.rodProfit, PROFIT, 0.0051) && !near(rodOnly.maths.rodMarginPercent, 25, 0.05) && !near(rodOnly.maths.total, atMargin.maths.total), [rodOnly.maths.rodProfit, rodOnly.maths.rodMarginPercent, rodOnly.maths.total, atMargin.maths.total]);
   ck(`${label}: no delivery charge yet`, near(rodOnly.maths.deliveryCharge, 0), rodOnly.maths.deliveryCharge);
   await waitChapter(page, 5, 120000);
   const priced = await figures(page);
@@ -237,7 +263,9 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: courier delivery chosen, with Freight 18 and Packaging 12 typed in`, priced.fulfilment === 'shipping' && Number(priced.freight) === DELIVERY.freight && Number(priced.packaging) === DELIVERY.packaging, [priced.fulfilment, priced.freight, priced.packaging]);
   ck(`${label}: the delivery charge is quoteMaths()'s (cost ${priced.maths.deliveryCost}, charged ${priced.maths.deliveryCharge} incl. GST)`, near(priced.maths.deliveryCost, DELIVERY.freight + DELIVERY.packaging) && near(priced.maths.deliveryCharge, Math.round((DELIVERY.freight + DELIVERY.packaging) * 115) / 100), priced.maths);
   ck(`${label}: delivery is added to the price separately (rod ${rodOnly.maths.total} + delivery ${priced.maths.deliveryCharge} = ${priced.maths.total})`, near(priced.maths.total, rodOnly.maths.total + priced.maths.deliveryCharge), [rodOnly.maths.total, priced.maths.deliveryCharge, priced.maths.total]);
-  ck(`${label}: the rod's target profit and margin are unchanged by delivery`, near(priced.maths.rodProfit, rodOnly.maths.rodProfit, 0.0051) && near(priced.maths.rodMarginPercent, 25, 0.01), [rodOnly.maths.rodProfit, priced.maths.rodProfit, priced.maths.rodMarginPercent]);
+  // Phase 3 review change: the profit is now the driver, so it is $PROFIT and the margin is the one Studio worked out
+  // from it (was: the 25% margin).
+  ck(`${label}: the rod's target profit and margin are unchanged by delivery`, near(priced.maths.rodProfit, rodOnly.maths.rodProfit, 0.0051) && near(priced.maths.rodProfit, PROFIT, 0.0051) && near(priced.maths.rodMarginPercent, rodOnly.maths.rodMarginPercent, 0.01), [rodOnly.maths.rodProfit, priced.maths.rodProfit, rodOnly.maths.rodMarginPercent, priced.maths.rodMarginPercent]);
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-3-pricing.png`) });
 
   // Chapter 5: the customer quote, watermarked, with the same figures.
@@ -361,10 +389,18 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: every one of the demonstration's ${acts.length} taps and typed characters was on a highlighted control`, acts.length > 300 && unlit.length === 0, unlit.slice(0, 5));
   ck(`${label}: every one of them was on a control fully in view (below the dock, on screen, not clipped)`, outOfView.length === 0, outOfView.slice(0, 5));
   const lit = await page.evaluate(() => window.__highlights);
-  for (const id of ['quoteTotalField', 'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteDeliveryTotalField', 'quoteProfitField', 'quoteMarginPercentField', 'quoteBalanceReceivedAmount']) {
+  for (const id of ['quoteTotalField', 'quoteProfit', 'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteDeliveryTotalField', 'quoteProfitField', 'quoteMarginPercentField', 'quoteBalanceReceivedAmount']) {
     const seen = lit.filter((h) => h.el === id);
     ck(`${label}: ${id} was highlighted in full view (${seen.length}x)`, seen.length > 0 && seen.every((h) => !h.view), seen);
   }
+  // Phase 3 review: Studio places Freight and Packaging above the Fulfilment Method choice. After Courier is chosen the
+  // page does not jump back up: on a Mac both are on screen together (no scroll); on an iPhone 13 they cannot both fit
+  // between the dock and Studio's bottom bar and Back to top button, so it is a short move (centring each control, as
+  // before, climbs about 560 px there - worked out from the layout).
+  const courierAt = acts.findIndex((a) => a.kind === 'click' && a.el === 'shipping');
+  const freightAt = acts.findIndex((a, i) => i > courierAt && a.el === 'quoteFreight');
+  const climb = courierAt >= 0 && freightAt > courierAt ? acts[courierAt].y - acts[freightAt].y : NaN;
+  ck(`${label}: after Courier, the page moves up ${climb} px to Freight (${label === 'mac' ? 'none' : 'at most 240'})`, label === 'mac' ? climb === 0 : climb >= 0 && climb <= 240, { courier: acts[courierAt], freight: acts[freightAt] });
   // Phase 3: no caption or player message is cut off - each is shown in the real caption line under its chapter label.
   const cut = await page.evaluate(() => {
     const line = document.querySelector('.demo-player__caption');
@@ -436,6 +472,51 @@ async function replayAndChapters(base, page, label, touch, expectedTotal) {
   ck(`${label}: nothing carried over between runs (one customer and one build, both Jordan Ellis)`, JSON.stringify(builds) === JSON.stringify(['build:Jordan Ellis', 'customer:Jordan Ellis']), builds);
 }
 
+// Phase 3 review: an older cached copy of a demonstration file, and a step that cannot finish.
+async function staleAndStopped(browser, base, label, contextOptions) {
+  console.log(`\n== Older cached files and a stuck step: ${label} ==`);
+  const directorSource = fs.readFileSync(path.join(root, 'js', 'demo-director.js'), 'utf8');
+  const older = directorSource.replace(/const DEMO_BUILD = "[^"]+";/, 'const DEMO_BUILD = "build148-v100";');
+  assert.notEqual(older, directorSource);
+  const run = async (staleTimes) => {
+    const { context, page, errors, offsite } = await boot(browser, base, contextOptions, '?demo&no-start');
+    await page.close();
+    let served = 0;
+    await context.route('**/js/demo-director.js', (route) => {
+      served += 1;
+      if (served <= staleTimes) return route.fulfill({ status: 200, contentType: 'application/javascript', body: older });
+      return route.continue();
+    });
+    const fresh = await context.newPage();
+    fresh.on('pageerror', (e) => errors.push(e.message));
+    await fresh.goto(`${base}/?demo`);
+    return { context, page: fresh, errors, offsite, served: () => served };
+  };
+  // Once older: one fresh reload, then the demonstration opens with matching files.
+  const once = await run(1);
+  await once.page.waitForSelector('#demoIntro:not([hidden])', { timeout: 60000 });
+  const opened = await once.page.evaluate(() => ({ url: location.pathname + location.search, build: window.KLABS_DEMO_PLAYER.build, data: window.KLABS_DEMO_DATA.build, guard: window.KLABS_DEMO.build }));
+  ck(`${label}: an older cached demonstration file is replaced by one fresh reload, then the demonstration opens with matching files`, opened.url === '/?demo&fresh=1' && opened.build === opened.data && opened.data === opened.guard && once.served() === 2, opened);
+  await once.context.close();
+  // Still older after that: back to the public entry with the notice, no loop, nothing of the demonstration shown.
+  const always = await run(99);
+  await always.page.waitForFunction(() => location.search === '' && !document.getElementById('publicDemoUnavailable').hidden, null, { timeout: 60000 });
+  await always.page.waitForTimeout(1500);
+  const back = await always.page.evaluate(() => ({ url: location.pathname + location.search + location.hash, demo: window.KLABS_DEMO.active, notice: document.getElementById('publicDemoUnavailable').textContent, dock: !document.getElementById('demoModeBar').hidden }));
+  ck(`${label}: still older after the fresh reload - the visitor is back on the public entry with the notice (one reload only)`, back.url === '/' && !back.demo && !back.dock && /could not open safely/.test(back.notice) && always.served() === 2, { back, served: always.served() });
+  await always.context.close();
+  // A step that cannot finish: the deposit's Record Payment button is missing in chapter 7.
+  const stuck = await boot(browser, base, contextOptions, '?demo&chapter=7');
+  await stuck.page.addStyleTag({ content: '#quoteRecordPaymentBtn { display:none !important; }' });
+  await stuck.page.waitForFunction(() => /^Demonstration paused\. Press Replay/.test(document.getElementById('demoCaption').textContent), null, { timeout: 90000 });
+  const stopped = await stuck.page.evaluate(() => ({ caption: document.getElementById('demoCaption').textContent, button: document.getElementById('demoPlayPauseBtn').textContent, playing: document.getElementById('demoModeBar').getAttribute('data-playing'), payments: (quote.payments || []).length }));
+  await stuck.page.waitForTimeout(3000);
+  const later = await stuck.page.evaluate(() => ({ payments: (quote.payments || []).length, write: window.Store.set('klabs-demo-after-stop', 1), caption: document.getElementById('demoCaption').textContent }));
+  ck(`${label}: a step that cannot finish ends calmly in "Demonstration paused. Press Replay", with Replay ready`, STOPPED.test(stopped.caption) && stopped.button === 'Replay' && stopped.playing === 'false', stopped);
+  ck(`${label}: after the stop nothing changes and the write window is closed`, later.payments === stopped.payments && later.write === false && STOPPED.test(later.caption), later);
+  await stuck.context.close();
+}
+
 async function main() {
   const server = await serve();
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -449,6 +530,8 @@ async function main() {
     const iphone = await fullPlayback(browser, base, 'iphone', { ...playwright.devices['iPhone 13'] }, true, shots);
     await replayAndChapters(base, iphone.page, 'iphone', true, iphone.priced.maths.total);
     await iphone.context.close();
+    await staleAndStopped(browser, base, 'mac', { viewport: { width: 1280, height: 860 } });
+    await staleAndStopped(browser, base, 'iphone', { ...playwright.devices['iPhone 13'] });
   } finally {
     await browser.close();
     server.close();

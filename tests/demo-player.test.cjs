@@ -15,8 +15,14 @@ const ui = read('js/ui.js');
 
 // A stand-in page: every control the journey asks for exists and is visible; clicks, typed characters and the order of
 // everything the director does are recorded. Time is virtual: a wait of N ms advances the clock by N at once.
-function stage({ search = '?demo' } = {}) {
+function stage({ search = '?demo', nearestFails = [], coveredOnce = [] } = {}) {
   const log = [];
+  // Phase 3 review: the director's watchdog timer does not drive the virtual clock; it fires once the clock has reached
+  // it. stall: once stall.when(log) is true the director's own timers never fire (a step that cannot finish) until
+  // stall.release() - h.advance(ms) moves the clock on meanwhile.
+  const watchdogs = [];
+  const stall = { when: null, held: [] };
+  const fireDue = () => { for (const w of watchdogs.splice(0)) { if (w.due <= clock) setImmediate(w.fn); else watchdogs.push(w); } };
   const busy = { studio: 0, writes: 0 };
   const slow = { turns: 0 };
   // Phase 3: every tap and every typed character, with whether its element was highlighted and fully in view then.
@@ -47,8 +53,10 @@ function stage({ search = '?demo' } = {}) {
         const top = this.underDock ? 40 : this.inView ? 300 : this.arriving > 0 ? 300 + this.arriving * 200 : 2000;
         return { top, bottom: top + 80, left: 10, right: 310, width: 300, height: 80 };
       },
-      scrollIntoView(options) { log.push(['into-view', key]); this.underDock = false; if (options && options.behavior === 'smooth' && !this.inView) this.arriving = 4; else this.inView = true; }, scrollTo(opts) { this.scrollTop = opts && typeof opts.top === 'number' ? opts.top : this.scrollTop; },
-      focus() {}, setAttribute(name, value) { this.attributes[name] = String(value); }, getAttribute(name) { return this.attributes[name] ?? null; },
+      // Phase 3 review: the alignment asked for is logged; nearestFails lists controls a smallest scroll leaves out of view.
+      scrollIntoView(options) { log.push(['into-view', key, options && options.block]); if (options && options.block === 'nearest' && nearestFails.includes(key)) return; this.underDock = false; if (options && options.behavior === 'smooth' && !this.inView) this.arriving = 4; else this.inView = true; }, scrollTo(opts) { this.scrollTop = opts && typeof opts.top === 'number' ? opts.top : this.scrollTop; },
+      // coveredOnce: once highlighted, something of Studio's floats over the control until it is scrolled again.
+      focus() {}, setAttribute(name, value) { this.attributes[name] = String(value); if (name === 'data-demo-highlight' && coveredOnce.includes(key) && !this.wasCovered) { this.wasCovered = true; this.underDock = true; } }, getAttribute(name) { return this.attributes[name] ?? null; },
       removeAttribute(name) { delete this.attributes[name]; },
       toggleAttribute(name, on) { if (on) this.attributes[name] = ''; else delete this.attributes[name]; },
       querySelectorAll() { return []; },
@@ -85,7 +93,7 @@ function stage({ search = '?demo' } = {}) {
   // Every caption the visitor is shown is recorded.
   const captionEl = get('#demoCaption');
   let captionText = '';
-  Object.defineProperty(captionEl, 'textContent', { get: () => captionText, set: (v) => { captionText = String(v); log.push(['caption', captionText]); } });
+  Object.defineProperty(captionEl, 'textContent', { get: () => captionText, set: (v) => { captionText = String(v); log.push(['caption', captionText, clock]); } });
   // As in index.html and ui.js: the introduction, the player and Studio's sheets start hidden.
   for (const key of ['#demoIntro', '#demoPlayer', '#choicePickerSheet', '#customerFinderSheet', '#viewQuoteSheet', '#confirmSheet', '#quoteBalanceReceivedForm', '#invoicePreviewSheet']) get(key).hidden = true;
   // The dock across the top of the page (the visible page starts below it).
@@ -104,7 +112,11 @@ function stage({ search = '?demo' } = {}) {
     location: { search, pathname: '/', replace(u) { replaced.push(u); } },
     history: { replaceState() {} },
     setTimeout: (fn, ms) => {
+      const stack = new Error().stack;
+      if (/\barmWatchdog\b/.test(stack)) { watchdogs.push({ due: clock + Math.max(0, Number(ms) || 0), fn }); return 1; }
+      if (stall.when && stall.when(log)) { stall.held.push(fn); return 1; }
       clock += Math.max(0, Number(ms) || 0);
+      fireDue();
       // slowDirector: the director's own pause-point waits (its wait()) are held back for that many turns, so it runs a
       // long time between pause points; each one is logged when it fires.
       if (slow.turns > 0 && /\bat wait \(/.test(new Error().stack) && !/closeWindowWhenSettled/.test(new Error().stack)) {
@@ -136,13 +148,18 @@ function stage({ search = '?demo' } = {}) {
     suspend() { suspended = true; steps.push('suspend'); log.push(['suspend']); },
     resume() { suspended = false; steps.push('resume'); log.push(['resume']); },
   });
-  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, busy, slow, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
+  const advance = (ms) => { clock += ms; fireDue(); };
+  stall.release = () => { const held = stall.held.splice(0); stall.when = null; held.forEach((fn) => setImmediate(fn)); };
+  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, busy, slow, stall, advance, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
 }
 const settle = async (h, untilFn, limit = 200000) => { for (let i = 0; i < limit && !untilFn(); i++) await new Promise((r) => setImmediate(r)); };
 const player = (h) => h.window.KLABS_DEMO_PLAYER;
 // 2B change: the demonstration now finishes after the final invoice and build summary (was: on the customer quote).
 const FINISHED = /from enquiry to paid in full/;
-const finished = (h) => FINISHED.test(h.get('#demoCaption').textContent) || /stopped/i.test(h.get('#demoCaption').textContent);
+// Phase 3 review change: the stopped state reads "Demonstration paused. Press Replay to watch again." (was: "...stopped
+// unexpectedly..."), so the end of a run is recognised by either message.
+const STOPPED = /^Demonstration paused\. Press Replay/;
+const finished = (h) => FINISHED.test(h.get('#demoCaption').textContent) || STOPPED.test(h.get('#demoCaption').textContent);
 const flatJourney = (h) => player(h).journey.flatMap((c, i) => c.steps.map((s) => ({ chapter: i + 1, step: s })));
 
 test('Q18 2A/2B: the journey has ten chapters in workflow order, each with short plain-language captions', () => {
@@ -566,4 +583,104 @@ test('Q18 Phase 3: while paused the caption is the short pause message on its ow
   assert.ok(player(h).messages.includes(paused) && /^Paused/.test(paused), paused);
   h.get('#demoPlayPauseBtn').click();
   assert.match(h.get('#demoCaption').textContent, /add their details/, 'Play puts the caption back');
+});
+
+// ---- Phase 3 review: watchdog, scrolling in reading order, pricing by margin or by profit.
+
+test('Q18 Phase 3 review: a step that cannot finish ends in a calm "paused - Replay" state, never a silent hang, and the stuck step can do nothing afterwards', async () => {
+  const h = stage();
+  const limit = player(h).watchdog;
+  assert.ok(limit >= 15000 && limit <= 30000, `a sensible limit for one step (${limit} ms)`);
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  // The director gets stuck in the middle of typing the customer's phone number.
+  h.stall.when = (log) => log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewPhone' && e[2] === '021');
+  await settle(h, () => h.stall.held.length > 0);
+  const caption = () => h.get('#demoCaption').textContent;
+  h.advance(limit - 1000);
+  await settle(h, () => false, 2000);
+  assert.doesNotMatch(caption(), STOPPED, 'not before the limit');
+  h.advance(2000);
+  await settle(h, () => STOPPED.test(caption()), 5000);
+  assert.match(caption(), STOPPED);
+  assert.ok(player(h).messages.includes(caption()), 'one of the short messages');
+  assert.equal(h.get('#demoPlayPauseBtn').textContent, 'Replay');
+  assert.equal(h.get('#demoPlayPauseBtn').disabled, false);
+  assert.deepEqual(h.steps, ['open', 'close'], 'the write window is closed');
+  // The stuck step comes unstuck later: it types and taps nothing more.
+  const before = h.log.filter((e) => e[0] === 'input' || e[0] === 'click').length;
+  h.stall.release();
+  await settle(h, () => false, 5000);
+  assert.equal(h.log.filter((e) => e[0] === 'input' || e[0] === 'click').length, before, 'nothing happens after the stop');
+  assert.match(caption(), STOPPED);
+  h.get('#demoPlayPauseBtn').click();
+  assert.deepEqual(h.replaced, ['/?demo&chapter=1'], 'Replay starts again');
+});
+
+test('Q18 Phase 3 review: time spent paused does not count towards the watchdog', async () => {
+  const h = stage();
+  const limit = player(h).watchdog;
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewPhone' && e[2] === '021'));
+  h.get('#demoPlayPauseBtn').click();
+  h.stall.when = () => true; // nothing of the director's runs while we look
+  h.advance(limit * 3);
+  await settle(h, () => false, 3000);
+  assert.match(h.get('#demoCaption').textContent, /^Paused/, 'still simply paused after a long pause');
+  h.stall.release();
+  h.get('#demoPlayPauseBtn').click();
+  await settle(h, () => finished(h));
+  assert.match(h.get('#demoCaption').textContent, FINISHED, 'carries on to the end');
+});
+
+test('Q18 Phase 3 review: controls are brought into view with the smallest scroll (reading order), centred only if that is not enough', async () => {
+  const h = stage({ nearestFails: ['#quoteFreight', '#quoteDeliveryTotalField'] });
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  assert.match(h.get('#demoCaption').textContent, FINISHED);
+  const scrolls = h.log.filter((e) => e[0] === 'into-view');
+  const firstOf = new Map();
+  for (const e of scrolls) if (!firstOf.has(e[1])) firstOf.set(e[1], e[2]);
+  assert.deepEqual([...firstOf].filter(([, block]) => block !== 'nearest'), [], 'the first move is always the smallest one');
+  // A field to type in, and a figure that is only shown (highlighted, not used).
+  for (const key of ['#quoteFreight', '#quoteDeliveryTotalField']) {
+    assert.deepEqual(scrolls.filter((e) => e[1] === key).map((e) => e[2]), ['nearest', 'center'], `${key} centred when the smallest scroll leaves it out of view`);
+  }
+  assert.ok(studioActs(h).every((a) => a.highlighted && a.inView));
+});
+
+test('Q18 Phase 3 review: pricing is shown both ways - a margin, then the profit you want - with one short caption, in about 5-8 s, figures from Studio', async () => {
+  const h = stage();
+  const pricing = flatJourney(h).filter(({ chapter }) => chapter === 4).map(({ step }) => step);
+  const at = (pred, from = 0) => pricing.findIndex((s, i) => i >= from && pred(s));
+  const caption = at((s) => s[0] === 'caption' && /margin/i.test(s[1]) && /profit/i.test(s[1]));
+  const margin = at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent' && /^\d+$/.test(s[2]));
+  const priceAfterMargin = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField'), margin);
+  const profit = at((s) => s[0] === 'type' && s[1] === '#quoteProfit' && /^\d+$/.test(s[2]));
+  const recalculated = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField') && [].concat(s[1]).includes('#quoteMarginPercentField'), profit);
+  assert.ok(caption >= 0 && caption < margin && margin < priceAfterMargin && priceAfterMargin < profit && profit < recalculated, JSON.stringify({ caption, margin, priceAfterMargin, profit, recalculated }));
+  assert.equal(pricing.slice(caption + 1, recalculated).filter((s) => s[0] === 'caption').length, 0, 'one caption for both');
+  // Timed while playing: from that caption to the next one.
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  const captions = h.log.filter((e) => e[0] === 'caption');
+  const i = captions.findIndex((e) => e[1] === pricing[caption][1]);
+  const ms = captions[i + 1][2] - captions[i][2];
+  assert.ok(ms >= 5000 && ms <= 8000, `about 5-8 s (${ms} ms)`);
+  assert.ok(h.log.some((e) => e[0] === 'input' && e[1] === '#quoteProfit' && e[2] === pricing[profit][2]), 'the profit is typed in');
+});
+
+test('Q18 Phase 3 review: if something floats over a control after it was brought into view, it is centred before it is used', async () => {
+  const h = stage({ coveredOnce: ['#toggleCurrentBuildStatusBtn'] });
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  assert.match(h.get('#demoCaption').textContent, FINISHED);
+  const scrolls = h.log.filter((e) => e[0] === 'into-view' && e[1] === '#toggleCurrentBuildStatusBtn').map((e) => e[2]);
+  assert.deepEqual(scrolls, ['nearest', 'center']);
+  const tap = studioActs(h).find((a) => a.key === '#toggleCurrentBuildStatusBtn');
+  assert.ok(tap && tap.highlighted && tap.inView, JSON.stringify(tap));
 });

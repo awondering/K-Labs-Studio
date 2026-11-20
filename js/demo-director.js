@@ -18,19 +18,27 @@
  *
  * Pacing (Phase 3): one steady typing speed and one short beat between actions. Before every action its control is
  * brought fully into view, and the control is highlighted (data-demo-highlight, css/studio.css) while it is used, so
- * nothing changes off screen and every tap, entry and choice is obvious. Key moments get a short hold (1-2 s). */
+ * nothing changes off screen and every tap, entry and choice is obvious. Key moments get a short hold (1-2 s).
+ *
+ * Phase 3 review: a control is brought into view with the smallest scroll that shows it whole (so the page moves on in
+ * reading order), and centred only if that is not enough. A watchdog stops the demonstration calmly - "Demonstration
+ * paused. Press Replay to watch again." - if one step cannot finish within WATCHDOG_MS of playing time (paused time
+ * does not count); the stuck step can do nothing afterwards. DEMO_BUILD is checked against the other demonstration
+ * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
 (function () {
   "use strict";
+  const DEMO_BUILD = "build148-v269";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
   const PACE = Object.freeze({ key: 60, beat: 540, captionBase: 800, captionPerChar: 22, scroll: 2400, view: 1500 });
   const STEP_TIMEOUT_MS = 10000;
+  const WATCHDOG_MS = 20000;
   const SETTLE_LIMIT_MS = 5000;
   const RESTING = "Fictional data. Nothing here is saved, sent or synced.";
   const PLAYING = "Demonstration playing. Nothing here is saved, sent or synced.";
   const FINISHED = "That's the job, from enquiry to paid in full. Replay or pick a chapter.";
-  const STOPPED = "The demo stopped unexpectedly. Replay to try again, or exit.";
+  const STOPPED = "Demonstration paused. Press Replay to watch again.";
   const PAUSED = "Paused. Press Play to carry on.";
   const skippingTo = (title, n) => `Skipping ahead to chapter ${n}: ${title}...`;
 
@@ -96,9 +104,11 @@
     { title: "Pricing", steps: [
       ["caption", "Studio prices it as you go: parts, labour and GST."],
       ["show", "#quoteTotalField", 1500],
-      ["caption", "Set your margin. The price updates straight away."],
+      ["caption", "Price by margin or by the profit you want."],
       ["type", "#quoteMarginPercent", "25"],
-      ["show", "#quoteTotalField", 1500],
+      ["show", "#quoteTotalField", 1000],
+      ["type", "#quoteProfit", "280"],
+      ["show", ["#quoteTotalField", "#quoteMarginPercentField"], 1200],
       ["caption", "Jordan wants it couriered, not collected."],
       ["show", "#quoteFulfilmentGroup", 1200],
       ["tap", "[data-fulfilment-method=\"shipping\"]"],
@@ -196,7 +206,10 @@
   const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
   // parked: the director has reached a pause point and stopped; the write window closes only after that.
   let parked = false;
-  const gate = () => (paused ? new Promise((resolve) => { parked = true; resume.push(resolve); }) : Promise.resolve());
+  // halted: the watchdog has stopped the demonstration; a step still in hand stops at its next wait.
+  let halted = false;
+  const HALTED = "The demonstration was stopped.";
+  const gate = () => (halted ? Promise.reject(new Error(HALTED)) : paused ? new Promise((resolve) => { parked = true; resume.push(resolve); }) : Promise.resolve());
   async function wait(ms) {
     let remaining = skipping ? 0 : Math.max(0, ms);
     await gate();
@@ -234,27 +247,49 @@
       if (/auto|scroll|hidden|clip/.test(`${style.overflowX} ${style.overflowY}`) && !inside(parent.getBoundingClientRect())) return false;
     }
     if (typeof document.elementsFromPoint !== "function") return true;
-    return [[0.5, 0.5], [0.15, 0.25], [0.85, 0.25], [0.15, 0.75], [0.85, 0.75]].every(([fx, fy]) => {
+    // Phase 3 review change: points nearer the corners (was 15/85 % across, 25/75 % down), so a small floating
+    // control over one corner (Back to top) counts as covering it.
+    return [[0.5, 0.5], [0.1, 0.2], [0.9, 0.2], [0.1, 0.8], [0.9, 0.8]].every(([fx, fy]) => {
       const onTop = document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy).find((node) => node.id !== "demoShield" && !node.closest("[data-demo-player]"));
       return !!onTop && el.contains(onTop);
     });
   }
-  // Scrolls the control to the middle of the screen and waits until it is fully in view and has stopped moving (at
-  // most PACE.view; a control taller than the screen is left as close as it comes).
-  async function bringIntoView(el) {
-    if (fullyInView(el)) return;
-    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", inline: "nearest", behavior: skipping ? "auto" : "smooth" });
+  // Phase 3 review: first the smallest scroll that shows the control whole, just below the dock (css/studio.css sets the
+  // page's scroll padding to the dock), so the page moves on in reading order; if that leaves it out of view, it is
+  // centred. Each time it waits until the control is fully in view and has stopped moving (at most PACE.view; a control
+  // taller than the screen is left as close as it comes).
+  async function scrollUntilInView(el, block) {
+    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block, inline: "nearest", behavior: skipping ? "auto" : "smooth" });
     let waited = 0;
     let last = "";
+    let still = 0;
     for (;;) {
       await gate();
       const r = el.getBoundingClientRect();
       const now = `${Math.round(r.top)},${Math.round(r.left)}`;
-      if ((fullyInView(el) && now === last) || waited >= PACE.view) return;
+      const inView = fullyInView(el);
+      still = now === last ? still + 1 : 0;
+      if (inView && still > 0) return true;
+      // Stopped moving but not in view: this alignment is not enough.
+      if (waited >= PACE.view || (still >= 4 && waited >= 250)) return inView;
       last = now;
       await sleep(50);
       waited += 50;
     }
+  }
+  // Studio's floating bottom bar covers the bottom of the screen; the page's bottom scroll padding (css/studio.css)
+  // keeps clear of it, measured each time because it is not on every screen.
+  function measureBottomBar() {
+    const bar = document.querySelector(".bottom-nav");
+    const top = bar && visible(bar) ? bar.getBoundingClientRect().top : Infinity;
+    const clear = Number.isFinite(top) ? Math.max(0, Math.ceil((window.innerHeight || 0) - top)) : 0;
+    document.documentElement.style.setProperty("--demo-bottom-clear", `${clear}px`);
+  }
+  async function bringIntoView(el) {
+    if (fullyInView(el)) return;
+    measureBottomBar();
+    if (await scrollUntilInView(el, "nearest")) return;
+    await scrollUntilInView(el, "center");
   }
   const highlight = (els, on) => els.forEach((el) => { if (on) el.setAttribute(HIGHLIGHT, ""); else el.removeAttribute(HIGHLIGHT); });
   const shown = (selector) => waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
@@ -264,6 +299,12 @@
     await bringIntoView(el);
     highlight([el], true);
     await wait(PACE.beat);
+    // Phase 3 review: something of Studio's can float over it once scrolling stops (the Back to top button): then it is
+    // centred, clear of the screen's edges, before it is used.
+    if (!fullyInView(el)) {
+      await scrollUntilInView(el, "center");
+      await wait(PACE.beat);
+    }
     return el;
   }
   async function tap(selector) {
@@ -392,6 +433,7 @@
   function togglePause() {
     if (chapterIndex < 0 || playerState === "finished") return;
     paused = !paused;
+    if (paused) pauses += 1;
     setPlayButton(paused ? "paused" : "playing");
     pauseToken += 1;
     if (paused) {
@@ -434,6 +476,24 @@
     if (kind === "hold") return wait(a);
     throw new Error(`Unknown demonstration step: ${kind}`);
   }
+  // Phase 3 review: the watchdog. A step that has not finished after WATCHDOG_MS of playing time stops the
+  // demonstration (a pause starts the count again, so paused time never counts). The stuck step is halted (when the
+  // demonstration stops, below): its next wait refuses to go on, and the write window has closed by then.
+  let pauses = 0;
+  function watched(step) {
+    const running = runStep(step);
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const finish = (fn, value) => { if (!done) { done = true; fn(value); } };
+      const armWatchdog = (seenPauses) => window.setTimeout(() => {
+        if (done) return;
+        if (paused || pauses !== seenPauses) { armWatchdog(pauses); return; }
+        finish(reject, new Error(`A demonstration step did not finish in time: ${step[0]} ${JSON.stringify(step[1])}`));
+      }, WATCHDOG_MS);
+      armWatchdog(pauses);
+      running.then((value) => finish(resolve, value), (error) => finish(reject, error));
+    });
+  }
   async function play(director, startAt) {
     await director.run(async () => {
       await wait(PACE.beat);
@@ -441,7 +501,7 @@
         skipping = i < startAt;
         showChapter(i);
         if (skipping) setCaption(skippingTo(JOURNEY[startAt].title, startAt + 1));
-        for (const step of JOURNEY[i].steps) await runStep(step);
+        for (const step of JOURNEY[i].steps) await watched(step);
         skipping = false;
         await wait(PACE.beat);
       }
@@ -505,6 +565,7 @@
         showChapter(JOURNEY.length);
         setCaption(FINISHED);
       } catch (error) {
+        halted = true;
         console.warn("[K-Labs Studio] The demonstration stopped:", error);
         setCaption(STOPPED);
       }
@@ -527,5 +588,5 @@
 
   // messages: everything else the caption line can show (the browser test checks none of it is cut off either).
   const MESSAGES = Object.freeze([PAUSED, FINISHED, STOPPED, ...JOURNEY.map((chapter, i) => skippingTo(chapter.title, i + 1))]);
-  window.KLABS_DEMO_PLAYER = Object.freeze({ open, journey: JOURNEY, pace: PACE, messages: MESSAGES });
+  window.KLABS_DEMO_PLAYER = Object.freeze({ open, build: DEMO_BUILD, journey: JOURNEY, pace: PACE, watchdog: WATCHDOG_MS, messages: MESSAGES });
 })();

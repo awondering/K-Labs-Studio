@@ -9,6 +9,8 @@
  * with (the 7'0" Medium Spin blank, Medium Spin Guide Set, DPS 18, EVA Split Grip, Aluminium Winding Check 16 mm and
  * NCP Nylon Thread A Black) carry realistic New Zealand cost and sell prices instead of the starter placeholders. */
 window.KLABS_DEMO_DATA = {
+ // Phase 3 review: the build of the demonstration files (checked by js/public-entry.js before anything is shown).
+ build: "build148-v269",
  anchor: "2026-11-20",
  store: {
  "klabs-workshop-component-taxonomy:": {

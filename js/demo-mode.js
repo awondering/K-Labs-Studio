@@ -36,6 +36,8 @@
   }
   const api = {
     active,
+    // Phase 3 review: the build of the demonstration files (checked by js/public-entry.js before anything is shown).
+    build: "build148-v269",
     accountId: DEMO_ACCOUNT_ID,
     isolated: false,
     failure: "",

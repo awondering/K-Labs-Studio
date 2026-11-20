@@ -17,6 +17,12 @@
   const demoScripts = ["js/demo-data.js", ...privateScripts.filter((src) => !demoExcludedScripts.has(src))];
   demoScripts.splice(demoScripts.indexOf("js/app.js"), 0, "js/demo-director.js");
   const DEMO_UNAVAILABLE_HASH = "#demo-unavailable";
+  // Q18 Phase 3 review: every demonstration file (the page, js/demo-mode.js, this file, js/demo-data.js and
+  // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
+  // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
+  // back to the public entry with the usual notice.
+  const DEMO_BUILD = "build148-v269";
+  const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
   // times the measured round trip on a weak mobile connection (Q16: an unanswered launch waited 8.2 s, now 3.2 s).
@@ -535,8 +541,16 @@
     document.getElementById("authScreen").style.display = "none";
     setVisible("accountAccessScreen", false);
     setVisible("exploreDemoScreen", false);
+    const sameBuild = (part, build) => {
+      if (build === DEMO_BUILD) return;
+      const error = new Error(`An older copy of the demonstration's ${part} (${build || "unknown"}) is cached; this is ${DEMO_BUILD}.`);
+      error.demoStale = true;
+      throw error;
+    };
     try {
       if (!demo.isolated) throw new Error(demo.failure || "Demo Mode isolation could not be confirmed.");
+      sameBuild("page", document.getElementById("demoModeBar")?.getAttribute("data-demo-build"));
+      sameBuild("guard", demo.build);
       demo.installShield(document);
       window.KLABS_ACCESS_STATE = { access_state: "demo", can_write: true, trial_available: false, email_verified: false, demo: true };
       // Local stand-in for the quote-number service (js/quote-number-allocator.js is not loaded). Numbers continue the
@@ -553,7 +567,12 @@
       };
       for (const src of demoScripts) {
         await loadScript(src);
-        if (src === "js/demo-data.js") demo.seed(window.KLABS_DEMO_DATA);
+        if (src === "js/demo-data.js") {
+          sameBuild("data", window.KLABS_DEMO_DATA?.build);
+          demo.seed(window.KLABS_DEMO_DATA);
+        }
+        // A missing player is not an older copy: it stops below, as before.
+        if (src === "js/demo-director.js" && window.KLABS_DEMO_PLAYER) sameBuild("player", window.KLABS_DEMO_PLAYER.build);
       }
       if (window.Store !== demo.store || window.KLABS_ACCOUNT_ID !== demo.accountId || window.KLABS_SUPABASE_CLIENT
         || window.KLABS_BUILD_SYNC || window.KLABS_SYNC || window.KLABS_SETTINGS_SYNC || window.KLABS_ADMIN_ACCESS) {
@@ -571,8 +590,32 @@
       return true;
     } catch (error) {
       console.warn("[K-Labs Studio] Demo Mode could not open safely:", error);
+      if (error?.demoStale && !freshReload()) {
+        await askForNewVersion();
+        window.location.replace(`${demo.enterUrl()}&${DEMO_FRESH_PARAM}=1`);
+        return false;
+      }
       window.location.replace(demo.exitUrl() + DEMO_UNAVAILABLE_HASH);
       return false;
+    }
+  }
+  function freshReload() {
+    return new RegExp(`[?&]${DEMO_FRESH_PARAM}=1(?:&|$)`).test(String(window.location.search || ""));
+  }
+  // Asks the service worker to fetch the new version and, if one starts installing, waits a little for it to take
+  // over (at most a few seconds); then the reload gets one consistent set of files.
+  async function askForNewVersion() {
+    const timeout = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    try {
+      const workers = window.navigator?.serviceWorker;
+      const registration = workers && typeof workers.getRegistration === "function" ? await workers.getRegistration() : null;
+      if (!registration || typeof registration.update !== "function") return;
+      await Promise.race([registration.update(), timeout(4000)]);
+      if (registration.installing || registration.waiting) {
+        await Promise.race([new Promise((resolve) => workers.addEventListener("controllerchange", resolve, { once: true })), timeout(5000)]);
+      }
+    } catch (error) {
+      // A reload is still the best that can be done.
     }
   }
 
