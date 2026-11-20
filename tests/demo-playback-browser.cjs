@@ -1,4 +1,4 @@
-// Q18 Phase 2A/2B: full playback of the scripted demonstration on the real screens, Start -> final invoice and build summary.
+// Q18 Phase 2A/2B/3: full playback of the scripted demonstration on the real screens, Start -> final invoice and build summary.
 // Run with: PLAYWRIGHT_MODULE=/path/to/playwright node tests/demo-playback-browser.cjs   (WebKit; DEMO_BROWSER=chromium to override)
 // Serves the repository from a local HTTP server with every other request refused. Synthetic demonstration data only.
 // Checks, at Mac and iPhone 13 sizes: no autoplay; every figure Studio shows while pricing, on the quote, in the payment
@@ -8,7 +8,9 @@
 // allocate" notice; the invoice balance is paid in full; Pause holds everything (and closes the write window) and Play
 // carries on; the visitor's own clicks, taps and typing change nothing; sheets are never covered by the dock; the
 // iPhone strip is slim; Replay (including the Pause button once finished) and the chapter controls restart without
-// leaving Demo Mode.
+// leaving Demo Mode. Phase 3: every tap and typed character the demonstration makes lands on a highlighted control that
+// is fully in view; the courier choice, delivery total and unchanged profit and margin are highlighted in view; no
+// caption or player message is cut off; the Mac dock is slim.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -86,6 +88,44 @@ async function boot(browser, base, contextOptions, search = '?demo') {
       if (/Connect to allocate|Could not allocate/i.test(text)) window.__notices.push('allocate notice');
     }).observe(document, { childList: true, subtree: true, characterData: true });
   });
+  // Phase 3: every scripted (not the visitor's) tap and typed character on a Studio control, with whether that control
+  // was highlighted with a visible outline and fully in view at that moment; and every highlight switched on.
+  await context.addInitScript(() => {
+    window.__acts = [];
+    window.__highlights = [];
+    const inView = (el) => {
+      const r = el.getBoundingClientRect();
+      if (!(r.width > 0 || r.height > 0)) return 'no size';
+      const dock = document.getElementById('demoModeBar');
+      const top = dock && !dock.hidden ? dock.getBoundingClientRect().bottom : 0;
+      const within = (b) => r.top >= b.top - 1 && r.bottom <= b.bottom + 1 && r.left >= b.left - 1 && r.right <= b.right + 1;
+      if (!within({ top, bottom: innerHeight, left: 0, right: innerWidth })) return `off screen ${Math.round(r.top)}-${Math.round(r.bottom)} (visible ${Math.round(top)}-${innerHeight})`;
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const st = getComputedStyle(p);
+        if (/auto|scroll|hidden|clip/.test(st.overflowX + ' ' + st.overflowY) && !within(p.getBoundingClientRect())) return `clipped by ${p.id || p.className}`;
+      }
+      // Covered: at points across the control, something of Studio's other than the control is on top (the shield and
+      // the dock are the demonstration's own layers and are ignored).
+      for (const [fx, fy] of [[0.5, 0.5], [0.1, 0.2], [0.9, 0.2], [0.1, 0.8], [0.9, 0.8]]) {
+        const onTop = document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy).find((n) => n.id !== 'demoShield' && !n.closest('[data-demo-player]'));
+        if (!onTop || !el.contains(onTop)) return `covered by ${onTop ? (onTop.id || onTop.className || onTop.tagName) : 'nothing'}`;
+      }
+      return '';
+    };
+    const name = (el) => el.id || el.getAttribute('data-fulfilment-method') || el.getAttribute('data-choice-option') || el.getAttribute('aria-controls') || el.className || el.tagName;
+    const record = (event) => {
+      const el = event.target;
+      if (event.isTrusted || !(el instanceof Element) || el.closest('[data-demo-player]')) return;
+      const lit = el.closest('[data-demo-highlight]');
+      const outline = lit ? getComputedStyle(lit) : null;
+      window.__acts.push({ kind: event.type, el: name(el), lit: !!lit && outline.outlineStyle !== 'none' && parseFloat(outline.outlineWidth) >= 2, view: inView(el) });
+    };
+    document.addEventListener('click', record, true);
+    document.addEventListener('input', record, true);
+    new MutationObserver((changes) => changes.forEach((c) => {
+      if (c.target.hasAttribute('data-demo-highlight')) window.__highlights.push({ el: name(c.target), view: inView(c.target) });
+    })).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-demo-highlight'] });
+  });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -130,6 +170,7 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: Start shows the player with chapter 1`, (await chapterLabel(page)).startsWith('1/10 Enquiry'));
   const strip = await page.evaluate(() => Math.round(document.getElementById('demoModeBar').getBoundingClientRect().height));
   if (label === 'iphone') ck(`${label}: the strip is slim while playing (${strip} px; 2A was about 210 px)`, strip <= 110, strip);
+  if (label === 'mac') ck(`${label}: the dock is slim while playing (${strip} px; 2B was about 143 px)`, strip <= 100, strip);
 
   // Sheets stay clear of the dock: customer sheet, component library, quote.
   await page.waitForSelector('#customerFinderNewForm:not([hidden])', { timeout: 30000 });
@@ -200,7 +241,9 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-3-pricing.png`) });
 
   // Chapter 5: the customer quote, watermarked, with the same figures.
-  await page.waitForFunction(() => /marked DEMO and goes nowhere/.test(document.getElementById('demoCaption').textContent), null, { timeout: 120000 });
+  // Phase 3 change: the quote's last caption is now "Marked DEMO here. In Studio it's ready to send." (2B: "...marked DEMO
+  // and goes nowhere...").
+  await page.waitForFunction(() => /Marked DEMO here\. In Studio it's ready to send\./.test(document.getElementById('demoCaption').textContent), null, { timeout: 120000 });
   const quoteDoc = await documentShown(page, '#viewQuoteSheet');
   ck(`${label}: the customer quote is open`, quoteDoc.open && quoteDoc.title === 'Customer Quote', quoteDoc.title);
   ck(`${label}: the quote carries the DEMO watermark and banner`, quoteDoc.watermark === '"DEMO"' && /DEMONSTRATION QUOTE/.test(quoteDoc.banner || ''), [quoteDoc.watermark, quoteDoc.banner]);
@@ -310,6 +353,39 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const summarySheet = await sheetsClear(page);
   ck(`${label}: the summary sheet is not covered by the dock`, summarySheet.length > 0 && summarySheet.every((s) => s.clear), summarySheet);
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-6-summary.png`) });
+
+  // Phase 3: every scripted tap and typed character landed on a highlighted control that was fully in view.
+  const acts = await page.evaluate(() => window.__acts);
+  const unlit = acts.filter((a) => !a.lit);
+  const outOfView = acts.filter((a) => a.view);
+  ck(`${label}: every one of the demonstration's ${acts.length} taps and typed characters was on a highlighted control`, acts.length > 300 && unlit.length === 0, unlit.slice(0, 5));
+  ck(`${label}: every one of them was on a control fully in view (below the dock, on screen, not clipped)`, outOfView.length === 0, outOfView.slice(0, 5));
+  const lit = await page.evaluate(() => window.__highlights);
+  for (const id of ['quoteTotalField', 'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteDeliveryTotalField', 'quoteProfitField', 'quoteMarginPercentField', 'quoteBalanceReceivedAmount']) {
+    const seen = lit.filter((h) => h.el === id);
+    ck(`${label}: ${id} was highlighted in full view (${seen.length}x)`, seen.length > 0 && seen.every((h) => !h.view), seen);
+  }
+  // Phase 3: no caption or player message is cut off - each is shown in the real caption line under its chapter label.
+  const cut = await page.evaluate(() => {
+    const line = document.querySelector('.demo-player__caption');
+    const label = document.getElementById('demoChapterLabel');
+    const text = document.getElementById('demoCaption');
+    const keep = [label.textContent, text.textContent];
+    const player = window.KLABS_DEMO_PLAYER;
+    const items = player.journey.flatMap((c, i) => c.steps.filter((s) => s[0] === 'caption').map((s) => [`${i + 1}/${player.journey.length} ${c.title}`, s[1]]))
+      // A message can show under any chapter's label, so each is tried under the longest.
+      .concat(player.messages.map((m) => [player.journey.map((c, i) => `${i + 1}/${player.journey.length} ${c.title}`).sort((x, y) => y.length - x.length)[0], m]));
+    const lineHeight = parseFloat(getComputedStyle(line).lineHeight);
+    const out = items.map(([l, t]) => {
+      label.textContent = l; text.textContent = t;
+      const clipped = line.scrollHeight > line.clientHeight + 1;
+      const lines = Math.round((line.scrollHeight - parseFloat(getComputedStyle(line).paddingTop) - parseFloat(getComputedStyle(line).paddingBottom)) / lineHeight);
+      return { t, clipped, lines };
+    });
+    [label.textContent, text.textContent] = keep;
+    return { count: items.length, cut: out.filter((o) => o.clipped), lines: Math.max(...out.map((o) => o.lines)) };
+  });
+  ck(`${label}: none of the ${cut.count} captions and messages is cut off (longest ${cut.lines} line${cut.lines === 1 ? '' : 's'})`, cut.count > 40 && cut.cut.length === 0 && cut.lines <= (label === 'mac' ? 1 : 2), cut);
 
   const notices = await page.evaluate(() => window.__notices);
   ck(`${label}: no "Connect to allocate" notice at any point`, notices.length === 0, notices);

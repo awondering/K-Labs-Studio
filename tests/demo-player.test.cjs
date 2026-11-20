@@ -19,6 +19,8 @@ function stage({ search = '?demo' } = {}) {
   const log = [];
   const busy = { studio: 0, writes: 0 };
   const slow = { turns: 0 };
+  // Phase 3: every tap and every typed character, with whether its element was highlighted and fully in view then.
+  const acts = [];
   const elements = new Map();
   let clock = 0;
   const make = (key) => {
@@ -28,16 +30,24 @@ function stage({ search = '?demo' } = {}) {
       dataset: {},
       addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); },
       dispatchEvent(event) {
-        if (event.type === 'input') log.push(['input', key, this.value, event.data ?? null]);
+        if (event.type === 'input') { log.push(['input', key, this.value, event.data ?? null]); act(this, 'input'); }
         if (event.type === 'change') log.push(['change', key, this.value]);
         (this.listeners[event.type] || []).forEach((fn) => fn(event));
         return true;
       },
-      click() { log.push(['click', key]); (this.listeners.click || []).forEach((fn) => fn({ type: 'click', target: this, isTrusted: false })); },
+      click() { log.push(['click', key]); act(this, 'click'); (this.listeners.click || []).forEach((fn) => fn({ type: 'click', target: this, isTrusted: false })); },
       closest() { return null; },
       getClientRects() { return this.hidden ? [] : [{}]; },
-      getBoundingClientRect() { return { top: 0, height: 80 }; },
-      scrollIntoView() {}, scrollTo(opts) { this.scrollTop = opts && typeof opts.top === 'number' ? opts.top : this.scrollTop; },
+      // Phase 3: Studio's controls start below the visible page. Scrolling one into view brings it fully on screen - at
+      // once, or with a smooth scroll a few position readings later (as a browser's smooth scroll moves over time).
+      // underDock: on screen, but under the dock across the top of the page (not in view until scrolled down).
+      inView: false, arriving: 0, underDock: false,
+      getBoundingClientRect() {
+        if (this.arriving > 0 && --this.arriving === 0) this.inView = true;
+        const top = this.underDock ? 40 : this.inView ? 300 : this.arriving > 0 ? 300 + this.arriving * 200 : 2000;
+        return { top, bottom: top + 80, left: 10, right: 310, width: 300, height: 80 };
+      },
+      scrollIntoView(options) { log.push(['into-view', key]); this.underDock = false; if (options && options.behavior === 'smooth' && !this.inView) this.arriving = 4; else this.inView = true; }, scrollTo(opts) { this.scrollTop = opts && typeof opts.top === 'number' ? opts.top : this.scrollTop; },
       focus() {}, setAttribute(name, value) { this.attributes[name] = String(value); }, getAttribute(name) { return this.attributes[name] ?? null; },
       removeAttribute(name) { delete this.attributes[name]; },
       toggleAttribute(name, on) { if (on) this.attributes[name] = ''; else delete this.attributes[name]; },
@@ -47,11 +57,14 @@ function stage({ search = '?demo' } = {}) {
     elements.set(key, el);
     return el;
   };
+  const act = (el, kind) => acts.push({ kind, key: el.key, at: clock, highlighted: 'data-demo-highlight' in el.attributes, inView: el.inView && !el.underDock });
   const get = (key) => elements.get(key) || make(key);
   // The journey's "wait until" checks: after the customer is created the new build shows Jordan Ellis and a quote
   // number; the expanded/collapsed state of sections follows what the director tapped.
   get('#quoteCustomerName').value = 'Jordan Ellis';
   get('#workshopBuildLifecycleStatus').textContent = 'Quote';
+  // Phase 3: the margin field starts on screen but under the dock - it is not in view until it is scrolled down.
+  get('#quoteMarginPercent').underDock = true;
   // 2B: what Studio does on screen when the director taps through steps 6-10 (sheets and forms opening and closing,
   // the job's status changing, the invoice being issued).
   const show = (key, on) => { get(key).hidden = !on; };
@@ -75,6 +88,8 @@ function stage({ search = '?demo' } = {}) {
   Object.defineProperty(captionEl, 'textContent', { get: () => captionText, set: (v) => { captionText = String(v); log.push(['caption', captionText]); } });
   // As in index.html and ui.js: the introduction, the player and Studio's sheets start hidden.
   for (const key of ['#demoIntro', '#demoPlayer', '#choicePickerSheet', '#customerFinderSheet', '#viewQuoteSheet', '#confirmSheet', '#quoteBalanceReceivedForm', '#invoicePreviewSheet']) get(key).hidden = true;
+  // The dock across the top of the page (the visible page starts below it).
+  get('#demoModeBar').getBoundingClientRect = () => ({ top: 0, bottom: 80, left: 0, right: 1280, width: 1280, height: 80 });
   const chapterButtons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => { const b = get(`chapter-${n}`); b.attributes['data-demo-chapter'] = String(n); return b; });
   const document = {
     getElementById: (id) => get(`#${id}`),
@@ -105,6 +120,8 @@ function stage({ search = '?demo' } = {}) {
     // Studio's own "still saving" signal (an autosave in hand); a test can hold it busy.
     KLABS_UI: { readRecoveryDraft: () => ({ quote: { id: 'build-1' } }), hasUnsavedEdits: () => busy.studio > 0 && busy.studio-- > 0 },
     ResizeObserver: class { observe() {} },
+    innerWidth: 1280, innerHeight: 860,
+    getComputedStyle: () => ({ overflowX: 'visible', overflowY: 'visible', position: 'static', outlineStyle: 'solid' }),
     console: { warn: (...a) => log.push(['warn', a.map(String).join(' ')]), error() {} },
   };
   window.window = window;
@@ -119,7 +136,7 @@ function stage({ search = '?demo' } = {}) {
     suspend() { suspended = true; steps.push('suspend'); log.push(['suspend']); },
     resume() { suspended = false; steps.push('resume'); log.push(['resume']); },
   });
-  return { window, document, get, log, replaced, steps, director, chapterButtons, busy, slow, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
+  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, busy, slow, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
 }
 const settle = async (h, untilFn, limit = 200000) => { for (let i = 0; i < limit && !untilFn(); i++) await new Promise((r) => setImmediate(r)); };
 const player = (h) => h.window.KLABS_DEMO_PLAYER;
@@ -138,8 +155,8 @@ test('Q18 2A/2B: the journey has ten chapters in workflow order, each with short
     const captions = chapter.steps.filter((s) => s[0] === 'caption').map((s) => s[1]);
     assert.ok(captions.length >= 2, `${chapter.title} has captions`);
     for (const text of captions) {
-      // 2B change: at most 90 characters (was 120), so a caption fits the slimmer iPhone strip in two short lines.
-      assert.ok(text.length <= 90, `short caption (${text.length}): ${text}`);
+      // Phase 3 change: at most 64 characters (2B: 90; 2A: 120) - short and plain; the browser test checks none is cut off.
+      assert.ok(text.length <= 64, `short caption (${text.length}): ${text}`);
       assert.doesNotMatch(text, /\b(click|DOM|director|script|selector|field id|input event|quoteMaths|API)\b/i, `workshop language: ${text}`);
     }
   }
@@ -276,7 +293,7 @@ test('Q18 2A: no separate demonstration maths and no direct data changes - figur
 
 // ---- Phase 2B
 
-test('Q18 2B: courier delivery - Freight and Packaging are typed in, and the caption says delivery is added separately with the rod\'s target profit unchanged', () => {
+test('Q18 2B/3: courier delivery - Freight and Packaging are typed in, and the caption says delivery is charged on top with profit and margin unchanged', () => {
   const h = stage();
   const flat = flatJourney(h);
   const pricing = flat.filter(({ chapter }) => chapter === 4).map(({ step }) => step);
@@ -286,9 +303,11 @@ test('Q18 2B: courier delivery - Freight and Packaging are typed in, and the cap
   const courier = at((s) => s[0] === 'tap' && s[1] === '[data-fulfilment-method="shipping"]');
   const freight = at((s) => s[0] === 'type' && s[1] === '#quoteFreight' && /^\d+$/.test(s[2]));
   const packaging = at((s) => s[0] === 'type' && s[1] === '#quotePackaging' && /^\d+$/.test(s[2]));
-  const explained = at((s) => s[0] === 'caption' && /delivery/i.test(s[1]) && /separately/i.test(s[1]) && /target profit/i.test(s[1]) && /same|unchanged/i.test(s[1]));
+  // Phase 3 change: plain wording "charged on top ... profit and margin stay the same" (2B: "added separately ... target
+  // profit stays the same"), followed by profit and margin shown highlighted (2B: a plain hold).
+  const explained = at((s) => s[0] === 'caption' && /delivery/i.test(s[1]) && /on top/i.test(s[1]) && /profit/i.test(s[1]) && /margin/i.test(s[1]) && /same|unchanged/i.test(s[1]));
   assert.ok(margin >= 0 && margin < courier && courier < freight && freight < packaging && packaging < explained, JSON.stringify({ margin, courier, freight, packaging, explained }));
-  assert.equal(pricing[explained + 1][0], 'hold', 'a short hold on "delivery added separately"');
+  assert.equal(pricing[explained + 1][0], 'show', 'profit and margin shown straight after the caption');
 });
 
 test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposit, workshop, final payment and complete, invoice and summary', () => {
@@ -325,10 +344,13 @@ test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposi
   const typedAmounts = flat.filter(({ step }) => step[0] === 'type' && step[1] === '#quoteBalanceReceivedAmount');
   assert.equal(typedAmounts.length, 1, 'only the deposit amount is typed');
   // Holds on the key moments: live pricing, delivery, the quote, the final invoice.
-  const holdAfter = (index) => flat.slice(index + 1, index + 4).some(({ step }) => step[0] === 'hold' && step[1] >= 1500);
+  // Phase 3 change: a key-moment hold is 1-2 s, as a plain hold or a highlighted "show" (2B: a hold of at least 1.5 s,
+  // and at least 2 s on the invoice).
+  const keyHold = ({ step }) => (step[0] === 'hold' && step[1] >= 1000 && step[1] <= 2000) || (step[0] === 'show' && step[2] >= 1000 && step[2] <= 2000);
+  const holdAfter = (index) => flat.slice(index + 1, index + 4).some(keyHold);
   assert.ok(holdAfter(at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent')), 'hold on live pricing');
   assert.ok(holdAfter(at((s) => s[0] === 'scroll' && /viewQuoteSheet/.test(s[1]))), 'hold on the quote');
-  assert.ok(flat.slice(marks.issued, marks.summary).some(({ step }) => step[0] === 'hold' && step[1] >= 2000), 'hold on the final invoice');
+  assert.ok(flat.slice(marks.issued, marks.summary).some(keyHold), 'hold on the final invoice');
 });
 
 test('Q18 2B: the whole journey plays from Start to the final invoice and summary through those controls', async () => {
@@ -400,13 +422,16 @@ test('Q18 2B: the player will not open without a director that can close its wri
   assert.throws(() => player(h).open(Object.freeze({ run: async (f) => f() })), /director is unavailable/);
 });
 
-test('Q18 2B: brisk routine typing and moves; the iPhone strip has its own Exit demo', async () => {
+test('Q18 2B/3: one steady typing speed and one short beat; the iPhone strip has its own Exit demo', async () => {
   const h = stage();
   const pace = player(h).pace;
   assert.ok(Object.isFrozen(pace));
-  // 2A was key 70, field 450, tap 650, captionBase 1400, captionPerChar 30, chapter 900 ms.
-  assert.ok(pace.key <= 45 && pace.field <= 300 && pace.tap <= 420 && pace.captionBase <= 1200 && pace.captionPerChar <= 25 && pace.chapter <= 600, JSON.stringify(pace));
-  assert.ok(pace.key >= 25, 'still readable as typing');
+  // Phase 3 change: one typing speed and one beat between actions (2B: separate field, tap and chapter gaps, key <= 45).
+  assert.equal(pace.field, undefined, 'no separate per-field gap');
+  assert.equal(pace.tap, undefined, 'no separate per-tap gap');
+  assert.equal(pace.chapter, undefined, 'no separate gap between chapters');
+  assert.ok(pace.key >= 40 && pace.key <= 70, `steady, readable typing (${pace.key} ms a character)`);
+  assert.ok(pace.beat >= 300 && pace.beat <= 600, `a short beat (${pace.beat} ms)`);
   player(h).open(h.director);
   h.get('#demoPlayerExitBtn').click();
   assert.ok(h.log.some((e) => e[0] === 'exit'));
@@ -450,4 +475,95 @@ test('Q18 2B: the write window closes only after the director has actually stopp
   h.get('#demoPlayPauseBtn').click();
   await settle(h, () => finished(h));
   assert.deepEqual(h.steps, ['open', 'suspend', 'resume', 'close']);
+});
+
+// ---- Phase 3: pacing, view and highlight.
+const playThrough = async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  assert.match(h.get('#demoCaption').textContent, FINISHED);
+  return h;
+};
+const studioActs = (h) => h.acts.filter((a) => !/^#demo|^chapter-/.test(a.key));
+
+test('Q18 Phase 3: every tap, typed field and selection happens on a highlighted control that is fully in view', async () => {
+  const h = await playThrough();
+  const acts = studioActs(h);
+  assert.ok(acts.length > 300, `the whole journey (${acts.length} actions and characters)`);
+  const bad = acts.filter((a) => !a.highlighted || !a.inView);
+  assert.deepEqual(bad.slice(0, 5), [], `${bad.length} actions without a highlight or out of view`);
+  // Each control is brought into view before it is used, and no highlight is left behind at the end.
+  for (const key of new Set(acts.map((a) => a.key))) {
+    const firstUse = h.log.findIndex((e) => (e[0] === 'click' || e[0] === 'input') && e[1] === key);
+    const intoView = h.log.findIndex((e) => e[0] === 'into-view' && e[1] === key);
+    assert.ok(intoView >= 0 && intoView < firstUse, `${key} brought into view before it is used`);
+  }
+  assert.deepEqual([...h.elements.values()].filter((el) => 'data-demo-highlight' in el.attributes).map((el) => el.key), []);
+});
+
+test('Q18 Phase 3: one steady typing speed throughout and the same short beat before every tap', async () => {
+  const h = await playThrough();
+  const pace = player(h).pace;
+  const typed = studioActs(h).filter((a) => a.kind === 'input');
+  const gaps = new Set();
+  for (let i = 1; i < typed.length; i++) if (typed[i].key === typed[i - 1].key) gaps.add(typed[i].at - typed[i - 1].at);
+  // Two typed characters in a row are always the same time apart (a cleared field before typing is the only extra input).
+  assert.deepEqual([...gaps].filter((g) => g !== pace.key && g !== 0), [], `typing gaps ${[...gaps]}`);
+});
+
+test('Q18 Phase 3: the whole demonstration runs about 3 to 3.5 minutes, with key moments held 1-2 s', async () => {
+  const h = await playThrough();
+  // The virtual clock leaves out Studio's own work and the browser's scrolling, which the real run adds on top.
+  assert.ok(h.clock() >= 165000 && h.clock() <= 205000, `about 3-3.5 minutes of playback (${h.clock()} ms virtual)`);
+  const flat = flatJourney(h);
+  const holds = flat.filter(({ step }) => step[0] === 'hold').map(({ step }) => step[1]).concat(flat.filter(({ step }) => step[0] === 'show').map(({ step }) => step[2]));
+  assert.ok(holds.length >= 5 && holds.every((ms) => ms >= 600 && ms <= 2000), `short holds only ${holds}`);
+});
+
+test('Q18 Phase 3: the courier choice is shown and held, then Courier, Freight, Packaging, the delivery total and the unchanged profit and margin are each highlighted', async () => {
+  const h = stage();
+  const pricing = flatJourney(h).filter(({ chapter }) => chapter === 4).map(({ step }) => step);
+  const at = (pred) => pricing.findIndex(pred);
+  const choice = at((s) => s[0] === 'show' && s[1] === '#quoteFulfilmentGroup');
+  const courier = at((s) => s[0] === 'tap' && s[1] === '[data-fulfilment-method="shipping"]');
+  const freight = at((s) => s[0] === 'type' && s[1] === '#quoteFreight');
+  const packaging = at((s) => s[0] === 'type' && s[1] === '#quotePackaging');
+  const total = at((s) => s[0] === 'show' && s[1] === '#quoteDeliveryTotalField');
+  const onTop = at((s) => s[0] === 'caption' && /on top/i.test(s[1]));
+  const profit = at((s) => s[0] === 'show' && Array.isArray(s[1]) && s[1].includes('#quoteProfitField') && s[1].includes('#quoteMarginPercentField'));
+  assert.ok(choice >= 0 && choice < courier && courier < freight && freight < packaging && packaging < total && total < onTop && onTop < profit, JSON.stringify({ choice, courier, freight, packaging, total, onTop, profit }));
+  assert.ok(pricing[choice][2] >= 800 && pricing[choice][2] <= 2000, 'a brief hold on the Collection / Courier choice');
+  // While playing: each of those is highlighted and in view while it is shown.
+  const seen = [];
+  const watch = ['#quoteFulfilmentGroup', '#quoteDeliveryTotalField', '#quoteProfitField', '#quoteMarginPercentField'];
+  for (const key of watch) {
+    const el = h.get(key);
+    el.setAttribute = (name, value) => { el.attributes[name] = String(value); if (name === 'data-demo-highlight') seen.push([key, el.inView]); };
+  }
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  assert.deepEqual(watch.filter((key) => !seen.some(([k, inView]) => k === key && inView)), [], JSON.stringify(seen));
+});
+
+test('Q18 Phase 3: the pause, skip, finished and stopped messages are short too', () => {
+  const h = stage();
+  const messages = player(h).messages;
+  assert.ok(Object.isFrozen(messages) && messages.length >= 4);
+  for (const text of messages) assert.ok(text.length <= 72, `short message (${text.length}): ${text}`);
+  assert.ok(messages.some((m) => /^Paused/.test(m)) && messages.some((m) => /from enquiry to paid in full/.test(m)));
+});
+
+test('Q18 Phase 3: while paused the caption is the short pause message on its own', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#customerFinderNewPhone'));
+  h.get('#demoPlayPauseBtn').click();
+  const paused = h.get('#demoCaption').textContent;
+  assert.ok(player(h).messages.includes(paused) && /^Paused/.test(paused), paused);
+  h.get('#demoPlayPauseBtn').click();
+  assert.match(h.get('#demoCaption').textContent, /add their details/, 'Play puts the caption back');
 });

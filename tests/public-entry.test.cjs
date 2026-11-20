@@ -110,10 +110,11 @@ test('signed-out entry and public interactions do not initialize private scripts
   assert.equal(h.elements.publicDiscoverDialog.open,true);
   h.elements.publicDiscoverClose.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,false);
-  // Q18: Explore opens Demo Mode (a separate page load) without signing in; nothing private loads on this page.
-  h.elements.publicExploreBtn.listeners.click();
-  assert.equal(h.window.KLABS_DEMO.entered,1);
-  assert.notEqual(h.elements.authScreen.style.display,'flex');
+  // Q18 Phase 3 change: the public Explore Studio entry is hidden and does nothing (2B: it opened Demo Mode); the
+  // demonstration opens only at ?demo until the owner reveals it. Nothing private loads on this page.
+  assert.equal(h.elements.publicExploreBtn.hidden,true);
+  assert.equal(h.elements.publicExploreBtn.listeners.click,undefined);
+  assert.equal(h.window.KLABS_DEMO.entered,0);
   assert.deepEqual(h.scripts,[]);
   h.elements.publicSignInBtn.listeners.click();
   assert.equal(h.elements.authScreen.style.display,'flex');
@@ -121,7 +122,7 @@ test('signed-out entry and public interactions do not initialize private scripts
   assert.equal(h.elements.authScreen.style.display,'none');
 });
 
-test('Discover sheet presents accurate features and its Explore action opens Demo Mode',()=>{
+test('Discover sheet presents accurate features; its Explore action is hidden until the demonstration is revealed',()=>{
   assert.match(html,/DESIGN &amp; MANAGE/);
   assert.match(html,/Build specifications, components and pricing\./);
   assert.match(html,/PRESENT WITH CONFIDENCE/);
@@ -134,10 +135,10 @@ test('Discover sheet presents accurate features and its Explore action opens Dem
   const h=harness();
   h.elements.publicDiscoverBtn.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,true);
-  h.elements.publicDiscoverExploreBtn.listeners.click();
-  assert.equal(h.elements.publicDiscoverDialog.open,false);
-  assert.equal(h.window.KLABS_DEMO.entered,1);
-  assert.notEqual(h.elements.authScreen.style.display,'flex');
+  // Q18 Phase 3 change: hidden, with no action (2B: it closed the sheet and opened Demo Mode).
+  assert.equal(h.elements.publicDiscoverExploreBtn.hidden,true);
+  assert.equal(h.elements.publicDiscoverExploreBtn.listeners.click,undefined);
+  assert.equal(h.window.KLABS_DEMO.entered,0);
   assert.deepEqual(h.scripts,[]);
 });
 
@@ -320,7 +321,8 @@ const PRIVATE_APP_FILES=['js/config.js','js/storage.js','js/ui.js','js/app.js','
 test('signed-out visitors never download or run the private application',async()=>{
   const h=harness();
   await h.window.KLABS_PUBLIC_ENTRY.applySession(null,()=>assert.fail('must not initialize'));
-  h.elements.publicExploreBtn.listeners.click();
+  // Q18 Phase 3 change: the Explore button is hidden with no action, so the visitor taps Discover instead (2B: Explore).
+  h.elements.publicDiscoverBtn.listeners.click();
   assert.deepEqual(h.preloads,[]);
   assert.deepEqual(h.scripts,[]);
 });
@@ -647,4 +649,13 @@ test('Q17: a valid sign-in is unaffected - normal start-up still verifies access
   assert.equal(state.offline_session,undefined);
   assert.equal(h.window.KLABS_CAN_WRITE(),true);
   assert.ok(!h.classes.has('klabs-offline-session'));
+});
+
+test('Q18 Phase 3: the public Explore Studio entries are hidden in the page itself (no flash before scripts run) and stay hidden', () => {
+  assert.match(html, /<button id="publicExploreBtn"[^>]*\shidden[\s>]/);
+  assert.match(html, /<button id="publicDiscoverExploreBtn"[^>]*\shidden[\s>]/);
+  // Their own styles (display:grid on Home) must not override hidden.
+  assert.match(fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8'), /#publicExploreBtn\[hidden\],\s*#publicDiscoverExploreBtn\[hidden\] \{ display:none !important; \}/);
+  // The ?demo route itself is unchanged: Demo Mode still starts from the address.
+  assert.match(fs.readFileSync(path.join(__dirname,'..','js','demo-mode.js'),'utf8'), /function enterUrl\(\)/);
 });

@@ -14,18 +14,25 @@
  * the payment service (js/public-entry.js); every document is shown with a DEMO watermark (css/studio.css).
  * Replay and the chapter controls reload the demonstration page (?demo&chapter=N), so every run starts from the same
  * fresh in-memory data without leaving Demo Mode; chapters before the chosen one are worked through quickly on the
- * same real screens. */
+ * same real screens.
+ *
+ * Pacing (Phase 3): one steady typing speed and one short beat between actions. Before every action its control is
+ * brought fully into view, and the control is highlighted (data-demo-highlight, css/studio.css) while it is used, so
+ * nothing changes off screen and every tap, entry and choice is obvious. Key moments get a short hold (1-2 s). */
 (function () {
   "use strict";
-  // Pacing only needs to be watchable (final pacing is Phase 3): routine typing and moves are brisk, and the key
-  // moments (live pricing, delivery added separately, the quote, the final invoice) get short holds. Milliseconds.
-  const PACE = Object.freeze({ key: 38, field: 260, tap: 380, captionBase: 1100, captionPerChar: 24, chapter: 500, scroll: 2000 });
+  // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
+  // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
+  // control to come fully into view.
+  const PACE = Object.freeze({ key: 60, beat: 540, captionBase: 800, captionPerChar: 22, scroll: 2400, view: 1500 });
   const STEP_TIMEOUT_MS = 10000;
   const SETTLE_LIMIT_MS = 5000;
   const RESTING = "Fictional data. Nothing here is saved, sent or synced.";
   const PLAYING = "Demonstration playing. Nothing here is saved, sent or synced.";
-  const FINISHED = "That's the whole job, from enquiry to paid in full. Replay, or choose a chapter.";
-  const STOPPED = "The demonstration stopped unexpectedly. Replay to try again, or exit the demo.";
+  const FINISHED = "That's the job, from enquiry to paid in full. Replay or pick a chapter.";
+  const STOPPED = "The demo stopped unexpectedly. Replay to try again, or exit.";
+  const PAUSED = "Paused. Press Play to carry on.";
+  const skippingTo = (title, n) => `Skipping ahead to chapter ${n}: ${title}...`;
 
   const freeze = (value) => {
     if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -33,13 +40,14 @@
   };
   const toggle = (bodyId) => `[aria-controls="${bodyId}"]`;
   // The journey. Steps: caption(text), tap(selector), type(selector, text), open(section toggle), pick([category,
-  // subcategory, component]) from the component library, until(selector visible), untilHidden(selector),
-  // untilValue(selector, value), untilText(selector, text), scroll(selector) and hold(ms) on a key moment.
+  // subcategory, component]) from the component library, show(selector or [selectors], ms) - brought into view and
+  // highlighted for a moment -, until(selector visible), untilHidden(selector), untilValue(selector, value),
+  // untilText(selector, text), scroll(selector) and hold(ms) on a key moment.
   const JOURNEY = freeze([
     { title: "Enquiry", steps: [
-      ["caption", "Jordan Ellis wants a new spin rod for snapper and kahawai."],
+      ["caption", "New enquiry: Jordan Ellis wants a snapper spin rod."],
       ["tap", "#homeEnterRodBtn"],
-      ["caption", "Jordan is a new customer, so add their details once."],
+      ["caption", "Jordan is new, so add their details."],
       ["tap", "#customerFinderAddNewAction"],
       ["type", "#customerFinderNewCustomerName", "Jordan Ellis"],
       ["type", "#customerFinderNewPhone", "021 555 0142"],
@@ -50,65 +58,68 @@
       ["type", "#customerFinderNewRegion", "Bay of Plenty"],
       ["type", "#customerFinderNewPostcode", "3116"],
       ["type", "#customerFinderNewCountry", "New Zealand"],
-      ["caption", "Create the customer. Studio opens a new build with its own quote number."],
+      ["caption", "Save the customer. Studio starts the build."],
       ["tap", "#customerFinderSubmitNewCustomerBtn"],
       ["untilHidden", "#customerFinderSheet"],
       ["until", "#workshopScreen.active"],
       ["untilValue", "#quoteCustomerName", "Jordan Ellis"],
     ] },
     { title: "Rod spec", steps: [
-      ["caption", "Give the build a name you'll recognise on the bench."],
+      ["caption", "Name the build so you'll know it on the bench."],
       ["tap", "#quoteBuildRenameBtn"],
       ["type", "#quoteBuildRenameInput", "7' Snapper Spin"],
       ["tap", "#quoteBuildRenameSave"],
-      ["caption", "Open the build details and add a note Jordan will see on the quote."],
+      ["caption", "Add a note for Jordan's quote."],
       ["open", toggle("workshopBuildSpecsBody")],
       ["type", "#quoteNotes", "Black wraps with gloss finish. Split grip."],
-      ["caption", "Record the finished length, the reel seat position and the grip lengths."],
+      ["caption", "Record the length, reel seat and grip sizes."],
       ["type", "#quoteSpecFinishedRodLength", "2134"],
       ["type", "#quoteSpecReelSeatPosition", "330 mm from butt"],
       ["type", "#quoteSpecRearGripLength", "250"],
       ["type", "#quoteSpecForeGripLength", "110"],
     ] },
     { title: "Components", steps: [
-      ["caption", "Pick the parts from the component library. Each brings its cost and sell price."],
+      ["caption", "Pick the parts from your component library."],
       ["open", toggle("workshopComponentsBody")],
       ["pick", ["Blanks", "Spinning Blanks", "7'0\" Medium Spin 6-10 kg"]],
-      ["caption", "Guides, reel seat and grip next."],
+      ["caption", "Guides, reel seat and grip."],
       ["pick", ["Guides", "Spinning Guide Sets", "Medium Spin Guide Set"]],
       ["pick", ["Reel Seats", "Threaded Reel Seats", "DPS 18"]],
       ["pick", ["Grips", "EVA Grips", "EVA Split Grip"]],
-      ["caption", "Then the small parts: winding check and thread."],
+      ["caption", "Then the winding check and thread."],
       ["pick", ["Winding Checks", "Grip Winding Checks", "Aluminium Winding Check 16 mm"]],
       ["pick", ["Thread", "Nylon", "NCP Nylon Thread A Black"]],
-      ["caption", "Add the labour: the workshop's hourly rate times the hours this build takes."],
+      ["caption", "Add the labour: five hours at your rate."],
       ["open", toggle("workshopQuoteSummaryBody")],
       ["type", "#quoteLabourHours", "5"],
     ] },
     { title: "Pricing", steps: [
-      ["caption", "Studio prices the job as you go: parts, labour and GST on one screen."],
-      ["hold", 1800],
-      ["caption", "Set the margin you want. The customer price updates straight away."],
+      ["caption", "Studio prices it as you go: parts, labour and GST."],
+      ["show", "#quoteTotalField", 1500],
+      ["caption", "Set your margin. The price updates straight away."],
       ["type", "#quoteMarginPercent", "25"],
-      ["hold", 1800],
-      ["caption", "Jordan wants the rod couriered, so add the freight and packaging."],
+      ["show", "#quoteTotalField", 1500],
+      ["caption", "Jordan wants it couriered, not collected."],
+      ["show", "#quoteFulfilmentGroup", 1200],
       ["tap", "[data-fulfilment-method=\"shipping\"]"],
+      ["caption", "Add the freight and packaging."],
       ["type", "#quoteFreight", "18"],
       ["type", "#quotePackaging", "12"],
-      ["caption", "Delivery is added to the price separately. The rod's target profit stays the same."],
-      ["hold", 2600],
+      ["show", "#quoteDeliveryTotalField", 1200],
+      ["caption", "Delivery is charged on top. Profit and margin stay the same."],
+      ["show", ["#quoteProfitField", "#quoteMarginPercentField"], 1800],
     ] },
     { title: "Quote", steps: [
-      ["caption", "Open the customer quote: exactly what Jordan will see."],
+      ["caption", "Open the quote, exactly as Jordan will see it."],
       ["tap", "#viewQuoteBtn"],
       ["until", "#viewQuoteSheet"],
-      ["caption", "Rod, specification, parts, delivery and price, under the workshop's name."],
+      ["caption", "Parts, spec, delivery and price, under your name."],
       ["scroll", "#viewQuoteSheet .component-sheet__body"],
-      ["hold", 1600],
-      ["caption", "This one is marked DEMO and goes nowhere. In your Studio it's ready to send."],
+      ["hold", 1500],
+      ["caption", "Marked DEMO here. In Studio it's ready to send."],
     ] },
     { title: "Accepted", steps: [
-      ["caption", "Jordan accepts the quote. Confirm the build to make it an active job."],
+      ["caption", "Jordan says yes. Confirm the build."],
       ["tap", "#viewQuoteCloseBtn"],
       ["untilHidden", "#viewQuoteSheet"],
       ["tap", "#confirmBuildBtn"],
@@ -116,37 +127,38 @@
       ["tap", "#confirmSheet [data-confirm-action=\"confirm\"]"],
       ["untilHidden", "#confirmSheet"],
       ["untilText", "#workshopBuildLifecycleStatus", "Active"],
-      ["caption", "Same job, same quote number. It's now Active."],
+      ["caption", "Same job, same quote number. Now it's Active."],
     ] },
     { title: "Deposit", steps: [
-      ["caption", "Jordan pays a $300 deposit by bank transfer. Record it on the job."],
+      ["caption", "Jordan pays a $300 deposit. Record it."],
       ["tap", "#quoteRecordPaymentBtn"],
       ["until", "#quoteBalanceReceivedForm"],
       ["tap", "#quotePaymentTypeField [data-payment-type=\"deposit\"]"],
       ["type", "#quoteBalanceReceivedAmount", "300"],
       ["tap", "#quoteBalanceReceivedSave"],
       ["untilHidden", "#quoteBalanceReceivedForm"],
-      ["caption", "The deposit is recorded, and the balance owing updates."],
+      ["caption", "Deposit recorded. The balance owing updates."],
     ] },
     { title: "Workshop", steps: [
-      ["caption", "Into the workshop. The job waits in Active Jobs until it's finished."],
+      ["caption", "Into the workshop. The job waits in Active Jobs."],
       ["tap", "[data-nav=\"workshopScreen\"]"],
       ["tap", "[data-studio-action=\"open-builds\"]"],
       ["until", "#buildsScreen.active"],
-      ["caption", "Open Jordan's job from the list."],
+      ["caption", "Open Jordan's job."],
       ["tap", "#buildsScreen [data-build-action=\"open\"]"],
       ["until", "#workshopScreen.active"],
       ["untilValue", "#quoteCustomerName", "Jordan Ellis"],
-      ["caption", "Keep private workshop notes as the rod comes together. Jordan never sees these."],
+      ["caption", "Private workshop notes. Jordan never sees these."],
       ["open", toggle("workshopBuildSpecsBody")],
       ["type", "#quoteSpecBuilderNotes", "Blank spined. Guides wrapped and coated. Grip and reel seat fitted."],
     ] },
     { title: "Final payment", steps: [
-      ["caption", "The rod is finished, and Jordan pays the balance."],
+      ["caption", "Rod finished. Jordan pays the balance."],
       ["open", toggle("workshopQuoteSummaryBody")],
       ["tap", "#quoteRecordPaymentBtn"],
       ["until", "#quoteBalanceReceivedForm"],
-      ["caption", "Studio fills in the balance still owing."],
+      ["caption", "Studio fills in what's still owing."],
+      ["show", "#quoteBalanceReceivedAmount", 900],
       ["tap", "#quoteBalanceReceivedSave"],
       ["untilHidden", "#quoteBalanceReceivedForm"],
       ["caption", "Paid in full. Mark the build complete."],
@@ -154,18 +166,18 @@
       ["untilText", "#workshopBuildLifecycleStatus", "Complete"],
     ] },
     { title: "Invoice", steps: [
-      ["caption", "Issue the final invoice. It shows both payments and nothing owing."],
+      ["caption", "Issue the final invoice: both payments, nothing owing."],
       ["tap", "#viewInvoicePreviewBtn"],
       ["until", "#invoicePreviewSheet"],
       ["tap", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]"],
       ["until", "#confirmSheet"],
       ["tap", "#confirmSheet [data-confirm-action=\"issue\"]"],
       ["untilText", "#invoicePreviewBody .invoice-document[data-invoice-issued=\"true\"]", "Invoice"],
-      ["caption", "Marked DEMO here. In your Studio it's ready to print or send."],
-      ["hold", 2600],
+      ["caption", "Marked DEMO here. In Studio it's ready to print or send."],
+      ["hold", 1800],
       ["tap", "#invoicePreviewSheet .invoice-preview__actions [data-invoice-preview-action=\"close\"]"],
       ["untilHidden", "#invoicePreviewSheet"],
-      ["caption", "And the completed build summary, for Jordan and your records."],
+      ["caption", "And the completed build summary, for your records."],
       ["tap", "#viewQuoteBtn"],
       ["until", "#viewQuoteSheet"],
       ["scroll", "#viewQuoteSheet .component-sheet__body"],
@@ -206,17 +218,69 @@
       waited += 50;
     }
   }
+  // ---- In view and highlighted. A control is fully in view when the whole of it is on screen below the dock, inside
+  // every scrolling area that holds it, and nothing of Studio's (a bar, another sheet) lies over it - the visitor shield
+  // and the dock aside.
+  const HIGHLIGHT = "data-demo-highlight";
+  function fullyInView(el) {
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 || r.height > 0)) return false;
+    const dock = byId("demoModeBar");
+    const top = dock && !dock.hidden ? Math.max(0, dock.getBoundingClientRect().bottom) : 0;
+    const inside = (box) => r.top >= box.top - 1 && r.bottom <= box.bottom + 1 && r.left >= box.left - 1 && r.right <= box.right + 1;
+    if (!inside({ top, bottom: window.innerHeight || 0, left: 0, right: window.innerWidth || 0 })) return false;
+    for (let parent = el.parentElement; parent && parent !== document.body && parent !== document.documentElement; parent = parent.parentElement) {
+      const style = window.getComputedStyle(parent);
+      if (/auto|scroll|hidden|clip/.test(`${style.overflowX} ${style.overflowY}`) && !inside(parent.getBoundingClientRect())) return false;
+    }
+    if (typeof document.elementsFromPoint !== "function") return true;
+    return [[0.5, 0.5], [0.15, 0.25], [0.85, 0.25], [0.15, 0.75], [0.85, 0.75]].every(([fx, fy]) => {
+      const onTop = document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy).find((node) => node.id !== "demoShield" && !node.closest("[data-demo-player]"));
+      return !!onTop && el.contains(onTop);
+    });
+  }
+  // Scrolls the control to the middle of the screen and waits until it is fully in view and has stopped moving (at
+  // most PACE.view; a control taller than the screen is left as close as it comes).
+  async function bringIntoView(el) {
+    if (fullyInView(el)) return;
+    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", inline: "nearest", behavior: skipping ? "auto" : "smooth" });
+    let waited = 0;
+    let last = "";
+    for (;;) {
+      await gate();
+      const r = el.getBoundingClientRect();
+      const now = `${Math.round(r.top)},${Math.round(r.left)}`;
+      if ((fullyInView(el) && now === last) || waited >= PACE.view) return;
+      last = now;
+      await sleep(50);
+      waited += 50;
+    }
+  }
+  const highlight = (els, on) => els.forEach((el) => { if (on) el.setAttribute(HIGHLIGHT, ""); else el.removeAttribute(HIGHLIGHT); });
+  const shown = (selector) => waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
+  // The control for the next action: on screen, in view, highlighted, then a beat so the visitor sees it first.
   async function control(selector) {
-    const el = await waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
-    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: skipping ? "auto" : "smooth" });
-    await wait(PACE.tap);
+    const el = await shown(selector);
+    await bringIntoView(el);
+    highlight([el], true);
+    await wait(PACE.beat);
     return el;
   }
   async function tap(selector) {
     const el = await control(selector);
     if (el.disabled) throw new Error(`${selector} is not available.`);
     el.click();
-    await wait(PACE.tap);
+    await wait(PACE.beat);
+    highlight([el], false);
+  }
+  // A key moment: what to look at is brought into view and highlighted for a moment.
+  async function show(selectors, ms) {
+    const els = [];
+    for (const selector of [].concat(selectors)) els.push(await shown(selector));
+    for (const el of els) await bringIntoView(el);
+    highlight(els, true);
+    await wait(ms);
+    highlight(els, false);
   }
   // Typed one character at a time. The director keeps its own copy of what it has typed, because Studio may reformat a
   // field after each character (a margin of "2" is shown as "2.0" until the "5" arrives).
@@ -232,13 +296,13 @@
       el.dispatchEvent(new InputEvent("input", { bubbles: true, data: character, inputType: "insertText" }));
     }
     el.dispatchEvent(new Event("change", { bubbles: true }));
-    await wait(PACE.field);
+    await wait(PACE.beat);
+    highlight([el], false);
   }
   async function pick(path) {
     await tap("#addComponentBtn");
     for (const name of path) await tap(`#choicePickerList [data-choice-option=${cssString(name)}]`);
     await waitFor(() => !visible(byId("choicePickerSheet")), "the component library closing");
-    await wait(PACE.tap);
   }
   async function scrollThrough(selector) {
     const el = await waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
@@ -331,7 +395,7 @@
     setPlayButton(paused ? "paused" : "playing");
     pauseToken += 1;
     if (paused) {
-      setCaption(`Paused. Press Play to carry on. ${captionNow}`.trim());
+      setCaption(PAUSED);
       closeWindowWhenSettled(pauseToken);
     } else {
       if (suspended) {
@@ -356,11 +420,12 @@
     if (kind === "tap") return tap(a);
     if (kind === "type") return type(a, b);
     if (kind === "open") {
-      const trigger = await control(a);
-      if (trigger.getAttribute("aria-expanded") !== "true") trigger.click();
-      return wait(PACE.tap);
+      const trigger = await shown(a);
+      if (trigger.getAttribute("aria-expanded") === "true") return undefined;
+      return tap(a);
     }
     if (kind === "pick") return pick(a);
+    if (kind === "show") return show(a, b);
     if (kind === "until") return waitFor(() => visible(document.querySelector(a)), a);
     if (kind === "untilHidden") return waitFor(() => !visible(document.querySelector(a)), `${a} closing`);
     if (kind === "untilValue") return waitFor(() => document.querySelector(a)?.value === b, `${a} showing ${b}`);
@@ -371,14 +436,14 @@
   }
   async function play(director, startAt) {
     await director.run(async () => {
-      await wait(600);
+      await wait(PACE.beat);
       for (let i = 0; i < JOURNEY.length; i++) {
         skipping = i < startAt;
         showChapter(i);
-        if (skipping) setCaption(`Skipping ahead to chapter ${startAt + 1}: ${JOURNEY[startAt].title}...`);
+        if (skipping) setCaption(skippingTo(JOURNEY[startAt].title, startAt + 1));
         for (const step of JOURNEY[i].steps) await runStep(step);
         skipping = false;
-        await wait(PACE.chapter);
+        await wait(PACE.beat);
       }
       // Let Studio finish saving the last change before the write window closes.
       await sleep(1500);
@@ -460,5 +525,7 @@
     try { start.focus({ preventScroll: true }); } catch (error) { /* focus is a convenience only */ }
   }
 
-  window.KLABS_DEMO_PLAYER = Object.freeze({ open, journey: JOURNEY, pace: PACE });
+  // messages: everything else the caption line can show (the browser test checks none of it is cut off either).
+  const MESSAGES = Object.freeze([PAUSED, FINISHED, STOPPED, ...JOURNEY.map((chapter, i) => skippingTo(chapter.title, i + 1))]);
+  window.KLABS_DEMO_PLAYER = Object.freeze({ open, journey: JOURNEY, pace: PACE, messages: MESSAGES });
 })();

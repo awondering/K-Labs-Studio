@@ -489,7 +489,27 @@ test('Q18 2B: the iPhone strip is slim while playing - caption above one row of 
   assert.ok(phone.length > 0);
   const block = phone.slice(0, phone.indexOf('/* end iPhone strip */'));
   assert.match(block, /@media \(max-width:620px\)/);
-  assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-dock__bar \{ display:none; \}/);
+  // Phase 3 change: the DEMO bar row is hidden while the player is open at every width (see the slim dock test below),
+  // so the iPhone block no longer needs its own rule for it (2B: the rule was here, for phones only).
   assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-player__caption \{[^}]*-webkit-line-clamp:2;/);
   assert.match(read('js/demo-director.js'), /dock\.setAttribute\("data-player-open", "true"\)/, 'from Start, and still after the end');
+});
+
+test('Q18 Phase 3: the Mac dock is slim too - while the player is open the DEMO bar row steps aside at every width and DEMO and Exit demo sit in the controls row', () => {
+  const start = css.indexOf('/* Q18 Phase 3: slim dock');
+  assert.ok(start > 0, 'slim dock block');
+  const block = css.slice(start, css.indexOf('/* end slim dock */'));
+  assert.doesNotMatch(block, /@media/, 'every width, not only phones');
+  assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-dock__bar \{ display:none; \}/);
+  assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-player__tag \{[^}]*display:block;/);
+  assert.match(block, /html\.klabs-demo \.demo-dock\[data-player-open="true"\] \.demo-player__exit \{[^}]*display:block;/);
+  assert.ok(css.indexOf('/* Q18 2B: iPhone strip') > start, 'the phone sizes still follow it');
+});
+
+test('Q18 Phase 3: the control the director is using is highlighted (a visible outline and glow, Demo Mode only)', () => {
+  const rule = /html\.klabs-demo \[data-demo-highlight\] \{([^}]*)\}/.exec(css);
+  assert.ok(rule, 'highlight rule');
+  assert.match(rule[1], /outline:3px solid/);
+  assert.match(rule[1], /box-shadow:/);
+  assert.doesNotMatch(css.replace(rule[0], ''), /(^|[^-\w])\[data-demo-highlight\]/m, 'not used outside Demo Mode');
 });
