@@ -17,9 +17,6 @@
   const demoScripts = ["js/demo-data.js", ...privateScripts.filter((src) => !demoExcludedScripts.has(src))];
   demoScripts.splice(demoScripts.indexOf("js/app.js"), 0, "js/demo-director.js");
   const DEMO_UNAVAILABLE_HASH = "#demo-unavailable";
-  // Q18 Phase 3: false keeps the public Explore Studio entries (Home and the Discover sheet) hidden, so the demonstration
-  // can be tried on the live site at ?demo before it is revealed. Set true to reveal it.
-  const DEMO_PUBLIC_ENTRY = false;
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
   // times the measured round trip on a weak mobile connection (Q16: an unanswered launch waited 8.2 s, now 3.2 s).
@@ -641,13 +638,8 @@
       leds.appendChild(led);
     });
     rod.classList.add("is-ready");
-    // Q18: Explore opens Demo Mode (a separate page load), without signing in - once the demonstration is revealed.
-    // Until then (DEMO_PUBLIC_ENTRY false) both Explore Studio entries stay hidden with no action, and Demo Mode opens
-    // only from its own address (?demo).
-    const enterDemo = () => window.KLABS_DEMO?.enter();
-    setVisible("publicExploreBtn", DEMO_PUBLIC_ENTRY);
-    setVisible("publicDiscoverExploreBtn", DEMO_PUBLIC_ENTRY);
-    if (DEMO_PUBLIC_ENTRY) document.getElementById("publicExploreBtn").addEventListener("click", enterDemo);
+    document.getElementById("publicExploreBtn").addEventListener("click", () => showAuth("workshopScreen"));
+    // Q18: the public entry is exactly as before (Explore Studio opens sign-in); Demo Mode opens only at ?demo.
     document.getElementById("demoModeExitBtn").addEventListener("click", () => window.KLABS_DEMO?.exit());
     if (!window.KLABS_DEMO?.active && window.location.hash === DEMO_UNAVAILABLE_HASH) {
       setVisible("publicDemoUnavailable", true);
@@ -657,9 +649,9 @@
     document.getElementById("authBackHome").addEventListener("click", showHome);
     document.getElementById("publicDiscoverBtn").addEventListener("click", () => dialog.showModal());
     document.getElementById("publicDiscoverClose").addEventListener("click", () => dialog.close());
-    if (DEMO_PUBLIC_ENTRY) document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
+    document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
       dialog.close();
-      enterDemo();
+      showAuth("workshopScreen");
     });
     document.getElementById("startTrialBtn").addEventListener("click", async (event) => {
       const button = event.currentTarget;

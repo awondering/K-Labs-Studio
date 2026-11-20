@@ -10771,9 +10771,6 @@ html.klabs-demo #readOnlyAccessNotice { display:none !important; }
 html.klabs-demo #app .layout-control-card__button,
 html.klabs-demo #app .component-quantity__step,
 html.klabs-demo #app [data-spiral-angle-action] { opacity:.5;pointer-events:none; }
-/* Q18 Phase 3: the public Explore Studio entries stay hidden until the demonstration is revealed (js/public-entry.js). */
-#publicExploreBtn[hidden],
-#publicDiscoverExploreBtn[hidden] { display:none !important; }
 .home-public-entry__notice { margin:4px 0 0;color:#c8c0b7;font-size:12px;line-height:1.5;text-align:center; }
 /* Q18 Demo Mode: the visitor shield covers the page above every Studio layer (it is the visible second layer; the
    visitor's own actions are stopped in js/demo-mode.js). The introduction and the DEMO bar with Exit demo sit above it. */
