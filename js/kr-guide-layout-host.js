@@ -23,9 +23,16 @@
   // The tool's body fills the viewport (min-height:100vh); inside a frame that would make the frame and content chase each other.
   // The card gives the frame the full width of the Workshop column; the tool's own side padding is tightened to match so its numeric rows have the room they were designed for.
   const FRAME_STYLE='<style>html,body{min-height:0!important;height:auto!important}main{padding-left:8px!important;padding-right:8px!important}</style>';
+  // Q18: on a Demo Mode page the tool document gets the demo storage and network guards before anything else runs.
+  function demoFrameGuard(){
+    const demo=typeof window!=='undefined'?window.KLABS_DEMO:null;
+    if(!demo || !demo.active)return '';
+    if(!demo.isolated || !demo.frameGuardScript)throw new Error('Demo Mode isolation is unavailable.');
+    return '<script>'+demo.frameGuardScript+'<\/script>';
+  }
   function buildSrcdoc(html,unit){
     const source=String(html||'');
-    const config='<script>window.__KR_HOST__='+JSON.stringify({unit:unit==='in'||unit==='frac'?unit:'mm'})+';<\/script>';
+    const config=demoFrameGuard()+'<script>window.__KR_HOST__='+JSON.stringify({unit:unit==='in'||unit==='frac'?unit:'mm'})+';<\/script>';
     return /<head[^>]*>/i.test(source)?source.replace(/<head[^>]*>/i,(match)=>match+config+FRAME_STYLE):config+FRAME_STYLE+source;
   }
   function contentHeight(doc){

@@ -61,6 +61,7 @@ function harness({storage={}}={}){
     sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},
     setTimeout(fn){window.expiryCallback=fn;return 1;},clearTimeout(){},
     location:{reload(){reloads++;}},KLABS_UI:{startNewBuildFlow(){}},
+    KLABS_DEMO:{active:false,entered:0,enter(){this.entered++;},exit(){}},
     KLABS_SUPABASE_CLIENT:{
       auth:{getSession:async()=>({data:{session},error:null}),signOut:async()=>({error:null})},
       rpc:async(name)=>{
@@ -109,8 +110,12 @@ test('signed-out entry and public interactions do not initialize private scripts
   assert.equal(h.elements.publicDiscoverDialog.open,true);
   h.elements.publicDiscoverClose.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,false);
+  // Q18 Phase 3 correction: restored to origin/main exactly - Explore Studio is shown and opens sign-in, as on main;
+  // it never opens Demo Mode (that opens only at ?demo). (Phase 1-2B: it opened Demo Mode; Phase 3 first cut: hidden.)
+  assert.notEqual(h.elements.publicExploreBtn.hidden,true);
   h.elements.publicExploreBtn.listeners.click();
   assert.equal(h.elements.authScreen.style.display,'flex');
+  assert.equal(h.window.KLABS_DEMO.entered,0);
   assert.deepEqual(h.scripts,[]);
   h.elements.authBackHome.listeners.click();
   assert.equal(h.elements.authScreen.style.display,'none');
@@ -129,9 +134,12 @@ test('Discover sheet presents accurate features and its Explore action opens sig
   const h=harness();
   h.elements.publicDiscoverBtn.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,true);
+  // Q18 Phase 3 correction: as on origin/main - shown; closes the sheet and opens sign-in; never Demo Mode.
+  assert.notEqual(h.elements.publicDiscoverExploreBtn.hidden,true);
   h.elements.publicDiscoverExploreBtn.listeners.click();
   assert.equal(h.elements.publicDiscoverDialog.open,false);
   assert.equal(h.elements.authScreen.style.display,'flex');
+  assert.equal(h.window.KLABS_DEMO.entered,0);
   assert.deepEqual(h.scripts,[]);
 });
 
@@ -641,4 +649,28 @@ test('Q17: a valid sign-in is unaffected - normal start-up still verifies access
   assert.equal(state.offline_session,undefined);
   assert.equal(h.window.KLABS_CAN_WRITE(),true);
   assert.ok(!h.classes.has('klabs-offline-session'));
+});
+
+test('Q18 Phase 3 correction: the public entry is exactly origin/main\'s - Explore Studio, its trial note and the Discover Explore button are shown and open sign-in; Demo Mode opens only at ?demo', () => {
+  // The markup is main's, byte for byte (no hidden attribute).
+  assert.ok(html.includes(`          <button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">
+            <span class="home-public-entry__primary-label">EXPLORE STUDIO</span>
+            <span class="home-public-entry__trial-note">7-day trial available</span>
+          </button>
+          <button id="publicDiscoverBtn" class="home-public-entry__secondary" type="button">DISCOVER K-LABS STUDIO</button>
+          <button id="publicSignInBtn" class="home-public-entry__signin" type="button">SIGN IN</button>`));
+  assert.ok(html.includes('<button id="publicDiscoverExploreBtn" class="public-discover-dialog__explore" type="button">EXPLORE STUDIO</button>'));
+  // Nothing hides them: no style rule, no visibility switch in the script.
+  const css = fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
+  const js = fs.readFileSync(path.join(__dirname,'..','js','public-entry.js'),'utf8');
+  assert.doesNotMatch(css, /#publicExploreBtn|#publicDiscoverExploreBtn/);
+  assert.doesNotMatch(js, /DEMO_PUBLIC_ENTRY|setVisible\("public(Discover)?ExploreBtn"/);
+  // Both behave as on main: they open sign-in (main's own listener lines, unchanged).
+  assert.ok(js.includes('document.getElementById("publicExploreBtn").addEventListener("click", () => showAuth("workshopScreen"));'));
+  assert.ok(js.includes(`document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
+      dialog.close();
+      showAuth("workshopScreen");
+    });`));
+  // The ?demo route itself is unchanged: Demo Mode still starts from the address.
+  assert.match(fs.readFileSync(path.join(__dirname,'..','js','demo-mode.js'),'utf8'), /function enterUrl\(\)/);
 });

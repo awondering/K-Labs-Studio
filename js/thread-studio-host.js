@@ -16,8 +16,15 @@
   function sanitiseScope(scope){
     return String(scope==null?'':scope).replace(/[^A-Za-z0-9_.@:-]/g,'').slice(0,96)||'local';
   }
+  // Q18: on a Demo Mode page the tool document gets the demo storage and network guards before anything else runs.
+  function demoFrameGuard(){
+    const demo=typeof window!=='undefined'?window.KLABS_DEMO:null;
+    if(!demo || !demo.active)return '';
+    if(!demo.isolated || !demo.frameGuardScript)throw new Error('Demo Mode isolation is unavailable.');
+    return '<script>'+demo.frameGuardScript+'<\/script>';
+  }
   function buildSrcdoc(html,scope){
-    const config='<script>window.__TDS_HOST__='+JSON.stringify({scope:sanitiseScope(scope)})+';<\/script>';
+    const config=demoFrameGuard()+'<script>window.__TDS_HOST__='+JSON.stringify({scope:sanitiseScope(scope)})+';<\/script>';
     const source=String(html||'');
     // Inject the configuration before the studio's own scripts run.
     return /<head[^>]*>/i.test(source)?source.replace(/<head[^>]*>/i,(match)=>match+config):config+source;

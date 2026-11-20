@@ -17,12 +17,19 @@ function klabsFetch(input, init) {
   return window.fetch(input, { ...(init || {}), signal: controller.signal })
     .finally(() => window.clearTimeout(timer));
 }
-window.KLABS_SUPABASE_CLIENT = window.supabase.createClient(
+// Q18: a Demo Mode page never creates a Supabase client, so it holds no session and makes no Supabase requests.
+window.KLABS_SUPABASE_CLIENT = window.KLABS_DEMO?.active ? null : window.supabase.createClient(
   window.KLABS_SUPABASE.url,
   window.KLABS_SUPABASE.publishableKey,
   { global: { fetch: klabsFetch } }
 );
 let klabsReadOnlyObserver = null;
+let klabsDemoMessageTimer = null;
+// Q18: the Studio controls the demonstration director may use in Demo Mode (see the click guard below).
+const DEMO_DIRECTOR_CONTROLS = ["#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
+  "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quotePaymentTypeField [data-payment-type]", "#quoteBalanceReceivedSave",
+  "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
+  "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]"].join(", ");
 
 function klabsApplyReadOnlyControls() {
   const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;
@@ -132,7 +139,8 @@ function klabsApplyAuthState(session) {
     document.body.classList.toggle("klabs-read-only", readOnly);
     const notice = document.getElementById("readOnlyAccessNotice");
     if (notice) {
-      notice.hidden = !readOnly;
+      // Q18: Demo Mode is identified by its own bar instead.
+      notice.hidden = !readOnly || !!window.KLABS_ACCESS_STATE?.demo;
       const noticeText = notice.querySelector("span");
       if (noticeText) {
         noticeText.textContent = window.KLABS_ACCESS_STATE?.offline_session
@@ -321,15 +329,46 @@ async function klabsSignUp() {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("click", (event) => {
-    if (!document.body.classList.contains("klabs-read-only")) return;
-    const control = event.target.closest("#app button, #app [role='button'], #app input[type='submit']");
+    // Q18: Demo Mode is editable for the demonstration director (visitors are stopped by the shield in
+    // js/demo-mode.js), so its blocked controls below apply whether or not the page is read-only.
+    const demo = !!window.KLABS_ACCESS_STATE?.demo;
+    if (!demo && !document.body.classList.contains("klabs-read-only")) return;
+    const control = event.target.closest(demo
+      ? "button:not([data-demo-player] *), [role='button']:not([data-demo-player] *), input[type='submit']"
+      : "#app button, #app [role='button'], #app input[type='submit']");
     if (!control || control.matches("[data-nav], [data-collapsible-trigger], [data-builds-status-filter]")) return;
     const label = `${control.textContent || ""} ${control.getAttribute("aria-label") || ""} ${control.id || ""}`;
     // Q17: with an unrenewed sign-in no customer document can be produced either (invoices, statements, PDFs).
     const offlineSession = document.body.classList.contains("klabs-offline-session");
-    const blockedOffline = offlineSession && (
+    // Q18: Demo Mode blocks the same documents, plus account, sign-out, sync, recovery and administration controls,
+    // for every click - visitor or director.
+    const blockedOffline = (offlineSession || demo) && (
       control.closest(".workshop-build-actions-surface, [data-current-build-action], [data-more-document], #currentBuildActionsMenu")
       || /\b(invoice|statement|documents?|pdf|share|download|issue|payment|deposit|generate|template)\b/i.test(label));
+    const blockedDemo = demo && (
+      control.closest("#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice, #retryFinancialBtn")
+      || control.matches(".layout-control-card__button, .component-quantity__step, [data-spiral-angle-action]")
+      || /\b(log ?out|sign ?out|sync|admin|upload|logo|increase|decrease|e-?mail|print|export|send)\b/i.test(label));
+    // Q18 2A/2B: the demonstration director (never a person: the visitor's own taps are not trusted to reach Studio at
+    // all - js/demo-mode.js) may use the journey's controls: View Quote and its Close, the fulfilment choice, Confirm
+    // Build, the payment form, Mark Complete, the invoice preview's Issue and Close, and Studio's own confirmation.
+    // Printing, email drafts, statements, More documents, the retry of a payment and every other build action stay blocked.
+    // A person's tap on one of them is refused here too, as a second layer behind the shield.
+    const demoJourneyControl = demo && !event.isTrusted && control.matches(DEMO_DIRECTOR_CONTROLS);
+    const demoVisitorOnJourney = demo && event.isTrusted && control.matches(DEMO_DIRECTOR_CONTROLS);
+    if (demo) {
+      if (demoJourneyControl || (!demoVisitorOnJourney && !blockedOffline && !blockedDemo)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const bar = document.getElementById("demoModeMessage");
+      if (bar) {
+        const resting = "Fictional data. Nothing here is saved, sent or synced.";
+        bar.textContent = "Editing, saving and customer documents are not available in the demonstration.";
+        window.clearTimeout(klabsDemoMessageTimer);
+        klabsDemoMessageTimer = window.setTimeout(() => { bar.textContent = resting; }, 4000);
+      }
+      return;
+    }
     if (!blockedOffline && !/\b(add|new|save|delete|remove|duplicate|edit|update|confirm|complete|mark|record|send|email|print|export|import|rename|copy|reset|clear|create|quote|price)\b/i.test(label)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -337,6 +376,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (notice) notice.querySelector("span").textContent = offlineSession
       ? "You are offline and your sign-in could not be renewed. You can view your saved records, but cannot edit, save, or create customer documents until you reconnect."
       : "This account is read-only. You can view your records, but cannot edit, save, or create customer documents.";
+  }, true);
+  // Q18: step (+/-) controls act on press-and-hold (pointerdown), before any click; in Demo Mode they never start.
+  document.addEventListener("pointerdown", (event) => {
+    if (!window.KLABS_ACCESS_STATE?.demo) return;
+    if (!event.target.closest?.("#app .layout-control-card__button, #app .component-quantity__step, #app [data-spiral-angle-action]")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }, true);
   document.addEventListener("submit", (event) => {
     if (!document.body.classList.contains("klabs-read-only") || !event.target.closest("#app")) return;
@@ -366,6 +412,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("settingsSignOut")
     ?.addEventListener("click", klabsSignOut);
 
+  // Q18: a Demo Mode page opens the demonstration instead of restoring a sign-in.
+  if (window.KLABS_DEMO?.active) {
+    window.KLABS_PUBLIC_ENTRY?.startDemo(klabsApplyAuthState);
+    return;
+  }
   klabsCheckLogin().catch((error) => {
     console.error("[K-Labs Studio] Could not restore the session:", error);
     if (error.name === "StudioTabLockError") {

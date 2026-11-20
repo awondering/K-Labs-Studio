@@ -6,6 +6,23 @@
     "js/quote-number-allocator.js", "js/app.js"
   ];
   const adminScript = "js/admin-panel.js";
+  // Q18 Demo Mode runs the real interface without an account. Sync, owner administration, the quote-number allocator
+  // and the recovery export are never loaded there, and js/storage.js is replaced by the in-memory store from
+  // js/demo-mode.js. The demonstration data is loaded first; the demonstration player (js/demo-director.js) after
+  // Studio's interface and before app.js.
+  const demoExcludedScripts = new Set([
+    "js/storage.js", "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js",
+    "js/build-sync-diff.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js", "js/quote-number-allocator.js"
+  ]);
+  const demoScripts = ["js/demo-data.js", ...privateScripts.filter((src) => !demoExcludedScripts.has(src))];
+  demoScripts.splice(demoScripts.indexOf("js/app.js"), 0, "js/demo-director.js");
+  const DEMO_UNAVAILABLE_HASH = "#demo-unavailable";
+  // Q18 Phase 3 review: every demonstration file (the page, js/demo-mode.js, this file, js/demo-data.js and
+  // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
+  // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
+  // back to the public entry with the usual notice.
+  const DEMO_BUILD = "build148-v270";
+  const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
   // times the measured round trip on a weak mobile connection (Q16: an unanswered launch waited 8.2 s, now 3.2 s).
@@ -338,15 +355,18 @@
     }, remaining);
   }
 
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Could not load ${src}. Reload and try again.`));
+      document.head.appendChild(script);
+    });
+  }
+
   function loadPrivateApp() {
     if (!loadPromise) {
-      const loadScript = (src) => new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error(`Could not load ${src}. Reload and try again.`));
-        document.head.appendChild(script);
-      });
       const adminPanelPromise = loadScript(adminScript);
       const privateAppPromise = privateScripts.reduce(
         (previous, src) => previous.then(() => loadScript(src)),
@@ -433,6 +453,172 @@
     }
   }
 
+  // Q18 2B: local stand-in for Studio's payment service (js/build-sync.js is not loaded in Demo Mode). Studio's own Record
+  // Payment and Issue Invoice screens hand it the deposit, the final payment and the final invoice exactly as they
+  // would hand them to the server; it applies the same rules as the server (one deposit, no duplicates, valid amounts
+  // and dates, never more than the saved price, one invoice that matches the saved build) and keeps the result with the
+  // saved build in the demonstration's in-memory Store, through Studio's own saveBuildRecords - so, like everything
+  // else, only while the demonstration director is running. Nothing is sent anywhere or kept on the device.
+  function demoFinancialService() {
+    let inFlight = false;
+    const clone = (value) => JSON.parse(JSON.stringify(value));
+    const canonical = (value) => {
+      if (Array.isArray(value)) return value.map(canonical);
+      if (value && typeof value === "object") return Object.keys(value).sort().reduce((out, key) => { out[key] = canonical(value[key]); return out; }, {});
+      return value;
+    };
+    const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+    const validDate = (text) => /^\d{4}-\d{2}-\d{2}$/.test(String(text || "")) && !Number.isNaN(Date.parse(`${text}T00:00:00Z`))
+      && new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) === text;
+    const cents = (value) => Math.round(Number(value) * 100);
+    function nextPayments(record, data) {
+      const payments = Array.isArray(record.payments) ? clone(record.payments) : [];
+      const amountText = String(data && data.amount);
+      if (!data || !String(data.id || "") || !validDate(data.date) || !/^[0-9]+(\.[0-9]{1,2})?$/.test(amountText)
+        || !(Number(amountText) > 0) || !["deposit", "balance"].includes(data.type)) {
+        throw new Error("Enter a valid payment amount and date.");
+      }
+      const payment = { id: String(data.id), type: data.type, amount: Number(amountText), date: data.date };
+      if (payments.some((item) => item.id === payment.id
+        || (item.type === payment.type && item.date === payment.date && cents(item.amount) === cents(payment.amount)))) {
+        throw new Error("This payment is already recorded; review payment history.");
+      }
+      if (payment.type === "deposit" && payments.some((item) => item.type === "deposit")) throw new Error("A deposit is already recorded; correct it instead.");
+      const total = cents(record.issuedInvoice ? record.issuedInvoice.total : record.finalCustomerPrice);
+      const received = [...payments, payment].reduce((sum, item) => sum + cents(item.amount), 0);
+      if (!(total > 0) || received > total) throw new Error("Payments cannot exceed the saved customer price.");
+      return [...payments, payment];
+    }
+    function issuedInvoice(record, data) {
+      if (record.issuedInvoice) throw new Error("An invoice has already been issued for this build.");
+      const invoice = data && data.invoice;
+      if (!invoice || typeof invoice !== "object" || typeof invoice.total !== "number" || !validDate(invoice.issuedDate)
+        || !same(invoice.payments, Array.isArray(record.payments) ? record.payments : []) || cents(invoice.total) !== cents(record.finalCustomerPrice)) {
+        throw new Error("Invoice does not match the saved build.");
+      }
+      return clone(invoice);
+    }
+    return Object.freeze({
+      demo: true,
+      busy: () => inFlight,
+      pendingFinancial: () => null,
+      retryFinancial: async () => { throw new Error("There is no unconfirmed transaction in the demonstration."); },
+      async financialOperation(buildId, kind, data) {
+        if (inFlight) throw new Error("A financial operation is already in progress.");
+        inFlight = true;
+        try {
+          await Promise.resolve();
+          const id = String(buildId);
+          const list = typeof window.savedBuildRecords === "function" ? window.savedBuildRecords() : [];
+          const record = list.find((item) => item && String(item.id) === id);
+          if (!record) throw new Error("Save this build before recording a payment.");
+          const next = clone(record);
+          if (kind === "add_payment") next.payments = nextPayments(record, data);
+          else if (kind === "issue_invoice") next.issuedInvoice = issuedInvoice(record, data);
+          else throw new Error("This transaction is not part of the demonstration.");
+          if (window.saveBuildRecords([next, ...list.filter((item) => !item || String(item.id) !== id)]) === false) {
+            throw new Error("The demonstration could not record this.");
+          }
+          window.KLABS_UI?.refreshBuildViews?.();
+          return { operation: { id: `demo-${kind}`, buildId: id, kind }, record: clone(next), conflict: false };
+        } finally {
+          inFlight = false;
+        }
+      }
+    });
+  } // end demoFinancialService
+
+  // Q18: open the real interface with the fictional demonstration data. Only on a demo page (js/demo-mode.js decides
+  // before anything else runs). No account, session, entitlement, sync or administration is involved. The visitor
+  // shield is installed before any Studio script runs; Studio is then editable, but only the demonstration director
+  // can change anything (the Store refuses every other write). The visitor lands on the demonstration's introduction
+  // screen, not on a saved job. If the isolation guards or the shield could not be confirmed, or anything fails while
+  // opening, the visitor is returned to the normal public entry screen with a short notice and nothing is shown.
+  async function startDemo(applyAuthState) {
+    const demo = window.KLABS_DEMO;
+    if (!demo?.active) return false;
+    document.body.classList.add("klabs-auth-resolving");
+    document.getElementById("authScreen").style.display = "none";
+    setVisible("accountAccessScreen", false);
+    setVisible("exploreDemoScreen", false);
+    const sameBuild = (part, build) => {
+      if (build === DEMO_BUILD) return;
+      const error = new Error(`An older copy of the demonstration's ${part} (${build || "unknown"}) is cached; this is ${DEMO_BUILD}.`);
+      error.demoStale = true;
+      throw error;
+    };
+    try {
+      if (!demo.isolated) throw new Error(demo.failure || "Demo Mode isolation could not be confirmed.");
+      sameBuild("page", document.getElementById("demoModeBar")?.getAttribute("data-demo-build"));
+      sameBuild("guard", demo.build);
+      demo.installShield(document);
+      window.KLABS_ACCESS_STATE = { access_state: "demo", can_write: true, trial_available: false, email_verified: false, demo: true };
+      // Local stand-in for the quote-number service (js/quote-number-allocator.js is not loaded). Numbers continue the
+      // demonstration business's own sequence (Studio passes its floor, from the demo business profile), are held in
+      // memory for this page only and never reach a server; each replay starts again from the same number.
+      let demoNextQuoteNumber = null;
+      window.KLABS_QUOTE_NUMBERS = {
+        peek: async () => ({ userId: demo.accountId, nextNumber: demoNextQuoteNumber }),
+        allocate: async (floor) => {
+          const number = Math.max(Math.round(Number(floor)) || 1, demoNextQuoteNumber || 1);
+          demoNextQuoteNumber = number + 1;
+          return number;
+        }
+      };
+      for (const src of demoScripts) {
+        await loadScript(src);
+        if (src === "js/demo-data.js") {
+          sameBuild("data", window.KLABS_DEMO_DATA?.build);
+          demo.seed(window.KLABS_DEMO_DATA);
+        }
+        // A missing player is not an older copy: it stops below, as before.
+        if (src === "js/demo-director.js" && window.KLABS_DEMO_PLAYER) sameBuild("player", window.KLABS_DEMO_PLAYER.build);
+      }
+      if (window.Store !== demo.store || window.KLABS_ACCOUNT_ID !== demo.accountId || window.KLABS_SUPABASE_CLIENT
+        || window.KLABS_BUILD_SYNC || window.KLABS_SYNC || window.KLABS_SETTINGS_SYNC || window.KLABS_ADMIN_ACCESS) {
+        throw new Error("Demo Mode isolation changed while opening.");
+      }
+      // 2B: the payment stand-in, put in place only now that no real sync module is present; it cannot be replaced.
+      const demoFinancial = demoFinancialService();
+      Object.defineProperty(window, "KLABS_BUILD_SYNC", { value: demoFinancial, writable: false, configurable: false, enumerable: true });
+      if (window.KLABS_BUILD_SYNC !== demoFinancial) throw new Error("Demo Mode isolation changed while opening.");
+      if (typeof window.KLABS_DEMO_PLAYER?.open !== "function") throw new Error("The demonstration player is unavailable.");
+      const director = demo.claimDirector();
+      applyAuthState({ user: { id: demo.accountId, email: "Demonstration" } });
+      setVisible("demoModeBar", true);
+      window.KLABS_DEMO_PLAYER.open(director);
+      return true;
+    } catch (error) {
+      console.warn("[K-Labs Studio] Demo Mode could not open safely:", error);
+      if (error?.demoStale && !freshReload()) {
+        await askForNewVersion();
+        window.location.replace(`${demo.enterUrl()}&${DEMO_FRESH_PARAM}=1`);
+        return false;
+      }
+      window.location.replace(demo.exitUrl() + DEMO_UNAVAILABLE_HASH);
+      return false;
+    }
+  }
+  function freshReload() {
+    return new RegExp(`[?&]${DEMO_FRESH_PARAM}=1(?:&|$)`).test(String(window.location.search || ""));
+  }
+  // Asks the service worker to fetch the new version and, if one starts installing, waits a little for it to take
+  // over (at most a few seconds); then the reload gets one consistent set of files.
+  async function askForNewVersion() {
+    const timeout = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    try {
+      const workers = window.navigator?.serviceWorker;
+      const registration = workers && typeof workers.getRegistration === "function" ? await workers.getRegistration() : null;
+      if (!registration || typeof registration.update !== "function") return;
+      await Promise.race([registration.update(), timeout(4000)]);
+      if (registration.installing || registration.waiting) {
+        await Promise.race([new Promise((resolve) => workers.addEventListener("controllerchange", resolve, { once: true })), timeout(5000)]);
+      }
+    } catch (error) {
+      // A reload is still the best that can be done.
+    }
+  }
+
   // Q17: the stored sign-in has expired and the server cannot be reached to renew it. Open this account's saved records
   // strictly view-only from its own saved access record - no Supabase data calls, no sync, no documents - and restart
   // normally as soon as the renewal succeeds or is refused. Without a valid saved record for this exact account,
@@ -496,6 +682,12 @@
     });
     rod.classList.add("is-ready");
     document.getElementById("publicExploreBtn").addEventListener("click", () => showAuth("workshopScreen"));
+    // Q18: the public entry is exactly as before (Explore Studio opens sign-in); Demo Mode opens only at ?demo.
+    document.getElementById("demoModeExitBtn").addEventListener("click", () => window.KLABS_DEMO?.exit());
+    if (!window.KLABS_DEMO?.active && window.location.hash === DEMO_UNAVAILABLE_HASH) {
+      setVisible("publicDemoUnavailable", true);
+      try { window.history.replaceState(null, "", window.location.pathname + window.location.search); } catch (error) { /* notice stays */ }
+    }
     document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));
     document.getElementById("authBackHome").addEventListener("click", showHome);
     document.getElementById("publicDiscoverBtn").addEventListener("click", () => dialog.showModal());
@@ -561,7 +753,7 @@
       event.stopImmediatePropagation();
       showAuth(nav.dataset.nav);
     }, true);
-    if (!window.KLABS_SUPABASE_CLIENT) {
+    if (!window.KLABS_SUPABASE_CLIENT && !window.KLABS_DEMO?.active) {
       showHome();
       document.getElementById("authMessage").textContent = "Sign in is unavailable. Check your connection and reload.";
     }
@@ -569,5 +761,5 @@
 
   if (hasStoredSession()) preloadPrivateApp();
 
-  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, showHome, isLoading: () => !!loadPromise };
+  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, startDemo, showHome, isLoading: () => !!loadPromise };
 })();

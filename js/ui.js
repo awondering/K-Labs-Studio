@@ -4846,7 +4846,11 @@ function normalizeQuote(inputQuote){
 }
 function updateQuoteActionPriority(){
   const statusEl=$('workshopBuildActionsStatus');
-  if(statusEl){
+  // Q18: nothing in Demo Mode is saved or synced.
+  if(statusEl && window.KLABS_ACCESS_STATE?.demo){
+    statusEl.textContent='Demonstration — not saved';
+    statusEl.classList.toggle('is-pending',false);
+  }else if(statusEl){
     const syncStatus=window.KLABS_BUILD_SYNC?.getStatus?.();
     if(syncStatus==='error'){
       statusEl.textContent='NOT SYNCED — REVIEW REQUIRED';
