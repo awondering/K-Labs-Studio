@@ -10759,12 +10759,7 @@ body:not(.klabs-logged-out) .home-public-entry {
 .readonly-access-notice strong { flex:none;color:#dfc4c0;font-size:10px;letter-spacing:.12em; }
 .readonly-access-notice[hidden] { display:none !important; }
 .build-sync-notice { justify-content:space-between; }
-/* Q18 Demo Mode: one slim bar identifies the demonstration and offers the way out; account, sync, recovery and
-   administration controls are not part of the demonstration. */
-.demo-mode-bar { gap:10px;padding:6px 6px 6px 14px;border-color:rgba(200,169,106,.3);background:linear-gradient(90deg,rgba(84,68,38,.28),rgba(20,21,21,.75)); }
-.demo-mode-bar strong { color:#d8c08c; }
-.demo-mode-bar span { flex:1 1 auto;min-width:0;line-height:1.35; }
-.demo-mode-bar__exit { flex:none;min-height:44px;padding:0 14px;white-space:nowrap; }
+/* Q18 Demo Mode: account, sync, recovery and administration controls are not part of the demonstration. */
 html.klabs-demo #settingsAccountCard,
 html.klabs-demo #settingsRecoveryCard,
 html.klabs-demo #settingsAdminEntry,
@@ -10776,17 +10771,49 @@ html.klabs-demo #readOnlyAccessNotice { display:none !important; }
 html.klabs-demo #app .layout-control-card__button,
 html.klabs-demo #app .component-quantity__step,
 html.klabs-demo #app [data-spiral-angle-action] { opacity:.5;pointer-events:none; }
-@media (max-width:620px) {
-  .readonly-access-notice.demo-mode-bar { flex-direction:row;align-items:center;gap:10px; }
-  .demo-mode-bar span { font-size:11.5px; }
-  .demo-mode-bar__exit { padding:0 12px; }
-}
 .home-public-entry__notice { margin:4px 0 0;color:#c8c0b7;font-size:12px;line-height:1.5;text-align:center; }
 /* Q18 Demo Mode: the visitor shield covers the page above every Studio layer (it is the visible second layer; the
    visitor's own actions are stopped in js/demo-mode.js). The introduction and the DEMO bar with Exit demo sit above it. */
 .demo-shield { position:fixed;inset:0;z-index:2147483000;background:transparent;cursor:default;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none; }
 .demo-shield[hidden] { display:none; }
-html.klabs-demo #demoModeBar { position:relative;z-index:2147483100; }
+/* Q18 2A: one dock fixed at the top identifies the demonstration and holds the player (caption, Pause/Play, Replay,
+   chapters) and Exit demo. It sits above the shield. The page and every Studio sheet are moved down by the dock's
+   measured height (--demo-dock-height, set by js/demo-director.js) so sheet titles and close buttons are never covered. */
+html.klabs-demo #demoModeBar { position:fixed;top:0;left:0;right:0;z-index:2147483100;padding:calc(6px + env(safe-area-inset-top,0px)) max(10px,env(safe-area-inset-right,0px)) 8px max(10px,env(safe-area-inset-left,0px));border-bottom:1px solid rgba(200,169,106,.3);background:linear-gradient(180deg,rgba(38,33,24,.97),rgba(17,18,18,.97));box-shadow:0 8px 22px rgba(0,0,0,.4);color:#c8c0b7;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px); }
+.demo-dock[hidden] { display:none !important; }
+html.klabs-demo body { padding-top:var(--demo-dock-height,0px); }
+html.klabs-demo .component-sheet { padding-top:calc(var(--demo-dock-height,0px) + 8px) !important; }
+html.klabs-demo .component-sheet .component-sheet__panel { max-height:min(100%,var(--component-sheet-panel-max-height,100%)) !important; }
+.demo-dock__bar,
+.demo-player { width:min(100%,1080px);margin:0 auto; }
+.demo-dock__bar { display:flex;align-items:center;gap:10px; }
+.demo-dock__tag { flex:none;color:#d8c08c;font-size:10px;letter-spacing:.14em; }
+.demo-dock__message { flex:1 1 auto;min-width:0;font-size:12px;line-height:1.35; }
+.demo-dock__exit { flex:none;min-height:40px;margin-left:auto;padding:0 14px;white-space:nowrap; }
+.demo-player { margin-top:6px; }
+.demo-player[hidden] { display:none; }
+.demo-player__caption { min-height:2.7em;margin:0 0 6px;color:#ece6d8;font-size:14px;line-height:1.35; }
+.demo-player__chapter-label { color:#d8c08c;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase; }
+.demo-player__controls { display:flex;align-items:center;gap:6px; }
+.demo-player__button { flex:none;min-width:72px;min-height:38px;padding:0 12px; }
+.demo-player__chapters { display:flex;flex:1 1 auto;gap:4px;min-width:0;margin:0;padding:0;list-style:none;overflow-x:auto;scrollbar-width:none; }
+.demo-player__chapters li { flex:none; }
+.demo-player__chapter { display:flex;align-items:center;gap:6px;min-height:38px;padding:0 10px;border:1px solid rgba(200,169,106,.25);border-radius:999px;background:rgba(255,255,255,.03);color:#bdb6aa;font:inherit;font-size:12px;cursor:pointer; }
+.demo-player__chapter b { font-weight:700;color:#d8c08c; }
+.demo-player__chapter[aria-current="step"] { border-color:#c8a96a;background:rgba(200,169,106,.18);color:#ece6d8; }
+.demo-player__chapter[data-done="true"] b::after { content:" \2713"; }
+@media (max-width:620px) {
+  .demo-dock__message { font-size:11px; }
+  html.klabs-demo .demo-dock[data-playing="true"] .demo-dock__message { display:none; }
+  .demo-player__caption { font-size:13px; }
+  .demo-player__button { min-width:0;padding:0 10px; }
+  .demo-player__chapter { min-width:38px;justify-content:center;padding:0; }
+  .demo-player__chapter span { display:none; }
+}
+/* Q18 2A: the customer quote shown in the demonstration carries a DEMO watermark and a banner (Demo Mode only). */
+html.klabs-demo .view-quote { position:relative;overflow:hidden; }
+html.klabs-demo .view-quote::before { content:"DEMONSTRATION QUOTE - FICTIONAL, NOT A REAL OFFER";display:block;margin:0 0 12px;padding:6px 10px;border:1px dashed rgba(200,169,106,.55);border-radius:6px;color:#d8c08c;font-size:10px;font-weight:700;letter-spacing:.12em;text-align:center; }
+html.klabs-demo .view-quote::after { content:"DEMO";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(200,169,106,.16);font-size:clamp(72px,22vw,150px);font-weight:800;letter-spacing:.12em;transform:rotate(-24deg);pointer-events:none; }
 .demo-intro { position:fixed;inset:0;z-index:2147483200;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px));background:rgba(6,7,8,.8);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px); }
 .demo-intro[hidden] { display:none; }
 .demo-intro__card { width:min(100%,460px);margin:auto;padding:24px 22px 20px;border:1px solid rgba(200,169,106,.3);border-radius:14px;background:linear-gradient(180deg,rgba(32,30,26,.98),rgba(17,18,18,.98));box-shadow:0 18px 48px rgba(0,0,0,.45);color:#d5cec1; }

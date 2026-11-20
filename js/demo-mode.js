@@ -8,7 +8,8 @@
  *  - the network is limited to reading this site's own files (same-origin GET/HEAD) - nothing can be sent anywhere;
  *  - window.Store (the app's only storage path) is an in-memory store seeded with the demonstration data. It accepts
  *    a change only while the demonstration director is running a step (claimDirector, below);
- *  - printing, sharing, new windows and file downloads are unavailable;
+ *  - printing, sharing, new windows and file downloads are unavailable, and the controls that would do them (email
+ *    drafts, print/PDF, external links) are hidden and disabled;
  *  - the Supabase client, sync, owner administration and the service worker are never started (see
  *    supabase-client.js, public-entry.js and app.js);
  *  - once the page is ready, the visitor shield (installShield) turns away every action a person makes on Studio:
@@ -261,10 +262,36 @@
   const SHIELD_EVENTS = ["click", "dblclick", "auxclick", "contextmenu", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend",
     "keydown", "keyup", "keypress", "beforeinput", "input", "change", "paste", "cut", "drop", "dragstart", "submit"];
   const DOWNLOAD_LINKS = 'a[download], a[href^="blob:"], a[href^="data:"], a[href^="mailto:"]';
+  // Controls that would take something out of the app - an email draft, printing or a PDF, a file, an external page.
+  // In Demo Mode they are hidden and disabled (not only guarded), including those Studio builds later, such as the
+  // customer quote sheet's Open Email Draft and the invoice preview's Print / Save as PDF.
+  const OUTPUT_CONTROLS = ['#emailQuoteBtn', '#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
+    '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]'];
+  function lockOutputControls(doc) {
+    const selector = OUTPUT_CONTROLS.join(", ");
+    if (!doc.head || typeof doc.createElement !== "function" || typeof doc.querySelectorAll !== "function" || typeof window.MutationObserver !== "function") {
+      throw new Error("The outgoing controls could not be hidden.");
+    }
+    const style = doc.createElement("style");
+    style.setAttribute("data-demo-output-lock", "");
+    style.textContent = `${selector} { display: none !important; }`;
+    doc.head.appendChild(style);
+    const lock = () => {
+      doc.querySelectorAll(selector).forEach((control) => {
+        control.hidden = true;
+        control.disabled = true;
+        control.tabIndex = -1;
+        control.setAttribute("aria-hidden", "true");
+      });
+    };
+    lock();
+    new window.MutationObserver(lock).observe(doc.documentElement, { childList: true, subtree: true });
+  }
   function installShield(doc) {
     if (api.shielded) return true;
     const overlay = doc.getElementById("demoShield");
     if (!overlay) throw new Error("The visitor shield is missing from this page.");
+    lockOutputControls(doc);
     const element = (target) => (target && target.nodeType === 3 ? target.parentElement : target);
     const inPlayer = (target) => !!(target && typeof target.closest === "function" && target.closest("[data-demo-player]"));
     const shield = (event) => {

@@ -1,89 +1,270 @@
 /* Q18 Demo Mode: the demonstration player and its director. Loaded only on a Demo Mode page, after Studio's interface.
  *
  * The director works the real Studio screens the way a person would - it taps real buttons and types into real fields,
- * one character at a time - so Studio's own handlers, checks and saving run exactly as in normal use. It never writes
- * data or changes screens directly. Every change happens inside a director step (KLABS_DEMO.claimDirector in
- * js/demo-mode.js); outside a step the demo Store refuses all writes, and the visitor shield turns away the visitor's
- * own taps and typing, so the visitor watches and only the introduction and Exit demo respond.
+ * one character at a time - so Studio's own handlers, checks, pricing (quoteMaths) and saving run exactly as in normal
+ * use. It never writes data, works out figures or changes screens directly. Every change happens inside one director
+ * step (KLABS_DEMO.claimDirector in js/demo-mode.js); outside it the demo Store refuses all writes, and the visitor
+ * shield turns away the visitor's own taps and typing, so the visitor watches and only the player's controls respond.
  *
- * Phase 1 amendment: the introduction screen and a first proof - from Start, the director creates the customer
- * Jordan Ellis and opens an empty New Rod Build for them through the real New Rod Build and Add Customer screens,
- * then stops. Play/Pause/Replay, chapters, captions and the rest of the journey are Phase 2A. */
+ * Phase 2A: the introduction (Start, no autoplay), the player (Pause/Play, Replay, chapters, captions) and the journey
+ * for Jordan Ellis's job: 1 enquiry and customer, 2 rod specification, 3 components and labour, 4 live pricing,
+ * 5 the customer quote (shown with a DEMO watermark by css/studio.css). Replay and the chapter controls reload the
+ * demonstration page (?demo&chapter=N), so every run starts from the same fresh in-memory data without leaving Demo
+ * Mode; chapters before the chosen one are worked through quickly on the same real screens. */
 (function () {
   "use strict";
-  const KEY_MS = 55;
-  const FIELD_PAUSE_MS = 320;
-  const TAP_SETTLE_MS = 420;
-  const STEP_TIMEOUT_MS = 8000;
+  // Pacing only needs to be watchable (fine-tuning is Phase 3). Times in milliseconds.
+  const PACE = Object.freeze({ key: 70, field: 450, tap: 650, captionBase: 1400, captionPerChar: 30, chapter: 900, scroll: 2400 });
+  const STEP_TIMEOUT_MS = 10000;
   const RESTING = "Fictional data. Nothing here is saved, sent or synced.";
-  const RUNNING = "Demonstration running. Watch Studio work - nothing here is saved, sent or synced.";
-  const FINISHED = "Preview ends here: customer Jordan Ellis created and a new rod build opened. The full walkthrough is in development.";
-  const STOPPED = "The demonstration stopped unexpectedly. Exit demo and try again.";
+  const PLAYING = "Demonstration playing. Nothing here is saved, sent or synced.";
+  const FINISHED = "That's the job: Jordan's quote is ready. Replay, or choose a chapter to watch it again.";
+  const STOPPED = "The demonstration stopped unexpectedly. Replay to try again, or exit the demo.";
 
-  const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  const freeze = (value) => {
+    if (value && typeof value === "object") { Object.values(value).forEach(freeze); Object.freeze(value); }
+    return value;
+  };
+  const toggle = (bodyId) => `[aria-controls="${bodyId}"]`;
+  // The journey. Steps: caption(text), tap(selector), type(selector, text), open(section toggle), pick([category,
+  // subcategory, component]) from the component library, until(selector visible), untilHidden(selector),
+  // untilValue(selector, value), scroll(selector) and pause(ms).
+  const JOURNEY = freeze([
+    { title: "Enquiry", steps: [
+      ["caption", "Jordan Ellis gets in touch about a new spin rod for snapper and kahawai."],
+      ["caption", "Start a new rod build from the home screen."],
+      ["tap", "#homeEnterRodBtn"],
+      ["caption", "Jordan is a new customer, so add their details once."],
+      ["tap", "#customerFinderAddNewAction"],
+      ["type", "#customerFinderNewCustomerName", "Jordan Ellis"],
+      ["type", "#customerFinderNewPhone", "021 555 0142"],
+      ["type", "#customerFinderNewEmail", "jordan.ellis@example.com"],
+      ["type", "#customerFinderNewAddress1", "8 Dune Street"],
+      ["type", "#customerFinderNewSuburb", "Mount Maunganui"],
+      ["type", "#customerFinderNewCity", "Tauranga"],
+      ["type", "#customerFinderNewRegion", "Bay of Plenty"],
+      ["type", "#customerFinderNewPostcode", "3116"],
+      ["type", "#customerFinderNewCountry", "New Zealand"],
+      ["caption", "Create the customer. Studio opens a new build for Jordan with its own quote number."],
+      ["tap", "#customerFinderSubmitNewCustomerBtn"],
+      ["untilHidden", "#customerFinderSheet"],
+      ["until", "#workshopScreen.active"],
+      ["untilValue", "#quoteCustomerName", "Jordan Ellis"],
+    ] },
+    { title: "Rod spec", steps: [
+      ["caption", "Give the build a name you'll recognise on the bench."],
+      ["tap", "#quoteBuildRenameBtn"],
+      ["type", "#quoteBuildRenameInput", "7' Snapper Spin"],
+      ["tap", "#quoteBuildRenameSave"],
+      ["caption", "Open the build details and add a note Jordan will see on the quote."],
+      ["open", toggle("workshopBuildSpecsBody")],
+      ["type", "#quoteNotes", "Black wraps with gloss finish. Split grip."],
+      ["caption", "Record the rod: finished length, where the reel seat sits, and the grip lengths."],
+      ["type", "#quoteSpecFinishedRodLength", "2134"],
+      ["type", "#quoteSpecReelSeatPosition", "330 mm from butt"],
+      ["type", "#quoteSpecRearGripLength", "250"],
+      ["type", "#quoteSpecForeGripLength", "110"],
+    ] },
+    { title: "Components", steps: [
+      ["caption", "Pick the parts from the component library. Each one brings its cost and sell price."],
+      ["open", toggle("workshopComponentsBody")],
+      ["pick", ["Blanks", "Spinning Blanks", "7'0\" Medium Spin 6-10 kg"]],
+      ["caption", "Guides, reel seat and grip next."],
+      ["pick", ["Guides", "Spinning Guide Sets", "Medium Spin Guide Set"]],
+      ["pick", ["Reel Seats", "Threaded Reel Seats", "DPS 18"]],
+      ["pick", ["Grips", "EVA Grips", "EVA Split Grip"]],
+      ["caption", "Then the small parts: winding check and thread."],
+      ["pick", ["Winding Checks", "Grip Winding Checks", "Aluminium Winding Check 16 mm"]],
+      ["pick", ["Thread", "Nylon", "NCP Nylon Thread A Black"]],
+      ["caption", "Add the labour: the workshop's hourly rate times the hours this build takes."],
+      ["open", toggle("workshopQuoteSummaryBody")],
+      ["type", "#quoteLabourHours", "5"],
+    ] },
+    { title: "Pricing", steps: [
+      ["caption", "Studio prices the job as you go: parts, labour and GST, all on one screen."],
+      ["pause", 1600],
+      ["caption", "Set the margin you want on this build. The customer price updates straight away."],
+      ["type", "#quoteMarginPercent", "25"],
+      ["pause", 1400],
+      ["caption", "Jordan will collect the rod from the workshop."],
+      ["tap", "[data-fulfilment-method=\"collection\"]"],
+    ] },
+    { title: "Quote", steps: [
+      ["caption", "Open the customer quote: exactly what Jordan will see."],
+      ["tap", "#viewQuoteBtn"],
+      ["until", "#viewQuoteSheet"],
+      ["caption", "Rod, specification, parts and price, under the workshop's own name."],
+      ["scroll", "#viewQuoteSheet .component-sheet__body"],
+      ["caption", "This one is marked DEMO and goes nowhere. In your Studio it's ready to send."],
+    ] },
+  ]);
+
   const byId = (id) => document.getElementById(id);
-  const visible = (el) => !!el && el.isConnected && !el.closest("[hidden]") && el.getClientRects().length > 0;
+  const visible = (el) => !!el && el.isConnected && !el.hidden && !el.closest("[hidden]") && el.getClientRects().length > 0;
+  const cssString = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
+  // Playback state. The director only moves while playing; a pause can fall anywhere, even mid-word.
+  let paused = false;
+  let skipping = false;
+  let resume = [];
+  const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  const gate = () => (paused ? new Promise((resolve) => resume.push(resolve)) : Promise.resolve());
+  async function wait(ms) {
+    let remaining = skipping ? 0 : Math.max(0, ms);
+    await gate();
+    while (remaining > 0) {
+      const slice = Math.min(remaining, 100);
+      await sleep(slice);
+      remaining -= slice;
+      await gate();
+    }
+  }
   async function waitFor(check, label) {
-    const deadline = Date.now() + STEP_TIMEOUT_MS;
-    while (Date.now() < deadline) {
+    let waited = 0;
+    for (;;) {
+      await gate();
       const result = check();
       if (result) return result;
-      await wait(50);
+      if (waited >= STEP_TIMEOUT_MS) throw new Error(`The demonstration could not find ${label}.`);
+      await sleep(50);
+      waited += 50;
     }
-    throw new Error(`The demonstration could not find ${label}.`);
   }
-  async function control(id) {
-    const el = await waitFor(() => (visible(byId(id)) ? byId(id) : null), `#${id}`);
-    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: "smooth" });
-    await wait(TAP_SETTLE_MS);
+  async function control(selector) {
+    const el = await waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
+    if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: skipping ? "auto" : "smooth" });
+    await wait(PACE.tap);
     return el;
   }
-  async function tap(id) {
-    const el = await control(id);
-    if (el.disabled) throw new Error(`#${id} is not available.`);
+  async function tap(selector) {
+    const el = await control(selector);
+    if (el.disabled) throw new Error(`${selector} is not available.`);
     el.click();
-    await wait(TAP_SETTLE_MS);
+    await wait(PACE.tap);
   }
-  async function type(id, text) {
-    const el = await control(id);
+  // Typed one character at a time. The director keeps its own copy of what it has typed, because Studio may reformat a
+  // field after each character (a margin of "2" is shown as "2.0" until the "5" arrives).
+  async function type(selector, text) {
+    const el = await control(selector);
+    let typed = "";
     el.value = "";
     el.dispatchEvent(new Event("input", { bubbles: true }));
     for (const character of String(text)) {
-      el.value += character;
+      await wait(PACE.key);
+      typed += character;
+      el.value = typed;
       el.dispatchEvent(new InputEvent("input", { bubbles: true, data: character, inputType: "insertText" }));
-      await wait(KEY_MS);
     }
     el.dispatchEvent(new Event("change", { bubbles: true }));
-    await wait(FIELD_PAUSE_MS);
+    await wait(PACE.field);
   }
-  const activeScreen = () => document.querySelector(".screen.active")?.id || "";
-
-  // The proof: a new enquiry from Jordan Ellis becomes a customer and an empty New Rod Build, on Studio's own screens.
-  async function playProof(director) {
-    await director.run(async () => {
-      await wait(600);
-      await tap('homeEnterRodBtn');
-      await tap('customerFinderAddNewAction');
-      await type('customerFinderNewCustomerName', 'Jordan Ellis');
-      await type('customerFinderNewPhone', '021 555 0142');
-      await type('customerFinderNewEmail', 'jordan.ellis@example.com');
-      await type('customerFinderNewAddress1', '8 Dune Street');
-      await type('customerFinderNewSuburb', 'Mount Maunganui');
-      await type('customerFinderNewCity', 'Tauranga');
-      await type('customerFinderNewRegion', 'Bay of Plenty');
-      await type('customerFinderNewPostcode', '3116');
-      await type('customerFinderNewCountry', 'New Zealand');
-      await tap('customerFinderSubmitNewCustomerBtn');
-      await waitFor(() => activeScreen() === 'workshopScreen' && byId('quoteCustomerName')?.value === 'Jordan Ellis', "the new rod build for Jordan Ellis");
-      // Let Studio finish saving the new build before the write window closes.
-      await wait(1500);
-    });
+  async function pick(path) {
+    await tap("#addComponentBtn");
+    for (const name of path) await tap(`#choicePickerList [data-choice-option=${cssString(name)}]`);
+    await waitFor(() => !visible(byId("choicePickerSheet")), "the component library closing");
+    await wait(PACE.tap);
+  }
+  async function scrollThrough(selector) {
+    const el = await waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
+    const steps = 6;
+    for (let i = 1; i <= steps; i++) {
+      el.scrollTo({ top: ((el.scrollHeight - el.clientHeight) * i) / steps, behavior: skipping ? "auto" : "smooth" });
+      await wait(PACE.scroll / steps);
+    }
+    await wait(PACE.scroll / 2);
   }
 
+  // ---- The player: introduction, caption, Pause/Play, Replay and chapters.
+  let chapterIndex = -1;
+  function setCaption(text) {
+    const caption = byId("demoCaption");
+    if (caption) caption.textContent = text;
+  }
   function setMessage(text) {
     const message = byId("demoModeMessage");
     if (message) message.textContent = text;
+  }
+  function showChapter(index) {
+    chapterIndex = index;
+    const label = byId("demoChapterLabel");
+    if (label) label.textContent = index >= JOURNEY.length ? "Finished" : index >= 0 ? `${index + 1}/${JOURNEY.length} ${JOURNEY[index].title}` : "";
+    document.querySelectorAll("[data-demo-chapter]").forEach((button) => {
+      const n = Number(button.getAttribute("data-demo-chapter")) - 1;
+      if (n === index) button.setAttribute("aria-current", "step"); else button.removeAttribute("aria-current");
+      button.setAttribute("data-done", String(n < index));
+    });
+  }
+  function setPlayButton(state) {
+    const button = byId("demoPlayPauseBtn");
+    if (!button) return;
+    button.textContent = state === "paused" ? "Play" : "Pause";
+    button.disabled = state === "finished";
+    button.setAttribute("aria-pressed", String(state === "paused"));
+  }
+  function togglePause() {
+    if (chapterIndex < 0) return;
+    paused = !paused;
+    setPlayButton(paused ? "paused" : "playing");
+    if (paused) {
+      setCaption(`Paused. Press Play to carry on. ${captionNow}`.trim());
+    } else {
+      setCaption(captionNow);
+      const waiting = resume;
+      resume = [];
+      waiting.forEach((go) => go());
+    }
+  }
+  let captionNow = "";
+  async function runStep(step) {
+    const [kind, a, b] = step;
+    if (kind === "caption") {
+      captionNow = a;
+      if (!skipping) setCaption(a);
+      return wait(PACE.captionBase + a.length * PACE.captionPerChar);
+    }
+    if (kind === "tap") return tap(a);
+    if (kind === "type") return type(a, b);
+    if (kind === "open") {
+      const trigger = await control(a);
+      if (trigger.getAttribute("aria-expanded") !== "true") trigger.click();
+      return wait(PACE.tap);
+    }
+    if (kind === "pick") return pick(a);
+    if (kind === "until") return waitFor(() => visible(document.querySelector(a)), a);
+    if (kind === "untilHidden") return waitFor(() => !visible(document.querySelector(a)), `${a} closing`);
+    if (kind === "untilValue") return waitFor(() => document.querySelector(a)?.value === b, `${a} showing ${b}`);
+    if (kind === "scroll") return scrollThrough(a);
+    if (kind === "pause") return wait(a);
+    throw new Error(`Unknown demonstration step: ${kind}`);
+  }
+  async function play(director, startAt) {
+    await director.run(async () => {
+      await wait(600);
+      for (let i = 0; i < JOURNEY.length; i++) {
+        skipping = i < startAt;
+        showChapter(i);
+        if (skipping) setCaption(`Skipping ahead to chapter ${startAt + 1}: ${JOURNEY[startAt].title}...`);
+        for (const step of JOURNEY[i].steps) await runStep(step);
+        skipping = false;
+        await wait(PACE.chapter);
+      }
+      // Let Studio finish saving the last change before the write window closes.
+      await sleep(1500);
+    });
+  }
+  function restartAt(chapter) {
+    window.location.replace(`${window.KLABS_DEMO.enterUrl()}&chapter=${chapter}`);
+  }
+  function requestedChapter() {
+    const match = /(?:^|[?&])chapter=(\d)(?:&|$)/.exec(window.location.search || "");
+    const n = match ? Number(match[1]) : 0;
+    return n >= 1 && n <= JOURNEY.length ? n : 0;
+  }
+  function watchDockHeight(dock) {
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty("--demo-dock-height", `${Math.ceil(dock.getBoundingClientRect().height)}px`);
+    apply();
+    if (typeof window.ResizeObserver === "function") new window.ResizeObserver(apply).observe(dock);
   }
 
   let opened = false;
@@ -94,25 +275,52 @@
     const intro = byId("demoIntro");
     const start = byId("demoStartBtn");
     const exit = byId("demoIntroExitBtn");
-    if (!intro || !start || !exit) throw new Error("The demonstration introduction is missing.");
+    const playerPanel = byId("demoPlayer");
+    const dock = byId("demoModeBar");
+    const playPause = byId("demoPlayPauseBtn");
+    const replay = byId("demoReplayBtn");
+    if (!intro || !start || !exit || !playerPanel || !dock || !playPause || !replay) throw new Error("The demonstration player is missing.");
     exit.addEventListener("click", () => window.KLABS_DEMO.exit());
-    start.addEventListener("click", async () => {
-      if (start.disabled) return;
+    playPause.addEventListener("click", togglePause);
+    replay.addEventListener("click", () => restartAt(1));
+    document.querySelectorAll("[data-demo-chapter]").forEach((button) => {
+      button.addEventListener("click", () => restartAt(Number(button.getAttribute("data-demo-chapter"))));
+    });
+    watchDockHeight(dock);
+    let started = false;
+    const begin = async (chapter) => {
+      if (started) return;
+      started = true;
       start.disabled = true;
       intro.hidden = true;
-      setMessage(RUNNING);
+      playerPanel.hidden = false;
+      dock.setAttribute("data-playing", "true");
+      setMessage(PLAYING);
+      setPlayButton("playing");
       try {
-        await playProof(director);
-        setMessage(FINISHED);
+        await play(director, chapter - 1);
+        showChapter(JOURNEY.length);
+        setCaption(FINISHED);
       } catch (error) {
         console.warn("[K-Labs Studio] The demonstration stopped:", error);
-        setMessage(STOPPED);
+        setCaption(STOPPED);
       }
-    });
+      setPlayButton("finished");
+      dock.setAttribute("data-playing", "false");
+      setMessage(RESTING);
+    };
+    start.addEventListener("click", () => begin(1));
     setMessage(RESTING);
+    const chapter = requestedChapter();
+    if (chapter) {
+      // Replay or a chapter choice: the visitor asked for it, so it plays without the introduction.
+      if (window.history && typeof window.history.replaceState === "function") window.history.replaceState(null, "", window.KLABS_DEMO.enterUrl());
+      begin(chapter);
+      return;
+    }
     intro.hidden = false;
     try { start.focus({ preventScroll: true }); } catch (error) { /* focus is a convenience only */ }
   }
 
-  window.KLABS_DEMO_PLAYER = Object.freeze({ open });
+  window.KLABS_DEMO_PLAYER = Object.freeze({ open, journey: JOURNEY });
 })();

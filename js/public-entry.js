@@ -464,11 +464,17 @@
       if (!demo.isolated) throw new Error(demo.failure || "Demo Mode isolation could not be confirmed.");
       demo.installShield(document);
       window.KLABS_ACCESS_STATE = { access_state: "demo", can_write: true, trial_available: false, email_verified: false, demo: true };
-      // Local stand-in for the quote-number service (js/quote-number-allocator.js is not loaded): it reports the
-      // demonstration business's next number and never allocates one.
+      // Local stand-in for the quote-number service (js/quote-number-allocator.js is not loaded). Numbers continue the
+      // demonstration business's own sequence (Studio passes its floor, from the demo business profile), are held in
+      // memory for this page only and never reach a server; each replay starts again from the same number.
+      let demoNextQuoteNumber = null;
       window.KLABS_QUOTE_NUMBERS = {
-        peek: async () => ({ userId: demo.accountId, nextNumber: null }),
-        allocate: async () => { throw new Error("Quote numbers are not allocated in Demo Mode."); }
+        peek: async () => ({ userId: demo.accountId, nextNumber: demoNextQuoteNumber }),
+        allocate: async (floor) => {
+          const number = Math.max(Math.round(Number(floor)) || 1, demoNextQuoteNumber || 1);
+          demoNextQuoteNumber = number + 1;
+          return number;
+        }
       };
       for (const src of demoScripts) {
         await loadScript(src);

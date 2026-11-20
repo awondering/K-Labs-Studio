@@ -236,8 +236,14 @@ test('Q18: Demo Mode opens the real, editable interface behind the shield - no s
   assert.deepEqual(h.order.slice(-2), ['director', 'player'], 'the director channel goes straight to the player');
   assert.deepEqual([...h.opened], [h.director], 'no saved job is opened; the player (introduction screen) is given the director');
   assert.equal(h.elements.demoModeBar.hidden, false);
-  await assert.rejects(h.window.KLABS_QUOTE_NUMBERS.allocate(1), /not allocated/);
+  // Local quote-number stand-in (2A): numbers come from the demonstration business's own sequence, in memory only.
   assert.deepEqual({ ...(await h.window.KLABS_QUOTE_NUMBERS.peek()) }, { userId: 'klabs-demo', nextNumber: null });
+  assert.equal(await h.window.KLABS_QUOTE_NUMBERS.allocate(1046), 1046);
+  assert.equal(await h.window.KLABS_QUOTE_NUMBERS.allocate(1046), 1047, 'never hands out the same number twice');
+  assert.equal(await h.window.KLABS_QUOTE_NUMBERS.allocate(1050), 1050, 'respects Studio\'s floor');
+  assert.deepEqual({ ...(await h.window.KLABS_QUOTE_NUMBERS.peek()) }, { userId: 'klabs-demo', nextNumber: 1051 });
+  assert.doesNotMatch(entrySource.slice(entrySource.indexOf('window.KLABS_QUOTE_NUMBERS = {'), entrySource.indexOf('for (const src of demoScripts)')), /fetch|rpc|supabase|Store|localStorage/i,
+    'no server, no device storage');
   assert.equal(h.window.location.replaced, undefined);
 });
 
@@ -298,13 +304,37 @@ test('Q18: account, sign-out, sync, recovery export, administration and customer
   // The demonstration is editable (for the director), so these controls are blocked in Demo Mode whether or not the
   // page is read-only, and for every click - visitor or director.
   assert.match(clientSource, /if \(!demo && !document\.body\.classList\.contains\("klabs-read-only"\)\) return;/);
-  assert.match(clientSource, /if \(demo\) \{\s*if \(!blockedOffline && !blockedDemo\) return;/);
+  // 2A: the director chooses the fulfilment method and opens the customer quote on screen (View Quote and its Close);
+  // every other document and build action stays blocked.
+  assert.match(clientSource, /const demoJourneyControl = demo && control\.matches\("#viewQuoteBtn, #viewQuoteCloseBtn, #quoteFulfilmentGroup \[data-fulfilment-method\]"\);/);
+  assert.match(clientSource, /if \(demo\) \{\s*if \(demoJourneyControl \|\| \(!blockedOffline && !blockedDemo\)\) return;/);
+  assert.doesNotMatch(clientSource.slice(clientSource.indexOf('if (demo) {'), clientSource.indexOf('if (demo) {') + 200), /viewInvoicePreviewBtn|invoice/,
+    'invoices, statements and PDFs remain blocked');
 });
 
-test('Q18: one compact bar identifies Demo Mode and offers the way out', () => {
-  assert.match(html, /<div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" data-demo-player hidden>\s*<strong>DEMO<\/strong>\s*<span id="demoModeMessage">Fictional data\. Nothing here is saved, sent or synced\.<\/span>\s*<button id="demoModeExitBtn" type="button" class="ghost-action demo-mode-bar__exit">Exit demo<\/button>/);
-  assert.match(css, /\.readonly-access-notice\.demo-mode-bar \{ flex-direction:row;/);
+test('Q18 2A: one dock at the top identifies Demo Mode, holds the player and the way out, and never covers Studio\'s sheets', () => {
+  const dock = html.slice(html.indexOf('<div id="demoModeBar"'), html.indexOf('<!-- /demoModeBar -->'));
+  assert.match(dock, /^<div id="demoModeBar" class="demo-dock" data-demo-player hidden>/);
+  assert.match(dock, /<strong class="demo-dock__tag">DEMO<\/strong>\s*<span id="demoModeMessage" class="demo-dock__message">Fictional data\. Nothing here is saved, sent or synced\.<\/span>\s*<button id="demoModeExitBtn" type="button" class="ghost-action demo-dock__exit">Exit demo<\/button>/);
+  assert.match(dock, /<div id="demoPlayer" class="demo-player" hidden>/);
+  for (const id of ['demoCaption', 'demoChapterLabel', 'demoPlayPauseBtn', 'demoReplayBtn']) assert.match(dock, new RegExp(`id="${id}"`), id);
+  for (const n of [1, 2, 3, 4, 5]) assert.match(dock, new RegExp(`data-demo-chapter="${n}"`), `chapter ${n}`);
+  assert.ok(html.indexOf('<div id="demoModeBar"') > html.indexOf('</main>') || html.indexOf('<div id="demoModeBar"') > html.lastIndexOf('id="app"'), 'outside the app layout');
   assert.match(entrySource, /getElementById\("demoModeExitBtn"\)\.addEventListener\("click", \(\) => window\.KLABS_DEMO\?\.exit\(\)\)/);
+  // Fixed at the top; the page and every sheet are moved down by the dock's height so titles and close buttons stay clear.
+  assert.match(css, /html\.klabs-demo #demoModeBar \{[^}]*position:fixed;[^}]*top:0;/);
+  assert.match(css, /html\.klabs-demo body \{[^}]*padding-top:var\(--demo-dock-height,0px\)/);
+  assert.match(css, /html\.klabs-demo \.component-sheet \{[^}]*padding-top:calc\(var\(--demo-dock-height,0px\) \+ 8px\) !important;/);
+  assert.match(css, /html\.klabs-demo \.component-sheet \.component-sheet__panel \{[^}]*max-height:min\(100%,var\(--component-sheet-panel-max-height,100%\)\) !important;/,
+    'every sheet panel (including the customer quote) fits in the space below the dock');
+  assert.match(read('js/demo-director.js'), /--demo-dock-height/);
+});
+
+test('Q18 2A: the customer quote shown in the demonstration carries a DEMO watermark (Demo Mode only)', () => {
+  assert.match(css, /html\.klabs-demo \.view-quote::after \{[^}]*content:"DEMO";/);
+  assert.match(css, /html\.klabs-demo \.view-quote::before \{[^}]*content:"DEMONSTRATION QUOTE[^"]*";/);
+  assert.match(css, /html\.klabs-demo \.view-quote \{[^}]*position:relative;/);
+  assert.doesNotMatch(css.replace(/html\.klabs-demo [^{]*\{[^}]*\}/g, ''), /content:"DEMO/, 'nothing outside Demo Mode');
 });
 
 test('Q18 amendment: demonstration data is fictional and holds supporting data only - no jobs, customers or finished build', () => {
@@ -318,6 +348,18 @@ test('Q18 amendment: demonstration data is fictional and holds supporting data o
   const text = JSON.stringify(data);
   assert.doesNotMatch(text, /INV-1042|demo-build-coastal|Jordan Ellis|Priya Nair|Tom Hughes|Mere Walker/, 'no pre-made jobs or customers');
   for (const email of text.match(/[\w.+-]+@[\w.-]+/g) || []) assert.match(email, /@example\.com$/, email);
+  // 2A: the parts the demonstration builds with carry realistic New Zealand prices (cost below sell price).
+  const library = store['klabs-workshop-component-library:'];
+  const part = (name) => library.find((c) => c.name === name);
+  const realistic = { "7'0\" Medium Spin 6-10 kg": [150, 300], 'Medium Spin Guide Set': [60, 150], 'DPS 18': [20, 60], 'EVA Split Grip': [15, 50],
+    'Aluminium Winding Check 16 mm': [4, 15], 'NCP Nylon Thread A Black': [5, 15] };
+  for (const [name, [low, high]] of Object.entries(realistic)) {
+    const c = part(name);
+    assert.ok(c, name);
+    assert.ok(c.unitCost >= low && c.unitCost <= high, `${name} cost ${c.unitCost}`);
+    assert.equal(c.cost, c.unitCost, `${name} cost fields agree`);
+    assert.ok(c.unitPrice > c.unitCost, `${name} sells above cost`);
+  }
   assert.equal(store['klabs-business-profile:'].businessName, 'Harbourline Custom Rods');
   assert.match(store['klabs-business-profile:'].phone, / 555 /);
   assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, 'no real account ids');

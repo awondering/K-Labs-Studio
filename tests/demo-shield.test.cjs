@@ -16,7 +16,7 @@ const css = read('css/studio.css');
 
 // A browser-like page: real-behaving Storage, a window that keeps capture listeners in order, and elements that know
 // whether they sit inside the demonstration's own controls ([data-demo-player]).
-function page(search = '?demo', { shieldStyle = { position: 'fixed', pointerEvents: 'auto' }, withShield = true } = {}) {
+function page(search = '?demo', { shieldStyle = { position: 'fixed', pointerEvents: 'auto' }, withShield = true, withHead = true } = {}) {
   const nativeWrites = [];
   class Storage { constructor(name) { this._name = name; this._data = new Map(); } }
   Storage.prototype.getItem = function (k) { return this._data.has(String(k)) ? this._data.get(String(k)) : null; };
@@ -47,9 +47,18 @@ function page(search = '?demo', { shieldStyle = { position: 'fixed', pointerEven
   };
   const classes = new Set();
   let cookieJar = '';
+  // Controls that would leave the app (email drafts, print, external links): present now, or added later by Studio.
+  const outputControl = (id) => ({ id, hidden: false, disabled: false, tabIndex: 0, attributes: {}, setAttribute(n, v) { this.attributes[n] = String(v); } });
+  const outputControls = [outputControl('emailQuoteBtn'), outputControl('viewQuoteEmailBtn')];
+  const queried = [];
+  const styles = [];
+  const observers = [];
   const document = {
     documentElement: { classList: { add: (c) => classes.add(c) }, nodeType: 1 },
     getElementById: (id) => elements[id] || null,
+    createElement: (tag) => ({ tag, textContent: '', setAttribute(n, v) { this[n] = v; } }),
+    querySelectorAll: (selector) => { queried.push(selector); return outputControls.slice(); },
+    head: withHead ? { appendChild: (el) => { styles.push(el); return el; } } : null,
   };
   document.body = { nodeType: 1, id: 'body' };
   Object.defineProperty(document, 'cookie', { configurable: true, get: () => cookieJar, set: (v) => { cookieJar = v; } });
@@ -63,11 +72,12 @@ function page(search = '?demo', { shieldStyle = { position: 'fixed', pointerEven
     fetch: async () => ({ ok: true }), XMLHttpRequest: function () {},
     print() { outputs.push('print'); }, open(url) { outputs.push(`open ${url}`); return {}; },
     getComputedStyle: (el) => el.style,
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(target, options) { this.target = target; this.options = options; } },
     addEventListener(type, fn, options) { listeners.push({ type, fn, capture: options === true || !!(options && options.capture), passive: !!(options && options.passive) }); },
     DOMException: class extends Error { constructor(m, n) { super(m); this.name = n; } },
   };
   window.window = window;
-  const context = vm.createContext({ window, document, URL, URLSearchParams, Storage, Promise, Error, TypeError, JSON, Map, Set, Object, String, Number, Math, Date, Array, console });
+  const context = vm.createContext({ window, document, URL, URLSearchParams, Storage, Promise, Error, TypeError, JSON, Map, Set, Object, String, Number, Math, Date, Array, console, MutationObserver: window.MutationObserver });
   vm.runInContext(demoSource, context);
   // Delivers an event the way the browser would: window capture listeners first, in the order they were added.
   const dispatch = (type, target, { isTrusted = true, cancelable = true } = {}) => {
@@ -79,7 +89,7 @@ function page(search = '?demo', { shieldStyle = { position: 'fixed', pointerEven
     }
     return event;
   };
-  return { window, document, elements, listeners, dispatch, outputs, blurred, nativeWrites, classes };
+  return { window, document, elements, listeners, dispatch, outputs, blurred, nativeWrites, classes, outputControls, outputControl, queried, styles, observers };
 }
 
 const VISITOR_EVENTS = ['click', 'dblclick', 'auxclick', 'contextmenu', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend',
@@ -192,22 +202,37 @@ test('Q18 amendment: only the director may change demo data, and only while it i
   assert.deepEqual(p.nativeWrites, [], 'nothing reached device storage');
 });
 
-test('Q18 amendment: the director proof uses the real Studio screens and controls, in order', () => {
-  const steps = [...directorSource.matchAll(/\b(tap|type)\('([A-Za-z0-9]+)'/g)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(steps.map(([, id]) => id), [
-    'homeEnterRodBtn', 'customerFinderAddNewAction',
-    'customerFinderNewCustomerName', 'customerFinderNewPhone', 'customerFinderNewEmail', 'customerFinderNewAddress1', 'customerFinderNewSuburb',
-    'customerFinderNewCity', 'customerFinderNewRegion', 'customerFinderNewPostcode', 'customerFinderNewCountry', 'customerFinderSubmitNewCustomerBtn']);
-  const markup = html + ui;
-  for (const [, id] of steps) assert.match(markup, new RegExp(`id="${id}"`), `${id} is a real Studio control`);
-  assert.match(directorSource, /director\.run\(/, 'every change happens inside a director step');
-  assert.doesNotMatch(directorSource, /Store\.set|localStorage|KLABS_UI\.|innerHTML/, 'the director never writes data or screens directly');
-  assert.match(directorSource, /'workshopScreen'/, 'finishes on the real New Job screen');
-  assert.match(directorSource, /quoteCustomerName/);
-  for (const value of ['Jordan Ellis', '021 555 0142', 'jordan.ellis@example.com', '8 Dune Street', 'Mount Maunganui', 'Tauranga', 'Bay of Plenty', '3116', 'New Zealand']) {
-    assert.ok(directorSource.includes(`'${value}'`), value);
+const OUTPUT_SELECTORS = ['#emailQuoteBtn', '#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
+  '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]'];
+
+test('Q18 2A: controls that leave the app (email draft, print/PDF, share, external links) are hidden and disabled, not just guarded', () => {
+  const p = page();
+  p.window.KLABS_DEMO.installShield(p.document);
+  assert.equal(p.styles.length, 1, 'one Demo Mode stylesheet');
+  const rule = p.styles[0].textContent;
+  for (const selector of OUTPUT_SELECTORS) assert.ok(rule.includes(selector), `${selector} is hidden`);
+  assert.match(rule, /\{\s*display:\s*none\s*!important;?\s*\}/);
+  for (const control of p.outputControls) {
+    assert.equal(control.hidden, true, control.id);
+    assert.equal(control.disabled, true, control.id);
+    assert.equal(control.tabIndex, -1, control.id);
+    assert.equal(control.attributes['aria-hidden'], 'true', control.id);
   }
-  assert.doesNotMatch(directorSource, /blank|component|labour|price|quoteNumber|invoice/i, 'stops before specification, components, pricing and documents (Phase 2A)');
+  for (const selector of OUTPUT_SELECTORS) assert.ok(p.queried.some((q) => q.includes(selector)), `${selector} is looked for`);
+  // Studio builds some of these later (the customer quote sheet, the invoice preview): they are caught as they appear.
+  assert.equal(p.observers.length, 1);
+  assert.deepEqual({ ...p.observers[0].options }, { childList: true, subtree: true });
+  const later = p.outputControl('viewQuoteEmailBtn');
+  p.outputControls.splice(0, p.outputControls.length, later);
+  p.observers[0].fn([]);
+  assert.equal(later.hidden, true);
+  assert.equal(later.disabled, true);
+});
+
+test('Q18 2A: fails closed - if the outgoing controls cannot be hidden, the shield is not installed', () => {
+  const p = page('?demo', { withHead: false });
+  assert.throws(() => p.window.KLABS_DEMO.installShield(p.document), /outgoing controls/i);
+  assert.equal(p.window.KLABS_DEMO.shielded, false);
 });
 
 test('Q18 amendment: introduction screen explains the demonstration and starts it; the shield sits under the controls', () => {
@@ -220,7 +245,7 @@ test('Q18 amendment: introduction screen explains the demonstration and starts i
   assert.match(intro, /nothing is saved/i);
   assert.match(intro, /<button id="demoStartBtn" type="button" class="primary-action[^"]*">START DEMONSTRATION<\/button>/);
   assert.match(intro, /<button id="demoIntroExitBtn" type="button"/);
-  assert.match(html, /<div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" data-demo-player hidden>/);
+  assert.match(html, /<div id="demoModeBar" class="demo-dock" data-demo-player hidden>/);
   const z = (selector) => Number(new RegExp(`${selector.replace(/[.#]/g, '\\$&')} \\{[^}]*z-index:(\\d+)`).exec(css)?.[1]);
   assert.ok(z('.demo-shield') > 1000, 'above every Studio layer');
   assert.ok(z('.demo-intro') > z('.demo-shield'));

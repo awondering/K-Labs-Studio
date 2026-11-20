@@ -5,7 +5,9 @@
  * email (example.com) is fictional. The records were produced by Studio's own save functions
  * (seedStarterComponentsLibrary) so they match the current record format exactly. Keys ending in ":" are per-account
  * and receive the demonstration account id when seeded. "anchor" is the date the data was written for: dates are
- * shifted to keep the same distance from today when the demonstration opens. */
+ * shifted to keep the same distance from today when the demonstration opens. The six parts the demonstration builds
+ * with (the 7'0" Medium Spin blank, Medium Spin Guide Set, DPS 18, EVA Split Grip, Aluminium Winding Check 16 mm and
+ * NCP Nylon Thread A Black) carry realistic New Zealand cost and sell prices instead of the starter placeholders. */
 window.KLABS_DEMO_DATA = {
  anchor: "2026-11-20",
  store: {
@@ -1449,12 +1451,12 @@ window.KLABS_DEMO_DATA = {
    "description": "",
    "customerLabel": "",
    "unit": "",
-   "unitCost": 6,
-   "unitPrice": 9.9,
+   "unitCost": 8,
+   "unitPrice": 12,
    "stockOnHand": 12,
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "Nylon; workshop starter specification for NCP Nylon Thread A Black.",
-   "cost": 6,
+   "cost": 8,
    "sizeOptions": []
   },
   {
@@ -1589,12 +1591,12 @@ window.KLABS_DEMO_DATA = {
    "description": "",
    "customerLabel": "",
    "unit": "",
-   "unitCost": 15,
-   "unitPrice": 24.75,
+   "unitCost": 6,
+   "unitPrice": 9,
    "stockOnHand": 9,
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "Grip Winding Checks; workshop starter specification for Aluminium Winding Check 16 mm.",
-   "cost": 15,
+   "cost": 6,
    "sizeOptions": []
   },
   {
@@ -1809,12 +1811,12 @@ window.KLABS_DEMO_DATA = {
    "description": "",
    "customerLabel": "",
    "unit": "",
-   "unitCost": 12,
-   "unitPrice": 19.8,
+   "unitCost": 22,
+   "unitPrice": 33,
    "stockOnHand": 10,
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "EVA Grips; workshop starter specification for EVA Split Grip.",
-   "cost": 12,
+   "cost": 22,
    "sizeOptions": []
   },
   {
@@ -1929,12 +1931,12 @@ window.KLABS_DEMO_DATA = {
    "description": "",
    "customerLabel": "",
    "unit": "",
-   "unitCost": 9,
-   "unitPrice": 14.85,
+   "unitCost": 28,
+   "unitPrice": 42,
    "stockOnHand": 11,
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "Threaded Reel Seats; workshop starter specification for DPS 18.",
-   "cost": 9,
+   "cost": 28,
    "sizeOptions": []
   },
   {
@@ -2129,12 +2131,12 @@ window.KLABS_DEMO_DATA = {
    "description": "",
    "customerLabel": "",
    "unit": "",
-   "unitCost": 25,
-   "unitPrice": 41.25,
+   "unitCost": 74,
+   "unitPrice": 111,
    "stockOnHand": 11,
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "Guide family: Alconite; frame: black; ring: Alconite; set sizes and quantities to be confirmed.",
-   "cost": 25,
+   "cost": 74,
    "sizeOptions": []
   },
   {
@@ -2229,12 +2231,12 @@ window.KLABS_DEMO_DATA = {
    "description": "",
    "customerLabel": "",
    "unit": "",
-   "unitCost": 25,
-   "unitPrice": 41.25,
+   "unitCost": 168,
+   "unitPrice": 252,
    "stockOnHand": 11,
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "Spinning Blanks; workshop starter specification for 7'0\" Medium Spin 6-10 kg.",
-   "cost": 25,
+   "cost": 168,
    "sizeOptions": []
   },
   {

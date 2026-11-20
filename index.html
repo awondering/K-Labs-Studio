@@ -160,11 +160,6 @@
       <strong>READ-ONLY ACCESS</strong>
       <span>Your trial has ended. Your records remain available, but changes cannot be saved.</span>
     </div>
-    <div id="demoModeBar" class="readonly-access-notice demo-mode-bar" role="status" data-demo-player hidden>
-      <strong>DEMO</strong>
-      <span id="demoModeMessage">Fictional data. Nothing here is saved, sent or synced.</span>
-      <button id="demoModeExitBtn" type="button" class="ghost-action demo-mode-bar__exit">Exit demo</button>
-    </div>
     <div id="buildSyncNotice" class="readonly-access-notice build-sync-notice" role="status" hidden>
       <strong>NOT SYNCED — REVIEW REQUIRED</strong>
       <button id="buildSyncReviewButton" type="button" class="ghost-action">Review</button>
@@ -1541,14 +1536,35 @@
     <div class="demo-intro__card">
       <p class="demo-intro__eyebrow">K-LABS STUDIO DEMONSTRATION</p>
       <h2 id="demoIntroTitle">Watch Studio take on a new customer</h2>
-      <p>Studio will work through a customer job on its real screens, as a rod builder would: a new enquiry arrives, the customer is added and a new rod build is opened for them.</p>
-      <p>You watch while the demonstration does the tapping and typing. The customer and business are fictional, and nothing is saved or sent.</p>
+      <p>Studio works through a real job on its own screens, as a rod builder would: a new enquiry, the rod specification, the parts and labour, live pricing and the customer quote.</p>
+      <p>You watch while the demonstration does the tapping and typing. Pause, replay or jump to a chapter at any time. The customer and business are fictional, and nothing is saved or sent.</p>
       <div class="demo-intro__actions">
         <button id="demoStartBtn" type="button" class="primary-action demo-intro__start">START DEMONSTRATION</button>
         <button id="demoIntroExitBtn" type="button" class="ghost-action demo-intro__exit">Exit demo</button>
       </div>
     </div>
   </section>
+  <div id="demoModeBar" class="demo-dock" data-demo-player hidden>
+    <div class="demo-dock__bar" role="status">
+      <strong class="demo-dock__tag">DEMO</strong>
+      <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>
+      <button id="demoModeExitBtn" type="button" class="ghost-action demo-dock__exit">Exit demo</button>
+    </div>
+    <div id="demoPlayer" class="demo-player" hidden>
+      <p class="demo-player__caption" aria-live="polite"><span id="demoChapterLabel" class="demo-player__chapter-label"></span> <span id="demoCaption"></span></p>
+      <div class="demo-player__controls">
+        <button id="demoPlayPauseBtn" type="button" class="ghost-action demo-player__button">Pause</button>
+        <button id="demoReplayBtn" type="button" class="ghost-action demo-player__button">Replay</button>
+        <ol class="demo-player__chapters" aria-label="Chapters">
+          <li><button type="button" class="demo-player__chapter" data-demo-chapter="1" aria-label="Chapter 1: Enquiry"><b>1</b><span>Enquiry</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-chapter="2" aria-label="Chapter 2: Rod spec"><b>2</b><span>Rod spec</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-chapter="3" aria-label="Chapter 3: Components"><b>3</b><span>Components</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-chapter="4" aria-label="Chapter 4: Pricing"><b>4</b><span>Pricing</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-chapter="5" aria-label="Chapter 5: Quote"><b>5</b><span>Quote</span></button></li>
+        </ol>
+      </div>
+    </div>
+  </div><!-- /demoModeBar -->
   <script src="js/demo-mode.js"></script>
   <script src="js/build-tab-lock.js"></script>
   <script src="js/public-entry.js"></script>

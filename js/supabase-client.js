@@ -344,8 +344,12 @@ document.addEventListener("DOMContentLoaded", () => {
       control.closest("#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice")
       || control.matches(".layout-control-card__button, .component-quantity__step, [data-spiral-angle-action]")
       || /\b(log ?out|sign ?out|sync|admin|upload|logo|increase|decrease|e-?mail|print|export|send)\b/i.test(label));
+    // Q18 2A: the demonstration chooses how the job is fulfilled and shows its customer quote on screen (View Quote and
+    // the sheet's Close). Printing, email drafts, invoices, statements, PDFs and every other build action stay blocked;
+    // the visitor cannot press anything on Studio at all (js/demo-mode.js).
+    const demoJourneyControl = demo && control.matches("#viewQuoteBtn, #viewQuoteCloseBtn, #quoteFulfilmentGroup [data-fulfilment-method]");
     if (demo) {
-      if (!blockedOffline && !blockedDemo) return;
+      if (demoJourneyControl || (!blockedOffline && !blockedDemo)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       const bar = document.getElementById("demoModeMessage");
