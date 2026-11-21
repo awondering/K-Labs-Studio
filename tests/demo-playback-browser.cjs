@@ -11,8 +11,7 @@
 // leaving Demo Mode. Phase 3: every tap and typed character the demonstration makes lands on a highlighted control that
 // is fully in view; the courier choice, delivery total and unchanged profit and margin are highlighted in view; no
 // caption or player message is cut off; the Mac dock is slim. Phase 3 review: pricing by a margin, then by the profit
-// wanted, recalculated live; after Courier the page does not jump back up to the delivery fields (Mac: no scroll at all;
-// iPhone: a small nudge); an older cached demonstration file is refreshed once, or the visitor is returned safely; a
+// wanted, recalculated live; shipping costs are directly below the fulfilment choices; an older cached demonstration file is refreshed once, or the visitor is returned safely; a
 // step that cannot finish ends calmly in "Demonstration paused. Press Replay" and nothing changes after it.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -263,6 +262,23 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: courier delivery chosen, with Freight 18 and Packaging 12 typed in`, priced.fulfilment === 'shipping' && Number(priced.freight) === DELIVERY.freight && Number(priced.packaging) === DELIVERY.packaging, [priced.fulfilment, priced.freight, priced.packaging]);
   ck(`${label}: the delivery charge is quoteMaths()'s (cost ${priced.maths.deliveryCost}, charged ${priced.maths.deliveryCharge} incl. GST)`, near(priced.maths.deliveryCost, DELIVERY.freight + DELIVERY.packaging) && near(priced.maths.deliveryCharge, Math.round((DELIVERY.freight + DELIVERY.packaging) * 115) / 100), priced.maths);
   ck(`${label}: delivery is added to the price separately (rod ${rodOnly.maths.total} + delivery ${priced.maths.deliveryCharge} = ${priced.maths.total})`, near(priced.maths.total, rodOnly.maths.total + priced.maths.deliveryCharge), [rodOnly.maths.total, priced.maths.deliveryCharge, priced.maths.total]);
+  const shippingLayout = await page.evaluate(() => {
+    const group = document.getElementById('quoteFulfilmentGroup');
+    const choices = group.querySelector('.quote-job-type__options').getBoundingClientRect();
+    const fields = document.getElementById('quoteDeliveryFields');
+    const amounts = [...fields.querySelectorAll('input')];
+    return {
+      underChoice: group.contains(fields) && !fields.hidden && choices.bottom <= fields.getBoundingClientRect().top,
+      fitsScreen: amounts.every((input) => {
+        const { left, right } = input.getBoundingClientRect();
+        return left >= 0 && right > left && right <= document.documentElement.clientWidth;
+      }),
+      total: amounts[2].value,
+      readOnly: amounts[2].readOnly,
+    };
+  });
+  ck(`${label}: Freight, Packaging and the calculated Total Shipping fit under the fulfilment choice`,
+    shippingLayout.underChoice && shippingLayout.fitsScreen && shippingLayout.readOnly && shippingLayout.total === '$30.00', shippingLayout);
   // Phase 3 review change: the profit is now the driver, so it is $PROFIT and the margin is the one Studio worked out
   // from it (was: the 25% margin).
   ck(`${label}: the rod's target profit and margin are unchanged by delivery`, near(priced.maths.rodProfit, rodOnly.maths.rodProfit, 0.0051) && near(priced.maths.rodProfit, PROFIT, 0.0051) && near(priced.maths.rodMarginPercent, rodOnly.maths.rodMarginPercent, 0.01), [rodOnly.maths.rodProfit, priced.maths.rodProfit, rodOnly.maths.rodMarginPercent, priced.maths.rodMarginPercent]);
@@ -369,8 +385,12 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const summary = await documentShown(page, '#viewQuoteSheet');
   ck(`${label}: the demonstration finishes on the completed Build Summary`, summary.open && summary.title === 'Build Summary', summary.title);
   ck(`${label}: the build summary carries the DEMO watermark and banner`, summary.watermark === '"DEMO"' && /DEMONSTRATION BUILD SUMMARY/.test(summary.banner || ''), [summary.watermark, summary.banner]);
-  const summaryRow = (re) => summary.rows.find((r) => re.test(r[0] || ''));
-  ck(`${label}: the summary's Total Price = quoteMaths() total, Balance Owing 0.00`, near(money(summaryRow(/^Total Price/)[1]), priced.maths.total) && near(money(summaryRow(/^Balance Owing/)[1]), 0), summary.rows);
+  const summaryAmount = (label) => money(summary.rows.find(([name]) => name === label)?.[1]);
+  ck(`${label}: Build Summary shows the full price, total received and Paid in full with zero owing`,
+    near(summaryAmount('Total Price'), priced.maths.total)
+    && near(summaryAmount('Total Received'), priced.maths.total)
+    && near(summaryAmount('Paid in full'), 0)
+    && !summary.rows.some(([name]) => name === 'Balance Owing' || name === 'Deposit Received'), summary.rows);
   const end = await page.evaluate(() => ({ caption: document.getElementById('demoCaption').textContent, label: document.getElementById('demoChapterLabel').textContent,
     play: { text: document.getElementById('demoPlayPauseBtn').textContent, disabled: document.getElementById('demoPlayPauseBtn').disabled }, replay: document.getElementById('demoReplayBtn').getClientRects().length }));
   ck(`${label}: at the end the Pause button reads Replay (and the separate Replay steps aside)`, end.label === 'Finished' && end.play.text === 'Replay' && !end.play.disabled && end.replay === 0, end);
@@ -393,14 +413,6 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
     const seen = lit.filter((h) => h.el === id);
     ck(`${label}: ${id} was highlighted in full view (${seen.length}x)`, seen.length > 0 && seen.every((h) => !h.view), seen);
   }
-  // Phase 3 review: Studio places Freight and Packaging above the Fulfilment Method choice. After Courier is chosen the
-  // page does not jump back up: on a Mac both are on screen together (no scroll); on an iPhone 13 they cannot both fit
-  // between the dock and Studio's bottom bar and Back to top button, so it is a short move (centring each control, as
-  // before, climbs about 560 px there - worked out from the layout).
-  const courierAt = acts.findIndex((a) => a.kind === 'click' && a.el === 'shipping');
-  const freightAt = acts.findIndex((a, i) => i > courierAt && a.el === 'quoteFreight');
-  const climb = courierAt >= 0 && freightAt > courierAt ? acts[courierAt].y - acts[freightAt].y : NaN;
-  ck(`${label}: after Courier, the page moves up ${climb} px to Freight (${label === 'mac' ? 'none' : 'at most 240'})`, label === 'mac' ? climb === 0 : climb >= 0 && climb <= 240, { courier: acts[courierAt], freight: acts[freightAt] });
   // Phase 3: no caption or player message is cut off - each is shown in the real caption line under its chapter label.
   const cut = await page.evaluate(() => {
     const line = document.querySelector('.demo-player__caption');

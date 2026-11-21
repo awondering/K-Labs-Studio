@@ -64,7 +64,7 @@ function pricingHarness(overrides={}){
     specificationValue:value=>String(value||'').trim(),
     migrateBlankWorkflow(){},
   });
-  ['normalizeJobType','normalizeJobKind','isComponentsJob','deliveryAmounts','naturalCustomerPrice','quoteMaths','setDeliveryBreakdown','setDeliveryTotal','applyManualFinalCustomerPrice','depositMaths']
+  ['normalizeJobType','normalizeJobKind','isComponentsJob','deliveryAmounts','naturalCustomerPrice','quoteMaths','setDeliveryBreakdown','applyManualFinalCustomerPrice','depositMaths']
     .forEach(name=>vm.runInContext(extractFunction(name),context));
   return context;
 }
@@ -167,25 +167,79 @@ test('Approved example matches Customer Price, tax, earnings, and deposit arithm
   assert.equal(math.remainingBalance,465.75);
 });
 
-test('Total-only and breakdown entry are exclusive; zero delivery contributes nothing',()=>{
-  const context=pricingHarness();
-  context.setDeliveryTotal(22);
-  assert.equal(context.quote.deliveryEntryMode,'total');
-  assert.equal(context.quote.freight,0);
-  assert.equal(context.quote.packaging,0);
+test('stored total-only shipping is retained until the breakdown is edited',()=>{
+  const context=pricingHarness({deliveryEntryMode:'total',deliveryTotal:22,freight:0,packaging:0});
   assert.equal(context.deliveryAmounts(context.quote).cost,22);
   assertClose(context.deliveryAmounts(context.quote).charge,25.3);
-
-  context.setDeliveryBreakdown(9,4);
+  context.setDeliveryBreakdown(22,4);
   assert.equal(context.quote.deliveryEntryMode,'breakdown');
-  assert.equal(context.quote.deliveryTotal,13);
-  assert.equal(context.deliveryAmounts(context.quote).cost,13);
-  assertClose(context.deliveryAmounts(context.quote).charge,14.95);
+  assert.equal(context.quote.deliveryTotal,26);
+  assertClose(context.deliveryAmounts(context.quote).charge,29.90);
+  context.setDeliveryBreakdown(0,0);
+  assert.equal(context.quoteMaths().deliveryCharge,0);
+});
 
-  context.setDeliveryTotal(0);
-  const math=context.quoteMaths();
-  assert.equal(math.deliveryCost,0);
-  assert.equal(math.deliveryCharge,0);
+test('Collection excludes shipping while retaining saved breakdown, total-only and legacy shipping',()=>{
+  const modes=[
+    {deliveryEntryMode:'breakdown',freight:18,packaging:12},
+    {deliveryEntryMode:'total',deliveryTotal:30,freight:0,packaging:0},
+    {deliveryEntryMode:'legacy',freightCost:30,freightCharge:34.50},
+  ];
+  for(const mode of modes){
+    for(const pricingDriver of ['price','profit','margin']){
+      const c=pricingHarness({...mode,pricingDriver,marginPercent:20,fulfilmentMethod:'shipping'});
+      const before=c.quoteMaths();
+      c.quote.fulfilmentMethod='collection';
+      const collection=c.quoteMaths();
+      assert.equal(collection.deliveryCost,0);
+      assert.equal(collection.deliveryCharge,0);
+      assertClose(before.total-collection.total,34.50);
+      assertClose(before.gst-collection.gst,4.50);
+      assertClose(before.rodProfit,collection.rodProfit);
+      assertClose(before.rodMarginPercent,collection.rodMarginPercent);
+      for(const [key,value] of Object.entries(mode))assert.equal(c.quote[key],value);
+      c.quote.fulfilmentMethod='shipping';
+      assert.equal(c.quoteMaths().total,before.total);
+    }
+  }
+});
+
+test('switching to Collection preserves an issued invoice and its recorded payments',()=>{
+  const invoice={total:231,invoiceNumber:'INV-1'};
+  const payments=[{type:'deposit',amount:50}];
+  const c=pricingHarness({pricingDriver:'price',fulfilmentMethod:'shipping',issuedInvoice:invoice,payments});
+  const before=c.depositMaths();
+  c.quote.fulfilmentMethod='collection';
+  const after=c.depositMaths();
+  assert.equal(after.deliveryCharge,0);
+  assert.equal(after.total,before.total);
+  assert.equal(after.amountReceived,50);
+  assert.equal(after.balanceOwing,181);
+  assert.deepEqual(c.quote.issuedInvoice,{total:231,invoiceNumber:'INV-1'});
+  assert.deepEqual(c.quote.payments,[{type:'deposit',amount:50}]);
+});
+
+test('Collection clamping preserves a manual discount for the return to Shipping',()=>{
+  const c=pricingHarness({pricingDriver:'price',priceAdjustment:-220,fulfilmentMethod:'shipping'});
+  const shipping=c.quoteMaths();
+  assert.equal(shipping.total,7.25);
+  c.quote.fulfilmentMethod='collection';
+  assert.equal(c.quoteMaths().total,0);
+  assert.equal(c.quote.priceAdjustment,-220);
+  c.quote.fulfilmentMethod='shipping';
+  assert.equal(c.quoteMaths().total,shipping.total);
+});
+
+test('an older Collection record without a price adjustment excludes its saved freight only once',()=>{
+  const saved={quoteStatus:'quote',fulfilmentMethod:'collection',deliveryEntryMode:'total',deliveryTotal:20,
+    gstRate:15,includeGst:true,taxEnabled:true,labourRate:0,labourHours:0,finalCustomerPrice:123,
+    components:[{category:'Guide',description:'Guide',cost:60,unitPrice:100,quantity:1}]};
+  const c=confirmationHarness(saved);
+  assert.equal(c.quote.finalCustomerPrice,100);
+  assert.equal(c.quote.priceAdjustment,0);
+  assert.equal(c.quote.deliveryTotal,20);
+  c.quote.fulfilmentMethod='shipping';
+  assert.equal(c.deliveryAmounts(c.quote).charge,23);
 });
 
 test('Tax disabled retains delivery recovery and legacy freight stays separately stored',()=>{

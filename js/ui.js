@@ -3904,8 +3904,9 @@ function naturalCustomerPrice(){
 function freightAmount(value){
   return Math.max(0,numberOrZero(value));
 }
-function deliveryAmounts(source){
+function deliveryAmounts(source,{includeStored=false}={}){
   const current=source&&typeof source==='object'?source:{};
+  if(!includeStored && current.fulfilmentMethod==='collection')return{cost:0,charge:0};
   const hasUnmarkedLegacyFreight=current.deliveryEntryMode!=='breakdown'
     && current.deliveryEntryMode!=='total'
     && current.deliveryEntryMode!=='legacy'
@@ -3931,12 +3932,6 @@ function setDeliveryBreakdown(freight,packaging){
   quote.freight=freightAmount(freight);
   quote.packaging=freightAmount(packaging);
   quote.deliveryTotal=roundMoney(quote.freight+quote.packaging);
-}
-function setDeliveryTotal(total){
-  quote.deliveryEntryMode='total';
-  quote.freight=0;
-  quote.packaging=0;
-  quote.deliveryTotal=freightAmount(total);
 }
 // Applies a builder-entered Final Customer Price as a deliberate override, storing only the delta from the natural
 // price so future component/labour changes still move the final price by their own natural amount.
@@ -4838,9 +4833,10 @@ function normalizeQuote(inputQuote){
     // Legacy record (old Price/Profit/Markup driver, or no saved price yet): preserve whatever final price it had
     // by storing the gap to the natural price as the manual adjustment, instead of recomputing/losing that value.
     const legacyFinal=numberOrZero(inputQuote&&inputQuote.finalCustomerPrice);
-    merged.priceAdjustment=roundMoney(legacyFinal-naturalPrice);
+    const excludedShipping=merged.fulfilmentMethod==='collection'?deliveryAmounts(merged,{includeStored:true}).charge:0;
+    merged.priceAdjustment=roundMoney(legacyFinal-naturalPrice-excludedShipping);
   }
-  merged.finalCustomerPrice=roundMoney(naturalPrice+merged.priceAdjustment);
+  merged.finalCustomerPrice=roundMoney(Math.max(0,naturalPrice+merged.priceAdjustment));
   merged.marginPercent=merged.markupPercent;
   return merged;
 }
@@ -9062,7 +9058,8 @@ function quoteHasMeaningfulDraft(currentQuote){
   const hasCountryOverride=specificationValue(candidate.country)!==specificationValue(baseline.country);
   const hasBuildSpecs=buildSpecsHaveContent(candidate.buildSpecifications);
   const hasBlank=!!(specificationValue(candidate.blankId)||specificationValue(candidate.blankName));
-  const hasCosts=numberOrZero(candidate.blankCost)>0 || quoteHasCustomLabourRate(candidate) || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0 || deliveryAmounts(candidate).charge>0 || deliveryAmounts(candidate).cost>0;
+  const storedDelivery=deliveryAmounts(candidate,{includeStored:true});
+  const hasCosts=numberOrZero(candidate.blankCost)>0 || quoteHasCustomLabourRate(candidate) || numberOrZero(candidate.labourHours)>0 || numberOrZero(candidate.markupPercent||candidate.marginPercent)>0 || numberOrZero(candidate.targetProfit)>0 || numberOrZero(candidate.finalCustomerPrice)>0 || storedDelivery.charge>0 || storedDelivery.cost>0;
   const hasComponentData=Array.isArray(candidate.components) && candidate.components.some((item)=>{
     return !!(specificationValue(item&&item.category)||specificationValue(item&&item.description)||specificationValue(item&&item.supplier)||numberOrZero(item&&item.cost)>0);
   });
@@ -9499,7 +9496,10 @@ function quoteMaths(){
   }
   finalPrice=roundMoney(Math.max(0,finalPrice));
   quote.finalCustomerPrice=finalPrice;
-  quote.priceAdjustment=roundMoney(finalPrice-natural);
+  // Collection can temporarily put a manually discounted price below zero. Retain the adjustment for Shipping.
+  if(driver!=='price' || componentsOnly || quote.fulfilmentMethod!=='collection' || natural+numberOrZero(quote.priceAdjustment)>=0){
+    quote.priceAdjustment=roundMoney(finalPrice-natural);
+  }
   const subtotal=finalPrice;
   // Delivery is tax-grossed when applicable so its post-tax recovery exactly equals its saved cost.
   const gst=taxActive?(subtotal*(gstRate/(100+gstRate))):0;
@@ -12544,7 +12544,8 @@ function isCustomerOnlyRecord(record){
   if(components.some((item)=>componentRowHasMeaningfulData(item)))return false;
   if(numberOrZero(source.blankCost)>0 || numberOrZero(source.labourHours)>0 || numberOrZero(source.targetProfit)>0 || numberOrZero(source.finalCustomerPrice)>0)return false;
   if(numberOrZero(source.marginPercent||source.markupPercent)>0 || numberOrZero(source.priceAdjustment)>0 || numberOrZero(source.naturalCustomerPrice)>0)return false;
-  if(deliveryAmounts(source).cost>0 || deliveryAmounts(source).charge>0)return false;
+  const storedDelivery=deliveryAmounts(source,{includeStored:true});
+  if(storedDelivery.cost>0 || storedDelivery.charge>0)return false;
   return true;
 }
 function isCustomerOnlyEntry(entry){
@@ -15816,28 +15817,17 @@ function bindLayoutControls(){
 }
 function fulfilmentStudioNote(){
   const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
-  if(method==='collection' && deliveryAmounts(quote).charge>0)return 'Freight charges are still included in the price. Collection is selected; review Freight if it is no longer needed.';
+  if(method==='collection' && deliveryAmounts(quote,{includeStored:true}).charge>0)return 'Saved shipping costs are excluded while Customer Collection is selected.';
   if(method==='shipping' && deliveryAddressIncomplete())return 'Delivery details needed: add the full delivery address in Customer Details.';
   if(!method)return quote&&quote.fulfilmentChoiceRequired?'Choose how this job will be fulfilled.':'';
   return '';
 }
 function syncFulfilmentSelector(){
   const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
-  const pricingSection=$('workshopPricingSection');
-  if(pricingSection){
-    const charge=deliveryAmounts(quote||{}).charge;
-    // Components jobs keep their v245 rule: the fields show once Courier / Shipping is chosen or a charge exists, editable in place.
-    // The Collection summary line with Edit is for custom builds and repairs only.
-    const mode=isComponentsJob(quote)
-      ?(method==='shipping' || charge>0?'fields':'hidden')
-      :deliveryEditOpen?'fields':method==='collection'?(charge>0?'summary':'hidden'):'fields';
-    pricingSection.setAttribute('data-delivery',mode);
-    const summary=$('quoteDeliverySummaryText');
-    if(summary && mode==='summary'){
-      const taxed=quoteTaxAvailable() && quote.includeGst!==false;
-      summary.textContent=`Delivery included in price: ${currencyWithCode(charge)}${taxed?` incl. ${activeTaxName()}`:''}`;
-    }
-  }
+  const fields=$('quoteDeliveryFields');
+  if(fields)fields.hidden=method!=='shipping';
+  const legacyNote=$('quoteDeliveryLegacyNote');
+  if(legacyNote)legacyNote.hidden=method!=='shipping'||!$('quoteDeliveryLegacyText')?.textContent;
   document.querySelectorAll('#quoteFulfilmentGroup [data-fulfilment-method]').forEach((button)=>{
     button.setAttribute('aria-pressed',String(button.getAttribute('data-fulfilment-method')===method));
   });
@@ -15847,19 +15837,6 @@ function syncFulfilmentSelector(){
     note.textContent=text;
     note.hidden=!text;
   }
-}
-// "Edit" reopens the delivery fields in place; they fold back once you leave them (never while one is selected).
-function openDeliveryEdit(){
-  deliveryEditOpen=true;
-  syncFulfilmentSelector();
-  const first=$('quoteFreight');
-  if(first && typeof first.focus==='function')first.focus();
-}
-function closeDeliveryEditOnLeave(event){
-  const fields=$('quoteDeliveryFields');
-  if(!deliveryEditOpen || (fields && event && event.relatedTarget && fields.contains(event.relatedTarget)))return;
-  deliveryEditOpen=false;
-  syncFulfilmentSelector();
 }
 // Q14: opens Job Pricing & Actions, brings the Fulfilment Method selector into view and focuses it. Display only.
 function revealFulfilmentSelector(){
@@ -15880,7 +15857,7 @@ function setQuoteFulfilmentMethod(value){
   const next=normalizeFulfilmentMethod(value);
   if(!next || quote.fulfilmentMethod===next){syncFulfilmentSelector();return;}
   quote.fulfilmentMethod=next;
-  syncFulfilmentSelector();
+  updateQuoteSummary();
   saveQuoteCurrent();
   markQuoteDirty();
 }
@@ -16844,7 +16821,6 @@ function bindWorkshopQuoteBuilder(){
   // Delivery edits never change the selected rod pricing target.
   const freightInput=$('quoteFreight');
   const packagingInput=$('quotePackaging');
-  const deliveryTotalInput=$('quoteDeliveryTotal');
   const onDeliveryBreakdownUpdate=()=>{
     const freight=freightAmount(freightInput&&freightInput.value);
     const packaging=freightAmount(packagingInput&&packagingInput.value);
@@ -16861,21 +16837,6 @@ function bindWorkshopQuoteBuilder(){
     el.addEventListener('input',onDeliveryBreakdownUpdate);
     el.addEventListener('change',onDeliveryBreakdownUpdate);
   });
-  if(deliveryTotalInput){
-    const onDeliveryTotalUpdate=()=>{
-      const total=freightAmount(deliveryTotalInput.value);
-      if(quote.deliveryEntryMode==='total'
-        && total===freightAmount(quote.deliveryTotal)
-        && freightAmount(quote.freight)===0
-        && freightAmount(quote.packaging)===0)return;
-      setDeliveryTotal(total);
-      saveQuoteCurrent();
-      markQuoteDirty();
-      updateQuoteSummary();
-    };
-    deliveryTotalInput.addEventListener('input',onDeliveryTotalUpdate);
-    deliveryTotalInput.addEventListener('change',onDeliveryTotalUpdate);
-  }
   const quoteProfitInput=$('quoteProfit');
   if(quoteProfitInput){
     const onProfitUpdate=()=>{
@@ -16940,7 +16901,7 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordPaymentBtn',openRecordPaymentForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['retryFinancialBtn',retryFinancialOperation],['quotePricingSummaryBtn',toggleQuotePricingSummary],['quoteDeliveryEditBtn',openDeliveryEdit]].forEach(([id,handler])=>{
+  [['quoteRecordPaymentBtn',openRecordPaymentForm],['quoteDepositReceivedSave',saveDepositReceived],['quoteDepositReceivedCancel',closeDepositReceivedForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['retryFinancialBtn',retryFinancialOperation],['quotePricingSummaryBtn',toggleQuotePricingSummary]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
@@ -16953,11 +16914,6 @@ function bindWorkshopQuoteBuilder(){
       const button=event.target.closest('[data-payment-type]');
       if(button)setRecordPaymentType(button.getAttribute('data-payment-type'));
     });
-  }
-  const deliveryFields=$('quoteDeliveryFields');
-  if(deliveryFields && deliveryFields.getAttribute('data-payment-bound')!=='true'){
-    deliveryFields.setAttribute('data-payment-bound','true');
-    deliveryFields.addEventListener('focusout',closeDeliveryEditOnLeave);
   }
   const paymentHistory=$('quotePaymentHistory');
   if(paymentHistory && paymentHistory.getAttribute('data-payment-bound')!=='true'){
@@ -17242,7 +17198,6 @@ function renderWorkshopQuote(){
   });
   syncStudioCustomSelectTrigger($('quoteCountry'));
   syncJobTypeSelector();
-  syncFulfilmentSelector();
   const mode=normalizeQuoteMode(quote.quoteMode);
   if(mode!=='internal'){
     quote.quoteMode='internal';
@@ -17350,39 +17305,29 @@ function updateQuoteSummary(){
     const missingCount=pricingDriver==='price'?componentRowsForTotals().filter((item)=>numberOrZero(item&&item.unitPrice)<=0).length:0;
     priceWarningEl.textContent=missingCount>0?`${missingCount} component${missingCount===1?'':'s'} missing a Sell Price - customer price excludes ${missingCount===1?'it':'them'} until entered.`:'';
   }
-  const deliveryInputs={
-    freight:$('quoteFreight'),
-    packaging:$('quotePackaging'),
-    total:$('quoteDeliveryTotal'),
-  };
-  if(deliveryInputs.freight && document.activeElement!==deliveryInputs.freight){
-    deliveryInputs.freight.value=quote.deliveryEntryMode==='legacy'
-      ?(math.freightCost>0?String(math.freightCost):'')
-      :(numberOrZero(quote.freight)>0?String(numberOrZero(quote.freight)):'');
+  const shipping=deliveryAmounts(quote,{includeStored:true});
+  const freightInput=$('quoteFreight');
+  const packagingInput=$('quotePackaging');
+  const totalShipping=$('quoteDeliveryTotal');
+  if(freightInput && document.activeElement!==freightInput){
+    const freight=quote.deliveryEntryMode==='breakdown'?freightAmount(quote.freight):shipping.cost;
+    freightInput.value=freight>0?String(freight):'';
   }
-  if(deliveryInputs.packaging && document.activeElement!==deliveryInputs.packaging){
-    deliveryInputs.packaging.value=quote.deliveryEntryMode==='legacy'
-      ?''
-      :(numberOrZero(quote.packaging)>0?String(numberOrZero(quote.packaging)):'');
+  if(packagingInput && document.activeElement!==packagingInput){
+    const packaging=quote.deliveryEntryMode==='breakdown'?freightAmount(quote.packaging):0;
+    packagingInput.value=packaging>0?String(packaging):'';
   }
-  if(deliveryInputs.total && document.activeElement!==deliveryInputs.total){
-    const entryTotal=quote.deliveryEntryMode==='legacy'
-      ?math.freightCharge
-      :quote.deliveryEntryMode==='total'
-        ?freightAmount(quote.deliveryTotal)
-        :freightAmount(quote.freight)+freightAmount(quote.packaging);
-    deliveryInputs.total.value=entryTotal>0?String(entryTotal):'';
+  if(totalShipping){
+    totalShipping.value=currency(shipping.cost);
   }
   const legacyDeliveryNote=$('quoteDeliveryLegacyNote');
   const legacyDeliveryText=$('quoteDeliveryLegacyText');
   const hasLegacyFreightRow=componentRowsForTotals().some((item)=>NON_COMPONENT_LINE_ITEM_NAMES.includes(normalizeNameKey(item.description||item.customerLabel||item.category)));
   if(legacyDeliveryNote){
-    const showLegacyNote=quote.deliveryEntryMode==='legacy'||hasLegacyFreightRow;
-    legacyDeliveryNote.hidden=!showLegacyNote;
     if(legacyDeliveryText){
       const messages=[];
       if(quote.deliveryEntryMode==='legacy'){
-        messages.push(`Saved legacy freight remains unchanged (cost ${currency(math.freightCost)}, customer charge ${currency(math.freightCharge)}). Editing Freight, Packaging or Total switches this build to cost-recovery delivery; the legacy values remain stored.`);
+        messages.push(`Saved legacy shipping uses a customer charge of ${currency(shipping.charge)}. Editing Freight or Packaging uses cost recovery. The legacy amounts remain stored.`);
       }
       if(hasLegacyFreightRow){
         messages.push('Existing freight, shipping or postage component rows are preserved and still count with components.');
@@ -17392,6 +17337,7 @@ function updateQuoteSummary(){
   }
   ['quoteCostBeforeMarginField','quoteMarginPercentField','quoteProfitField'].forEach((id)=>{const el=$(id);if(el)el.hidden=false;});
   updateDepositFields();
+  syncFulfilmentSelector();
   updateWorkshopSectionVisibility();
 }
 // Deposit Received is a recorded payment (not the configured deposit) and never touches status, price or costs.
@@ -17399,7 +17345,6 @@ let paymentFormBuildKey='';
 let balanceCorrectionId='';
 // Pricing & Actions layout: screen-only state. Opening or closing these never changes the job, so nothing is saved or synced.
 let pricingSummaryOpen=false;     // the "Pricing" line, once an invoice is issued or the job is complete
-let deliveryEditOpen=false;       // the delivery fields reopened from "Delivery included in price … Edit" under Customer Collection
 let recordPaymentType='balance';  // the Deposit | Balance choice inside the Record Payment form
 let recordPaymentPrefill='';      // the amount the form filled in, so switching type never overwrites a typed amount
 let financialOperationInFlight=false;
@@ -17499,7 +17444,6 @@ function updatePaymentBlock(){
     closeDepositReceivedForm();
     closeBalanceReceivedForm();
     pricingSummaryOpen=false;
-    deliveryEditOpen=false;
   }
   const math=depositMaths();
   const balanceInput=$('quoteBalanceReceivedAmount');

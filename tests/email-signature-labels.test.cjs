@@ -90,7 +90,8 @@ test('pricing labels and neutral headings',()=>{
 });
 
 test('saved fulfilment method is highlighted when the job is rendered',()=>{
-  assert.match(fn('renderWorkshopQuote'),/syncFulfilmentSelector\(\)/);
+  assert.match(fn('renderWorkshopQuote'),/updateQuoteSummary\(\)/);
+  assert.match(fn('updateQuoteSummary'),/syncFulfilmentSelector\(\)/);
   const buttons=['collection','shipping'].map((m)=>{
     const attrs={};
     return {attrs,getAttribute:(k)=>k==='data-fulfilment-method'?m:attrs[k],setAttribute:(k,v)=>{attrs[k]=v;}};

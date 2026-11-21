@@ -30,11 +30,14 @@ function block(id) {
   throw new Error('unbalanced ' + id);
 }
 
-test('Q14: selector is outside the collapsible pricing-fields block and directly above the Documents actions', () => {
+test('Q14: selector is outside the collapsible pricing-fields block and immediately follows pricing', () => {
   assert.ok(!block('workshopPricingFields').includes('quoteFulfilmentGroup'), 'not inside #workshopPricingFields');
   const surface = html.slice(html.indexOf('<section class="workshop-build-actions-surface"'));
   const firstChild = /<section[^>]*>\s*<div id="([^"]+)"/.exec(surface)[1];
   assert.equal(firstChild, 'quoteFulfilmentGroup', 'first item of the actions area');
+  assert.match(html, /<\/div>\s*<section class="workshop-build-actions-surface"[^>]*>\s*<div id="quoteFulfilmentGroup"/);
+  assert.match(block('quoteFulfilmentGroup'), /id="quoteDeliveryFields"[^>]*hidden[\s\S]*Freight[\s\S]*Packaging[\s\S]*Total Shipping/);
+  assert.match(block('quoteDeliveryFields'), /id="quoteDeliveryTotal"[^>]*readonly/);
   assert.ok(surface.indexOf('quoteFulfilmentGroup') < surface.indexOf('aria-label="Documents"'));
   assert.ok(block('workshopQuoteSummaryBody').includes('id="quoteFulfilmentGroup"'), 'still inside Job Pricing & Actions');
   assert.equal((html.match(/id="quoteFulfilmentGroup"/g) || []).length, 1, 'one selector only');
@@ -51,7 +54,9 @@ test('Q14: no pricing visibility rule can hide the selector (no components / no 
   // No CSS rule (any job kind, delivery mode or lifecycle) hides the selector or its options.
   for (const m of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
     if (!/display\s*:\s*none|visibility\s*:\s*hidden/.test(m[2])) continue;
-    assert.doesNotMatch(m[1], /quoteFulfilmentGroup|quote-job-type__option|data-fulfilment-method|workshop-build-actions-surface/, m[1].trim());
+    for (const selector of m[1].split(",")) {
+      assert.doesNotMatch(selector.trim(), /(?:quoteFulfilmentGroup|quote-job-type__option|data-fulfilment-method|workshop-build-actions-surface)$/, selector.trim());
+    }
   }
 });
 

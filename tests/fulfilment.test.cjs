@@ -41,6 +41,7 @@ function ctx(over={},status='quote'){
     openConfirmDialog:(o,cb)=>{dialogs.push({type:'confirm',o});c.confirmCb=cb;},
     markQuoteDirty:()=>{c.dirty=true;},
     saveQuoteCurrent:()=>{},
+    updateQuoteSummary:()=>c.syncFulfilmentSelector(),
     $:()=>null,
     document:{querySelectorAll:()=>[]},
   };
@@ -67,12 +68,12 @@ test('record fields: new jobs require a choice; legacy records are not assumed o
   assert.ok(!/fulfilmentMethod/.test(fn('applyCustomerFieldsToQuoteFromRecord')),'customer change must not touch method');
 });
 
-test('selector markup exists with both options, directly above the Documents actions (Q14)',()=>{
+test('selector markup exists with both options, before the shipping fields and documents',()=>{
   assert.match(html,/id="quoteFulfilmentGroup"/);
   assert.match(html,/data-fulfilment-method="collection"/);
   assert.match(html,/data-fulfilment-method="shipping"/);
   const group=html.indexOf('id="quoteFulfilmentGroup"');
-  assert.ok(group>html.indexOf('id="quoteDeliveryFields"'),'after the pricing/delivery fields');
+  assert.ok(group<html.indexOf('id="quoteDeliveryFields"'),'before the delivery fields');
   assert.ok(group<html.indexOf('aria-label="Documents"'),'before the Documents actions');
 });
 
@@ -168,8 +169,8 @@ test('shipping with complete address and collection proceed without warning',()=
   }
 });
 
-test('Studio notes: collection+freight warning, shipping incomplete, choose prompt',()=>{
-  assert.match(ctx({fulfilmentMethod:'collection',freightCharge:12}).fulfilmentStudioNote(),/Freight/);
+test('Studio notes: saved-shipping exclusion, shipping incomplete, choose prompt',()=>{
+  assert.match(ctx({fulfilmentMethod:'collection',freightCharge:12}).fulfilmentStudioNote(),/saved shipping costs are excluded/i);
   assert.equal(ctx({fulfilmentMethod:'collection'}).fulfilmentStudioNote(),'');
   assert.match(ctx({fulfilmentMethod:'shipping'}).fulfilmentStudioNote(),/Delivery details needed/);
   assert.equal(ctx({...full,fulfilmentMethod:'shipping'}).fulfilmentStudioNote(),'');
