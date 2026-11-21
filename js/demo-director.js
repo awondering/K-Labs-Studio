@@ -48,7 +48,7 @@
   };
   const toggle = (bodyId) => `[aria-controls="${bodyId}"]`;
   // The journey. Steps: caption(text), tap(selector), type(selector, text), open(section toggle), pick([category,
-  // subcategory, component]) from the component library, show(selector or [selectors], ms) - brought into view and
+  // subcategory, component]) from the component library, date(selector, daysAhead), show(selector or [selectors], ms) - brought into view and
   // highlighted for a moment -, until(selector visible), untilHidden(selector), untilValue(selector, value),
   // untilText(selector, text), scroll(selector) and hold(ms) on a key moment.
   const JOURNEY = freeze([
@@ -77,8 +77,9 @@
       ["tap", "#quoteBuildRenameBtn"],
       ["type", "#quoteBuildRenameInput", "7' Snapper Spin"],
       ["tap", "#quoteBuildRenameSave"],
-      ["caption", "Add a note for Jordan's quote."],
+      ["caption", "Set the expected completion date and add a note."],
       ["open", toggle("workshopBuildSpecsBody")],
+      ["date", "#quoteEstimatedCompletionDate", 21],
       ["type", "#quoteNotes", "Black wraps with gloss finish. Split grip."],
       ["caption", "Record the length, reel seat and grip sizes."],
       ["type", "#quoteSpecFinishedRodLength", "2134"],
@@ -345,6 +346,22 @@
     await wait(PACE.beat);
     highlight([el], false);
   }
+  async function setDate(selector, daysAhead) {
+    const el = await control(selector);
+    if (el.type !== "date") throw new Error(`${selector} is not a date field.`);
+    const date = new Date();
+    date.setDate(date.getDate() + daysAhead);
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    const value = `${date.getFullYear()}-${mm}-${dd}`;
+    // Native date controls accept complete date values only.
+    el.value = value;
+    if (el.value !== value) throw new Error(`${selector} did not accept ${value}.`);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    await wait(PACE.beat);
+    highlight([el], false);
+  }
   async function pick(path) {
     await tap("#addComponentBtn");
     for (const name of path) await tap(`#choicePickerList [data-choice-option=${cssString(name)}]`);
@@ -466,6 +483,7 @@
     }
     if (kind === "tap") return tap(a);
     if (kind === "type") return type(a, b);
+    if (kind === "date") return setDate(a, b);
     if (kind === "open") {
       const trigger = await shown(a);
       if (trigger.getAttribute("aria-expanded") === "true") return undefined;

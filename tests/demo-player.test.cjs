@@ -15,7 +15,7 @@ const ui = read('js/ui.js');
 
 // A stand-in page: every control the journey asks for exists and is visible; clicks, typed characters and the order of
 // everything the director does are recorded. Time is virtual: a wait of N ms advances the clock by N at once.
-function stage({ search = '?demo', nearestFails = [], coveredOnce = [] } = {}) {
+function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay = null } = {}) {
   const log = [];
   // Phase 3 review: the director's watchdog timer does not drive the virtual clock; it fires once the clock has reached
   // it. stall: once stall.when(log) is true the director's own timers never fire (a step that cannot finish) until
@@ -31,7 +31,7 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [] } = {}) {
   let clock = 0;
   const make = (key) => {
     const el = {
-      key, hidden: false, disabled: false, value: '', textContent: '', isConnected: true, listeners: {}, attributes: {},
+      key, type: key === '#quoteEstimatedCompletionDate' ? 'date' : '', hidden: false, disabled: false, value: '', textContent: '', isConnected: true, listeners: {}, attributes: {},
       style: {}, scrollTop: 0, scrollHeight: 2000, clientHeight: 600,
       dataset: {},
       addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); },
@@ -137,8 +137,11 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [] } = {}) {
     console: { warn: (...a) => log.push(['warn', a.map(String).join(' ')]), error() {} },
   };
   window.window = window;
+  const ClockDate = localDay ? class extends Date {
+    constructor(...args) { if (args.length) super(...args); else super(...localDay); }
+  } : Date;
   const context = vm.createContext({ window, document, Event: class { constructor(type, o) { this.type = type; Object.assign(this, o); } },
-    InputEvent: class { constructor(type, o) { this.type = type; Object.assign(this, o); } }, Promise, Error, Date, String, Number, Math, Object, Array, JSON, Set, Map, setImmediate, console: window.console });
+    InputEvent: class { constructor(type, o) { this.type = type; Object.assign(this, o); } }, Promise, Error, Date: ClockDate, String, Number, Math, Object, Array, JSON, Set, Map, setImmediate, console: window.console });
   vm.runInContext(directorSource, context);
   let inStep = 0;
   let suspended = false;
@@ -217,7 +220,7 @@ test('Q18 2A: the director works the real Studio controls in workflow order: cus
   assert.ok(flat.length > 100);
   // Every control exists on the real page (index.html) or is built by Studio's own interface (ui.js).
   for (const { step } of flat) {
-    if (!['tap', 'type', 'open', 'until', 'untilHidden', 'untilText', 'untilValue', 'scroll'].includes(step[0])) continue;
+    if (!['tap', 'type', 'date', 'open', 'until', 'untilHidden', 'untilText', 'untilValue', 'scroll'].includes(step[0])) continue;
     const selector = step[1];
     for (const id of selector.matchAll(/#([A-Za-z0-9]+)/g)) assert.ok(html.includes(`id="${id[1]}"`) || ui.includes(`id="${id[1]}"`) || ui.includes(`'${id[1]}'`), `${selector} exists`);
     for (const attr of selector.matchAll(/\[([a-z-]+)="([^"]+)"\]/g)) {
@@ -250,6 +253,21 @@ test('Q18 2A: field values are typed one character at a time, visibly - never fi
   assert.match(h.get('#demoCaption').textContent, FINISHED, `reaches the end: ${h.get('#demoCaption').textContent} ${JSON.stringify(h.log.filter((e) => e[0] === 'warn'))}`);
   assert.ok(h.clock() > 60000, `watchable pacing (${h.clock()} ms of playback)`);
   assert.deepEqual(h.steps, ['open', 'close'], 'one director step for the whole playback; the write window closes at the end');
+});
+
+test('Rod spec sets Estimated Completion three weeks ahead using one native date input and change', async () => {
+  const h = stage({ localDay: [2026, 11, 20, 22] });
+  const field = '#quoteEstimatedCompletionDate';
+  assert.match(html, /id="quoteEstimatedCompletionDate" type="date"/);
+  player(h).open(h.director);
+  h.get('#demoStartBtn').click();
+  await settle(h, () => finished(h));
+  assert.match(h.get('#demoCaption').textContent, FINISHED);
+  assert.deepEqual(h.log.filter(([, selector]) => selector === field).filter(([event]) => event === 'input' || event === 'change'),
+    [['input', field, '2027-01-10', null], ['change', field, '2027-01-10']]);
+  const at = h.log.findIndex(([kind, selector]) => kind === 'input' && selector === field);
+  assert.ok(at < h.log.findIndex(([kind, selector]) => kind === 'click' && selector === '#viewQuoteBtn'));
+  assert.ok(h.acts.some(({ key, highlighted, inView }) => key === field && highlighted && inView));
 });
 
 test('Q18 2A: the visitor starts the demonstration - nothing plays until Start', async () => {
