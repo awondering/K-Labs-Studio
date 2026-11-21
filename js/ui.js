@@ -14802,13 +14802,17 @@ function customerQuoteSummaryMarkup(){
   const totalRow=`<div><span>Total Price</span><strong>${pricePending?'To be confirmed':currencyWithCode(math.total)}</strong></div>`;
   const shortfall=math.depositEnabled&&math.amountReceived>0&&math.depositOutstanding;
   const labels=customerDocumentLabels();
+  const buildSummary=labels.key==='complete'&&labels.jobType==='build';
+  const paidInFull=buildSummary&&math.total>0&&math.balanceOwing===0;
+  const receivedLabel=buildSummary&&(paidInFull||math.amountReceived!==math.depositReceivedAmount)?'Total Received':'Deposit Received';
+  const balanceLabel=paidInFull?'Paid in full':'Balance Owing';
   const buildConfirmation=labels.key==='active'&&labels.jobType==='build';
   const showDepositRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total));
   const showDepositStillRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing));
   const pricingRows=pricePending
     ?`${totalRow}${math.amountReceived>0?`<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>`:''}`
     :math.amountReceived>0
-    ?`${totalRow}${showDepositRequired?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${showDepositStillRequired?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>Balance Owing</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
+    ?`${totalRow}${showDepositRequired?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>${receivedLabel}</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${showDepositStillRequired?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>${balanceLabel}</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
     :math.depositEnabled
     ?`${totalRow}<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
     :totalRow;
