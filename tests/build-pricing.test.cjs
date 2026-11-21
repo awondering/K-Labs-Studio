@@ -348,7 +348,6 @@ test('normalizePayments keeps valid payments and drops malformed ones; legacy re
 
 test('Customer document and email render received-payment wording and markup wiring exists',()=>{
   assert.match(source,/<span>Deposit Received<\/span>/);
-  assert.match(source,/<span>Balance Owing<\/span>/);
   assert.match(source,/<span>Deposit Still Required<\/span>/);
   assert.match(source,/Deposit received: \$\{currencyWithCode\(math\.amountReceived\)\}/);
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
@@ -457,4 +456,32 @@ test('Quote, completed and repair documents keep their existing shortfall rows',
       assert.match(email,/Deposit still required:/);
     }
   }
+});
+
+test('Completed Build Summary labels deposits, partial payments and full payment accurately',()=>{
+  const deposit={id:'deposit',type:'deposit',amount:400,date:'2026-10-18'};
+  const balance=(amount)=>({id:'balance',type:'balance',amount,date:'2026-10-19'});
+  const cases=[
+    {payments:[deposit],receivedLabel:'Deposit Received',received:400,balanceLabel:'Balance Owing',owing:2100},
+    {payments:[deposit,balance(600)],receivedLabel:'Total Received',received:1000,balanceLabel:'Balance Owing',owing:1500},
+    {payments:[balance(600)],receivedLabel:'Total Received',received:600,balanceLabel:'Balance Owing',owing:1900},
+    {payments:[deposit,balance(2100)],receivedLabel:'Total Received',received:2500,balanceLabel:'Paid in full',owing:0},
+    {payments:[{...deposit,amount:2500}],receivedLabel:'Total Received',received:2500,balanceLabel:'Paid in full',owing:0},
+  ];
+  for(const {payments,receivedLabel,received,balanceLabel,owing} of cases){
+    const context=confirmationHarness({quoteStatus:'complete',depositEnabled:true,depositType:'fixed',depositValue:400,payments});
+    const before=JSON.stringify(context.quote.payments);
+    const preview=context.customerQuoteSummaryMarkup();
+    const money=context.currencyWithCode;
+    assert.ok(preview.includes(`<span>${receivedLabel}</span><strong>${money(received)}</strong>`), receivedLabel);
+    assert.ok(preview.includes(`<span>${balanceLabel}</span><strong>${money(owing)}</strong>`), balanceLabel);
+    assert.equal(JSON.stringify(context.quote.payments),before);
+  }
+});
+
+test('Completed Build Summary does not show payment received or paid in full without a payment',()=>{
+  const context=confirmationHarness({quoteStatus:'complete',depositEnabled:true,depositType:'fixed',depositValue:400});
+  const preview=context.customerQuoteSummaryMarkup();
+  assert.doesNotMatch(preview,/<span>(?:Deposit Received|Total Received|Paid in full)<\/span>/);
+  assert.match(preview,/<span>Balance Remaining<\/span><strong>\$2100\.00 NZD<\/strong>/);
 });
