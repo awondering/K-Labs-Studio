@@ -6,6 +6,7 @@ const vm=require('node:vm');
 
 const source=fs.readFileSync(path.join(__dirname,'..','js','ui.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
 
 function fn(name){
   const start=source.indexOf(`function ${name}(`);
@@ -13,12 +14,12 @@ function fn(name){
   return source.slice(start,source.indexOf('\n}',start)+2);
 }
 
-function model(specs){
+function model(specs,{rodLengthMm=2000,seatLength=130,reference='rear'}={}){
   const c={
     quote:{buildSpecifications:specs},
     state:{firstGuide:0,guideCount:0,targetStripper:0},
     workshopToolsState:{spiral:{guides:[]}},
-    normalizeBuildLayout:()=>({rodLengthMm:2000,reelSeat:{lengthMm:130},reelSeatPositionRef:'rear'}),
+    normalizeBuildLayout:()=>({rodLengthMm,reelSeat:{lengthMm:seatLength},reelSeatPositionRef:reference}),
     calcGuideLayout:()=>({rows:[]}),
     buildGuideView:()=>null,
     formatGuideListMeasurement:(mm)=>`${mm} mm`,
@@ -41,6 +42,20 @@ test('grip inputs are ordered Rear, Lower, Fore',()=>{
   assert.ok(at('quoteSpecRearGripLength')<at('quoteSpecGripBelowReelSeatLength'));
   assert.ok(at('quoteSpecGripBelowReelSeatLength')<at('quoteSpecForeGripLength'));
   assert.match(html,/<span>Rear Grip<\/span>/);
+});
+
+test('seat reference buttons reuse Studio choice controls and share the grip field dimensions',()=>{
+  const c=vm.createContext({});
+  vm.runInContext(`${fn('rodLayoutSeatRefLabels')}\n${fn('rodLayoutSeatRefChoice')}`,c);
+  const markup=c.rodLayoutSeatRefChoice('centre');
+  assert.match(markup,/class="quote-job-type__options rod-layout__choice"/);
+  const buttons=[...markup.matchAll(/class="quote-job-type__option" data-layout-seat-ref="([^"]+)" aria-pressed="([^"]+)"/g)];
+  assert.deepEqual(buttons.map(([,ref,active])=>[ref,active]),[['rear','false'],['centre','true'],['front','false']]);
+  assert.match(css,/\.quote-job-type__options\.rod-layout__choice\{\s*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  const dimensions=/\.rod-layout__choice \.quote-job-type__option,\s*#workshopScreen \.build-details__grips input\{([^}]+)\}/.exec(css)?.[1]||'';
+  assert.match(dimensions,/min-height:44px/);
+  assert.match(dimensions,/border-radius:var\(--ds-radius-sm\)/);
+  assert.match(css,/\.quote-job-type__option\[aria-pressed="true"\]\{[^}]*linear-gradient/);
 });
 
 test('blank and zero foregrip omit the foregrip item without prompts or NaN',()=>{
@@ -66,6 +81,15 @@ test('positive foregrip still renders from the front of the reel seat',()=>{
   assert.ok(m.items.some((item)=>item.key==='lowerGrip'));
 });
 
+test('the demo split grips leave a 175 mm gap with the seat rear at 330 mm',()=>{
+  const m=model({rearGripLength:'80 mm',gripBelowReelSeatLength:'75 mm',foreGripLength:'100 mm',
+    reelSeatPosition:'330 mm from butt'},{rodLengthMm:2134,seatLength:null});
+  const bounds=Object.fromEntries(m.items.map(({key,startMm,endMm})=>[key,[startMm,endMm]]));
+  assert.deepEqual(bounds,{rearGrip:[0,80],reelSeat:[330,460],lowerGrip:[255,330],foreGrip:[460,560]});
+  assert.equal(m.seatRef,'rear');
+  assert.ok(!m.overlaps&&!m.approximateOverlap&&!m.exceeds);
+});
+
 test('unreadable foregrip text and zero rear/lower grips are still flagged',()=>{
   assert.equal(model({...base,foreGripLength:'abc'}).prompts.length,1);
   const m=model({...base,rearGripLength:'0',gripBelowReelSeatLength:'0',foreGripLength:''});
@@ -86,6 +110,8 @@ test('grip summaries omit a blank or zero foregrip but keep positive values',()=
     vm.runInContext(`${fn('buildSpecMeasurementMm')}\n${fn('customerGripConfigurationValue')}\n${fn('customerGripFeatureSummary')}`,c);
     return [c.customerGripConfigurationValue(),c.customerGripFeatureSummary()];
   };
+  const [, threeGrips]=summaries({rearGripLength:'80 mm',gripBelowReelSeatLength:'75 mm',foreGripLength:'100 mm'});
+  assert.equal(threeGrips,'Grip layout with rear grip 80 mm, lower grip 75 mm, and fore grip 100 mm.');
   for(const fore of ['','0','0 mm']){
     const [internal,customer]=summaries({rearGripLength:'280 mm',gripBelowReelSeatLength:'90 mm',foreGripLength:fore});
     assert.equal(internal,'Rear 280 mm \u2022 Lower 90 mm');

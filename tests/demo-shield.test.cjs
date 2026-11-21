@@ -371,6 +371,7 @@ function clickGuard() {
 }
 const surface = ['.workshop-build-actions-surface'];
 const GUARDED = {
+  seatReference: [['[data-layout-seat-ref]', 'button'], ['#quoteSpecReelSeatRef'], 'Centre of seat'],
   viewQuote: [['#viewQuoteBtn', 'button'], surface, 'View Quote'],
   viewQuoteClose: [['#viewQuoteCloseBtn', 'button'], ['#viewQuoteSheet'], 'Close'],
   fulfilment: [['[data-fulfilment-method]', 'button'], ['#quoteFulfilmentGroup', ...surface], 'Courier / Shipping'],

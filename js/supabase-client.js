@@ -26,7 +26,7 @@ window.KLABS_SUPABASE_CLIENT = window.KLABS_DEMO?.active ? null : window.supabas
 let klabsReadOnlyObserver = null;
 let klabsDemoMessageTimer = null;
 // Q18: the Studio controls the demonstration director may use in Demo Mode (see the click guard below).
-const DEMO_DIRECTOR_CONTROLS = ["#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
+const DEMO_DIRECTOR_CONTROLS = ["#quoteSpecReelSeatRef [data-layout-seat-ref]", "#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
   "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quotePaymentTypeField [data-payment-type]", "#quoteBalanceReceivedSave",
   "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
   "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]"].join(", ");

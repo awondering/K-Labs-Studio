@@ -11230,38 +11230,9 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   min-height:44px;
 }
 
-#workshopScreen .rod-layout__choice{
-  display:grid;
+#workshopScreen .quote-job-type__options.rod-layout__choice{
   grid-template-columns:repeat(3,minmax(0,1fr));
-  justify-self:stretch !important;
-  border:1px solid rgba(214,210,200,.2);
-  border-radius:8px;
-  overflow:hidden;
-}
-
-#workshopScreen .rod-layout__choice button{
-  min-height:36px;
-  padding:4px 6px;
-  border:0;
-  border-left:1px solid rgba(214,210,200,.14);
-  background:transparent;
-  color:rgba(223,216,205,.82);
-  font-size:9px;
-  font-weight:700;
-  line-height:1.25;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-  cursor:pointer;
-}
-
-#workshopScreen .rod-layout__choice button:first-child{
-  border-left:0;
-}
-
-#workshopScreen .rod-layout__choice button[aria-pressed="true"]{
-  background:rgba(var(--kl-red-rgb),.14);
-  color:#fff4ec;
-  box-shadow:inset 0 -1px 0 rgba(var(--kl-red-rgb),.85);
+  justify-self:stretch;
 }
 
 #workshopScreen .rod-layout__readout-edit{
@@ -12355,17 +12326,19 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 .studio-components-list__row--component .studio-components-price{padding:0;border:0;background:transparent;border-radius:0;margin:0;font-size:11px}
 .studio-components-list__row--component .studio-components-list__menu-trigger{border:0;background:transparent;width:44px;min-width:44px;align-self:stretch}
 
-/* Build Details: Rear / Fore / Lower grip lengths in one equal row (stacked at equal width when narrow) */
+/* Build Details: Rear / Lower / Fore grip lengths in one equal row, stacked when narrow. */
 #workshopScreen .build-details__grips{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:6px;
+  gap:var(--ds-space-2);
   align-items:start;
 }
 #workshopScreen .build-details__grips label{min-width:0}
+#workshopScreen .rod-layout__choice .quote-job-type__option,
 #workshopScreen .build-details__grips input{
   min-height:44px;
-  padding:0 8px;
+  padding-inline:var(--ds-space-3);
+  border-radius:var(--ds-radius-sm);
   box-sizing:border-box;
 }
 #workshopScreen .build-details__grip-note{
@@ -12774,10 +12747,10 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   flex:0 0 auto;
 }
 
-/* Job Type selector: compact two-option control under Customer Details. */
+/* Shared choice buttons for Job Type, Fulfilment Method and Reel Seat Position. */
 #workshopScreen .quote-job-type{display:grid;gap:6px}
 #workshopScreen .quote-job-type__label{color:#c8c2b6;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
-#workshopScreen .quote-job-type__options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#workshopScreen .quote-job-type__options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--ds-space-2)}
 #workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 #workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}
 /* Keep fulfilment reachable even when the rod pricing fields are folded or hidden. */
