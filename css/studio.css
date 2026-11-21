@@ -7269,7 +7269,9 @@ textarea::-moz-selection,
 }
 
 /* Merged Job Pricing & Actions: the body owns the padding; the actions block sits under the pricing fields. */
-#workshopScreen #workshopPricingFields[hidden]{
+#workshopScreen #workshopPricingFields[hidden],
+#workshopScreen #workshopPricingFields[hidden] + .workshop-build-actions-surface #quotePaymentBlock,
+#workshopScreen #quoteDeliveryFields[hidden]{
   display:none;
 }
 
@@ -7356,11 +7358,18 @@ textarea::-moz-selection,
   min-width:0;
   min-height:44px;
   padding:8px 6px;
-  font-size:14px;
+  font-size:16px;
+  width:100%;
   font-variant-numeric:tabular-nums;
 }
 
-#workshopScreen .build-pricing__delivery label:last-child input{
+#workshopScreen .build-pricing__delivery label > span{
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+}
+
+#workshopScreen .build-pricing__delivery input[readonly]{
   border-color:rgba(214,210,200,.24);
 }
 
@@ -7579,13 +7588,6 @@ textarea::-moz-selection,
 
 #workshopScreen .build-pricing .build-pricing__total input{
   font-size:20px;
-}
-
-#workshopScreen .build-pricing .build-pricing__delivery input{
-  min-width:0;
-  padding:8px 6px;
-  font-size:14px;
-  font-variant-numeric:tabular-nums;
 }
 
 @media (max-width:299px){
@@ -8007,16 +8009,11 @@ textarea::-moz-selection,
    - Documents: View and Email always; Customer Invoice on Active and Complete, and under "More documents" at Quote;
      Payment Statement under ••• once an invoice is issued. */
 #workshopPricingSection:not([data-pricing-collapsible="true"]) #quotePricingSummaryBtn{display:none}
-#workshopPricingSection[data-pricing-collapsed="true"] #workshopPricingFields > :not(#quotePricingSummaryBtn):not(#quotePaymentBlock){display:none}
+#workshopPricingSection[data-pricing-collapsed="true"] #workshopPricingFields > :not(#quotePricingSummaryBtn){display:none}
 #workshopScreen .build-pricing .build-pricing__summary-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:0 12px;text-align:left}
 #workshopScreen .build-pricing .build-pricing__summary-toggle strong{margin-left:auto;font-variant-numeric:tabular-nums}
 #workshopScreen .build-pricing .build-pricing__summary-toggle::after{content:'\25B8';opacity:.6}
 #workshopScreen .build-pricing .build-pricing__summary-toggle[aria-expanded="true"]::after{content:'\25BE'}
-#workshopPricingSection:is([data-delivery="hidden"],[data-delivery="summary"]) #quoteDeliveryFields{display:none}
-#workshopPricingSection:not([data-delivery="summary"]) #quoteDeliverySummary{display:none}
-#workshopScreen .build-pricing .build-pricing__delivery-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
-#workshopScreen .build-pricing .build-pricing__delivery-summary span{min-width:0;font-size:13px;font-variant-numeric:tabular-nums}
-#workshopScreen .build-pricing .build-pricing__delivery-summary .ghost-action{flex:0 0 auto;min-height:44px;padding:0 16px}
 #workshopPricingSection:not([data-lifecycle="quote"])[data-deposit-received="true"] :is(#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
 #workshopPricingSection[data-paid-in-full="true"]:not([data-job-kind="components"]) #quoteRecordPaymentBtn{display:none}
 #workshopPricingSection[data-lifecycle="quote"][data-has-payments="false"] .quote-payment__summary{display:none}
@@ -12783,7 +12780,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .quote-job-type__options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 #workshopScreen .quote-job-type__option{min-height:44px;padding:0 8px;border-radius:11px;border:1px solid rgba(214,210,200,.14);background:linear-gradient(180deg,#0f1213,#090b0c);color:#b6b0a4;font:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 #workshopScreen .quote-job-type__option[aria-pressed="true"]{color:#f1ece1;border-color:rgba(186,31,44,.55);background:linear-gradient(180deg,rgba(186,31,44,.22),rgba(186,31,44,.1))}
-/* Q14: Fulfilment Method sits above the Documents actions (outside the pricing fields), visible for every job type. */
+/* Keep fulfilment reachable even when the rod pricing fields are folded or hidden. */
 #workshopScreen #quoteFulfilmentGroup .build-pricing__note{color:var(--titanium);font-size:11px;line-height:1.35;margin:0}
 #workshopScreen #quoteFulfilmentGroup{border-radius:12px;transition:box-shadow .3s ease}
 #workshopScreen #quoteFulfilmentGroup.is-attention{box-shadow:0 0 0 2px rgba(186,31,44,.55)}

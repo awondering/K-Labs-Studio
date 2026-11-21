@@ -381,13 +381,13 @@ test('the Pricing section is marked with the job kind, stage and delivery choice
   ctx.updateWorkshopBuildActionsUi();ctx.syncFulfilmentSelector();
   assert.equal(section()['data-job-kind'],'components');
   assert.equal(section()['data-lifecycle'],'quote');
-  assert.equal(section()['data-delivery'],'hidden','Components: delivery fields wait for a fulfilment choice');
+  assert.equal(el('quoteDeliveryFields').hidden,true,'Components: delivery fields wait for a fulfilment choice');
   assert.equal(el('confirmBuildBtn').textContent,'Confirm Order');
   assert.equal(el('deleteItem').textContent,'Delete Order');
   ctx.quote={...ctx.quote,fulfilmentMethod:'shipping'};ctx.syncFulfilmentSelector();
-  assert.equal(section()['data-delivery'],'fields','Courier / Shipping reveals freight and packaging');
+  assert.equal(el('quoteDeliveryFields').hidden,false,'Courier / Shipping reveals freight and packaging');
   ctx.quote={...ctx.quote,fulfilmentMethod:'collection',freight:5};ctx.syncFulfilmentSelector();
-  assert.equal(section()['data-delivery'],'fields','an existing delivery charge stays editable in place (unchanged from v245)');
+  assert.equal(el('quoteDeliveryFields').hidden,true,'Collection hides saved shipping costs');
   ctx.quote={jobType:'build',quoteStatus:'active',payments:[{amount:1}]};
   ctx.updateWorkshopBuildActionsUi();
   assert.equal(section()['data-job-kind'],'','rod build: no Components rules apply');

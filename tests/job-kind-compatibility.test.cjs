@@ -67,12 +67,16 @@ function atRest(record){
 
 // ---------- 1. Existing rod builds, repairs, invoices, deposits and payments are unchanged ----------
 for(const name of Object.keys(fixtures.raw)){
-  test(`v241 snapshot: ${name} saves to exactly the recorded form`,()=>{
-    assert.deepEqual(atRest(fixtures.raw[name]),fixtures.canonical[name]);
+  const original=fixtures.canonical[name];
+  // Q20 excludes the saved $12 freight from this Collection job and keeps all other fields.
+  const canonical=name==='rodBuildActiveDepositOnly'
+    ?{...original,finalCustomerPrice:158,naturalCustomerPrice:158}
+    :original;
+  test(`v241 snapshot: ${name} saves to the expected form`,()=>{
+    assert.deepEqual(atRest(fixtures.raw[name]),canonical);
   });
   test(`v241 snapshot: ${name} is stable when re-opened, re-persisted and saved again`,()=>{
     const {c}=recordHarness();
-    const canonical=fixtures.canonical[name];
     assert.deepEqual(plain(c.quoteForPersistence(c.normalizeQuote(plain(canonical)))),canonical,'re-opening and re-saving changes nothing');
     const {saved,stored,notified}=olderClientOpenAndSave(canonical);
     assert.deepEqual(withoutTimestamps(saved),withoutTimestamps(canonical),'open-and-save keeps every business field');

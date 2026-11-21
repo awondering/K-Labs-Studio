@@ -980,16 +980,6 @@
             <button id="quotePricingSummaryBtn" class="ghost-action quote-grid__full build-pricing__summary-toggle" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span>Pricing</span><strong id="quotePricingSummaryValue"></strong></button>
             <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-            <div id="quoteDeliveryFields" class="quote-grid__full build-pricing__delivery" role="group" aria-label="Delivery costs">
-              <label id="quoteFreightField"><span>Freight</span><input id="quoteFreight" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-              <label id="quotePackagingField"><span>Packaging</span><input id="quotePackaging" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-              <label id="quoteDeliveryTotalField"><span>Total</span><input id="quoteDeliveryTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            </div>
-            <div id="quoteDeliverySummary" class="quote-grid__full build-pricing__delivery-summary"><span id="quoteDeliverySummaryText"></span><button id="quoteDeliveryEditBtn" class="ghost-action" type="button">Edit</button></div>
-            <details id="quoteDeliveryLegacyNote" class="quote-grid__full build-pricing__note" hidden>
-              <summary>Legacy freight amounts</summary>
-              <p id="quoteDeliveryLegacyText"></p>
-            </details>
             <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Components Cost</span><input id="quoteCostBeforeMargin" type="text" readonly tabindex="-1" /></label>
             <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteProfitField"><span>Required Profit</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
@@ -1014,57 +1004,66 @@
             <label id="quoteDepositValueField" hidden><span id="quoteDepositValueLabel">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-describedby="quoteDepositValueError" /></label>
             <p id="quoteDepositValueError" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
             <label id="quoteBalanceRemainingField" hidden><span id="quoteBalanceRemainingLabel">Balance After Deposit</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
-            <div id="quotePaymentBlock" class="quote-grid__full quote-payment">
-              <h3 class="quote-payment__heading">Payment Status</h3>
-              <div class="quote-payment__summary" aria-live="polite">
-                <div><span>Total Received</span><strong id="quotePaymentTotalReceived"></strong></div>
-                <div><span>Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
-              </div>
-              <p id="quoteDepositReceivedStatus" class="quote-payment__status" aria-live="polite"></p>
-              <details id="quotePaymentHistoryDetails" class="quote-payment__history-details" hidden>
-                <summary>Payment history</summary>
-                <div id="quotePaymentHistory" class="quote-payment__history"></div>
-              </details>
-              <div class="quote-payment__actions">
-                <button id="quoteRecordPaymentBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Payment</button>
-                <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Confirm Pending Transaction</button>
-              </div>
-              <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
-                <label><span>Amount Received</span><input id="quoteDepositReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-                <label><span>Date Received</span><input id="quoteDepositReceivedDate" type="date" /></label>
-                <label id="quoteDepositCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteDepositCorrectionReason" type="text" /></label>
-                <p id="quoteDepositReceivedError" class="quote-payment__error" role="alert"></p>
-                <div class="quote-payment__actions">
-                  <button id="quoteDepositReceivedSave" class="primary-action" type="button">Save</button>
-                  <button id="quoteDepositReceivedCancel" class="ghost-action" type="button">Cancel</button>
-                </div>
-              </div>
-              <div id="quoteBalanceReceivedForm" class="quote-payment__form" hidden>
-                <div id="quotePaymentTypeField" class="quote-pricing-driver quote-payment__type" role="group" aria-label="Payment type" hidden>
-                  <div class="quote-pricing-driver__options">
-                    <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="deposit" aria-pressed="false">DEPOSIT</button>
-                    <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="balance" aria-pressed="true">BALANCE</button>
-                  </div>
-                </div>
-                <label><span>Amount Received</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-                <label><span>Date Received</span><input id="quoteBalanceReceivedDate" type="date" /></label>
-                <label id="quoteBalanceCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteBalanceCorrectionReason" type="text" /></label>
-                <p id="quoteBalanceReceivedError" class="quote-payment__error" role="alert"></p>
-                <div class="quote-payment__actions">
-                  <button id="quoteBalanceReceivedSave" class="primary-action" type="button">Save</button>
-                  <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Cancel</button>
-                </div>
-              </div>
-            </div>
             </div>
             <section class="workshop-build-actions-surface" aria-label="Build actions">
               <div id="quoteFulfilmentGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Fulfilment Method">
                 <span class="quote-job-type__label">Fulfilment Method</span>
                 <div class="quote-job-type__options">
                   <button type="button" class="quote-job-type__option" data-fulfilment-method="collection" aria-pressed="false">Customer Collection</button>
-                  <button type="button" class="quote-job-type__option" data-fulfilment-method="shipping" aria-pressed="false">Courier / Shipping</button>
+                  <button type="button" class="quote-job-type__option" data-fulfilment-method="shipping" aria-pressed="false" aria-controls="quoteDeliveryFields">Courier / Shipping</button>
                 </div>
+                <div id="quoteDeliveryFields" class="quote-grid quote-grid__full build-pricing__delivery" role="group" aria-label="Shipping costs" hidden>
+                  <label id="quoteFreightField"><span>Freight</span><input id="quoteFreight" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                  <label id="quotePackagingField"><span>Packaging</span><input id="quotePackaging" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                  <label id="quoteDeliveryTotalField"><span>Total Shipping</span><input id="quoteDeliveryTotal" type="text" readonly /></label>
+                </div>
+                <details id="quoteDeliveryLegacyNote" class="quote-grid__full build-pricing__note" hidden>
+                  <summary>Legacy freight amounts</summary>
+                  <p id="quoteDeliveryLegacyText"></p>
+                </details>
                 <p id="quoteFulfilmentNote" class="build-pricing__note" hidden></p>
+              </div>
+              <div id="quotePaymentBlock" class="quote-grid quote-grid__full quote-payment">
+                <h3 class="quote-payment__heading">Payment Status</h3>
+                <div class="quote-payment__summary" aria-live="polite">
+                  <div><span>Total Received</span><strong id="quotePaymentTotalReceived"></strong></div>
+                  <div><span>Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
+                </div>
+                <p id="quoteDepositReceivedStatus" class="quote-payment__status" aria-live="polite"></p>
+                <details id="quotePaymentHistoryDetails" class="quote-payment__history-details" hidden>
+                  <summary>Payment history</summary>
+                  <div id="quotePaymentHistory" class="quote-payment__history"></div>
+                </details>
+                <div class="quote-payment__actions">
+                  <button id="quoteRecordPaymentBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Payment</button>
+                  <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Confirm Pending Transaction</button>
+                </div>
+                <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
+                  <label><span>Amount Received</span><input id="quoteDepositReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                  <label><span>Date Received</span><input id="quoteDepositReceivedDate" type="date" /></label>
+                  <label id="quoteDepositCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteDepositCorrectionReason" type="text" /></label>
+                  <p id="quoteDepositReceivedError" class="quote-payment__error" role="alert"></p>
+                  <div class="quote-payment__actions">
+                    <button id="quoteDepositReceivedSave" class="primary-action" type="button">Save</button>
+                    <button id="quoteDepositReceivedCancel" class="ghost-action" type="button">Cancel</button>
+                  </div>
+                </div>
+                <div id="quoteBalanceReceivedForm" class="quote-payment__form" hidden>
+                  <div id="quotePaymentTypeField" class="quote-pricing-driver quote-payment__type" role="group" aria-label="Payment type" hidden>
+                    <div class="quote-pricing-driver__options">
+                      <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="deposit" aria-pressed="false">DEPOSIT</button>
+                      <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="balance" aria-pressed="true">BALANCE</button>
+                    </div>
+                  </div>
+                  <label><span>Amount Received</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                  <label><span>Date Received</span><input id="quoteBalanceReceivedDate" type="date" /></label>
+                  <label id="quoteBalanceCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteBalanceCorrectionReason" type="text" /></label>
+                  <p id="quoteBalanceReceivedError" class="quote-payment__error" role="alert"></p>
+                  <div class="quote-payment__actions">
+                    <button id="quoteBalanceReceivedSave" class="primary-action" type="button">Save</button>
+                    <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Cancel</button>
+                  </div>
+                </div>
               </div>
               <div class="workshop-build-actions-docs" role="group" aria-label="Documents">
                 <span class="workshop-build-actions-docs__label">Documents</span>

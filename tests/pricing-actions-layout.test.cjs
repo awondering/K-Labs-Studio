@@ -41,14 +41,14 @@ function app(record,env={}){
   const doc=(name)=>(...args)=>{spy.documents.push(name);return '';};
   const sync=new Proxy({},{get:(t,name)=>name==='pendingFinancial'?()=>false:name==='getStatus'?()=>'synced':(...args)=>{spy.sync.push(name);}});
   const c=loadRecordFunctions(['normalizeQuote','updatePaymentBlock','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState',
-    'toggleQuotePricingSummary','openDeliveryEdit','closeDeliveryEditOnLeave','openRecordPaymentForm','setRecordPaymentType','closeBalanceReceivedForm',
+    'toggleQuotePricingSummary','setQuoteFulfilmentMethod','openRecordPaymentForm','setRecordPaymentType','closeBalanceReceivedForm',
     'openBalanceCorrection','closeDepositReceivedForm','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu',
     'toggleMoreDocumentsMenu','handleMoreDocumentsAction'],{
     $:dom.el,document:dom.document,Store:{get:(k,f)=>f,set:()=>true},
     window:{KLABS_ACCOUNT_ID:'acct',KLABS_BUILD_SYNC:sync,requestAnimationFrame:()=>{},crypto:{randomUUID:()=>'new-payment-id'}},
     activeAccountKey:()=>'acct',activeTaxEnabled:()=>env.tax!==false,formatDateDisplay:(v)=>String(v),localDateInputValue:()=>'2026-11-18',
     businessProfile:{businessName:'Synthetic Rods'},positionAnchoredActionMenu(){},
-    saveQuoteCurrent:()=>{spy.saves++;},markQuoteDirty:()=>{spy.dirty++;},persistCurrentQuoteRecord:async()=>{spy.persist++;return true;},
+    updateQuoteSummary:()=>c.syncFulfilmentSelector(),saveQuoteCurrent:()=>{spy.saves++;},markQuoteDirty:()=>{spy.dirty++;},persistCurrentQuoteRecord:async()=>{spy.persist++;return true;},
     commitFinancialOperation:async(kind,data)=>{spy.financial.push({kind,type:data.type,amount:data.amount,id:data.id});},
     customerQuoteSummaryMarkup:doc('quote'),customerEmailLines:doc('email'),buildInvoiceSnapshot:doc('invoiceSnapshot'),
     invoiceDocumentMarkup:doc('invoiceMarkup'),customerInvoicePreviewMarkup:doc('invoicePreview'),
@@ -100,7 +100,7 @@ test('the layout rules are screen-only and scoped to the Pricing & Actions secti
   assert.match(layoutCss,/#workshopPricingSection:not\(\[data-lifecycle="quote"\]\) #quoteMoreDocumentsWrap\{display:none\}/,'More documents is Quote-stage only');
   assert.match(layoutCss,/:not\(\[data-invoice-issued="true"\]\) #currentBuildActionsMenu \[data-current-build-action="statement"\]/);
   assert.match(layoutCss,/\[data-paid-in-full="true"\]:not\(\[data-job-kind="components"\]\) #quoteRecordPaymentBtn\{display:none\}/);
-  assert.match(layoutCss,/\[data-pricing-collapsed="true"\] #workshopPricingFields > :not\(#quotePricingSummaryBtn\):not\(#quotePaymentBlock\)\{display:none\}/,'Payment stays visible when pricing folds');
+  assert.match(layoutCss,/\[data-pricing-collapsed="true"\] #workshopPricingFields > :not\(#quotePricingSummaryBtn\)\{display:none\}/,'Payment stays visible when pricing folds');
 });
 
 // ---------- stages ----------
@@ -134,32 +134,23 @@ test('paid in full hides Record Payment; money owing or no payment yet keeps it'
 });
 
 // ---------- delivery ----------
-test('Customer Collection: empty delivery fields hide; Shipping or no choice shows them (builds and repairs)',()=>{
-  for(const jobType of ['build','repair']){
-    assert.equal(app(job({jobType,fulfilmentMethod:'collection'})).attrs()['data-delivery'],'hidden');
-    assert.equal(app(job({jobType,fulfilmentMethod:'shipping'})).attrs()['data-delivery'],'fields');
-    assert.equal(app(job({jobType})).attrs()['data-delivery'],'fields','no choice yet: as today');
+test('only Courier reveals shipping costs for builds, repairs and Components',()=>{
+  for(const kind of [{jobType:'build'},{jobType:'repair'},{jobKind:'components'}]){
+    const q=app(job({...kind,fulfilmentMethod:'shipping',freight:10,packaging:2}));
+    assert.equal(q.el('quoteDeliveryFields').hidden,false);
+    q.c.setQuoteFulfilmentMethod('collection');
+    assert.equal(q.el('quoteDeliveryFields').hidden,true);
+    assert.match(q.el('quoteFulfilmentNote').textContent,/excluded/);
+    assert.deepEqual([q.c.quote.freight,q.c.quote.packaging],[10,2]);
+    assert.equal(q.c.depositMaths().total,100);
+    q.c.setQuoteFulfilmentMethod('shipping');
+    assert.equal(q.el('quoteDeliveryFields').hidden,false);
+    assert.equal(q.c.depositMaths().total,113.8);
+    assert.equal(q.spy.saves,2);
+    assert.equal(q.spy.dirty,2);
+    assert.deepEqual(q.spy.financial,[]);
+    assert.equal(app(job({...kind,freight:10})).el('quoteDeliveryFields').hidden,true);
   }
-});
-
-test('Customer Collection with a delivery charge: the amount stays visible, and Edit reopens the fields in place',()=>{
-  const q=app(job({fulfilmentMethod:'collection',freight:10,packaging:2}));
-  assert.equal(q.attrs()['data-delivery'],'summary');
-  assert.equal(q.el('quoteDeliverySummaryText').textContent,'Delivery included in price: $13.80 NZD incl. GST');
-  q.c.openDeliveryEdit();
-  assert.equal(q.attrs()['data-delivery'],'fields');
-  assert.equal(q.el('quoteFreight').focused,true,'Edit goes straight to Freight');
-  q.c.closeDeliveryEditOnLeave({relatedTarget:q.el('quotePackaging')});
-  assert.equal(q.attrs()['data-delivery'],'fields','moving between the delivery fields never hides them');
-  q.c.closeDeliveryEditOnLeave({relatedTarget:null});
-  assert.equal(q.attrs()['data-delivery'],'summary','leaving folds back to the included amount');
-  noSideEffects(q.spy,'Delivery Edit');
-  assert.equal(q.c.quote.freight,10,'choosing Collection never clears freight');
-});
-
-test('tax off: the delivery line shows no tax wording',()=>{
-  const q=app(job({fulfilmentMethod:'collection',freight:10,packaging:2}),{tax:false});
-  assert.equal(q.el('quoteDeliverySummaryText').textContent,'Delivery included in price: $12.00 NZD');
 });
 
 // ---------- Record Payment ----------
@@ -276,18 +267,6 @@ test('rendering the section at every stage builds no document and makes no save 
     q.render();q.render();
     noSideEffects(q.spy,`${record.jobType} ${record.quoteStatus}`);
   }
-});
-
-// ---------- Components jobs keep their v245 behaviour ----------
-test('Components: Collection with a saved delivery charge keeps the fields editable in place (no summary line), as in v245',()=>{
-  const order=(extra)=>job({jobKind:'components',...extra});
-  assert.equal(app(order({fulfilmentMethod:'collection',freight:10,packaging:2})).attrs()['data-delivery'],'fields');
-  assert.equal(app(order({fulfilmentMethod:'shipping'})).attrs()['data-delivery'],'fields');
-  assert.equal(app(order({fulfilmentMethod:'collection'})).attrs()['data-delivery'],'hidden');
-  assert.equal(app(order({})).attrs()['data-delivery'],'hidden','no choice and no charge: hidden, as in v245');
-  assert.equal(app(order({freight:10})).attrs()['data-delivery'],'fields','a charge with no choice stays visible, as in v245');
-  // A custom build in the same situation gets the new summary line.
-  assert.equal(app(job({fulfilmentMethod:'collection',freight:10,packaging:2})).attrs()['data-delivery'],'summary');
 });
 
 test('Components: pricing never folds into one line, and Record Payment is not hidden by the paid-in-full rule',()=>{
