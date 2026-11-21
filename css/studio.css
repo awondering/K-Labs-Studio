@@ -7619,6 +7619,100 @@ textarea::-moz-selection,
   }
 }
 
+/* Q23 Rod Pricing simplification: Components Cost, Rod Price, Your Return by default; Advanced Pricing from Settings. */
+#workshopPricingSection:not([data-advanced-pricing="true"]) #quoteAdvancedPricing{display:none}
+#workshopScreen .build-pricing .build-pricing__hint{
+  margin:0;
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+  font-variant-numeric:tabular-nums;
+}
+#workshopScreen .build-pricing .build-pricing__hint:empty{display:none}
+#workshopScreen .build-pricing #quoteTotalField .build-pricing__hint{padding:0 2px}
+#workshopScreen .build-pricing .build-pricing__notice{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 44px;
+  align-items:center;
+  gap:8px;
+  margin:2px 0 0;
+  padding:4px 4px 4px 10px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-sm);
+  background:var(--ds-surface-soft);
+  color:var(--ds-text-strong);
+  font-size:12px;
+  line-height:1.4;
+}
+#workshopScreen .build-pricing .build-pricing__notice[hidden]{display:none}
+#workshopScreen .build-pricing .build-pricing__notice-dismiss{
+  min-width:44px;
+  min-height:44px;
+  padding:0;
+  justify-content:center;
+}
+#workshopScreen .build-pricing .build-pricing__advanced{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px 8px;
+  margin-top:4px;
+  padding-top:8px;
+  border-top:1px solid rgba(214,210,200,.1);
+}
+#workshopScreen .build-pricing .build-pricing__advanced > label{
+  display:grid;
+  min-width:0;
+  gap:2px;
+}
+#workshopScreen .build-pricing .build-pricing__advanced > label > span,
+#workshopScreen .build-pricing .build-pricing__advanced-title,
+#workshopScreen .build-pricing .build-pricing__time-label{
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+  letter-spacing:.03em;
+}
+#workshopScreen .build-pricing .build-pricing__advanced-title{
+  grid-column:1 / -1;
+  color:var(--ds-text-strong);
+  font-weight:700;
+}
+#workshopScreen .build-pricing #quoteEffectiveHourly{
+  align-self:end;
+  padding-bottom:12px;
+}
+#workshopScreen .build-pricing .build-pricing__time{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:auto auto auto minmax(72px,1fr) auto;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+#workshopScreen .build-pricing .build-pricing__time-hours{
+  color:var(--ds-text-strong);
+  font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+#workshopScreen .build-pricing .build-pricing__time-apply{
+  min-height:44px;
+  white-space:nowrap;
+}
+@media (max-width:420px){
+  #workshopScreen .build-pricing .build-pricing__time{
+    grid-template-columns:auto auto auto minmax(0,1fr);
+  }
+  #workshopScreen .build-pricing .build-pricing__time-label{grid-column:1 / -1}
+  #workshopScreen .build-pricing .build-pricing__time-apply{grid-column:1 / -1}
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > #settingsShowAdvancedPricingField .settings-pricing-hint{
+  grid-column:1 / -1;
+  margin:-4px 0 0;
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+}
+
 /* Sprint 2: Active Builds production refinements */
 #buildsScreen .screen-head .subtle{
   max-width:34ch;
@@ -12764,7 +12858,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
 /* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
    per-job tax-rate controls are hidden; payments and the invoice appear once the order is confirmed. */
-#workshopPricingSection[data-job-kind="components"] :is(#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+#workshopPricingSection[data-job-kind="components"] :is(#quoteLegacyLabourLine,#quoteAdvancedPricingNote,#quoteAdvancedPricing,#quoteRodPriceHint,#quoteCustomerTotalLine,#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
 #workshopPricingSection[data-job-kind="components"] #quoteMoreDocumentsWrap,
 #workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock{display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.

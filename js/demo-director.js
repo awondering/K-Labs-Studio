@@ -8,7 +8,7 @@
  * visitor watches and only the player's controls respond.
  *
  * The journey follows Jordan Ellis's job from enquiry to paid in full: 1 enquiry and customer, 2 rod specification,
- * 3 components and labour, 4 live pricing and courier delivery, 5 the customer quote, 6 the customer accepts (Confirm
+ * 3 components, 4 live pricing (Rod Price and Your Return) and courier delivery, 5 the customer quote, 6 the customer accepts (Confirm
  * Build), 7 the deposit, 8 workshop progress, 9 the final payment and Mark Complete, 10 the final invoice and the
  * completed build summary. Payments and the invoice go through Studio's own screens to a local demo-only stand-in for
  * the payment service (js/public-entry.js); every document is shown with a DEMO watermark (css/studio.css).
@@ -103,18 +103,14 @@
       ["caption", "Then the winding check and thread."],
       ["pick", ["Winding Checks", "Grip Winding Checks", "Aluminium Winding Check 16 mm"]],
       ["pick", ["Thread", "Nylon", "NCP Nylon Thread A Black"]],
-      ["caption", "Add the labour: five hours at your rate."],
-      ["open", toggle("workshopQuoteSummaryBody")],
-      ["type", "#quoteLabourHours", "5"],
     ] },
     { title: "Pricing", steps: [
-      ["caption", "Studio prices it as you go: parts, labour and GST."],
-      ["show", "#quoteTotalField", 1500],
-      ["caption", "Price by margin or by the profit you want."],
-      ["type", "#quoteMarginPercent", "25"],
-      ["show", "#quoteTotalField", 1000],
-      ["type", "#quoteProfit", "280"],
-      ["show", ["#quoteTotalField", "#quoteMarginPercentField"], 1200],
+      ["caption", "Studio adds up what the parts cost you."],
+      ["open", toggle("workshopQuoteSummaryBody")],
+      ["show", "#quoteCostBeforeMarginField", 1500],
+      ["caption", "Set your rod price, GST included. Your return updates live."],
+      ["type", "#quoteTotal", "899"],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1500],
       ["caption", "Jordan wants it couriered, not collected."],
       ["show", "#quoteFulfilmentGroup", 1200],
       ["tap", "[data-fulfilment-method=\"shipping\"]"],
@@ -122,8 +118,8 @@
       ["type", "#quoteFreight", "18"],
       ["type", "#quotePackaging", "12"],
       ["show", "#quoteDeliveryTotalField", 1200],
-      ["caption", "Delivery is charged on top. Profit and margin stay the same."],
-      ["show", ["#quoteProfitField", "#quoteMarginPercentField"], 1800],
+      ["caption", "Delivery is charged on top. Your return stays the same."],
+      ["show", ["#quoteCustomerTotalLine", "#quoteEarningsSummary"], 1800],
     ] },
     { title: "Quote", steps: [
       ["caption", "Open the quote, exactly as Jordan will see it."],

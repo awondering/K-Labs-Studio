@@ -71,8 +71,9 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
   // number; the expanded/collapsed state of sections follows what the director tapped.
   get('#quoteCustomerName').value = 'Jordan Ellis';
   get('#workshopBuildLifecycleStatus').textContent = 'Quote';
-  // Phase 3: the margin field starts on screen but under the dock - it is not in view until it is scrolled down.
-  get('#quoteMarginPercent').underDock = true;
+  // Phase 3: a pricing field starts on screen but under the dock - it is not in view until it is scrolled down.
+  // Q23: the Rod Price field (the margin field before the pricing simplification).
+  get('#quoteTotal').underDock = true;
   // 2B: what Studio does on screen when the director taps through steps 6-10 (sheets and forms opening and closing,
   // the job's status changing, the invoice being issued).
   const show = (key, on) => { get(key).hidden = !on; };
@@ -199,7 +200,7 @@ test('Rod spec shows each seat reference before entering the final rear measurem
   });
 });
 
-test('Q18 2A: the director works the real Studio controls in workflow order: customer, spec, components, labour, pricing, quote', () => {
+test('Q18 2A: the director works the real Studio controls in workflow order: customer, spec, components, pricing, quote', () => {
   const h = stage();
   const flat = player(h).journey.flatMap((c, i) => c.steps.map((s) => ({ chapter: i + 1, step: s })));
   const at = (pred) => flat.findIndex(({ step }) => pred(step));
@@ -209,13 +210,15 @@ test('Q18 2A: the director works the real Studio controls in workflow order: cus
     at((s) => s[0] === 'tap' && s[1] === '#customerFinderSubmitNewCustomerBtn'),
     at((s) => s[0] === 'type' && s[1] === '#quoteSpecFinishedRodLength'),
     at((s) => s[0] === 'pick' && s[1][0] === 'Blanks'),
-    at((s) => s[0] === 'type' && s[1] === '#quoteLabourHours'),
-    at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent'),
+    // Q23: no labour step; pricing shows the Components Cost, then the Rod Price is typed in.
+    at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteCostBeforeMarginField')),
+    at((s) => s[0] === 'type' && s[1] === '#quoteTotal'),
     at((s) => s[0] === 'tap' && s[1] === '#viewQuoteBtn'),
   ];
   assert.ok(order.every((i) => i >= 0), JSON.stringify(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'workflow order');
-  assert.deepEqual(order.map((i) => flat[i].chapter), [1, 1, 1, 2, 3, 3, 4, 5]);
+  assert.deepEqual(order.map((i) => flat[i].chapter), [1, 1, 1, 2, 3, 4, 4, 5]);
+  assert.ok(!flat.some(({ step }) => [].concat(step[1]).some((t) => /quoteLabour|quoteMarginPercent|quoteProfit/.test(String(t)))), 'no labour, margin or profit steps');
   // 2B: every control the later chapters use is checked below too.
   assert.ok(flat.length > 100);
   // Every control exists on the real page (index.html) or is built by Studio's own interface (ui.js).
@@ -317,7 +320,7 @@ test('Q18 2A: a chapter jump skips quickly through the earlier chapters on the r
   const h = stage({ search: '?demo&chapter=4' });
   player(h).open(h.director);
   assert.equal(h.get('#demoIntro').hidden, true, 'a chosen chapter starts without the introduction');
-  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#quoteMarginPercent'));
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#quoteTotal'));
   const skipping = h.clock();
   assert.ok(h.log.some((e) => e[0] === 'click' && e[1] === '#customerFinderSubmitNewCustomerBtn'), 'earlier chapters still done through Studio');
   await settle(h, () => finished(h));
@@ -344,21 +347,21 @@ test('Q18 2A: no separate demonstration maths and no direct data changes - figur
 
 // ---- Phase 2B
 
-test('Q18 2B/3: courier delivery - Freight and Packaging are typed in, and the caption says delivery is charged on top with profit and margin unchanged', () => {
+test('Q18 2B/3: courier delivery - Freight and Packaging are typed in, and the caption says delivery is charged on top with Your Return unchanged', () => {
   const h = stage();
   const flat = flatJourney(h);
   const pricing = flat.filter(({ chapter }) => chapter === 4).map(({ step }) => step);
   assert.ok(!flat.some(({ step }) => step[0] === 'tap' && /collection/.test(step[1])), 'no Customer Collection any more');
   const at = (pred) => pricing.findIndex(pred);
-  const margin = at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent');
+  const price = at((s) => s[0] === 'type' && s[1] === '#quoteTotal');
   const courier = at((s) => s[0] === 'tap' && s[1] === '[data-fulfilment-method="shipping"]');
   const freight = at((s) => s[0] === 'type' && s[1] === '#quoteFreight' && /^\d+$/.test(s[2]));
   const packaging = at((s) => s[0] === 'type' && s[1] === '#quotePackaging' && /^\d+$/.test(s[2]));
-  // Phase 3 change: plain wording "charged on top ... profit and margin stay the same" (2B: "added separately ... target
-  // profit stays the same"), followed by profit and margin shown highlighted (2B: a plain hold).
-  const explained = at((s) => s[0] === 'caption' && /delivery/i.test(s[1]) && /on top/i.test(s[1]) && /profit/i.test(s[1]) && /margin/i.test(s[1]) && /same|unchanged/i.test(s[1]));
-  assert.ok(margin >= 0 && margin < courier && courier < freight && freight < packaging && packaging < explained, JSON.stringify({ margin, courier, freight, packaging, explained }));
-  assert.equal(pricing[explained + 1][0], 'show', 'profit and margin shown straight after the caption');
+  // Q23: plain wording "charged on top ... your return stays the same" (Phase 3: profit and margin), followed by the
+  // customer total and Your Return shown highlighted.
+  const explained = at((s) => s[0] === 'caption' && /delivery/i.test(s[1]) && /on top/i.test(s[1]) && /return/i.test(s[1]) && /same|unchanged/i.test(s[1]));
+  assert.ok(price >= 0 && price < courier && courier < freight && freight < packaging && packaging < explained, JSON.stringify({ price, courier, freight, packaging, explained }));
+  assert.equal(pricing[explained + 1][0], 'show', 'the customer total and Your Return shown straight after the caption');
 });
 
 test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposit, workshop, final payment and complete, invoice and summary', () => {
@@ -399,7 +402,7 @@ test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposi
   // and at least 2 s on the invoice).
   const keyHold = ({ step }) => (step[0] === 'hold' && step[1] >= 1000 && step[1] <= 2000) || (step[0] === 'show' && step[2] >= 1000 && step[2] <= 2000);
   const holdAfter = (index) => flat.slice(index + 1, index + 4).some(keyHold);
-  assert.ok(holdAfter(at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent')), 'hold on live pricing');
+  assert.ok(holdAfter(at((s) => s[0] === 'type' && s[1] === '#quoteTotal')), 'hold on live pricing');
   assert.ok(holdAfter(at((s) => s[0] === 'scroll' && /viewQuoteSheet/.test(s[1]))), 'hold on the quote');
   assert.ok(flat.slice(marks.issued, marks.summary).some(keyHold), 'hold on the final invoice');
 });
@@ -573,7 +576,7 @@ test('Q18 Phase 3: the whole demonstration runs about 3 to 3.5 minutes, with key
   assert.ok(holds.length >= 5 && holds.every((ms) => ms >= 600 && ms <= 2000), `short holds only ${holds}`);
 });
 
-test('Q18 Phase 3: the courier choice is shown and held, then Courier, Freight, Packaging, the delivery total and the unchanged profit and margin are each highlighted', async () => {
+test('Q18 Phase 3: the courier choice is shown and held, then Courier, Freight, Packaging, the delivery total, the customer total and the unchanged Your Return are each highlighted', async () => {
   const h = stage();
   const pricing = flatJourney(h).filter(({ chapter }) => chapter === 4).map(({ step }) => step);
   const at = (pred) => pricing.findIndex(pred);
@@ -583,12 +586,12 @@ test('Q18 Phase 3: the courier choice is shown and held, then Courier, Freight, 
   const packaging = at((s) => s[0] === 'type' && s[1] === '#quotePackaging');
   const total = at((s) => s[0] === 'show' && s[1] === '#quoteDeliveryTotalField');
   const onTop = at((s) => s[0] === 'caption' && /on top/i.test(s[1]));
-  const profit = at((s) => s[0] === 'show' && Array.isArray(s[1]) && s[1].includes('#quoteProfitField') && s[1].includes('#quoteMarginPercentField'));
+  const profit = at((s) => s[0] === 'show' && Array.isArray(s[1]) && s[1].includes('#quoteCustomerTotalLine') && s[1].includes('#quoteEarningsSummary'));
   assert.ok(choice >= 0 && choice < courier && courier < freight && freight < packaging && packaging < total && total < onTop && onTop < profit, JSON.stringify({ choice, courier, freight, packaging, total, onTop, profit }));
   assert.ok(pricing[choice][2] >= 800 && pricing[choice][2] <= 2000, 'a brief hold on the Collection / Courier choice');
   // While playing: each of those is highlighted and in view while it is shown.
   const seen = [];
-  const watch = ['#quoteFulfilmentGroup', '#quoteDeliveryTotalField', '#quoteProfitField', '#quoteMarginPercentField'];
+  const watch = ['#quoteFulfilmentGroup', '#quoteDeliveryTotalField', '#quoteCustomerTotalLine', '#quoteEarningsSummary'];
   for (const key of watch) {
     const el = h.get(key);
     el.setAttribute = (name, value) => { el.attributes[name] = String(value); if (name === 'data-demo-highlight') seen.push([key, el.inView]); };
@@ -685,17 +688,18 @@ test('Q18 Phase 3 review: controls are brought into view with the smallest scrol
   assert.ok(studioActs(h).every((a) => a.highlighted && a.inView));
 });
 
-test('Q18 Phase 3 review: pricing is shown both ways - a margin, then the profit you want - with one short caption, in about 5-8 s, figures from Studio', async () => {
+// Q23 (replaces "pricing is shown both ways - a margin, then the profit you want"): the simple default pricing.
+test('Q23: pricing shows the Components Cost, then the Rod Price is typed in with Your Return, one short caption, about 5-8 s', async () => {
   const h = stage();
   const pricing = flatJourney(h).filter(({ chapter }) => chapter === 4).map(({ step }) => step);
   const at = (pred, from = 0) => pricing.findIndex((s, i) => i >= from && pred(s));
-  const caption = at((s) => s[0] === 'caption' && /margin/i.test(s[1]) && /profit/i.test(s[1]));
-  const margin = at((s) => s[0] === 'type' && s[1] === '#quoteMarginPercent' && /^\d+$/.test(s[2]));
-  const priceAfterMargin = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField'), margin);
-  const profit = at((s) => s[0] === 'type' && s[1] === '#quoteProfit' && /^\d+$/.test(s[2]));
-  const recalculated = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField') && [].concat(s[1]).includes('#quoteMarginPercentField'), profit);
-  assert.ok(caption >= 0 && caption < margin && margin < priceAfterMargin && priceAfterMargin < profit && profit < recalculated, JSON.stringify({ caption, margin, priceAfterMargin, profit, recalculated }));
-  assert.equal(pricing.slice(caption + 1, recalculated).filter((s) => s[0] === 'caption').length, 0, 'one caption for both');
+  const cost = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteCostBeforeMarginField'));
+  const caption = at((s) => s[0] === 'caption' && /rod price/i.test(s[1]) && /return/i.test(s[1]));
+  const price = at((s) => s[0] === 'type' && s[1] === '#quoteTotal' && /^\d+$/.test(s[2]));
+  const shown = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField') && [].concat(s[1]).includes('#quoteEarningsSummary'), price);
+  assert.ok(cost >= 0 && cost < caption && caption < price && price < shown, JSON.stringify({ cost, caption, price, shown }));
+  assert.match(pricing[caption][1], /GST included/, 'the price is entered including tax');
+  assert.equal(pricing.slice(caption + 1, shown).filter((s) => s[0] === 'caption').length, 0, 'one caption');
   // Timed while playing: from that caption to the next one.
   player(h).open(h.director);
   h.get('#demoStartBtn').click();
@@ -704,7 +708,7 @@ test('Q18 Phase 3 review: pricing is shown both ways - a margin, then the profit
   const i = captions.findIndex((e) => e[1] === pricing[caption][1]);
   const ms = captions[i + 1][2] - captions[i][2];
   assert.ok(ms >= 5000 && ms <= 8000, `about 5-8 s (${ms} ms)`);
-  assert.ok(h.log.some((e) => e[0] === 'input' && e[1] === '#quoteProfit' && e[2] === pricing[profit][2]), 'the profit is typed in');
+  assert.ok(h.log.some((e) => e[0] === 'input' && e[1] === '#quoteTotal' && e[2] === pricing[price][2]), 'the rod price is typed in');
 });
 
 test('Q18 Phase 3 review: if something floats over a control after it was brought into view, it is centred before it is used', async () => {

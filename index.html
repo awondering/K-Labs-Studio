@@ -978,15 +978,30 @@
           <div id="workshopQuoteSummaryBody" class="quote-section__body">
             <div id="workshopPricingFields" class="quote-grid quote-grid--two build-pricing">
             <button id="quotePricingSummaryBtn" class="ghost-action quote-grid__full build-pricing__summary-toggle" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span>Pricing</span><strong id="quotePricingSummaryValue"></strong></button>
-            <label id="quoteLabourRateField"><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            <label id="quoteLabourHoursField"><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
+            <!-- Q23: the labour split is no longer offered. The fields stay (hidden) so saved builds keep their labour exactly. -->
+            <label id="quoteLabourRateField" hidden><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+            <label id="quoteLabourHoursField" hidden><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
             <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Components Cost</span><input id="quoteCostBeforeMargin" type="text" readonly tabindex="-1" /></label>
-            <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Customer Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-            <label id="quoteProfitField"><span>Required Profit</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
-            <label id="quoteMarginPercentField"><span>Margin %</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
+            <label id="quoteTotalField" class="quote-grid__full build-pricing__total"><span>Rod Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="quoteRodPriceHint" class="build-pricing__hint"></small></label>
+            <p id="quoteCustomerTotalLine" class="quote-grid__full build-pricing__hint" hidden></p>
             <div id="quoteEarningsSummary" class="quote-grid__full build-earnings-summary" aria-live="polite">
-              <span>Estimated Earnings</span><strong id="quoteEstimatedEarnings">$0.00</strong>
-              <p>Includes labour and profit. Before overheads and income tax.</p>
+              <span>Your Return</span><strong id="quoteEstimatedEarnings">$0.00</strong>
+              <p>Before overheads and income tax.</p>
+            </div>
+            <p id="quoteLegacyLabourLine" class="quote-grid__full build-pricing__hint" hidden></p>
+            <p id="quoteAdvancedPricingNote" class="quote-grid__full build-pricing__notice" role="note" hidden><span>Margin and target pricing are now in Settings → Show Advanced Pricing</span><button id="quoteAdvancedPricingNoteDismiss" class="ghost-action build-pricing__notice-dismiss" type="button" aria-label="Dismiss this note">✕</button></p>
+            <div id="quoteAdvancedPricing" class="quote-grid__full build-pricing__advanced" role="group" aria-labelledby="quoteAdvancedPricingTitle">
+              <span id="quoteAdvancedPricingTitle" class="build-pricing__advanced-title">Advanced Pricing</span>
+              <label id="quoteProfitField"><span id="quoteProfitLabel">Target Return ($)</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
+              <label id="quoteMarginPercentField"><span id="quoteMarginPercentLabel">Target Return (% of price)</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
+              <label id="quoteBuildHoursField"><span>Build hours (optional)</span><input id="quoteBuildHours" type="number" inputmode="decimal" min="0" step="0.25" placeholder="0" /></label>
+              <p id="quoteEffectiveHourly" class="build-pricing__hint" aria-live="polite"></p>
+              <div id="quoteTimePricingRow" class="build-pricing__time">
+                <span class="build-pricing__time-label">Price from my time</span>
+                <span id="quoteTimeHours" class="build-pricing__time-hours">0 h</span><span aria-hidden="true">×</span>
+                <input id="quoteTimeRate" class="build-pricing__time-rate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Rate" aria-label="Hourly rate" />
+                <button id="quoteTimePricingApply" class="ghost-action build-pricing__time-apply" type="button">Set Target Return</button>
+              </div>
             </div>
             <p id="quotePriceWarning" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
             <label id="quoteIncludeGstField" class="quote-gst-toggle quote-grid__full"><span id="quoteIncludeTaxLabel">Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
@@ -1180,6 +1195,7 @@
           <label class="settings-pricing-field settings-pricing-field--stacked" id="settingsTaxNameField"><span class="settings-pricing-label">Tax name</span><input id="settingsTaxName" type="text" maxlength="40" placeholder="GST" value="GST" autocomplete="off" /></label>
           <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label" id="settingsTaxRegistrationLabel">GST Number</span><input id="settingsBusinessGstNumber" type="text" autocomplete="off" placeholder="Optional" /></label>
           <label class="settings-pricing-field"><span class="settings-pricing-label">Labour rate (per hr)</span><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></label>
+          <div class="settings-pricing-field" id="settingsShowAdvancedPricingField"><span class="settings-pricing-label" id="settingsShowAdvancedPricingLabel">Show Advanced Pricing</span><label class="settings-toggle" for="settingsShowAdvancedPricing"><input id="settingsShowAdvancedPricing" type="checkbox" aria-labelledby="settingsShowAdvancedPricingLabel" aria-describedby="settingsShowAdvancedPricingHint" /><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span></label><small id="settingsShowAdvancedPricingHint" class="settings-pricing-hint">Target Return ($ or %), build hours and pricing from your time.</small></div>
           <label class="settings-pricing-field settings-pricing-field--stacked" id="settingsCurrencyField"><span class="settings-pricing-label">Currency</span><select id="settingsCurrency" aria-label="Currency">
             <option value="NZD">NZD — New Zealand dollar</option>
             <option value="AUD">AUD — Australian dollar</option>
