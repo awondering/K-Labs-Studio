@@ -98,6 +98,7 @@ async function boot(browser, base, contextOptions, search = '?demo') {
   await context.addInitScript(() => {
     window.__acts = [];
     window.__highlights = [];
+    window.__seatRefs = [];
     const inView = (el) => {
       const r = el.getBoundingClientRect();
       if (!(r.width > 0 || r.height > 0)) return 'no size';
@@ -117,13 +118,20 @@ async function boot(browser, base, contextOptions, search = '?demo') {
       }
       return '';
     };
-    const name = (el) => el.id || el.getAttribute('data-fulfilment-method') || el.getAttribute('data-choice-option') || el.getAttribute('aria-controls') || el.className || el.tagName;
+    const name = (el) => el.id || el.getAttribute('data-fulfilment-method') || el.getAttribute('data-layout-seat-ref') || el.getAttribute('data-choice-option') || el.getAttribute('aria-controls') || el.className || el.tagName;
     const record = (event) => {
       const el = event.target;
       if (event.isTrusted || !(el instanceof Element) || el.closest('[data-demo-player]')) return;
       const lit = el.closest('[data-demo-highlight]');
       const outline = lit ? getComputedStyle(lit) : null;
       window.__acts.push({ kind: event.type, el: name(el), lit: !!lit && outline.outlineStyle !== 'none' && parseFloat(outline.outlineWidth) >= 2, view: inView(el), y: Math.round(scrollY) });
+      if (event.type === 'click' && el.matches('#quoteSpecReelSeatRef [data-layout-seat-ref]')) {
+        // Studio replaces the buttons after updating the selection. Read that result after the click finishes.
+        setTimeout(() => window.__seatRefs.push({
+          ref: document.querySelector('#quoteSpecReelSeatRef [aria-pressed="true"]')?.getAttribute('data-layout-seat-ref'),
+          position: document.getElementById('quoteSpecReelSeatPosition').value,
+        }), 0);
+      }
     };
     document.addEventListener('click', record, true);
     document.addEventListener('input', record, true);
@@ -199,6 +207,42 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
 
   // Pause during chapter 3, while parts are being picked: nothing moves until Play.
   await waitChapter(page, 3, 120000);
+  const rodSpec = await page.evaluate(() => {
+    const styles = (el) => {
+      const { width, height, left, right } = el.getBoundingClientRect();
+      const { borderRadius, borderWidth, borderStyle, backgroundImage, fontSize } = getComputedStyle(el);
+      return { width, height, left, right, borderRadius, borderWidth, borderStyle, backgroundImage, fontSize };
+    };
+    const buttons = [...document.querySelectorAll('#quoteSpecReelSeatRef button')];
+    const grips = [...document.querySelectorAll('.build-details__grips input')];
+    const model = rodLayoutModel();
+    return {
+      refs: window.__seatRefs,
+      selected: buttons.filter((el) => el.getAttribute('aria-pressed') === 'true').map((el) => el.getAttribute('data-layout-seat-ref')),
+      value: document.getElementById('quoteSpecReelSeatPosition').value,
+      grips: grips.map((el) => el.value),
+      geometry: Object.fromEntries(model.items.map(({ key, startMm, endMm }) => [key, [startMm, endMm]])),
+      valid: !model.overlaps && !model.approximateOverlap && !model.exceeds,
+      width: document.documentElement.clientWidth,
+      buttons: buttons.map(styles),
+      inputs: grips.map(styles),
+    };
+  });
+  assert.deepEqual(rodSpec.refs, ['rear', 'centre', 'front', 'rear'].map((ref) => ({ ref, position: '' })));
+  assert.deepEqual(rodSpec.selected, ['rear']);
+  ck(`${label}: the reference walkthrough ends at Rear of Seat with 330 mm from the butt`, rodSpec.value === '330 mm from butt', rodSpec);
+  assert.deepEqual(rodSpec.grips, ['80 mm', '75 mm', '100 mm']);
+  assert.deepEqual(rodSpec.geometry, { rearGrip: [0, 80], reelSeat: [330, 460], lowerGrip: [255, 330], foreGrip: [460, 560] });
+  ck(`${label}: split grips fit the model without overlap`, rodSpec.valid, rodSpec.geometry);
+  const [rear, centre] = rodSpec.buttons;
+  const controls = [...rodSpec.buttons, ...rodSpec.inputs];
+  ck(`${label}: seat buttons are equal and align with the grip inputs' height and radius`,
+    controls.length === 6 && controls.every((c) => c.width >= 44 && c.height >= 44 && c.height === rear.height
+      && c.left >= 0 && c.right <= rodSpec.width && c.borderRadius === rear.borderRadius
+      && c.borderStyle === 'solid' && c.borderWidth === rear.borderWidth && parseFloat(c.fontSize) >= 11)
+    && rodSpec.buttons.every((b) => Math.abs(b.width - rear.width) < 1)
+    && rear.backgroundImage !== centre.backgroundImage && centre.backgroundImage !== rodSpec.inputs[0].backgroundImage, controls);
+
   await page.waitForFunction(() => quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).length >= 1, null, { timeout: 60000 });
   await visitorPress(page, '#demoPlayPauseBtn', touch);
   const snap = () => page.evaluate(() => JSON.stringify({ parts: quote.components.map((c) => c.libraryComponentId || ''), sheet: [...document.querySelectorAll('.component-sheet')].filter((s) => !s.hidden).map((s) => s.id + (s.querySelector('h2')?.textContent || '')), hours: document.getElementById('quoteLabourHours').value, store: window.KLABS_DEMO.storeKeys().length }));

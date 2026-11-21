@@ -180,6 +180,22 @@ test('Q18 2A/2B: the journey has ten chapters in workflow order, each with short
   assert.ok(Object.isFrozen(journey) && journey.every((c) => Object.isFrozen(c) && Object.isFrozen(c.steps)), 'the journey cannot be changed at run time');
 });
 
+test('Rod spec shows each seat reference before entering the final rear measurement', () => {
+  const steps = player(stage()).journey[1].steps;
+  const refs = Array.from(steps, ([kind, selector], index) => ({
+    index, match: kind === 'tap' && selector.match(/^#quoteSpecReelSeatRef \[data-layout-seat-ref="(rear|centre|front)"\]$/),
+  })).filter(({ match }) => match);
+  assert.deepEqual(refs.map(({ match }) => match[1]), ['rear', 'centre', 'front', 'rear']);
+  const entries = Array.from(steps).filter(([kind, selector]) => kind === 'type' && /#quoteSpec(?:ReelSeatPosition|.*Grip.*Length)$/.test(selector));
+  assert.ok(entries.every((entry) => steps.indexOf(entry) > refs.at(-1).index));
+  assert.deepEqual(Object.fromEntries(entries.map(([, selector, value]) => [selector, value])), {
+    '#quoteSpecReelSeatPosition': '330 mm from butt',
+    '#quoteSpecRearGripLength': '80 mm',
+    '#quoteSpecGripBelowReelSeatLength': '75 mm',
+    '#quoteSpecForeGripLength': '100 mm',
+  });
+});
+
 test('Q18 2A: the director works the real Studio controls in workflow order: customer, spec, components, labour, pricing, quote', () => {
   const h = stage();
   const flat = player(h).journey.flatMap((c, i) => c.steps.map((s) => ({ chapter: i + 1, step: s })));

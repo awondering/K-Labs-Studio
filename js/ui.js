@@ -4375,7 +4375,7 @@ function customerGripFeatureSummary(){
   const lower=customerSafeText(specs.gripBelowReelSeatLength);
   const fore=buildSpecMeasurementMm(specs.foreGripLength,{zeroIsEmpty:true}).state==='empty'?'':customerSafeText(specs.foreGripLength);
   if(rear && fore && !lower)return `Split-grip layout with a rear grip of ${rear} and a fore grip of ${fore}.`;
-  if(rear && lower && fore)return `Full handle layout with rear grip ${rear}, lower grip ${lower}, and fore grip ${fore}.`;
+  if(rear && lower && fore)return `Grip layout with rear grip ${rear}, lower grip ${lower}, and fore grip ${fore}.`;
   if(rear)return `Rear grip layout set at ${rear}.`;
   if(lower)return `Lower grip section set at ${lower}.`;
   if(fore)return `Fore grip section set at ${fore}.`;
@@ -16418,7 +16418,7 @@ function rodLayoutSeatRefLabels(){
   return {rear:'Rear of seat',centre:'Centre of seat',front:'Front of seat'};
 }
 function rodLayoutSeatRefChoice(current){
-  return `<div class="rod-layout__choice" role="group" aria-label="Where on the reel seat the position is measured">${Object.entries(rodLayoutSeatRefLabels()).map(([value,label])=>`<button type="button" data-layout-seat-ref="${value}" aria-pressed="${current===value?'true':'false'}">${label}</button>`).join('')}</div>`;
+  return `<div class="quote-job-type__options rod-layout__choice" role="group" aria-label="Where on the reel seat the position is measured">${Object.entries(rodLayoutSeatRefLabels()).map(([value,label])=>`<button type="button" class="quote-job-type__option" data-layout-seat-ref="${value}" aria-pressed="${current===value?'true':'false'}">${label}</button>`).join('')}</div>`;
 }
 function rodLayoutReadout(model){
   if(!rodLayoutSelection)return '';
