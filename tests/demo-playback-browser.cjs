@@ -385,8 +385,12 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const summary = await documentShown(page, '#viewQuoteSheet');
   ck(`${label}: the demonstration finishes on the completed Build Summary`, summary.open && summary.title === 'Build Summary', summary.title);
   ck(`${label}: the build summary carries the DEMO watermark and banner`, summary.watermark === '"DEMO"' && /DEMONSTRATION BUILD SUMMARY/.test(summary.banner || ''), [summary.watermark, summary.banner]);
-  const summaryRow = (re) => summary.rows.find((r) => re.test(r[0] || ''));
-  ck(`${label}: the summary's Total Price = quoteMaths() total, Balance Owing 0.00`, near(money(summaryRow(/^Total Price/)[1]), priced.maths.total) && near(money(summaryRow(/^Balance Owing/)[1]), 0), summary.rows);
+  const summaryAmount = (label) => money(summary.rows.find(([name]) => name === label)?.[1]);
+  ck(`${label}: Build Summary shows the full price, total received and Paid in full with zero owing`,
+    near(summaryAmount('Total Price'), priced.maths.total)
+    && near(summaryAmount('Total Received'), priced.maths.total)
+    && near(summaryAmount('Paid in full'), 0)
+    && !summary.rows.some(([name]) => name === 'Balance Owing' || name === 'Deposit Received'), summary.rows);
   const end = await page.evaluate(() => ({ caption: document.getElementById('demoCaption').textContent, label: document.getElementById('demoChapterLabel').textContent,
     play: { text: document.getElementById('demoPlayPauseBtn').textContent, disabled: document.getElementById('demoPlayPauseBtn').disabled }, replay: document.getElementById('demoReplayBtn').getClientRects().length }));
   ck(`${label}: at the end the Pause button reads Replay (and the separate Replay steps aside)`, end.label === 'Finished' && end.play.text === 'Replay' && !end.play.disabled && end.replay === 0, end);
