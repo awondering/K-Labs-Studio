@@ -207,6 +207,17 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
 
   // Pause during chapter 3, while parts are being picked: nothing moves until Play.
   await waitChapter(page, 3, 120000);
+  const expectedCompletion = await page.evaluate(() => {
+    const input = document.getElementById('quoteEstimatedCompletionDate');
+    const today = new Date();
+    const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    return { type: input.type, value: input.value, saved: quote.estimatedCompletionDate,
+      daysAhead: (Date.parse(input.value) - todayDay) / 86400000,
+      display: formatDateDisplay(input.value, { includeTime: false }) };
+  });
+  ck(`${label}: Estimated Completion is saved from the native date field three weeks ahead`,
+    expectedCompletion.type === 'date' && expectedCompletion.daysAhead === 21
+    && expectedCompletion.value === expectedCompletion.saved, expectedCompletion);
   const rodSpec = await page.evaluate(() => {
     const styles = (el) => {
       const { width, height, left, right } = el.getBoundingClientRect();
@@ -335,6 +346,8 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const quoteDoc = await documentShown(page, '#viewQuoteSheet');
   ck(`${label}: the customer quote is open`, quoteDoc.open && quoteDoc.title === 'Customer Quote', quoteDoc.title);
   ck(`${label}: the quote carries the DEMO watermark and banner`, quoteDoc.watermark === '"DEMO"' && /DEMONSTRATION QUOTE/.test(quoteDoc.banner || ''), [quoteDoc.watermark, quoteDoc.banner]);
+  ck(`${label}: the customer quote shows Estimated Completion`,
+    quoteDoc.rows.find(([name]) => name === 'Estimated Completion')?.[1] === expectedCompletion.display, quoteDoc.rows);
   const total = quoteDoc.rows.find((r) => r[0] === 'Total Price');
   ck(`${label}: the quote's Total Price = quoteMaths() total`, total && near(money(total[1]), priced.maths.total), total);
   const deliveryRow = quoteDoc.rows.find((r) => /^Delivery/.test(r[0] || '') && /\d/.test(r[1] || ''));
@@ -385,6 +398,9 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   await visitorPress(page, '[data-nav="homeScreen"]', touch);
   await page.waitForTimeout(400);
   ck(`${label}: Jordan's job is in Active Jobs, and the visitor's tap on Home does not leave it`, await page.evaluate(() => document.getElementById('buildsScreen').classList.contains('active') && /Jordan Ellis/.test(document.getElementById('buildsScreen').innerText)));
+  const activeDue = await page.locator('.saved-build-card').filter({ hasText: 'Jordan Ellis' }).locator('small').allTextContents();
+  ck(`${label}: Active Jobs retains the estimated completion date`,
+    activeDue.some((text) => text === `Est. completion ${expectedCompletion.display}`), activeDue);
   await page.waitForFunction(() => /Grip and reel seat fitted/.test(document.getElementById('quoteSpecBuilderNotes')?.value || ''), null, { timeout: 60000 });
   ck(`${label}: private workshop notes typed on the job`, true);
 
@@ -421,6 +437,15 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   // Studio writes "Paid in full" (shown in capitals) in the balance row once nothing is owing.
   ck(`${label}: invoice balance = Paid in full, 0.00`, !!row(/^Paid in full$/i) && near(money(row(/^Paid in full$/i)[1]), 0) && !row(/^Balance owing$/i), invoice.amounts);
   ck(`${label}: Print / Save as PDF and More documents are hidden`, !invoice.print.shown && invoice.print.disabled && invoice.more === 0, [invoice.print, invoice.more]);
+  const completed = await page.evaluate(() => ({
+    estimate: quote.estimatedCompletionDate,
+    actual: Date.parse(quote.completedAt),
+    email: customerEmailLines().filter((line) => /^(Completed|Estimated completion):/.test(line)),
+    expectedEmailLine: `Completed: ${formatCustomerEmailLongDate(quote.completedAt)}`,
+  }));
+  ck(`${label}: Mark Complete records an actual date without overwriting the estimate`,
+    completed.estimate === expectedCompletion.value && completed.actual < Date.parse(expectedCompletion.value)
+    && completed.email.length === 1 && completed.email[0] === completed.expectedEmailLine, completed);
   const invoiceSheet = await sheetsClear(page);
   ck(`${label}: the invoice sheet title and close button are not covered by the dock`, invoiceSheet.length > 0 && invoiceSheet.every((s) => s.clear), invoiceSheet);
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-5-invoice.png`) });
@@ -429,6 +454,8 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const summary = await documentShown(page, '#viewQuoteSheet');
   ck(`${label}: the demonstration finishes on the completed Build Summary`, summary.open && summary.title === 'Build Summary', summary.title);
   ck(`${label}: the build summary carries the DEMO watermark and banner`, summary.watermark === '"DEMO"' && /DEMONSTRATION BUILD SUMMARY/.test(summary.banner || ''), [summary.watermark, summary.banner]);
+  ck(`${label}: the Build Summary retains the original estimated completion date`,
+    summary.rows.find(([name]) => name === 'Estimated Completion')?.[1] === expectedCompletion.display, summary.rows);
   const summaryAmount = (label) => money(summary.rows.find(([name]) => name === label)?.[1]);
   ck(`${label}: Build Summary shows the full price, total received and Paid in full with zero owing`,
     near(summaryAmount('Total Price'), priced.maths.total)
