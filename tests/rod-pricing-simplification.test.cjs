@@ -39,7 +39,8 @@ function pricing(job,settings={}){
   const studioSettings={taxRate:15,taxEnabled:true,taxType:'gst',currency:'NZD',defaultLabourRate:85,...settings};
   const c=loadRecordFunctions(['normalizeQuote','quoteMaths','rodPricingFigures','applyManualRodPrice','applyManualTargetReturn',
     'applyManualTargetReturnPercent','rodPriceLabel','targetReturnPercentLabel','legacyLabourLineText','effectiveHourlyReturn',
-    'timePricingAmount','accountUsesAdvancedPricing','shouldShowAdvancedPricingNote','advancedPricingEnabled'],{
+    'timePricingAmount','accountUsesAdvancedPricing','shouldShowAdvancedPricingNote','advancedPricingEnabled',
+    'rodPriceHintText','customerTotalLineText','taxAmountLabel'],{
     studioSettings,
     activeTaxEnabled:()=>studioSettings.taxEnabled!==false,
     activeTaxRate:()=>studioSettings.taxRate,
@@ -244,4 +245,34 @@ test('Components jobs keep their own pricing: the new rod-pricing elements are h
 });
 test('Advanced Pricing is hidden unless the pricing section says it is on',()=>{
   assert.match(css,/#workshopPricingSection:not\(\[data-advanced-pricing="true"\]\) #quoteAdvancedPricing\{display:none\}/);
+});
+
+// ---------- 4. Review fixes (22 Nov 2026): GST clarity, document buttons, one heading style ----------
+test('GST: the rod figure, the customer total and the GST Amount box each say what they cover',()=>{
+  const c=pricing(newBuild());
+  assert.equal(c.rodPriceHintText({currencyCode:'NZD',taxActive:true,taxName:'GST',rodTax:'$117.26',jobType:'build'}),'NZD · GST on the rod $117.26');
+  assert.equal(c.rodPriceHintText({currencyCode:'NZD',taxActive:true,taxName:'VAT',rodTax:'$9.00',jobType:'repair'}),'NZD · VAT on the repair $9.00');
+  assert.equal(c.rodPriceHintText({currencyCode:'AUD',taxActive:false,taxName:'GST',rodTax:'$0.00',jobType:'build'}),'AUD');
+  assert.equal(c.customerTotalLineText({total:'$933.50',totalTax:'$121.76',taxActive:true,taxName:'GST'}),
+    'Customer total with delivery: $933.50 (incl. GST $121.76)');
+  assert.equal(c.customerTotalLineText({total:'$812.00',totalTax:'$0.00',taxActive:false,taxName:'GST'}),'Customer total with delivery: $812.00');
+  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:true}),'GST (rod + delivery)');
+  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:false}),'GST (rod)');
+  assert.equal(c.taxAmountLabel({taxName:'VAT',jobType:'repair',withDelivery:true}),'VAT (repair + delivery)');
+  assert.equal(c.taxAmountLabel({taxName:'GST',componentsJob:true,withDelivery:true}),'GST Amount','Components jobs keep their label');
+});
+test('the build screen uses one section heading style: Fulfilment Method, Payment Status and Documents',()=>{
+  assert.match(html,/<span class="quote-job-type__label build-section-heading">Fulfilment Method<\/span>/);
+  assert.match(html,/<h3 class="quote-payment__heading build-section-heading">Payment Status<\/h3>/);
+  assert.match(html,/<span class="workshop-build-actions-docs__label build-section-heading">Documents<\/span>/);
+  assert.match(css,/#workshopScreen #workshopPricingSection \.build-section-heading\{[^}]*font-size:11px[^}]*\}/);
+});
+test('Documents are one compact row of secondary buttons; iPhone two per row at 44px; no full-width Customer Invoice',()=>{
+  assert.doesNotMatch(css,/#viewInvoicePreviewBtn\{grid-column:1\/-1\}/);
+  assert.match(css,/#workshopScreen \.workshop-build-actions-docs__grid\{display:flex;flex-wrap:wrap;gap:8px\}/);
+  assert.match(css,/@media \(max-width:640px\)\{[^@]*#workshopPricingSection \.workshop-build-actions-docs__grid > \*\{flex:1 1 calc\(50% - 4px\)[^}]*\}[^@]*min-height:44px/);
+});
+test('the red active-target marker shows only with Advanced Pricing on (the simple screen has one price)',()=>{
+  const src=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
+  assert.match(src,/classList\.toggle\('quote-field--active-target',advancedPricingEnabled\(\) && !componentsPricing && pricingDriver===driverName\)/);
 });

@@ -4000,6 +4000,18 @@ function rodPriceLabel({taxActive,taxName,jobType}={}){
   const base=jobType==='repair'?'Repair Price':'Rod Price';
   return taxActive?`${base} (incl. ${taxName})`:base;
 }
+// Q23 review: each GST figure says what it covers - the rod alone, or the customer total with delivery. Wording only.
+function rodPriceHintText({currencyCode,taxActive,taxName,rodTax,jobType}={}){
+  return taxActive?`${currencyCode} · ${taxName} on the ${jobType==='repair'?'repair':'rod'} ${rodTax}`:String(currencyCode||'');
+}
+function customerTotalLineText({total,totalTax,taxActive,taxName}={}){
+  return `Customer total with delivery: ${total}${taxActive?` (incl. ${taxName} ${totalTax})`:''}`;
+}
+function taxAmountLabel({taxName,jobType,withDelivery,componentsJob}={}){
+  if(componentsJob)return `${taxName} Amount`;
+  const item=jobType==='repair'?'repair':'rod';
+  return `${taxName} (${withDelivery?`${item} + delivery`:item})`;
+}
 function targetReturnPercentLabel({taxActive,taxName}={}){
   return taxActive?`Target Return (% of price excl. ${taxName})`:'Target Return (% of price)';
 }
@@ -17398,7 +17410,8 @@ function updateQuoteSummary(){
   const pricingDriver=normalizePricingDriver(quote.pricingDriver);
   [['quoteTotalField','price'],['quoteProfitField','profit'],['quoteMarginPercentField','margin']].forEach(([id,driverName])=>{
     const el=$(id);
-    if(el)el.classList.toggle('quote-field--active-target',pricingDriver===driverName);
+    // The red "active target" marker only means something when Advanced Pricing shows more than one way to price.
+    if(el)el.classList.toggle('quote-field--active-target',advancedPricingEnabled() && !componentsPricing && pricingDriver===driverName);
   });
   const totalLabel=document.querySelector('#quoteTotalField > span');
   if(totalLabel)totalLabel.textContent=componentsPricing
@@ -17406,17 +17419,17 @@ function updateQuoteSummary(){
     :rodPriceLabel({taxActive:taxActiveForPrice,taxName:taxNameText,jobType:normalizeJobType(quote.jobType)});
   const rodPriceHint=$('quoteRodPriceHint');
   if(rodPriceHint){
-    rodPriceHint.textContent=componentsPricing?'':(taxActiveForPrice
-      ?`${activeCurrencyCode()} · includes ${taxNameText} ${currency(rodFigures.rodTax)}`
-      :activeCurrencyCode());
+    rodPriceHint.textContent=componentsPricing?'':rodPriceHintText({currencyCode:activeCurrencyCode(),taxActive:taxActiveForPrice,
+      taxName:taxNameText,rodTax:currency(rodFigures.rodTax),jobType:normalizeJobType(quote.jobType)});
   }
+  // Shown as soon as Courier / Shipping is chosen (not on the first Freight keystroke), so the fields below do not move
+  // while delivery amounts are typed.
+  const withDelivery=!componentsPricing && (quote.fulfilmentMethod==='shipping' || numberOrZero(math.freightCharge)>0);
   const customerTotalLine=$('quoteCustomerTotalLine');
   if(customerTotalLine){
-    // Shown as soon as Courier / Shipping is chosen (not on the first Freight keystroke), so the fields below do not move
-    // while delivery amounts are typed.
-    const withDelivery=!componentsPricing && (quote.fulfilmentMethod==='shipping' || numberOrZero(math.freightCharge)>0);
     customerTotalLine.hidden=!withDelivery;
-    customerTotalLine.textContent=withDelivery?`Customer total with delivery: ${currency(math.total)}`:'';
+    customerTotalLine.textContent=withDelivery?customerTotalLineText({total:currency(math.total),totalTax:currency(math.gst),
+      taxActive:taxActiveForPrice,taxName:taxNameText}):'';
   }
   const legacyLabourLine=$('quoteLegacyLabourLine');
   if(legacyLabourLine){
@@ -17449,7 +17462,8 @@ function updateQuoteSummary(){
     timeApply.disabled=!(amount>0);
     timeApply.textContent=amount>0?`Set Target Return ${currency(amount)}`:'Set Target Return';
   }
-  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`${taxNameText} Amount`;
+  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=taxAmountLabel({taxName:taxNameText,jobType:normalizeJobType(quote.jobType),
+    withDelivery,componentsJob:componentsPricing});
   if($('quoteIncludeTaxLabel'))$('quoteIncludeTaxLabel').textContent=`Include ${taxNameText}`;
   if($('quoteTaxRateLabel'))$('quoteTaxRateLabel').textContent=`${taxNameText} Rate (%)`;
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);

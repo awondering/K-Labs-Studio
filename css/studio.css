@@ -7713,6 +7713,23 @@ textarea::-moz-selection,
   line-height:1.4;
 }
 
+/* Q23 review fixes (22 Nov 2026), build screen layout only:
+   - Fulfilment Method, Payment Status and Documents share one section heading style;
+   - Documents are compact secondary buttons in one row (iPhone: two per row at 44px; an odd last one takes the row);
+   - Record Payment and Confirm Build keep a sensible width on Mac instead of running edge to edge;
+   - the page keeps scrolled-to controls clear of the bottom nav bar outside Demo Mode (Demo Mode measures it itself). */
+#workshopScreen #workshopPricingSection .build-section-heading{display:block;margin:0;font-size:11px;font-weight:700;line-height:1.3;letter-spacing:.12em;text-transform:uppercase;color:var(--ds-text-strong)}
+html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))}
+@media (min-width:641px){
+  #workshopScreen #quotePaymentBlock .quote-payment__actions > button{flex:0 0 auto;min-width:180px;min-height:40px;padding-left:20px;padding-right:20px}
+  #workshopScreen .workshop-build-actions-surface > #confirmBuildBtn{justify-self:start;width:auto;min-width:220px;min-height:40px;padding-left:28px;padding-right:28px}
+  #workshopScreen #workshopPricingSection .workshop-build-actions-status-toggle{min-height:40px}
+}
+@media (max-width:640px){
+  #workshopScreen #workshopPricingSection .workshop-build-actions-docs__grid > *{flex:1 1 calc(50% - 4px);min-width:0}
+  #workshopScreen #workshopPricingSection .workshop-build-actions-docs__grid .ghost-action{min-height:44px;padding-left:8px;padding-right:8px}
+}
+
 /* Sprint 2: Active Builds production refinements */
 #buildsScreen .screen-head .subtle{
   max-width:34ch;
@@ -8092,8 +8109,9 @@ textarea::-moz-selection,
 #workshopScreen .workshop-build-actions-surface{display:grid;gap:10px}
 #workshopScreen .workshop-build-actions-docs{display:grid;gap:6px}
 #workshopScreen .workshop-build-actions-docs__label{color:var(--ds-text-muted);font-size:9px;letter-spacing:.09em;text-transform:uppercase}
-#workshopScreen .workshop-build-actions-docs__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-#workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:8px;padding-right:8px}
+#workshopScreen .workshop-build-actions-docs__grid{display:flex;flex-wrap:wrap;gap:8px}
+#workshopScreen .workshop-build-actions-docs__grid > *{flex:0 0 auto;min-width:0}
+#workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:16px;padding-right:16px;font-size:11px;border:var(--ds-stroke);background:transparent;color:var(--ds-text-strong)}
 /* Pricing & Actions, iPhone layout (custom builds and repairs). Screen-only: stage and job state come from attributes on
    #workshopPricingSection set during the existing render; showing or hiding never saves, syncs or builds a document.
    - Pricing fields fold into one "Pricing" line once an invoice is issued, and at Complete (Payment stays visible).
@@ -8113,10 +8131,9 @@ textarea::-moz-selection,
 #workshopPricingSection[data-lifecycle="quote"][data-has-payments="false"] .quote-payment__summary{display:none}
 #workshopScreen .quote-payment__form .quote-payment__type{grid-column:1/-1}
 #workshopPricingSection[data-lifecycle="quote"] #viewInvoicePreviewBtn{display:none}
-#workshopScreen .workshop-build-actions-docs__grid #viewInvoicePreviewBtn{grid-column:1/-1}
 /* Quote stage: a compact "More documents" menu holds Customer Invoice. Opening it only shows the menu. */
 #workshopPricingSection:not([data-lifecycle="quote"]) #quoteMoreDocumentsWrap{display:none}
-#workshopScreen .workshop-build-actions-docs__grid .workshop-build-actions-more{grid-column:1/-1;position:relative;min-width:0}
+#workshopScreen .workshop-build-actions-docs__grid .workshop-build-actions-more{position:relative;min-width:0}
 #workshopScreen .workshop-build-actions-more .workshop-build-actions-more__toggle{width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
 #workshopScreen .workshop-build-actions-more .workshop-build-actions-more__toggle::after{content:'\25BE';opacity:.6}
 #workshopScreen .workshop-build-actions-more .workshop-build-actions-menu{min-width:168px}
