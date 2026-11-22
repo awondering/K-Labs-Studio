@@ -474,6 +474,17 @@
     }
     return operation;
   }
+  let recordRemoval = false;
+  async function recordRemovalSupported() {
+    if (recordRemoval) return true;
+    try {
+      const { data, error } = await client().rpc("klabs_record_removal_version");
+      recordRemoval = !error && data === 1;
+    } catch (error) {
+      recordRemoval = false;
+    }
+    return recordRemoval;
+  }
   async function financialOperation(buildId, kind, data) {
     if (!userId || !accountMatches() || !canWrite() || window.navigator?.onLine === false ||
         !window.crypto?.randomUUID || !client()) {
@@ -681,6 +692,9 @@
     getMode: () => mode,
     pendingFinancial,
     financialOperation,
+    // Q32: whether the server lets a builder remove an issued invoice, a payment entry or an invoiced build
+    // (supabase/migrations/20261123000000_q32_record_removal.sql). Until it does, Studio explains instead of failing a sync.
+    recordRemovalSupported,
     retryFinancial() {
       const operation = pendingFinancial();
       if (!operation) throw new Error("There is no pending financial operation.");

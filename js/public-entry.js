@@ -21,7 +21,7 @@
   // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
   // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
   // back to the public entry with the usual notice.
-  const DEMO_BUILD = "build148-v276";
+  const DEMO_BUILD = "build148-v277";
   const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
