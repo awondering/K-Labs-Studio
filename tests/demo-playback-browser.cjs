@@ -247,14 +247,21 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   assert.deepEqual(rodSpec.grips, ['80 mm', '75 mm', '100 mm']);
   assert.deepEqual(rodSpec.geometry, { rearGrip: [0, 80], reelSeat: [330, 460], lowerGrip: [255, 330], foreGrip: [460, 560] });
   ck(`${label}: split grips fit the model without overlap`, rodSpec.valid, rodSpec.geometry);
-  const [rear, centre] = rodSpec.buttons;
-  const controls = [...rodSpec.buttons, ...rodSpec.inputs];
-  ck(`${label}: seat buttons are equal and align with the grip inputs' height and radius`,
-    controls.length === 6 && controls.every((c) => c.width >= 44 && c.height >= 44 && c.height === rear.height
-      && c.left >= 0 && c.right <= rodSpec.width && c.borderRadius === rear.borderRadius
-      && c.borderStyle === 'solid' && c.borderWidth === rear.borderWidth && parseFloat(c.fontSize) >= 11)
-    && rodSpec.buttons.every((b) => Math.abs(b.width - rear.width) < 1)
-    && rear.backgroundImage !== centre.backgroundImage && centre.backgroundImage !== rodSpec.inputs[0].backgroundImage, controls);
+  // Q23 final correction: Rear / Centre / Front is a compact segmented control, not three full-width slabs. The selected
+  // segment is titanium, never red; iPhone segments are 40px with a 44px hit area; Mac segments are slim and sized to content.
+  const seat = rodSpec.buttons;
+  const selectedSeat = await page.evaluate(() => {
+    const el = document.querySelector('#quoteSpecReelSeatRef [aria-pressed="true"]');
+    const s = getComputedStyle(el);
+    const rgb = (c) => (c.match(/\d+(\.\d+)?/g) || []).map(Number);
+    const [r, g, b] = rgb(s.borderColor);
+    return { border: s.borderColor, background: s.backgroundColor, reddish: r > g + 50 && r > b + 50,
+      hit: parseFloat(getComputedStyle(el, '::after').height) || 0, group: el.parentElement.getBoundingClientRect().width };
+  });
+  ck(`${label}: Rear / Centre / Front is a compact segmented control with a titanium (not red) selection`,
+    seat.length === 3 && seat.every((c) => c.left >= 0 && c.right <= rodSpec.width && parseFloat(c.fontSize) >= 11 && c.height === seat[0].height)
+      && (touch ? seat[0].height >= 40 : seat[0].height >= 30 && seat[0].height <= 36)
+      && !selectedSeat.reddish && (touch || selectedSeat.group < rodSpec.width * 0.6), { seat, selectedSeat });
 
   await page.waitForFunction(() => quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).length >= 1, null, { timeout: 60000 });
   await visitorPress(page, '#demoPlayPauseBtn', touch);
@@ -277,10 +284,27 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const f = await figures(page);
+    f.view = await page.evaluate(() => {
+      const section = document.getElementById('workshopPricingSection');
+      return { advanced: section.getAttribute('data-advanced-pricing') === 'true', method: section.getAttribute('data-pricing-method'),
+        margin: document.getElementById('quoteMarginPercent').value, target: document.getElementById('quoteProfit').value,
+        editable: ['quoteTotal', 'quoteProfit', 'quoteMarginPercent'].filter((id) => !document.getElementById(id).readOnly) };
+    });
     samples.push(f);
     if (/couriered/.test(await page.evaluate(() => document.getElementById('demoCaption').textContent))) break;
     await page.waitForTimeout(120);
   }
+  // Q23 final correction: the short Advanced Pricing moment - a 55% target margin, then a $450 target return, each
+  // recalculating the Rod Price (GST included) from the parts; only the chosen field can be typed into.
+  const byMargin = samples.find((s) => s.view.advanced && s.view.method === 'percent' && Number(s.view.margin) === 55);
+  const byReturn = samples.find((s) => s.view.advanced && s.view.method === 'return' && Number(s.view.target) === 450);
+  ck(`${label}: Advanced - a 55% target margin recalculates the Rod Price (margin on the price excl. GST)`,
+    !!byMargin && near(byMargin.maths.rodPrice, PARTS_COST / 0.45 * 1.15, 0.011) && near(byMargin.maths.earnings, PARTS_COST / 0.45 * 0.55, 0.011)
+      && JSON.stringify(byMargin.view.editable) === '["quoteMarginPercent"]', byMargin && { view: byMargin.view, maths: byMargin.maths });
+  ck(`${label}: Advanced - a $450 target return recalculates the Rod Price; Your Return shows $450`,
+    !!byReturn && near(byReturn.maths.rodPrice, (PARTS_COST + 450) * 1.15, 0.011) && near(money(byReturn.shown.earnings), 450)
+      && JSON.stringify(byReturn.view.editable) === '["quoteProfit"]', byReturn && { view: byReturn.view, maths: byReturn.maths });
+  ck(`${label}: back to Simple before delivery`, !samples[samples.length - 1].view.advanced, samples[samples.length - 1].view);
   const live = new Set(samples.map((s) => money(s.shown.earnings).toFixed(2)));
   ck(`${label}: Your Return changes live on screen as the rod price is typed (${live.size} different returns seen)`, live.size >= 2, [...live]);
   const mismatched = samples.filter((s) => !near(Number(s.shown.rodPrice), s.maths.rodPrice) || !near(money(s.shown.earnings), s.maths.earnings, 0.0051) || !near(money(s.shown.componentsCost), s.maths.materialCost));

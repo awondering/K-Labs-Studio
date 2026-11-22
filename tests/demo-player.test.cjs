@@ -218,7 +218,14 @@ test('Q18 2A: the director works the real Studio controls in workflow order: cus
   assert.ok(order.every((i) => i >= 0), JSON.stringify(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'workflow order');
   assert.deepEqual(order.map((i) => flat[i].chapter), [1, 1, 1, 2, 3, 4, 4, 5]);
-  assert.ok(!flat.some(({ step }) => [].concat(step[1]).some((t) => /quoteLabour|quoteMarginPercent|quoteProfit/.test(String(t)))), 'no labour, margin or profit steps');
+  assert.ok(!flat.some(({ step }) => [].concat(step[1]).some((t) => /quoteLabour/.test(String(t)))), 'no labour steps');
+  // Q23 final correction: margin and dollar-return targets appear only in the short Advanced Pricing moment of chapter 4,
+  // between switching to Advanced and back to Simple.
+  const advancedOn = at((s) => s[0] === 'tap' && s[1] === '[data-pricing-view="advanced"]');
+  const advancedOff = at((s) => s[0] === 'tap' && s[1] === '[data-pricing-view="simple"]');
+  const targets = flat.map((f, i) => [f, i]).filter(([{ step }]) => [].concat(step[1]).some((t) => /quoteMarginPercent|quoteProfit/.test(String(t))));
+  assert.ok(advancedOn > 0 && advancedOff > advancedOn && flat[advancedOn].chapter === 4 && flat[advancedOff].chapter === 4);
+  assert.ok(targets.length >= 2 && targets.every(([, i]) => i > advancedOn && i < advancedOff), 'targets only inside the Advanced moment');
   // 2B: every control the later chapters use is checked below too.
   assert.ok(flat.length > 100);
   // Every control exists on the real page (index.html) or is built by Studio's own interface (ui.js).
@@ -570,7 +577,8 @@ test('Q18 Phase 3: one steady typing speed throughout and the same short beat be
 test('Q18 Phase 3: the whole demonstration runs about 3 to 3.5 minutes, with key moments held 1-2 s', async () => {
   const h = await playThrough();
   // The virtual clock leaves out Studio's own work and the browser's scrolling, which the real run adds on top.
-  assert.ok(h.clock() >= 165000 && h.clock() <= 205000, `about 3-3.5 minutes of playback (${h.clock()} ms virtual)`);
+  // Q23 final correction adds a short Advanced Pricing moment, so the upper bound is now exactly 3.5 minutes.
+  assert.ok(h.clock() >= 165000 && h.clock() <= 210000, `about 3-3.5 minutes of playback (${h.clock()} ms virtual)`);
   const flat = flatJourney(h);
   const holds = flat.filter(({ step }) => step[0] === 'hold').map(({ step }) => step[1]).concat(flat.filter(({ step }) => step[0] === 'show').map(({ step }) => step[2]));
   assert.ok(holds.length >= 5 && holds.every((ms) => ms >= 600 && ms <= 2000), `short holds only ${holds}`);

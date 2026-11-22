@@ -3961,6 +3961,36 @@ function applyManualTargetMargin(value){
 function advancedPricingEnabled(){
   return !!(studioSettings&&studioSettings.showAdvancedPricing===true);
 }
+// Simple / Advanced in the Rod Pricing heading is a view only: held in memory, never saved to the build or to Settings.
+// Until the builder switches, the Settings preference (Show Advanced Pricing) decides.
+let pricingViewChoice=null;
+function pricingViewAdvanced(){
+  return pricingViewChoice===null?advancedPricingEnabled():pricingViewChoice==='advanced';
+}
+function setPricingView(mode){
+  pricingViewChoice=mode==='advanced'?'advanced':'simple';
+}
+// Advanced Pricing offers three ways to price: set the Rod Price, a Target Return ($) or a Target Return (%, a margin on
+// the price excluding tax). Choosing one only changes which field is typed into; the build changes once a value is typed.
+let pricingMethodChoice=null;
+let pricingMethodBuildKey='';
+function pricingMethodForDriver(driver){
+  return driver==='profit'?'return':driver==='margin'?'percent':'price';
+}
+function editablePricingFieldId(method){
+  return method==='return'?'quoteProfit':method==='percent'?'quoteMarginPercent':'quoteTotal';
+}
+function paymentEntriesMarkup(payments,{money,date,showCorrections=false}={}){
+  const list=Array.isArray(payments)?payments:[];
+  if(!list.length)return '';
+  return `<ul>${list.map((payment)=>{
+    const type=payment&&payment.type==='balance'?'Balance received':'Deposit received';
+    const when=payment&&payment.date?date(payment.date):'Unknown date';
+    const correct=showCorrections&&payment?.id&&(payment.type==='balance'||payment.type==='deposit')
+      ?`<button type="button" class="ghost-action quote-payment__correct" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button>`:'';
+    return `<li class="quote-payment__entry"><span>${type}</span><strong>${escapeHtml(money(numberOrZero(payment&&payment.amount)))} — ${escapeHtml(when)}</strong>${correct}</li>`;
+  }).join('')}</ul>`;
+}
 // Rod-only figures from quoteMaths(): the price of the rod itself (delivery is charged on top) and the builder's return.
 // Your Return = rod price excluding tax - components buy cost (for a saved build with labour, it includes that labour).
 function rodPricingFigures(math){
@@ -16700,7 +16730,10 @@ function updateWorkshopBackToTopVisibility(){
   const workshopActive=!!(workshop && workshop.classList.contains('active'));
   const blockedByModal=document.body.classList.contains('component-sheet-open') || expandedComponentRowIndex>=0;
   // Only once the user has scrolled most of a screen; short pages never need it.
-  const shouldShow=workshopActive && !blockedByModal && window.scrollY>Math.max(320,window.innerHeight*0.75);
+  // Not at the end of the page either, where it would sit over the last controls (Mark Complete, the ••• menu).
+  const maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const nearEnd=window.scrollY>=maxScroll-160;
+  const shouldShow=workshopActive && !blockedByModal && !nearEnd && window.scrollY>Math.max(320,window.innerHeight*0.75);
   button.hidden=!shouldShow;
   button.classList.toggle('is-visible',shouldShow);
 }
@@ -16984,6 +17017,20 @@ function bindWorkshopQuoteBuilder(){
       updateQuoteSummary();
     });
   }
+  // Simple / Advanced and the Advanced pricing method only change what is shown and which field is typed into. Nothing is
+  // saved and no figure changes until a value is typed.
+  document.querySelectorAll('[data-pricing-view]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      setPricingView(button.getAttribute('data-pricing-view'));
+      updateQuoteSummary();
+    });
+  });
+  document.querySelectorAll('[data-pricing-method]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      pricingMethodChoice=button.getAttribute('data-pricing-method');
+      updateQuoteSummary();
+    });
+  });
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput){
     const onTaxToggle=()=>{
@@ -17402,16 +17449,33 @@ function updateQuoteSummary(){
     const shownPrice=componentsPricing?math.total:rodFigures.rodPrice;
     $('quoteTotal').value=quotePricePending()?'':numberOrZero(shownPrice).toFixed(2);
     $('quoteTotal').setAttribute('placeholder',quotePricePending()?'To be confirmed':'0.00');
-    $('quoteTotal').readOnly=componentsPricing;
   }
-  // Target Return ($ and %) are editable pricing targets - never overwrite the field the builder is typing into.
+  // Target Return ($ and %) - never overwrite the field the builder is typing into.
   if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(rodFigures.yourReturn).toFixed(2);
   if($('quoteMarginPercent') && document.activeElement!==$('quoteMarginPercent'))$('quoteMarginPercent').value=numberOrZero(rodFigures.returnPercent).toFixed(1);
   const pricingDriver=normalizePricingDriver(quote.pricingDriver);
-  [['quoteTotalField','price'],['quoteProfitField','profit'],['quoteMarginPercentField','margin']].forEach(([id,driverName])=>{
+  // Simple / Advanced (a view only) and, in Advanced, the chosen way to price. A build opens on the method it was last
+  // priced by. Only the chosen field can be typed into; the other two are calculated results.
+  const advancedView=!componentsPricing && pricingViewAdvanced();
+  const methodKey=String(quote.id||quote.buildNumber||'');
+  if(methodKey!==pricingMethodBuildKey || pricingMethodChoice===null){
+    pricingMethodBuildKey=methodKey;
+    pricingMethodChoice=pricingMethodForDriver(pricingDriver);
+  }
+  const pricingMethod=advancedView?pricingMethodChoice:'price';
+  if($('quoteTotal'))$('quoteTotal').readOnly=componentsPricing || pricingMethod!=='price';
+  if($('quoteProfit'))$('quoteProfit').readOnly=pricingMethod!=='return';
+  if($('quoteMarginPercent'))$('quoteMarginPercent').readOnly=pricingMethod!=='percent';
+  document.querySelectorAll('[data-pricing-view]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String((button.getAttribute('data-pricing-view')==='advanced')===advancedView));
+  });
+  document.querySelectorAll('[data-pricing-method]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String(button.getAttribute('data-pricing-method')===pricingMethod));
+  });
+  ['quoteTotalField','quoteProfitField','quoteMarginPercentField'].forEach((id)=>{
+    // Selection is shown by the method switch, not by a red field.
     const el=$(id);
-    // The red "active target" marker only means something when Advanced Pricing shows more than one way to price.
-    if(el)el.classList.toggle('quote-field--active-target',advancedPricingEnabled() && !componentsPricing && pricingDriver===driverName);
+    if(el)el.classList.toggle('quote-field--active-target',false);
   });
   const totalLabel=document.querySelector('#quoteTotalField > span');
   if(totalLabel)totalLabel.textContent=componentsPricing
@@ -17437,11 +17501,11 @@ function updateQuoteSummary(){
     legacyLabourLine.textContent=text;
     legacyLabourLine.hidden=!text;
   }
-  const advancedOn=advancedPricingEnabled();
-  $('workshopPricingSection')?.setAttribute('data-advanced-pricing',advancedOn?'true':'false');
+  $('workshopPricingSection')?.setAttribute('data-advanced-pricing',advancedView?'true':'false');
+  $('workshopPricingSection')?.setAttribute('data-pricing-method',pricingMethod);
   const pricingNote=$('quoteAdvancedPricingNote');
   if(pricingNote){
-    pricingNote.hidden=!shouldShowAdvancedPricingNote({settings:studioSettings,records:savedBuildRecords,
+    pricingNote.hidden=advancedView || !shouldShowAdvancedPricingNote({settings:studioSettings,records:savedBuildRecords,
       componentsJob:componentsPricing,demo:!!window.KLABS_DEMO?.active});
   }
   if($('quoteMarginPercentLabel'))$('quoteMarginPercentLabel').textContent=targetReturnPercentLabel({taxActive:taxActiveForPrice,taxName:taxNameText});
@@ -17631,7 +17695,8 @@ function updatePaymentBlock(){
   const history=$('quotePaymentHistory');
   if(received)received.textContent=currencyWithCode(math.amountReceived);
   if(balance)balance.textContent=math.total>0&&math.balanceOwing===0?`PAID IN FULL (${currencyWithCode(0)})`:currencyWithCode(math.balanceOwing);
-  if(history)history.innerHTML=paymentHistoryMarkup(true);
+  if(history)history.innerHTML=paymentEntriesMarkup(quote.payments,{money:currencyWithCode,
+    date:(value)=>formatDateDisplay(`${value}T00:00:00`),showCorrections:true});
   const historyDetails=$('quotePaymentHistoryDetails');
   if(historyDetails)historyDetails.hidden=!(Array.isArray(quote.payments)&&quote.payments.length);
   const retry=$('retryFinancialBtn');
@@ -17640,9 +17705,9 @@ function updatePaymentBlock(){
     catch(error){retry.hidden=false;console.error('[K-Labs Studio] Financial operation could not be read:',error);}
   }
   if(math.depositPayment){
+    // The deposit itself is listed in the payment entries above; only what is still required is added here.
     const partial=math.depositEnabled&&math.depositOutstanding;
-    status.textContent=`Deposit received: ${currencyWithCode(math.depositReceivedAmount)} on ${formatDateDisplay(`${math.depositReceivedDate}T00:00:00`)}`
-      +(partial?`. Deposit still required: ${currencyWithCode(math.depositStillRequired)} of ${currencyWithCode(math.depositAmount)}.`:'');
+    status.textContent=partial?`Deposit still required: ${currencyWithCode(math.depositStillRequired)} of ${currencyWithCode(math.depositAmount)}.`:'';
   }else{
     status.textContent=math.depositEnabled?'Deposit not yet received.':'';
   }

@@ -27,7 +27,7 @@
  * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v272";
+  const DEMO_BUILD = "build148-v273";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -111,6 +111,20 @@
       ["caption", "Set your rod price, GST included. Your return updates live."],
       ["type", "#quoteTotal", "899"],
       ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1500],
+      // Advanced Pricing, in memory only: a target margin, then a target dollar return, each recalculating the Rod Price;
+      // then back to the Rod Price and the simple view.
+      ["caption", "Advanced: set a target margin. Studio works out the price."],
+      ["tap", "[data-pricing-view=\"advanced\"]"],
+      ["tap", "[data-pricing-method=\"percent\"]"],
+      ["type", "#quoteMarginPercent", "55"],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1000],
+      ["caption", "Or the return you want in dollars. Or keep it simple."],
+      ["tap", "[data-pricing-method=\"return\"]"],
+      ["type", "#quoteProfit", "450"],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1000],
+      ["tap", "[data-pricing-method=\"price\"]"],
+      ["type", "#quoteTotal", "899"],
+      ["tap", "[data-pricing-view=\"simple\"]"],
       ["caption", "Jordan wants it couriered, not collected."],
       ["show", "#quoteFulfilmentGroup", 1200],
       ["tap", "[data-fulfilment-method=\"shipping\"]"],

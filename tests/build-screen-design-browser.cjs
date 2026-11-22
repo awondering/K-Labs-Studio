@@ -63,7 +63,22 @@ const measure=(page)=>page.evaluate(()=>{
   const navTop=document.querySelector('.bottom-nav').getBoundingClientRect().top;
   const ends=['confirmBuildBtn','toggleCurrentBuildStatusBtn','workshopBuildActionsStatus','currentBuildActionsMenuBtn'].map((id)=>document.getElementById(id)).filter(vis);
   const lastBottom=Math.max(...ends.map((el)=>el.getBoundingClientRect().bottom));
+  const rgb=(c)=>(String(c).match(/\d+(\.\d+)?/g)||[]).map(Number);
+  const reddish=(c)=>{const [r,g,b,a=1]=rgb(c);return a>0.05&&r>g+50&&r>b+50;};
+  const visible=(c)=>{const v=rgb(c);return v.length>=3&&(v[3]===undefined||v[3]>0.05);};
+  const panel=document.getElementById('studioWorkflowPanel');
+  const redSelected=[...panel.querySelectorAll('[aria-pressed="true"]')].filter(vis).filter((el)=>{const s=getComputedStyle(el);return reddish(s.borderTopColor)||reddish(s.backgroundColor);}).map((el)=>el.textContent.trim());
+  const inputLookingResults=[...document.querySelectorAll('#workshopPricingSection input[readonly]')].filter(vis).filter((el)=>{
+    const s=getComputedStyle(el);return visible(s.backgroundColor)||(parseFloat(s.borderTopWidth)>0&&visible(s.borderTopColor));
+  }).map((el)=>el.id);
+  const segments=[...panel.querySelectorAll('.ds-segmented__option,.quote-job-type__option')].filter(vis).map((el)=>{
+    const r=el.getBoundingClientRect();const after=getComputedStyle(el,'::after');
+    const extend=after.content&&after.content!=='none'?Math.max(0,-(parseFloat(after.top)||0)):0;
+    return {text:el.textContent.trim(),h:Math.round(r.height),hit:Math.round(r.height+2*extend)};
+  });
+  const segmentGroups=[...panel.querySelectorAll('.ds-segmented,.quote-job-type__options')].filter(vis).map((el)=>Math.round(el.getBoundingClientRect().width));
   return {
+    redSelected,inputLookingResults,segments,segmentGroups,
     gstLabelOneLine:(()=>{const el=document.getElementById('quoteTaxLabel');if(el.getClientRects().length===0)return true;/* folded away at Complete */return el.getClientRects().length===1&&el.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).lineHeight||'20')*1.5+2;})(),
     rodRed:document.getElementById('quoteTotalField').classList.contains('quote-field--active-target'),
     hint:t('quoteRodPriceHint'),total:t('quoteCustomerTotalLine'),gstLabel:t('quoteTaxLabel'),gst:document.getElementById('quoteGst').value,
@@ -105,6 +120,11 @@ async function main(){
         ck(`${label}: Fulfilment Method, Payment Status and Documents share one heading style`,
           m.headings.every((h)=>h&&h===m.headings[0]),m.headings);
         ck(`${label}: the last controls clear the bottom nav bar by at least 16px`,m.clearance>=16,m.clearance);
+        ck(`${label}: no selected state is red (segmented selections are titanium)`,m.redSelected.length===0,m.redSelected);
+        ck(`${label}: calculated values read as results, not input boxes`,m.inputLookingResults.length===0,m.inputLookingResults);
+        ck(`${label}: segmented controls are compact - 30-36px on Mac; 40px with a 44px hit area on iPhone`,
+          m.segments.length>=2&&m.segments.every((s)=>size==='mac'?s.h>=30&&s.h<=36:s.h>=40&&s.hit>=44),m.segments);
+        if(size==='mac')ck(`${label}: segmented groups are sized to content, not stretched`,m.segmentGroups.every((w)=>w<=m.surfaceW*0.75),[m.segmentGroups,m.surfaceW]);
         ck(`${label}: no horizontal overflow`,!m.overflow);
         if(process.env.BSD_SHOTS){
           await page.evaluate(()=>document.querySelector('.workshop-build-actions-surface').scrollIntoView({block:'start'}));
@@ -118,6 +138,49 @@ async function main(){
           await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-${stage}-bottom.png`)});
         }
       }
+      // Simple / Advanced and the pricing method are views: switching never changes the build or writes storage.
+      await setState(page,'quote');await page.waitForTimeout(150);
+      const views=await page.evaluate(()=>{
+        const store=()=>JSON.stringify(Object.keys(localStorage).sort().map((k)=>[k,localStorage.getItem(k)]));
+        const before={quote:JSON.stringify(quote),store:store()};
+        const press=(sel)=>document.querySelector(sel).click();
+        const shown=(id)=>document.getElementById(id).getClientRects().length>0;
+        const editable=()=>['quoteTotal','quoteProfit','quoteMarginPercent'].filter((id)=>!document.getElementById(id).readOnly&&shown(id));
+        press('[data-pricing-view="advanced"]');
+        const advanced={fields:['quoteProfitField','quoteMarginPercentField','quotePricingMethodField'].every(shown),editable:editable()};
+        press('[data-pricing-method="percent"]');const percent=editable();
+        press('[data-pricing-method="return"]');const ret=editable();
+        press('[data-pricing-method="price"]');
+        press('[data-pricing-view="simple"]');
+        const simple={hidden:['quoteProfitField','quoteMarginPercentField','quotePricingMethodField'].every((id)=>!shown(id)),editable:editable()};
+        return {advanced,percent,ret,simple,unchanged:JSON.stringify(quote)===before.quote,storeUnchanged:store()===before.store};
+      });
+      if(process.env.BSD_SHOTS){
+        // A picture of Advanced (Target Return % chosen). Views only, so nothing changes; back to Simple afterwards.
+        await page.evaluate(()=>{document.querySelector('[data-pricing-view="advanced"]').click();document.querySelector('[data-pricing-method="percent"]').click();
+          document.getElementById('quoteRodPricingHead').scrollIntoView({block:'start'});});
+        await page.waitForTimeout(200);
+        await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-advanced-pricing.png`)});
+        await page.evaluate(()=>{document.querySelector('[data-pricing-method="price"]').click();document.querySelector('[data-pricing-view="simple"]').click();});
+      }
+      ck(`${size}: Advanced shows the three pricing methods; each method makes only its own field editable`,
+        views.advanced.fields&&JSON.stringify(views.percent)==='["quoteMarginPercent"]'&&JSON.stringify(views.ret)==='["quoteProfit"]',views);
+      ck(`${size}: back in Simple only the Rod Price is editable`,views.simple.hidden&&JSON.stringify(views.simple.editable)==='["quoteTotal"]',views.simple);
+      ck(`${size}: switching Simple / Advanced and methods changes nothing saved`,views.unchanged&&views.storeUnchanged,views);
+      // Payment Status: one line per payment, no repeated heading, no deposit sentence, Record Payment at its natural width.
+      const pay=await page.evaluate(()=>{
+        quote.payments=[{id:'p1',type:'deposit',amount:300,date:'2026-11-22'},{id:'p2',type:'balance',amount:100,date:'2026-11-29'}];
+        updatePaymentBlock();
+        const entries=[...document.querySelectorAll('#quotePaymentHistory .quote-payment__entry')].filter((el)=>el.getClientRects().length).map((el)=>el.textContent.replace(/\s*Correct$/,'').replace(/\s+/g,' ').trim());
+        const block=document.getElementById('quotePaymentBlock');
+        const btn=document.getElementById('quoteRecordPaymentBtn').getBoundingClientRect();
+        const out={entries,text:block.innerText,status:document.getElementById('quoteDepositReceivedStatus').textContent,btnW:Math.round(btn.width),btnH:Math.round(btn.height),blockW:Math.round(block.getBoundingClientRect().width)};
+        quote.payments=[];updatePaymentBlock();
+        return out;
+      });
+      ck(`${size}: Payment Status lists each payment with its amount and date, with no repeated heading or deposit sentence`,
+        pay.entries.length===2&&/^Deposit received ?\$300\.00/.test(pay.entries[0])&&/^Balance received ?\$100\.00/.test(pay.entries[1])&&!/payment history/i.test(pay.text)&&pay.status==='',pay);
+      ck(`${size}: Record Payment is a compact secondary button at its natural width`,pay.btnW<pay.blockW*0.6&&pay.btnH>=(size==='mac'?36:44),pay);
       ck(`${size}: no page errors`,errors.length===0,errors);
       await context.close();
     }

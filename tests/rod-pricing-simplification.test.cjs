@@ -40,7 +40,8 @@ function pricing(job,settings={}){
   const c=loadRecordFunctions(['normalizeQuote','quoteMaths','rodPricingFigures','applyManualRodPrice','applyManualTargetReturn',
     'applyManualTargetReturnPercent','rodPriceLabel','targetReturnPercentLabel','legacyLabourLineText','effectiveHourlyReturn',
     'timePricingAmount','accountUsesAdvancedPricing','shouldShowAdvancedPricingNote','advancedPricingEnabled',
-    'rodPriceHintText','customerTotalLineText','taxAmountLabel'],{
+    'rodPriceHintText','customerTotalLineText','taxAmountLabel','pricingMethodForDriver','editablePricingFieldId',
+    'pricingViewAdvanced','setPricingView','paymentEntriesMarkup'],{
     studioSettings,
     activeTaxEnabled:()=>studioSettings.taxEnabled!==false,
     activeTaxRate:()=>studioSettings.taxRate,
@@ -215,11 +216,13 @@ test('no labour split by default: Labour Rate and Labour Hours are not shown',()
   assert.match(pricingBlock,/<label id="quoteLabourHoursField" hidden>/);
 });
 test('Advanced Pricing holds Target Return ($), Target Return (%), Build hours and the time helper',()=>{
+  const fields=pricingBlock.slice(pricingBlock.indexOf('id="quotePricingFieldsRow"'),pricingBlock.indexOf('id="quoteCustomerTotalLine"'));
+  for(const id of ['quoteTotalField','quoteProfitField','quoteMarginPercentField'])assert.ok(fields.includes(`id="${id}"`),id);
+  assert.match(fields,/<span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
   const advanced=pricingBlock.slice(pricingBlock.indexOf('id="quoteAdvancedPricing"'));
-  for(const id of ['quoteProfitField','quoteMarginPercentField','quoteBuildHoursField','quoteEffectiveHourly','quoteTimePricingRow','quoteTimeRate','quoteTimePricingApply']){
+  for(const id of ['quoteBuildHoursField','quoteEffectiveHourly','quoteTimePricingRow','quoteTimeRate','quoteTimePricingApply']){
     assert.ok(advanced.includes(`id="${id}"`),id);
   }
-  assert.match(advanced,/<span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
   assert.match(advanced,/Price from my time/);
   assert.doesNotMatch(pricingBlock,/Required Profit|Margin %/);
 });
@@ -272,7 +275,87 @@ test('Documents are one compact row of secondary buttons; iPhone two per row at 
   assert.match(css,/#workshopScreen \.workshop-build-actions-docs__grid\{display:flex;flex-wrap:wrap;gap:8px\}/);
   assert.match(css,/@media \(max-width:640px\)\{[^@]*#workshopPricingSection \.workshop-build-actions-docs__grid > \*\{flex:1 1 calc\(50% - 4px\)[^}]*\}[^@]*min-height:44px/);
 });
-test('the red active-target marker shows only with Advanced Pricing on (the simple screen has one price)',()=>{
+test('the red active-target marker is not used on the rod pricing fields',()=>{
   const src=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
-  assert.match(src,/classList\.toggle\('quote-field--active-target',advancedPricingEnabled\(\) && !componentsPricing && pricingDriver===driverName\)/);
+  assert.match(src,/classList\.toggle\('quote-field--active-target',false\)/);
+});
+
+// ---------- 5. Final correction brief (22 Nov 2026): three pricing methods, Simple / Advanced, payment entries ----------
+for(const [name,settings,job] of [
+  ['GST 15%',{},{}],
+  ['tax off',{taxEnabled:false},{includeGst:false}],
+  ['VAT 20%',{taxRate:20,taxType:'vat'},{gstRate:20}],
+  ['GST 15% with courier delivery',{},{fulfilmentMethod:'shipping',deliveryEntryMode:'breakdown',freight:18,packaging:12}],
+]){
+  test(`the three pricing methods agree and are reversible (${name})`,()=>{
+    const c=pricing(newBuild(job),settings);
+    c.applyManualRodPrice('899');                                   // A. Set Rod Price
+    const a=c.rodPricingFigures(c.quoteMaths());
+    const rate=job.includeGst===false?0:(job.gstRate||15);
+    assert.ok(near(a.rodPrice,899));
+    assert.ok(near(a.rodExclusive,899/(1+rate/100)));
+    assert.ok(near(a.yourReturn,a.rodExclusive-210),'Your Return = Rod Price excl. tax - Components Cost');
+    assert.ok(near(a.returnPercent,a.yourReturn/a.rodExclusive*100,0.01),'margin on the ex-tax price, not markup');
+    c.applyManualTargetReturn(a.yourReturn.toFixed(2));             // B. Target Return ($)
+    assert.ok(near(c.rodPricingFigures(c.quoteMaths()).rodPrice,899,0.011));
+    c.applyManualTargetReturnPercent(String(a.returnPercent));      // C. Target Return (%)
+    const m=c.rodPricingFigures(c.quoteMaths());
+    assert.ok(near(m.rodPrice,899,0.011),[m.rodPrice]);
+    assert.ok(near(m.yourReturn,a.yourReturn,0.011));
+    c.applyManualRodPrice('899');                                   // and back to A
+    assert.ok(near(c.rodPricingFigures(c.quoteMaths()).rodPrice,899));
+    if(job.fulfilmentMethod==='shipping'){
+      const math=c.quoteMaths();
+      assert.ok(near(math.total,899+30*1.15),'delivery is charged on top');
+      assert.ok(near(c.rodPricingFigures(math).yourReturn,a.yourReturn),'delivery does not inflate the return');
+    }
+  });
+}
+test('Target Return (%) 50 means the ex-tax price is double the components cost (margin, not markup)',()=>{
+  const c=pricing(newBuild());
+  c.applyManualTargetReturnPercent('50');
+  const f=c.rodPricingFigures(c.quoteMaths());
+  assert.ok(near(f.rodExclusive,420));
+  assert.ok(near(f.rodPrice,483));
+});
+test('each pricing method has one editable field; a saved driver opens on its method',()=>{
+  const c=pricing(newBuild());
+  assert.deepEqual(['price','profit','margin','other'].map((d)=>c.pricingMethodForDriver(d)),['price','return','percent','price']);
+  assert.deepEqual(['price','return','percent'].map((m)=>c.editablePricingFieldId(m)),['quoteTotal','quoteProfit','quoteMarginPercent']);
+});
+test('Simple / Advanced is a view only: it starts from the Settings preference and never changes the build',()=>{
+  const c=pricing(newBuild());
+  const before=JSON.stringify(c.quote);
+  assert.equal(c.pricingViewAdvanced(),false,'Simple by default');
+  c.setPricingView('advanced');
+  assert.equal(c.pricingViewAdvanced(),true);
+  c.setPricingView('simple');
+  assert.equal(c.pricingViewAdvanced(),false);
+  assert.equal(JSON.stringify(c.quote),before,'switching does not change the build');
+  assert.equal(c.studioSettings.showAdvancedPricing,undefined,'nor the Settings preference');
+  const d=pricing(newBuild(),{showAdvancedPricing:true});
+  assert.equal(d.pricingViewAdvanced(),true,'Settings → Show Advanced Pricing opens on Advanced');
+});
+test('payment entries: one line per payment with amount and date; no heading; corrections kept',()=>{
+  const c=pricing(newBuild());
+  const money=(v)=>`$${Number(v).toFixed(2)}`;const date=(d)=>`[${d}]`;
+  assert.equal(c.paymentEntriesMarkup([],{money,date}),'');
+  const out=c.paymentEntriesMarkup([{id:'p1',type:'deposit',amount:300,date:'2026-11-22'},{id:'p2',type:'balance',amount:633.5,date:'2026-12-10'}],{money,date,showCorrections:true});
+  assert.doesNotMatch(out,/Payment history/i);
+  assert.match(out,/<li[^>]*><span>Deposit received<\/span><strong>\$300\.00 — \[2026-11-22\]<\/strong>/);
+  assert.match(out,/<li[^>]*><span>Balance received<\/span><strong>\$633\.50 — \[2026-12-10\]<\/strong>/);
+  assert.match(out,/data-correct-payment="p2"/);
+});
+test('the pricing screen: Rod Pricing heading with Simple / Advanced, then the method switch and the three fields',()=>{
+  assert.match(html,/id="quoteRodPricingHead"[\s\S]*?Rod Pricing[\s\S]*?data-pricing-view="simple"[^>]*>Simple<[\s\S]*?data-pricing-view="advanced"[^>]*>Advanced</);
+  const order=['quoteRodPricingHead','quoteCostBeforeMarginField','quotePricingMethodField','quoteTotalField','quoteProfitField','quoteMarginPercentField','quoteEarningsSummary'];
+  const at=order.map((id)=>html.indexOf(`id="${id}"`));
+  assert.ok(at.every((i)=>i>0)&&at.every((i,n)=>n===0||i>at[n-1]),JSON.stringify(at));
+  assert.match(html,/data-pricing-method="price"[^>]*>Rod Price<[\s\S]*?data-pricing-method="return"[^>]*>Target Return \$<[\s\S]*?data-pricing-method="percent"[^>]*>Target Return %</);
+});
+test('payment status: totals, the entries list, then Record Payment; no details/summary heading',()=>{
+  const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('workshop-build-actions-docs'));
+  assert.doesNotMatch(block,/<summary>/);
+  assert.match(block,/id="quotePaymentHistory" class="quote-payment__entries"/);
+  assert.ok(block.indexOf('quotePaymentHistory')<block.indexOf('quoteRecordPaymentBtn'),'entries above Record Payment');
 });
