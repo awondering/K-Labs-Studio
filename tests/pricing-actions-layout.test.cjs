@@ -90,7 +90,7 @@ test('documents: View and Email, Customer Invoice, then a More documents menu ho
   assert.doesNotMatch(section,/viewPaymentStatementBtn/);
   const menu=section.slice(section.indexOf('id="currentBuildActionsMenu"'));
   assert.deepEqual([...menu.matchAll(/data-current-build-action="([^"]+)">([^<]+)</g)].map((m)=>`${m[1]}:${m[2]}`),
-    ['statement:Payment Statement','delete:Delete Build']);
+    ['rename:Rename Build','statement:Payment Statement','delete:Delete Build']);
 });
 
 test('the layout rules are screen-only and scoped to the Pricing & Actions section',()=>{

@@ -7619,6 +7619,352 @@ textarea::-moz-selection,
   }
 }
 
+/* Q23 Rod Pricing simplification: Components Cost, Rod Price, Your Return by default; Advanced Pricing from Settings. */
+#workshopPricingSection:not([data-advanced-pricing="true"]) #quoteAdvancedPricing{display:none}
+#workshopScreen #workshopPricingSection:not([data-advanced-pricing="true"]) :is(#quotePricingMethodField,#quoteProfitField,#quoteMarginPercentField){display:none}
+/* With Rod Price as the method, Target Return ($) would repeat Your Return: Your Return stays the one result. */
+#workshopScreen #workshopPricingSection[data-pricing-method="price"] #quoteProfitField{display:none}
+#workshopScreen .build-pricing .build-pricing__hint{
+  margin:0;
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+  font-variant-numeric:tabular-nums;
+}
+#workshopScreen .build-pricing .build-pricing__hint:empty{display:none}
+#workshopScreen .build-pricing #quoteTotalField .build-pricing__hint{padding:0 2px}
+#workshopScreen .build-pricing .build-pricing__notice{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 44px;
+  align-items:center;
+  gap:8px;
+  margin:2px 0 0;
+  padding:4px 4px 4px 10px;
+  border:var(--ds-stroke);
+  border-radius:var(--ds-radius-sm);
+  background:var(--ds-surface-soft);
+  color:var(--ds-text-strong);
+  font-size:12px;
+  line-height:1.4;
+}
+#workshopScreen .build-pricing .build-pricing__notice[hidden]{display:none}
+#workshopScreen .build-pricing .build-pricing__notice-dismiss{
+  min-width:44px;
+  min-height:44px;
+  padding:0;
+  justify-content:center;
+}
+#workshopScreen .build-pricing .build-pricing__advanced{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px 8px;
+  margin-top:4px;
+  padding-top:8px;
+  border-top:1px solid rgba(214,210,200,.1);
+}
+#workshopScreen .build-pricing .build-pricing__advanced > label{
+  display:grid;
+  min-width:0;
+  gap:2px;
+}
+#workshopScreen .build-pricing .build-pricing__advanced > label > span,
+#workshopScreen .build-pricing .build-pricing__advanced-title,
+#workshopScreen .build-pricing .build-pricing__time-label{
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+  letter-spacing:.03em;
+}
+#workshopScreen .build-pricing .build-pricing__advanced-title{
+  grid-column:1 / -1;
+  color:var(--ds-text-strong);
+  font-weight:700;
+}
+#workshopScreen .build-pricing #quoteEffectiveHourly{
+  align-self:end;
+  padding-bottom:12px;
+}
+#workshopScreen .build-pricing .build-pricing__time{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:auto auto auto minmax(72px,1fr) auto;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+#workshopScreen .build-pricing .build-pricing__time-hours{
+  color:var(--ds-text-strong);
+  font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+#workshopScreen .build-pricing .build-pricing__time-apply{
+  min-height:44px;
+  white-space:nowrap;
+}
+@media (max-width:420px){
+  #workshopScreen .build-pricing .build-pricing__time{
+    grid-template-columns:auto auto auto minmax(0,1fr);
+  }
+  #workshopScreen .build-pricing .build-pricing__time-label{grid-column:1 / -1}
+  #workshopScreen .build-pricing .build-pricing__time-apply{grid-column:1 / -1}
+}
+#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > #settingsShowAdvancedPricingField .settings-pricing-hint{
+  grid-column:1 / -1;
+  margin:-4px 0 0;
+  color:var(--titanium);
+  font-size:11px;
+  line-height:1.4;
+}
+
+/* Q23 review fixes (22 Nov 2026), build screen layout only:
+   - Fulfilment Method, Payment Status and Documents share one section heading style;
+   - Documents are compact secondary buttons in one row (iPhone: two per row at 44px; an odd last one takes the row);
+   - Record Payment and Confirm Build keep a sensible width on Mac instead of running edge to edge;
+   - the page keeps scrolled-to controls clear of the bottom nav bar outside Demo Mode (Demo Mode measures it itself). */
+#workshopScreen #workshopPricingSection .build-section-heading{display:block;margin:0;font-size:11px;font-weight:700;line-height:1.3;letter-spacing:.12em;text-transform:uppercase;color:var(--ds-text-strong)}
+html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))}
+@media (min-width:641px){
+  #workshopScreen #quotePaymentBlock .quote-payment__actions > button{flex:0 0 auto;min-height:40px;padding-left:20px;padding-right:20px}
+  #workshopScreen .workshop-build-actions-surface > #confirmBuildBtn{justify-self:end;width:auto;min-width:200px;min-height:40px;padding-left:28px;padding-right:28px}
+  #workshopScreen #workshopPricingSection .workshop-build-actions-status-toggle{min-height:40px}
+}
+@media (max-width:640px){
+  #workshopScreen #workshopPricingSection .workshop-build-actions-docs__grid > *{flex:1 1 calc(50% - 4px);min-width:0}
+  #workshopScreen #workshopPricingSection .workshop-build-actions-docs__grid .ghost-action{min-height:44px;padding-left:8px;padding-right:8px}
+}
+
+/* Q23 final correction (22 Nov 2026). Four control types on the build screen:
+   - primary: restrained metallic red, one per stage (Confirm Build, Mark Complete), right-aligned on Mac;
+   - secondary: compact, natural width (Record Payment, documents);
+   - segmented: a compact group with a subtle titanium selected state (Simple / Advanced, the pricing method, Job Type,
+     Fulfilment, reel seat "measured to"); never red;
+   - calculated values: read-only results, not input boxes.
+   iPhone keeps 44px touch targets; Mac stays restrained rather than stretched. Existing tokens only. */
+#workshopScreen #studioWorkflowPanel :is(.ds-segmented,.quote-job-type__options){
+  display:inline-flex;
+  flex-wrap:wrap;
+  align-items:stretch;
+  justify-self:start;
+  gap:2px;
+  width:auto;
+  max-width:100%;
+  padding:2px;
+  border:var(--ds-stroke);
+  border-radius:999px;
+  background:rgba(255,255,255,.02);
+}
+#workshopScreen #studioWorkflowPanel :is(.ds-segmented__option,.quote-job-type__option){
+  position:relative;
+  flex:0 0 auto;
+  width:auto;
+  min-height:32px;
+  padding:0 14px;
+  border:1px solid transparent;
+  border-radius:999px;
+  background:transparent;
+  box-shadow:none;
+  color:var(--ds-text-muted);
+  font:inherit;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.02em;
+  text-transform:none;
+  white-space:nowrap;
+  cursor:pointer;
+}
+#workshopScreen #studioWorkflowPanel :is(.ds-segmented__option,.quote-job-type__option)[aria-pressed="true"]{
+  border-color:color-mix(in srgb,var(--titanium) 55%,transparent);
+  background:color-mix(in srgb,var(--titanium) 16%,transparent);
+  color:var(--ds-text-strong);
+}
+#workshopScreen #studioWorkflowPanel :is(.ds-segmented__option,.quote-job-type__option):focus-visible{
+  outline:2px solid var(--titanium);
+  outline-offset:2px;
+}
+#workshopScreen #studioWorkflowPanel .quote-job-type{display:grid;gap:6px}
+/* The "Build" / "Repair" group title repeated the page eyebrow directly above it. */
+#workshopScreen #studioWorkflowPanel #buildDetailsGroupRow{display:none}
+/* Finished Rod Length: a compact measurement field (its note keeps the full width below it). */
+#workshopScreen #studioWorkflowPanel .build-details__finished-length > label{max-width:150px}
+#workshopScreen #studioWorkflowPanel .build-details__unit{
+  color:var(--titanium);
+  font-weight:700;
+  letter-spacing:.04em;
+}
+/* Reel Seat Position — From Butt: the distance and the Rear / Centre / Front reference on one row, wrapping when
+   narrow. The field matches the segmented track's height (38px Mac, 46px iPhone). */
+#workshopScreen #studioWorkflowPanel .build-details__seat-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  gap:var(--ds-space-2) var(--ds-space-4);
+}
+#workshopScreen #studioWorkflowPanel .build-details__seat-position{flex:0 0 auto;width:auto;max-width:100%}
+#workshopScreen #studioWorkflowPanel .build-details__seat-position span{white-space:nowrap}
+#workshopScreen #studioWorkflowPanel :is(.build-details__seat-position,.build-details__finished-length > label) input{width:100%;min-width:0;box-sizing:border-box}
+#workshopScreen #studioWorkflowPanel .build-details__seat-position input{width:150px;min-height:38px;height:38px}
+#workshopScreen #studioWorkflowPanel .build-details__seat-ref{display:grid;gap:4px;flex:0 1 auto;min-width:0}
+@media (max-width:640px){
+  #workshopScreen #studioWorkflowPanel .build-details__finished-length > label{max-width:none;width:min(100%,170px)}
+  #workshopScreen #studioWorkflowPanel .build-details__seat-position input{width:170px;max-width:100%}
+  #workshopScreen #studioWorkflowPanel .build-details__seat-position input{min-height:46px;height:46px}
+}
+/* Empty status lines in the pricing grid left blank rows between fields. */
+#workshopScreen #workshopPricingFields > p:empty{display:none}
+/* Q23 GST cleanup: one compact tax row - [Include GST ✓]  15%  GST total $117.26 - wrapping only when narrow. */
+#workshopScreen #workshopPricingSection .build-pricing__tax-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:var(--ds-space-2) var(--ds-space-4);
+  min-height:44px;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-row[hidden]{display:none}
+#workshopScreen #workshopPricingSection .build-pricing__tax-row .build-pricing__tax-toggle{
+  display:inline-flex;
+  flex:0 0 auto;
+  gap:10px;
+  min-height:44px;
+  padding:0;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate{
+  position:relative;
+  flex:0 0 auto;
+  min-height:28px;
+  padding:0 10px;
+  border:var(--ds-stroke);
+  border-radius:999px;
+  background:transparent;
+  color:var(--ds-text-strong);
+  font:inherit;
+  font-size:12px;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  cursor:pointer;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate[aria-expanded="true"]{
+  border-color:color-mix(in srgb,var(--titanium) 55%,transparent);
+  background:color-mix(in srgb,var(--titanium) 14%,transparent);
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate:focus-visible{outline:2px solid var(--titanium);outline-offset:2px}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate[hidden]{display:none}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total{
+  display:inline-flex;
+  flex:0 1 auto;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total[hidden]{display:none}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total > span{white-space:nowrap}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total > input{width:9ch;min-width:0;min-height:0;height:auto;padding:0;text-align:right}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate-field{max-width:150px}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate-field[hidden]{display:none}
+/* Deposit Required: a compact payment term at the top of Payment Status. */
+#workshopScreen #quotePaymentBlock .quote-payment__terms{gap:8px}
+#workshopScreen #quotePaymentBlock .quote-payment__terms > p:empty{display:none}
+#workshopScreen #quotePaymentBlock #quoteDepositEnabledField{
+  display:inline-flex;
+  justify-self:start;
+  align-items:center;
+  gap:10px;
+  min-height:44px;
+  padding:0;
+  border:0;
+  background:transparent;
+  cursor:pointer;
+}
+#workshopScreen #quotePaymentBlock #quoteDepositEnabledField input{width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--titanium)}
+@media (max-width:640px){
+  /* The rate chip keeps a 44px touch target without looking bigger. */
+  #workshopScreen #workshopPricingSection .build-pricing__tax-rate::after{content:"";position:absolute;inset:-8px -2px}
+}
+#workshopPricingSection:not([data-job-kind="components"]) .build-pricing__head{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+#workshopScreen #workshopPricingSection .build-pricing__method{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+#workshopScreen #workshopPricingSection .build-pricing__method-label{color:var(--titanium);font-size:11px;letter-spacing:.03em}
+#workshopScreen #workshopPricingSection .build-pricing__fields{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  gap:8px 12px;
+}
+#workshopScreen #workshopPricingSection .build-pricing__fields > label{display:grid;gap:2px;flex:0 1 200px;min-width:0}
+#workshopScreen #workshopPricingSection .build-pricing__fields > label > input{width:100%;font-size:17px}
+/* The three price fields share one label style, so the chosen method is shown by the switch, not by a bigger label. */
+#workshopScreen #workshopPricingSection .build-pricing__fields > label > span{
+  color:var(--ds-text-strong);
+  font-size:11px;
+  font-weight:700;
+  line-height:1.3;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+/* Your Time: inputs sized to their content, not stretched across the card. */
+#workshopScreen #workshopPricingSection #quoteBuildHoursField{max-width:200px}
+#workshopScreen #workshopPricingSection .build-pricing__time{grid-template-columns:auto auto auto minmax(72px,120px) auto;justify-content:start}
+/* Calculated and read-only values read as results: no input box. */
+#workshopScreen #workshopPricingSection input[readonly]{
+  border-color:transparent;
+  background:transparent;
+  box-shadow:none;
+  padding-left:0;
+  color:var(--ds-text-strong);
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  cursor:default;
+}
+#workshopScreen #workshopPricingSection input[readonly]::-webkit-inner-spin-button,
+#workshopScreen #workshopPricingSection input[readonly]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+/* Fewer nested boxes: Your Return is a summary panel without a border; the tax and deposit switches are plain rows;
+   the actions start under a hairline, not a rounded box edge. */
+#workshopScreen #workshopPricingSection .build-earnings-summary{border-color:transparent}
+#workshopScreen #workshopPricingSection .build-pricing .quote-gst-toggle{border-color:transparent;background:transparent;padding-left:0;padding-right:0;min-height:44px}
+#workshopScreen #studioWorkflowPanel input[type="checkbox"]{accent-color:var(--titanium)}
+#workshopScreen #workshopPricingSection .workshop-build-actions-surface{border-radius:0}
+#workshopScreen #workshopPricingSection .workshop-build-actions-status-value--active,
+#workshopScreen .quote-builder__overview-status.saved-build-card__status--active{
+  border-color:color-mix(in srgb,var(--titanium) 55%,transparent);
+  background:color-mix(in srgb,var(--titanium) 14%,transparent);
+  color:var(--ds-text-strong);
+}
+/* Payment Status: totals as figures, one line per payment, then Record Payment at its natural width. */
+#workshopScreen #quotePaymentBlock{gap:8px}
+#workshopScreen #quotePaymentBlock .quote-payment__summary strong{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ds-text-strong)}
+#workshopScreen #quotePaymentBlock .quote-payment__history-details{grid-column:1 / -1}
+#workshopScreen #quotePaymentBlock .quote-payment__entries ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+#workshopScreen #quotePaymentBlock .quote-payment__entry{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
+#workshopScreen #quotePaymentBlock .quote-payment__entry > span{flex:1 0 100%;color:var(--titanium);font-size:11px;letter-spacing:.03em}
+#workshopScreen #quotePaymentBlock .quote-payment__entry > strong{color:var(--ds-text-strong);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+#workshopScreen #quotePaymentBlock .quote-payment__correct{min-height:32px;padding:0 12px}
+#workshopScreen #quotePaymentBlock .quote-payment__status:empty{display:none}
+#workshopScreen #quotePaymentBlock .quote-payment__actions{grid-column:1 / -1;justify-content:flex-start}
+#workshopScreen #quotePaymentBlock .quote-payment__actions > button{flex:0 0 auto}
+/* Primary actions: restrained metallic red, right-aligned like Mark Complete. */
+#workshopScreen #workshopPricingSection :is(#confirmBuildBtn,.workshop-build-actions-status-toggle){
+  border:1px solid color-mix(in srgb,var(--kl-red-base) 70%,transparent);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--kl-red-base) 82%,#000),color-mix(in srgb,var(--kl-red-deep) 92%,#000));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  color:#f3ece4;
+}
+@media (max-width:640px){
+  #workshopScreen #studioWorkflowPanel :is(.ds-segmented__option,.quote-job-type__option){min-height:40px}
+  /* 44px touch targets without bulky visuals: the hit area reaches 2px past the 40px segment. */
+  #workshopScreen #studioWorkflowPanel :is(.ds-segmented__option,.quote-job-type__option)::after{content:'';position:absolute;inset:-2px 0}
+  /* Three-way switches use equal columns on iPhone, so long labels wrap inside their segment, not the whole group. */
+  #workshopScreen #workshopPricingSection .build-pricing__method .ds-segmented{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:100%;border-radius:14px}
+  #workshopScreen #workshopPricingSection .build-pricing__method .ds-segmented__option{white-space:normal;text-wrap:balance;line-height:1.15;padding:0 6px;border-radius:12px}
+  #workshopScreen #workshopPricingSection .build-pricing__fields > #quoteTotalField{flex:1 1 100%}
+  #workshopScreen #workshopPricingSection .build-pricing__fields > label{flex:1 1 calc(50% - 6px)}
+  #workshopScreen #quotePaymentBlock .quote-payment__actions > button{min-height:44px}
+  #workshopScreen #quotePaymentBlock .quote-payment__correct{min-height:44px}
+}
+
 /* Sprint 2: Active Builds production refinements */
 #buildsScreen .screen-head .subtle{
   max-width:34ch;
@@ -7998,8 +8344,9 @@ textarea::-moz-selection,
 #workshopScreen .workshop-build-actions-surface{display:grid;gap:10px}
 #workshopScreen .workshop-build-actions-docs{display:grid;gap:6px}
 #workshopScreen .workshop-build-actions-docs__label{color:var(--ds-text-muted);font-size:9px;letter-spacing:.09em;text-transform:uppercase}
-#workshopScreen .workshop-build-actions-docs__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-#workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:8px;padding-right:8px}
+#workshopScreen .workshop-build-actions-docs__grid{display:flex;flex-wrap:wrap;gap:8px}
+#workshopScreen .workshop-build-actions-docs__grid > *{flex:0 0 auto;min-width:0}
+#workshopScreen .workshop-build-actions-docs__grid .ghost-action{min-height:40px;padding-left:16px;padding-right:16px;font-size:11px;border:var(--ds-stroke);background:transparent;color:var(--ds-text-strong)}
 /* Pricing & Actions, iPhone layout (custom builds and repairs). Screen-only: stage and job state come from attributes on
    #workshopPricingSection set during the existing render; showing or hiding never saves, syncs or builds a document.
    - Pricing fields fold into one "Pricing" line once an invoice is issued, and at Complete (Payment stays visible).
@@ -8019,10 +8366,9 @@ textarea::-moz-selection,
 #workshopPricingSection[data-lifecycle="quote"][data-has-payments="false"] .quote-payment__summary{display:none}
 #workshopScreen .quote-payment__form .quote-payment__type{grid-column:1/-1}
 #workshopPricingSection[data-lifecycle="quote"] #viewInvoicePreviewBtn{display:none}
-#workshopScreen .workshop-build-actions-docs__grid #viewInvoicePreviewBtn{grid-column:1/-1}
 /* Quote stage: a compact "More documents" menu holds Customer Invoice. Opening it only shows the menu. */
 #workshopPricingSection:not([data-lifecycle="quote"]) #quoteMoreDocumentsWrap{display:none}
-#workshopScreen .workshop-build-actions-docs__grid .workshop-build-actions-more{grid-column:1/-1;position:relative;min-width:0}
+#workshopScreen .workshop-build-actions-docs__grid .workshop-build-actions-more{position:relative;min-width:0}
 #workshopScreen .workshop-build-actions-more .workshop-build-actions-more__toggle{width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
 #workshopScreen .workshop-build-actions-more .workshop-build-actions-more__toggle::after{content:'\25BE';opacity:.6}
 #workshopScreen .workshop-build-actions-more .workshop-build-actions-menu{min-width:168px}
@@ -10819,7 +11165,7 @@ html.klabs-demo .demo-dock[data-player-open="true"] .demo-player__button,
 html.klabs-demo .demo-dock[data-player-open="true"] .demo-player__chapter { min-height:34px; }
 /* Q18 Phase 3: the control the director is using right now (js/demo-director.js). Just outside the control, so it never
    covers the control's own label or value. */
-html.klabs-demo [data-demo-highlight] { outline:3px solid #e2b553 !important;outline-offset:2px !important;box-shadow:0 0 0 4px rgba(226,181,83,.35),0 0 18px rgba(226,181,83,.45) !important;transition:box-shadow .15s ease; }
+html.klabs-demo [data-demo-highlight] { outline:2px solid rgba(226,181,83,.8) !important;outline-offset:2px !important;box-shadow:0 0 0 4px rgba(226,181,83,.12) !important;transition:box-shadow .15s ease; }
 /* end slim dock */
 /* Q18 2B: iPhone strip. While playing, the strip is a caption (at most two short lines) above one slim row: DEMO, Pause,
    Replay, the chapters and Exit demo. Before Start and after the end the DEMO bar with Exit demo shows as before. */
@@ -12764,9 +13110,9 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
 /* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
    per-job tax-rate controls are hidden; payments and the invoice appear once the order is confirmed. */
-#workshopPricingSection[data-job-kind="components"] :is(#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+#workshopPricingSection[data-job-kind="components"] :is(#quoteRodPricingHead,#quotePricingMethodField,#quoteLegacyLabourLine,#quoteAdvancedPricingNote,#quoteAdvancedPricing,#quoteRodPriceHint,#quoteCustomerTotalLine,#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteTaxRateChip,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
 #workshopPricingSection[data-job-kind="components"] #quoteMoreDocumentsWrap,
-#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock{display:none}
+#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock > :not(#quoteDepositTerms){display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
 #workshopScreen .build-details__rod-specs{display:contents}

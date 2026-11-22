@@ -54,7 +54,7 @@ function harness(){
     },
   });
   vm.runInContext("let paymentFormBuildKey='';let balanceCorrectionId='';let pricingSummaryOpen=false;let deliveryEditOpen=false;let recordPaymentType='balance';let recordPaymentPrefill='';",context);
-  for(const name of ['paymentHistoryMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup','closeDepositReceivedForm',
+  for(const name of ['paymentHistoryMarkup','paymentEntriesMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup','closeDepositReceivedForm',
     'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','setRecordPaymentChoice','setRecordPaymentType','recordPaymentSuggestedAmount','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }
@@ -65,8 +65,11 @@ test('payment status displays all received payments and balance without changing
   context.updatePaymentBlock();
   assert.equal(elements.quotePaymentTotalReceived.textContent,'$1280.75 NZD');
   assert.equal(elements.quotePaymentBalanceOwing.textContent,'$1219.25 NZD');
-  assert.match(elements.quotePaymentHistory.innerHTML,/Deposit: \$1180\.75 NZD.*2026-11-10/);
-  assert.match(elements.quotePaymentHistory.innerHTML,/Balance: \$100\.00 NZD.*2026-11-12/);
+  // Q23 final correction: one line per payment ("Deposit received / $x — date"), with no repeated heading.
+  assert.match(elements.quotePaymentHistory.innerHTML,/Deposit received<\/span><strong>\$1180\.75 NZD — 2026-11-10/);
+  assert.match(elements.quotePaymentHistory.innerHTML,/Balance received<\/span><strong>\$100\.00 NZD — 2026-11-12/);
+  assert.doesNotMatch(elements.quotePaymentHistory.innerHTML,/Payment history/);
+  assert.equal(elements.quoteDepositReceivedStatus.textContent,'','the deposit is not repeated in a sentence');
   assert.equal(JSON.stringify(quote.payments),before);
 });
 test('balance form opens with the outstanding balance and closes without writing',()=>{

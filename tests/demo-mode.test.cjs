@@ -518,7 +518,8 @@ test('Q18 Phase 3: the Mac dock is slim too - while the player is open the DEMO 
 test('Q18 Phase 3: the control the director is using is highlighted (a visible outline and glow, Demo Mode only)', () => {
   const rule = /html\.klabs-demo \[data-demo-highlight\] \{([^}]*)\}/.exec(css);
   assert.ok(rule, 'highlight rule');
-  assert.match(rule[1], /outline:3px solid/);
+  // Q23 final correction: a quieter highlight (no heavy glow), still a clearly visible 2px outline.
+  assert.match(rule[1], /outline:2px solid/);
   assert.match(rule[1], /box-shadow:/);
   assert.doesNotMatch(css.replace(rule[0], ''), /(^|[^-\w])\[data-demo-highlight\]/m, 'not used outside Demo Mode');
 });

@@ -561,7 +561,7 @@ function applyStudioSettingsSyncPayload(payload){
   syncBusinessProfileControls(true);
   syncSettingsPreferenceControls();
   if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
-  if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();if($('settingsShowAdvancedPricing'))$('settingsShowAdvancedPricing').checked=advancedPricingEnabled();
   syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
   syncCurrencyControl();
@@ -588,7 +588,7 @@ function reloadBusinessProfileForAccount(){
   syncSettingsPreferenceControls();
   syncBusinessProfileControls(true);
   if($('settingsTaxRate'))$('settingsTaxRate').value=String(activeTaxRate());
-  if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+  if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();if($('settingsShowAdvancedPricing'))$('settingsShowAdvancedPricing').checked=advancedPricingEnabled();
   syncTaxIdentityControls();
   if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
   syncCurrencyControl();
@@ -3955,6 +3955,128 @@ function applyManualTargetProfit(value){
 function applyManualTargetMargin(value){
   quote.marginPercent=numberOrZero(value);
   quote.pricingDriver='margin';
+}
+// Q23 Rod Pricing simplification. Presentation over the unchanged quoteMaths(): the builder sees Components Cost,
+// Rod Price (entered including tax) and Your Return. Saved jobs keep their stored drivers, labour and figures exactly.
+function advancedPricingEnabled(){
+  return !!(studioSettings&&studioSettings.showAdvancedPricing===true);
+}
+// Simple / Advanced in the Rod Pricing heading is a view only: held in memory, never saved to the build or to Settings.
+// Until the builder switches, the Settings preference (Show Advanced Pricing) decides.
+let pricingViewChoice=null;
+function pricingViewAdvanced(){
+  return pricingViewChoice===null?advancedPricingEnabled():pricingViewChoice==='advanced';
+}
+function setPricingView(mode){
+  pricingViewChoice=mode==='advanced'?'advanced':'simple';
+}
+// Advanced Pricing offers three ways to price: set the Rod Price, a Target Return ($) or a Target Return (%, a margin on
+// the price excluding tax). Choosing one only changes which field is typed into; the build changes once a value is typed.
+let pricingMethodChoice=null;
+let pricingMethodBuildKey='';
+function pricingMethodForDriver(driver){
+  return driver==='profit'?'return':driver==='margin'?'percent':'price';
+}
+function editablePricingFieldId(method){
+  return method==='return'?'quoteProfit':method==='percent'?'quoteMarginPercent':'quoteTotal';
+}
+function paymentEntriesMarkup(payments,{money,date,showCorrections=false}={}){
+  const list=Array.isArray(payments)?payments:[];
+  if(!list.length)return '';
+  return `<ul>${list.map((payment)=>{
+    const type=payment&&payment.type==='balance'?'Balance received':'Deposit received';
+    const when=payment&&payment.date?date(payment.date):'Unknown date';
+    const correct=showCorrections&&payment?.id&&(payment.type==='balance'||payment.type==='deposit')
+      ?`<button type="button" class="ghost-action quote-payment__correct" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button>`:'';
+    return `<li class="quote-payment__entry"><span>${type}</span><strong>${escapeHtml(money(numberOrZero(payment&&payment.amount)))} — ${escapeHtml(when)}</strong>${correct}</li>`;
+  }).join('')}</ul>`;
+}
+// Rod-only figures from quoteMaths(): the price of the rod itself (delivery is charged on top) and the builder's return.
+// Your Return = rod price excluding tax - components buy cost (for a saved build with labour, it includes that labour).
+function rodPricingFigures(math){
+  const componentsCost=numberOrZero(math&&math.materialCost);
+  const labourCost=numberOrZero(math&&math.labourCost);
+  const rodPrice=Math.max(0,numberOrZero(math&&math.subtotal)-numberOrZero(math&&math.freightCharge));
+  const rodExclusive=numberOrZero(math&&math.rodProfit)+componentsCost+labourCost;
+  const yourReturn=numberOrZero(math&&math.exclusiveRevenue)-componentsCost-numberOrZero(math&&math.freightCost);
+  const returnPercent=rodExclusive>0?(yourReturn/rodExclusive)*100:0;
+  return{componentsCost,labourCost,rodPrice,rodExclusive,rodTax:rodPrice-rodExclusive,yourReturn,returnPercent};
+}
+function savedLabourCost(source){
+  if(isComponentsJob(source))return 0;
+  return numberOrZero(source&&source.labourRate)*numberOrZero(source&&source.labourHours);
+}
+// The Rod Price excludes delivery; the stored Final Customer Price still includes it, exactly as before.
+function applyManualRodPrice(value){
+  applyManualFinalCustomerPrice(Math.max(0,numberOrZero(value))+deliveryAmounts(quote).charge);
+}
+// Target Return ($) is stored as the existing Required Profit target; saved labour stays part of the return.
+function applyManualTargetReturn(value){
+  applyManualTargetProfit(numberOrZero(value)-savedLabourCost(quote));
+}
+// Target Return (%) is a margin on the rod price excluding tax, stored as the existing Margin % target. With saved labour
+// (counted as cost by the Margin % target) the equivalent margin is worked out so Your Return is exactly that share.
+function applyManualTargetReturnPercent(value){
+  const percent=Math.min(99.99,numberOrZero(value));
+  const labour=savedLabourCost(quote);
+  const components=componentRowsForTotals().reduce((sum,item)=>sum+componentRowLineCost(item),0);
+  if(labour<=0 || components<=0){
+    applyManualTargetMargin(percent);
+    return;
+  }
+  applyManualTargetMargin(100*(1-((components+labour)*(1-percent/100))/components));
+}
+function rodPriceLabel({taxActive,taxName,jobType}={}){
+  const base=jobType==='repair'?'Repair Price':'Rod Price';
+  return taxActive?`${base} (incl. ${taxName})`:base;
+}
+// Q23 review: each GST figure says what it covers - the rod alone, or the customer total with delivery. Wording only.
+function rodPriceHintText({currencyCode,taxActive,taxName,rodTax,jobType}={}){
+  return taxActive?`${currencyCode} · ${taxName} on the ${jobType==='repair'?'repair':'rod'} ${rodTax}`:String(currencyCode||'');
+}
+// The tax total is shown once, in the tax row, so this line only says the total includes it.
+function customerTotalLineText({total,taxActive,taxName}={}){
+  return `Customer total with delivery: ${total}${taxActive?` incl. ${taxName}`:''}`;
+}
+// Q23 GST cleanup: the tax row shows the one tax total (rod plus any delivery); the rod's own tax stays under the price.
+function taxAmountLabel({taxName,componentsJob}={}){
+  if(componentsJob)return `${taxName} Amount`;
+  return `${taxName} total`;
+}
+function taxRatePercentText(rate){
+  const value=Math.max(0,numberOrZero(rate));
+  return `${Number.isInteger(value)?value:Number(value.toFixed(2))}%`;
+}
+let taxRateEditorOpen=false;
+function targetReturnPercentLabel({taxActive,taxName}={}){
+  return taxActive?`Target Margin (% of price excl. ${taxName})`:'Target Margin (% of price)';
+}
+function legacyLabourLineText(source){
+  const cost=savedLabourCost(source);
+  if(!(cost>0))return '';
+  const hours=numberOrZero(source.labourHours);
+  return `Includes labour ${String(hours)} h × ${currency(numberOrZero(source.labourRate))} = ${currency(cost)} (saved with this build)`;
+}
+function effectiveHourlyReturn(amount,hours){
+  const h=numberOrZero(hours);
+  if(!(h>0))return null;
+  return roundMoney(numberOrZero(amount)/h);
+}
+function timePricingAmount(hours,rate){
+  return roundMoney(Math.max(0,numberOrZero(hours))*Math.max(0,numberOrZero(rate)));
+}
+// Accounts whose saved builds used the older labour, Required Profit or Margin % pricing see a one-time note.
+function accountUsesAdvancedPricing(records){
+  return (Array.isArray(records)?records:[]).some((record)=>{
+    if(!record || typeof record!=='object' || isComponentsJob(record))return false;
+    return record.pricingDriver==='profit' || record.pricingDriver==='margin' || savedLabourCost(record)>0;
+  });
+}
+function shouldShowAdvancedPricingNote({settings,records,componentsJob,demo}={}){
+  const current=settings&&typeof settings==='object'?settings:{};
+  if(demo || componentsJob || current.showAdvancedPricing===true || current.advancedPricingNoteDismissed===true)return false;
+  // records may be a function so the saved builds are only read when the note could actually show.
+  return accountUsesAdvancedPricing(typeof records==='function'?records():records);
 }
 function homeRodElement(){return $('homeLivingRod');}
 function homeRodLedPositions(){
@@ -14207,8 +14329,8 @@ function applyWorkshopBuildOverview(){
   }
   const renameEditor=$('quoteBuildRenameEditor');
   if(renameEditor && !renameEditor.hidden && (!hasIdentity || buildRenameQuoteRef!==quote))closeBuildRenameEditor();
-  const renameBtn=$('quoteBuildRenameBtn');
-  if(renameBtn)renameBtn.hidden=!hasIdentity || !!(renameEditor && !renameEditor.hidden);
+  const renameItem=document.querySelector('#currentBuildActionsMenu [data-current-build-action="rename"]');
+  if(renameItem)renameItem.hidden=!hasIdentity;
   // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
   const entryActionsEl=$('quoteBuilderEntryActions');
   if(entryActionsEl)entryActionsEl.hidden=hasActiveBuildRef||hasIdentity;
@@ -14337,6 +14459,12 @@ function toggleQuotePricingSummary(){
   if(section)syncPricingLayoutState(section,currentBuildLifecycleStatus());
 }
 function handleCurrentBuildAction(action){
+  if(action==='rename'){
+    closeCurrentBuildActionsMenu();
+    openBuildRenameEditor();
+    $('quoteBuildRenameEditor')?.scrollIntoView?.({block:'center'});
+    return;
+  }
   if(action==='statement'){
     closeCurrentBuildActionsMenu();
     openPaymentStatement();
@@ -14449,8 +14577,6 @@ function openBuildRenameEditor(){
   buildRenameQuoteRef=quote;
   input.value=specificationValue(quote&&quote.buildName);
   editor.hidden=false;
-  const renameBtn=$('quoteBuildRenameBtn');
-  if(renameBtn)renameBtn.hidden=true;
   try{input.focus({preventScroll:true});}catch{input.focus();}
   try{input.select();}catch{}
 }
@@ -14458,8 +14584,20 @@ function closeBuildRenameEditor(){
   const editor=$('quoteBuildRenameEditor');
   if(editor)editor.hidden=true;
   buildRenameQuoteRef=null;
-  const renameBtn=$('quoteBuildRenameBtn');
-  if(renameBtn)renameBtn.hidden=!(specificationValue(quote&&quote.customerName)||specificationValue(quote&&quote.buildName));
+}
+// Names the open build as an ordinary edit (marked unsaved, then autosaved like any other field), without opening the
+// Rename editor. Demo Mode uses it so the demonstration build starts with its real name. It does not wait for an
+// explicit save, so a slow device cannot leave the name half-applied.
+function nameCurrentBuild(name){
+  const value=String(name||'').trim();
+  if(!value || !quote)return false;
+  if(value!==specificationValue(quote.buildName)){
+    quote.buildName=value;
+    markQuoteDirty();
+    saveQuoteCurrent();
+  }
+  updateWorkshopBuildOverview();
+  return true;
 }
 function saveBuildRename(){
   const input=$('quoteBuildRenameInput');
@@ -15994,6 +16132,9 @@ function renderFinishedRodLengthInput(){
   if(finishedRodLengthPending && (finishedRodLengthPending.quote!==quote || finishedRodLengthPending.unitKey!==finishedRodLengthUnitKey()))finishedRodLengthPending=null;
   const unitEl=$('quoteSpecFinishedRodLengthUnit');
   if(unitEl)unitEl.textContent=measurementUnitSuffix();
+  // Reel Seat Position reads a bare number in the same unit, so it shows the same unit.
+  const seatUnitEl=$('quoteSpecReelSeatPositionUnit');
+  if(seatUnitEl)seatUnitEl.textContent=measurementUnitSuffix();
   input.placeholder=`e.g. ${blankMeasurementInputText(3962.4)}`;
   const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
   const stored=layout.rodLengthMm;
@@ -16614,7 +16755,10 @@ function updateWorkshopBackToTopVisibility(){
   const workshopActive=!!(workshop && workshop.classList.contains('active'));
   const blockedByModal=document.body.classList.contains('component-sheet-open') || expandedComponentRowIndex>=0;
   // Only once the user has scrolled most of a screen; short pages never need it.
-  const shouldShow=workshopActive && !blockedByModal && window.scrollY>Math.max(320,window.innerHeight*0.75);
+  // Not at the end of the page either, where it would sit over the last controls (Mark Complete, the ••• menu).
+  const maxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const nearEnd=window.scrollY>=maxScroll-160;
+  const shouldShow=workshopActive && !blockedByModal && !nearEnd && window.scrollY>Math.max(320,window.innerHeight*0.75);
   button.hidden=!shouldShow;
   button.classList.toggle('is-visible',shouldShow);
 }
@@ -16732,11 +16876,11 @@ function bindWorkshopQuoteBuilder(){
       window.scrollTo(0,0);
     });
   }
-  const buildRenameBtn=$('quoteBuildRenameBtn');
-  if(buildRenameBtn && buildRenameBtn.getAttribute('data-build-rename-bound')!=='true'){
-    buildRenameBtn.setAttribute('data-build-rename-bound','true');
-    buildRenameBtn.addEventListener('click',openBuildRenameEditor);
-    $('quoteBuildRenameSave')?.addEventListener('click',saveBuildRename);
+  // Rename lives in the build's ••• Actions menu (Rename Build); the editor still opens under the heading.
+  const buildRenameSave=$('quoteBuildRenameSave');
+  if(buildRenameSave && buildRenameSave.getAttribute('data-build-rename-bound')!=='true'){
+    buildRenameSave.setAttribute('data-build-rename-bound','true');
+    buildRenameSave.addEventListener('click',saveBuildRename);
     $('quoteBuildRenameCancel')?.addEventListener('click',closeBuildRenameEditor);
     $('quoteBuildRenameInput')?.addEventListener('keydown',(event)=>{
       if(event.key==='Escape'){
@@ -16810,7 +16954,9 @@ function bindWorkshopQuoteBuilder(){
   const quoteTotalInput=$('quoteTotal');
   if(quoteTotalInput){
     const onFinalPriceUpdate=()=>{
-      applyManualFinalCustomerPrice(quoteTotalInput.value);
+      // Q23: builds and repairs enter the Rod Price (delivery is added on top); a Components job keeps its Customer Price.
+      if(isComponentsJob(quote))applyManualFinalCustomerPrice(quoteTotalInput.value);
+      else applyManualRodPrice(quoteTotalInput.value);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -16840,7 +16986,7 @@ function bindWorkshopQuoteBuilder(){
   const quoteProfitInput=$('quoteProfit');
   if(quoteProfitInput){
     const onProfitUpdate=()=>{
-      applyManualTargetProfit(quoteProfitInput.value);
+      applyManualTargetReturn(quoteProfitInput.value);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -16851,7 +16997,7 @@ function bindWorkshopQuoteBuilder(){
   const quoteMarginPercentInput=$('quoteMarginPercent');
   if(quoteMarginPercentInput){
     const onMarginUpdate=()=>{
-      applyManualTargetMargin(quoteMarginPercentInput.value);
+      applyManualTargetReturnPercent(quoteMarginPercentInput.value);
       saveQuoteCurrent();
       markQuoteDirty();
       updateQuoteSummary();
@@ -16859,6 +17005,57 @@ function bindWorkshopQuoteBuilder(){
     quoteMarginPercentInput.addEventListener('input',onMarginUpdate);
     quoteMarginPercentInput.addEventListener('change',onMarginUpdate);
   }
+  // Q23 Advanced Pricing: Build hours are display-only (never part of the price); the time helper sets Target Return once.
+  const buildHoursInput=$('quoteBuildHours');
+  if(buildHoursInput){
+    const onBuildHoursUpdate=()=>{
+      const hours=Math.max(0,numberOrZero(buildHoursInput.value));
+      if(String(buildHoursInput.value).trim()===''||hours===0)delete quote.buildHours;
+      else quote.buildHours=hours;
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    };
+    buildHoursInput.addEventListener('input',onBuildHoursUpdate);
+    buildHoursInput.addEventListener('change',onBuildHoursUpdate);
+  }
+  const timeRateInput=$('quoteTimeRate');
+  if(timeRateInput){
+    timeRateInput.addEventListener('input',()=>updateQuoteSummary());
+  }
+  const timeApplyButton=$('quoteTimePricingApply');
+  if(timeApplyButton){
+    timeApplyButton.addEventListener('click',()=>{
+      const amount=timePricingAmount(quote.buildHours,timeRateInput&&timeRateInput.value);
+      if(!(amount>0))return;
+      applyManualTargetReturn(amount);
+      saveQuoteCurrent();
+      markQuoteDirty();
+      updateQuoteSummary();
+    });
+  }
+  const pricingNoteDismiss=$('quoteAdvancedPricingNoteDismiss');
+  if(pricingNoteDismiss){
+    pricingNoteDismiss.addEventListener('click',()=>{
+      studioSettings.advancedPricingNoteDismissed=true;
+      saveStudioSettings();
+      updateQuoteSummary();
+    });
+  }
+  // Simple / Advanced and the Advanced pricing method only change what is shown and which field is typed into. Nothing is
+  // saved and no figure changes until a value is typed.
+  document.querySelectorAll('[data-pricing-view]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      setPricingView(button.getAttribute('data-pricing-view'));
+      updateQuoteSummary();
+    });
+  });
+  document.querySelectorAll('[data-pricing-method]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      pricingMethodChoice=button.getAttribute('data-pricing-method');
+      updateQuoteSummary();
+    });
+  });
   const includeTaxInput=$('quoteIncludeGst');
   if(includeTaxInput){
     const onTaxToggle=()=>{
@@ -16869,6 +17066,20 @@ function bindWorkshopQuoteBuilder(){
     };
     includeTaxInput.addEventListener('input',onTaxToggle);
     includeTaxInput.addEventListener('change',onTaxToggle);
+  }
+  // The rate chip opens (and closes) this build's own tax rate field. Opening it changes nothing.
+  const quoteTaxRateChip=$('quoteTaxRateChip');
+  if(quoteTaxRateChip && quoteTaxRateChip.getAttribute('data-tax-rate-chip-bound')!=='true'){
+    quoteTaxRateChip.setAttribute('data-tax-rate-chip-bound','true');
+    quoteTaxRateChip.addEventListener('click',()=>{
+      taxRateEditorOpen=!taxRateEditorOpen;
+      if(!taxRateEditorOpen && document.activeElement===$('quoteTaxRate'))$('quoteTaxRate').blur();
+      updateQuoteSummary();
+      if(taxRateEditorOpen){
+        const input=$('quoteTaxRate');
+        try{input?.focus({preventScroll:true});}catch{input?.focus();}
+      }
+    });
   }
   const quoteTaxRateInput=$('quoteTaxRate');
   if(quoteTaxRateInput){
@@ -17266,33 +17477,116 @@ function updateQuoteSummary(){
   updateBuildPricingSummary();
   if($('quoteLabourCost'))$('quoteLabourCost').value=currency(math.labourCost);
   if($('quoteCostBeforeMargin'))$('quoteCostBeforeMargin').value=currency(math.materialCost);
-  if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=currency(math.exclusiveRevenue-math.materialCost-math.freightCost);
+  // Q23: a Components job keeps its own Customer Price; builds and repairs show the Rod Price and Your Return.
+  const componentsPricing=isComponentsJob(quote);
+  const rodFigures=rodPricingFigures(math);
+  const taxNameText=activeTaxName();
+  const taxActiveForPrice=quoteTaxAvailable() && quote.includeGst!==false;
+  if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=currency(rodFigures.yourReturn);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   if($('quoteTotal') && document.activeElement!==$('quoteTotal')){
-    $('quoteTotal').value=quotePricePending()?'':numberOrZero(math.total).toFixed(2);
+    const shownPrice=componentsPricing?math.total:rodFigures.rodPrice;
+    $('quoteTotal').value=quotePricePending()?'':numberOrZero(shownPrice).toFixed(2);
     $('quoteTotal').setAttribute('placeholder',quotePricePending()?'To be confirmed':'0.00');
-    $('quoteTotal').readOnly=isComponentsJob(quote);
   }
-  // Required Profit/Margin are editable pricing targets (BUILD "pricingtarget103" restore) - never overwrite
-  // the field the builder is actively typing into, same guard as Final Customer Price/Tax Rate above.
-  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(math.rodProfit).toFixed(2);
-  if($('quoteMarginPercent') && document.activeElement!==$('quoteMarginPercent'))$('quoteMarginPercent').value=numberOrZero(math.rodMarginPercent).toFixed(1);
+  // Target Return ($ and %) - never overwrite the field the builder is typing into.
+  if($('quoteProfit') && document.activeElement!==$('quoteProfit'))$('quoteProfit').value=numberOrZero(rodFigures.yourReturn).toFixed(2);
+  if($('quoteMarginPercent') && document.activeElement!==$('quoteMarginPercent'))$('quoteMarginPercent').value=numberOrZero(rodFigures.returnPercent).toFixed(1);
   const pricingDriver=normalizePricingDriver(quote.pricingDriver);
-  [['quoteTotalField','price'],['quoteProfitField','profit'],['quoteMarginPercentField','margin']].forEach(([id,driverName])=>{
+  // Simple / Advanced (a view only) and, in Advanced, the chosen way to price. A build opens on the method it was last
+  // priced by. Only the chosen field can be typed into; the other two are calculated results.
+  const advancedView=!componentsPricing && pricingViewAdvanced();
+  const methodKey=String(quote.id||quote.buildNumber||'');
+  if(methodKey!==pricingMethodBuildKey || pricingMethodChoice===null){
+    pricingMethodBuildKey=methodKey;
+    pricingMethodChoice=pricingMethodForDriver(pricingDriver);
+  }
+  const pricingMethod=advancedView?pricingMethodChoice:'price';
+  if($('quoteTotal'))$('quoteTotal').readOnly=componentsPricing || pricingMethod!=='price';
+  if($('quoteProfit'))$('quoteProfit').readOnly=pricingMethod!=='return';
+  if($('quoteMarginPercent'))$('quoteMarginPercent').readOnly=pricingMethod!=='percent';
+  document.querySelectorAll('[data-pricing-view]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String((button.getAttribute('data-pricing-view')==='advanced')===advancedView));
+  });
+  document.querySelectorAll('[data-pricing-method]').forEach((button)=>{
+    button.setAttribute('aria-pressed',String(button.getAttribute('data-pricing-method')===pricingMethod));
+  });
+  ['quoteTotalField','quoteProfitField','quoteMarginPercentField'].forEach((id)=>{
+    // Selection is shown by the method switch, not by a red field.
     const el=$(id);
-    if(el)el.classList.toggle('quote-field--active-target',pricingDriver===driverName);
+    if(el)el.classList.toggle('quote-field--active-target',false);
   });
   const totalLabel=document.querySelector('#quoteTotalField > span');
-  if(totalLabel)totalLabel.textContent=`Customer Price (${activeCurrencyCode()})`;
-  const taxNameText=activeTaxName();
-  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=`${taxNameText} Amount`;
+  if(totalLabel)totalLabel.textContent=componentsPricing
+    ?`Customer Price (${activeCurrencyCode()})`
+    :rodPriceLabel({taxActive:taxActiveForPrice,taxName:taxNameText,jobType:normalizeJobType(quote.jobType)});
+  const rodPriceHint=$('quoteRodPriceHint');
+  if(rodPriceHint){
+    rodPriceHint.textContent=componentsPricing?'':rodPriceHintText({currencyCode:activeCurrencyCode(),taxActive:taxActiveForPrice,
+      taxName:taxNameText,rodTax:currency(rodFigures.rodTax),jobType:normalizeJobType(quote.jobType)});
+  }
+  // Shown as soon as Courier / Shipping is chosen (not on the first Freight keystroke), so the fields below do not move
+  // while delivery amounts are typed.
+  const withDelivery=!componentsPricing && (quote.fulfilmentMethod==='shipping' || numberOrZero(math.freightCharge)>0);
+  const customerTotalLine=$('quoteCustomerTotalLine');
+  if(customerTotalLine){
+    customerTotalLine.hidden=!withDelivery;
+    customerTotalLine.textContent=withDelivery?customerTotalLineText({total:currency(math.total),totalTax:currency(math.gst),
+      taxActive:taxActiveForPrice,taxName:taxNameText}):'';
+  }
+  const legacyLabourLine=$('quoteLegacyLabourLine');
+  if(legacyLabourLine){
+    const text=legacyLabourLineText(quote);
+    legacyLabourLine.textContent=text;
+    legacyLabourLine.hidden=!text;
+  }
+  $('workshopPricingSection')?.setAttribute('data-advanced-pricing',advancedView?'true':'false');
+  $('workshopPricingSection')?.setAttribute('data-pricing-method',pricingMethod);
+  const pricingNote=$('quoteAdvancedPricingNote');
+  if(pricingNote){
+    pricingNote.hidden=advancedView || !shouldShowAdvancedPricingNote({settings:studioSettings,records:savedBuildRecords,
+      componentsJob:componentsPricing,demo:!!window.KLABS_DEMO?.active});
+  }
+  if($('quoteMarginPercentLabel'))$('quoteMarginPercentLabel').textContent=targetReturnPercentLabel({taxActive:taxActiveForPrice,taxName:taxNameText});
+  const buildHoursInput=$('quoteBuildHours');
+  const buildHours=numberOrZero(quote.buildHours);
+  if(buildHoursInput && document.activeElement!==buildHoursInput)buildHoursInput.value=buildHours>0?String(buildHours):'';
+  const hourly=effectiveHourlyReturn(rodFigures.yourReturn,buildHours);
+  if($('quoteEffectiveHourly'))$('quoteEffectiveHourly').textContent=hourly===null?'':`Effective return ${currency(hourly)}/hour`;
+  if($('quoteTimeHours'))$('quoteTimeHours').textContent=`${String(buildHours)} h`;
+  const timeRateInput=$('quoteTimeRate');
+  if(timeRateInput && document.activeElement!==timeRateInput && timeRateInput.value===''){
+    const defaultRate=activeDefaultLabourRate();
+    if(defaultRate>0)timeRateInput.value=String(defaultRate);
+  }
+  const timeApply=$('quoteTimePricingApply');
+  if(timeApply){
+    const amount=timePricingAmount(buildHours,timeRateInput&&timeRateInput.value);
+    timeApply.disabled=!(amount>0);
+    timeApply.textContent=amount>0?`Set Target Return ${currency(amount)}`:'Set Target Return';
+  }
+  if($('quoteTaxLabel'))$('quoteTaxLabel').textContent=taxAmountLabel({taxName:taxNameText,jobType:normalizeJobType(quote.jobType),
+    withDelivery,componentsJob:componentsPricing});
   if($('quoteIncludeTaxLabel'))$('quoteIncludeTaxLabel').textContent=`Include ${taxNameText}`;
   if($('quoteTaxRateLabel'))$('quoteTaxRateLabel').textContent=`${taxNameText} Rate (%)`;
   if($('quoteTaxRate') && document.activeElement!==$('quoteTaxRate'))$('quoteTaxRate').value=numberOrZero(math.taxRate).toFixed(1);
   const taxAvailable=quoteTaxAvailable();
   const showTaxDetails=taxAvailable && quote.includeGst!==false;
   if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
-  if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
+  if($('quoteTaxSummaryRow'))$('quoteTaxSummaryRow').hidden=!taxAvailable;
+  // Q23 GST cleanup: the rate is a compact chip; this build's own rate field opens from it (and stays open while it is
+  // being edited). The chip says when the build's rate differs from Settings.
+  const rateChip=$('quoteTaxRateChip');
+  if(rateChip){
+    const buildRate=numberOrZero(math.taxRate);
+    const differs=Math.abs(buildRate-activeTaxRate())>1e-9;
+    rateChip.textContent=`${taxRatePercentText(buildRate)}${differs?' · this build':''}`;
+    rateChip.setAttribute('aria-label',`${taxNameText} rate ${taxRatePercentText(buildRate)}${differs?' for this build':''}. Change the rate for this build`);
+    rateChip.hidden=!showTaxDetails;
+    rateChip.setAttribute('aria-expanded',showTaxDetails&&taxRateEditorOpen?'true':'false');
+  }
+  if(!showTaxDetails)taxRateEditorOpen=false;
+  if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!(showTaxDetails&&(taxRateEditorOpen||document.activeElement===$('quoteTaxRate')));
   if($('quoteGstField'))$('quoteGstField').hidden=!showTaxDetails;
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');
@@ -17453,7 +17747,8 @@ function updatePaymentBlock(){
   const history=$('quotePaymentHistory');
   if(received)received.textContent=currencyWithCode(math.amountReceived);
   if(balance)balance.textContent=math.total>0&&math.balanceOwing===0?`PAID IN FULL (${currencyWithCode(0)})`:currencyWithCode(math.balanceOwing);
-  if(history)history.innerHTML=paymentHistoryMarkup(true);
+  if(history)history.innerHTML=paymentEntriesMarkup(quote.payments,{money:currencyWithCode,
+    date:(value)=>formatDateDisplay(`${value}T00:00:00`),showCorrections:true});
   const historyDetails=$('quotePaymentHistoryDetails');
   if(historyDetails)historyDetails.hidden=!(Array.isArray(quote.payments)&&quote.payments.length);
   const retry=$('retryFinancialBtn');
@@ -17462,9 +17757,9 @@ function updatePaymentBlock(){
     catch(error){retry.hidden=false;console.error('[K-Labs Studio] Financial operation could not be read:',error);}
   }
   if(math.depositPayment){
+    // The deposit itself is listed in the payment entries above; only what is still required is added here.
     const partial=math.depositEnabled&&math.depositOutstanding;
-    status.textContent=`Deposit received: ${currencyWithCode(math.depositReceivedAmount)} on ${formatDateDisplay(`${math.depositReceivedDate}T00:00:00`)}`
-      +(partial?`. Deposit still required: ${currencyWithCode(math.depositStillRequired)} of ${currencyWithCode(math.depositAmount)}.`:'');
+    status.textContent=partial?`Deposit still required: ${currencyWithCode(math.depositStillRequired)} of ${currencyWithCode(math.depositAmount)}.`:'';
   }else{
     status.textContent=math.depositEnabled?'Deposit not yet received.':'';
   }
@@ -18106,7 +18401,7 @@ function onScreenChange(screenId){
   }
   if(screenId==='settingsScreen' && $('settingsTaxRate')){
     $('settingsTaxRate').value=String(activeTaxRate());
-    if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();
+    if($('settingsTaxEnabled'))$('settingsTaxEnabled').checked=activeTaxEnabled();if($('settingsShowAdvancedPricing'))$('settingsShowAdvancedPricing').checked=advancedPricingEnabled();
     syncTaxIdentityControls();
     if($('settingsDefaultLabourRate'))$('settingsDefaultLabourRate').value=String(activeDefaultLabourRate());
     syncCurrencyControl();
@@ -18586,6 +18881,20 @@ function bindSettingsControls(){
     taxEnabledInput.addEventListener('input',onTaxEnabledChange);
     taxEnabledInput.addEventListener('change',onTaxEnabledChange);
   }
+  // Q23: Show Advanced Pricing (off unless the builder turns it on).
+  const showAdvancedPricingInput=$('settingsShowAdvancedPricing');
+  if(showAdvancedPricingInput){
+    showAdvancedPricingInput.checked=advancedPricingEnabled();
+    const onShowAdvancedPricingChange=()=>{
+      if(showAdvancedPricingInput.checked===advancedPricingEnabled())return;
+      studioSettings.showAdvancedPricing=showAdvancedPricingInput.checked;
+      const ok=saveStudioSettings();
+      updateQuoteSummary();
+      setSettingsSectionSaveState('PricingTax',ok?'saved':'error');
+    };
+    showAdvancedPricingInput.addEventListener('input',onShowAdvancedPricingChange);
+    showAdvancedPricingInput.addEventListener('change',onShowAdvancedPricingChange);
+  }
   const taxNameInput=$('settingsTaxName');
   const taxRegistrationInput=$(TAX_REGISTRATION_FIELD.id);
   if(taxNameInput && taxNameInput.getAttribute('data-settings-bound')!=='true'){
@@ -18926,7 +19235,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible')refreshServerQuoteCounter();
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI={buildWheels,render,nameCurrentBuild,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
 window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
 window.KLABS_UI.refreshBusinessLogoControls=syncBusinessLogoControls;
 window.KLABS_UI.readRecoveryDraft=()=>({

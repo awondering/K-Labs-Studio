@@ -3,15 +3,15 @@
 // Serves the repository from a local HTTP server with every other request refused. Synthetic demonstration data only.
 // Checks, at Mac and iPhone 13 sizes: no autoplay; every figure Studio shows while pricing, on the quote, in the payment
 // status, on the invoice and on the build summary matches Studio's own quoteMaths()/depositMaths(); the parts' prices
-// come from the demonstration library; courier delivery is added separately and leaves the rod's target profit unchanged;
+// come from the demonstration library; courier delivery is added separately and leaves the Rod Price and Your Return unchanged;
 // every document carries the DEMO watermark; the quote and invoice use local demonstration numbers with no "Connect to
 // allocate" notice; the invoice balance is paid in full; Pause holds everything (and closes the write window) and Play
 // carries on; the visitor's own clicks, taps and typing change nothing; sheets are never covered by the dock; the
 // iPhone strip is slim; Replay (including the Pause button once finished) and the chapter controls restart without
 // leaving Demo Mode. Phase 3: every tap and typed character the demonstration makes lands on a highlighted control that
-// is fully in view; the courier choice, delivery total and unchanged profit and margin are highlighted in view; no
-// caption or player message is cut off; the Mac dock is slim. Phase 3 review: pricing by a margin, then by the profit
-// wanted, recalculated live; shipping costs are directly below the fulfilment choices; an older cached demonstration file is refreshed once, or the visitor is returned safely; a
+// is fully in view; the courier choice, delivery total, customer total and unchanged Your Return are highlighted in view; no
+// caption or player message is cut off; the Mac dock is slim. Q23: pricing by the Rod Price typed in (GST
+// included), with Your Return recalculated live; shipping costs are directly below the fulfilment choices; an older cached demonstration file is refreshed once, or the visitor is returned safely; a
 // step that cannot finish ends calmly in "Demonstration paused. Press Replay" and nothing changes after it.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -24,11 +24,11 @@ let passed = 0;
 const ck = (name, cond, detail) => { assert.ok(cond, `${name}${detail === undefined ? '' : ' ' + JSON.stringify(detail)}`); passed++; console.log('PASS', name); };
 
 // The parts the demonstration picks, with the demonstration library's cost prices (js/demo-data.js).
-const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Split Grip': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
-const LABOUR = { rate: 85, hours: 5 };
+const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Grip 75 mm': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
 const DELIVERY = { freight: 18, packaging: 12 };
-// Phase 3 review: the profit typed after the margin (Required Profit, $).
-const PROFIT = 280;
+// Q23: the Rod Price typed in chapter 4, GST included (was: labour 5 h at $85, a 25% margin, then a $280 profit).
+const ROD_PRICE = 899;
+const PARTS_COST = Object.values(PART_COSTS).reduce((a, b) => a + b, 0);
 const STOPPED = /^Demonstration paused\. Press Replay/;
 
 function serve() {
@@ -53,12 +53,13 @@ async function figures(page) {
     const v = (id) => { const el = document.getElementById(id); return el ? (el.value !== undefined && el.tagName === 'INPUT' ? el.value : el.textContent) : null; };
     const maths = depositMaths();
     return {
-      shown: { componentsCost: v('quoteCostBeforeMargin'), customerPrice: v('quoteTotal'), profit: v('quoteProfit'), margin: v('quoteMarginPercent'), gst: v('quoteGst'),
+      shown: { componentsCost: v('quoteCostBeforeMargin'), rodPrice: v('quoteTotal'), rodPriceLabel: document.querySelector('#quoteTotalField > span').textContent, gst: v('quoteGst'),
+        customerTotal: v('quoteCustomerTotalLine'), customerTotalHidden: document.getElementById('quoteCustomerTotalLine').hidden,
         earnings: v('quoteEstimatedEarnings'), summary: v('quotePricingSummaryValue'), headline: v('workshopBuildPricingSummaryText'), labourRate: v('quoteLabourRate'), labourHours: v('quoteLabourHours') },
-      maths: { materialCost: maths.materialCost, labourCost: maths.labourCost, total: maths.total, gst: maths.gst, rodProfit: maths.rodProfit, rodMarginPercent: maths.rodMarginPercent,
+      maths: { materialCost: maths.materialCost, labourCost: maths.labourCost, total: maths.total, gst: maths.gst, rodPrice: maths.subtotal - maths.freightCharge,
         earnings: maths.exclusiveRevenue - maths.materialCost - maths.freightCost, balanceOwing: maths.balanceOwing, amountReceived: maths.amountReceived,
         deliveryCost: maths.freightCost, deliveryCharge: maths.freightCharge },
-      parts: quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).map((c) => ({ name: c.category, libraryId: c.libraryComponentId || '', cost: componentRowLineCost(c) })),
+      parts: quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).map((c) => ({ name: c.category, libraryId: c.libraryComponentId || '', cost: componentRowLineCost(c), qty: componentRowQuantity(c), unitCost: Number(c.cost) })),
       rate: quote.labourRate, hours: quote.labourHours, quoteNumber: quote.quoteNumber, prefix: businessProfile.quotePrefix,
       fulfilment: quote.fulfilmentMethod, freight: quote.freight, packaging: quote.packaging, lifecycle: currentBuildLifecycleStatus(), payments: JSON.parse(JSON.stringify(quote.payments || [])),
     };
@@ -67,11 +68,12 @@ async function figures(page) {
 function checkFigures(label, f) {
   const { shown, maths } = f;
   ck(`${label}: Components Cost shown = quoteMaths() materials`, near(money(shown.componentsCost), maths.materialCost), [shown.componentsCost, maths.materialCost]);
-  ck(`${label}: Customer Price shown = quoteMaths() total`, near(Number(shown.customerPrice), maths.total), [shown.customerPrice, maths.total]);
-  ck(`${label}: Required Profit shown = quoteMaths() profit`, near(Number(shown.profit), maths.rodProfit, 0.0051), [shown.profit, maths.rodProfit]);
-  ck(`${label}: Margin % shown = quoteMaths() margin`, near(Number(shown.margin), maths.rodMarginPercent, 0.051), [shown.margin, maths.rodMarginPercent]);
+  ck(`${label}: Rod Price shown = quoteMaths() total less delivery`, near(Number(shown.rodPrice), maths.rodPrice), [shown.rodPrice, maths.rodPrice]);
+  ck(`${label}: the price is labelled Rod Price (incl. GST)`, shown.rodPriceLabel === 'Rod Price (incl. GST)', shown.rodPriceLabel);
   ck(`${label}: GST shown = quoteMaths() GST`, near(money(shown.gst), maths.gst, 0.0051), [shown.gst, maths.gst]);
-  ck(`${label}: Estimated Earnings shown = quoteMaths()`, near(money(shown.earnings), maths.earnings, 0.0051), [shown.earnings, maths.earnings]);
+  ck(`${label}: Your Return shown = quoteMaths()`, near(money(shown.earnings), maths.earnings, 0.0051), [shown.earnings, maths.earnings]);
+  ck(`${label}: the customer total with delivery is shown only for Courier / Shipping, and = quoteMaths() total`,
+    (f.fulfilment === 'shipping' || maths.deliveryCharge > 0) ? (!shown.customerTotalHidden && near(money(shown.customerTotal), maths.total)) : shown.customerTotalHidden, [f.fulfilment, shown.customerTotal, shown.customerTotalHidden, maths.total]);
   ck(`${label}: pricing summary shown = quoteMaths() total`, near(money(shown.summary), maths.total), [shown.summary, maths.total]);
   ck(`${label}: build headline shows the same total`, shown.headline.includes(money(shown.summary).toLocaleString('en-NZ', { minimumFractionDigits: 2 })) || near(money(shown.headline.split('·')[1]), maths.total), shown.headline);
 }
@@ -204,6 +206,12 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   await waitChapter(page, 2, 120000);
   const numbered = await page.evaluate(() => ({ screen: document.querySelector('.screen.active')?.id, name: document.getElementById('quoteCustomerName').value, number: quote.quoteNumber, prefix: businessProfile.quotePrefix }));
   ck(`${label}: the new build for Jordan Ellis has a local demonstration quote number`, numbered.screen === 'workshopScreen' && numbered.name === 'Jordan Ellis' && numbered.number === `${numbered.prefix}1046`, numbered);
+  // The build is created with its name; Rename is not on the heading (it is Rename Build in the ••• menu) and is not demonstrated.
+  const named = await page.evaluate(() => ({ buildName: quote.buildName, title: document.getElementById('quoteBuilderTitle').textContent,
+    headingRename: !!document.querySelector('.quote-builder__identity button'), editorOpen: !document.getElementById('quoteBuildRenameEditor').hidden,
+    menuRename: document.querySelector('#currentBuildActionsMenu [data-current-build-action="rename"]')?.textContent || '' }));
+  ck(`${label}: the build starts as "Jordan Ellis — 7' Snapper Spin" with no Rename on the heading; Rename Build is in the ••• menu`,
+    named.buildName === "7' Snapper Spin" && named.title === "Jordan Ellis — 7' Snapper Spin" && !named.headingRename && !named.editorOpen && named.menuRename === 'Rename Build', named);
 
   // Pause during chapter 3, while parts are being picked: nothing moves until Play.
   await waitChapter(page, 3, 120000);
@@ -239,20 +247,27 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
       inputs: grips.map(styles),
     };
   });
-  assert.deepEqual(rodSpec.refs, ['rear', 'centre', 'front', 'rear'].map((ref) => ({ ref, position: '' })));
-  assert.deepEqual(rodSpec.selected, ['rear']);
-  ck(`${label}: the reference walkthrough ends at Rear of Seat with 330 mm from the butt`, rodSpec.value === '330 mm from butt', rodSpec);
-  assert.deepEqual(rodSpec.grips, ['80 mm', '75 mm', '100 mm']);
-  assert.deepEqual(rodSpec.geometry, { rearGrip: [0, 80], reelSeat: [330, 460], lowerGrip: [255, 330], foreGrip: [460, 560] });
+  // Q23 owner corrections: the measurement is entered first, then one reference (Rear) is chosen - no cycling.
+  ck(`${label}: 330 mm is entered first, then Rear of seat is chosen once`,
+    JSON.stringify(rodSpec.refs) === JSON.stringify([{ ref: 'rear', position: '330 mm' }]) && JSON.stringify(rodSpec.selected) === '["rear"]' && rodSpec.value === '330 mm', rodSpec);
+  assert.deepEqual(rodSpec.grips, ['75 mm', '75 mm', '100 mm']);
+  assert.deepEqual(rodSpec.geometry, { rearGrip: [0, 75], reelSeat: [330, 460], lowerGrip: [255, 330], foreGrip: [460, 560] });
   ck(`${label}: split grips fit the model without overlap`, rodSpec.valid, rodSpec.geometry);
-  const [rear, centre] = rodSpec.buttons;
-  const controls = [...rodSpec.buttons, ...rodSpec.inputs];
-  ck(`${label}: seat buttons are equal and align with the grip inputs' height and radius`,
-    controls.length === 6 && controls.every((c) => c.width >= 44 && c.height >= 44 && c.height === rear.height
-      && c.left >= 0 && c.right <= rodSpec.width && c.borderRadius === rear.borderRadius
-      && c.borderStyle === 'solid' && c.borderWidth === rear.borderWidth && parseFloat(c.fontSize) >= 11)
-    && rodSpec.buttons.every((b) => Math.abs(b.width - rear.width) < 1)
-    && rear.backgroundImage !== centre.backgroundImage && centre.backgroundImage !== rodSpec.inputs[0].backgroundImage, controls);
+  // Q23 final correction: Rear / Centre / Front is a compact segmented control, not three full-width slabs. The selected
+  // segment is titanium, never red; iPhone segments are 40px with a 44px hit area; Mac segments are slim and sized to content.
+  const seat = rodSpec.buttons;
+  const selectedSeat = await page.evaluate(() => {
+    const el = document.querySelector('#quoteSpecReelSeatRef [aria-pressed="true"]');
+    const s = getComputedStyle(el);
+    const rgb = (c) => (c.match(/\d+(\.\d+)?/g) || []).map(Number);
+    const [r, g, b] = rgb(s.borderColor);
+    return { border: s.borderColor, background: s.backgroundColor, reddish: r > g + 50 && r > b + 50,
+      hit: parseFloat(getComputedStyle(el, '::after').height) || 0, group: el.parentElement.getBoundingClientRect().width };
+  });
+  ck(`${label}: Rear / Centre / Front is a compact segmented control with a titanium (not red) selection`,
+    seat.length === 3 && seat.every((c) => c.left >= 0 && c.right <= rodSpec.width && parseFloat(c.fontSize) >= 11 && c.height === seat[0].height)
+      && (touch ? seat[0].height >= 40 : seat[0].height >= 30 && seat[0].height <= 36)
+      && !selectedSeat.reddish && (touch || selectedSeat.group < rodSpec.width * 0.6), { seat, selectedSeat });
 
   await page.waitForFunction(() => quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).length >= 1, null, { timeout: 60000 });
   await visitorPress(page, '#demoPlayPauseBtn', touch);
@@ -268,52 +283,61 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   await page.waitForFunction((was) => JSON.stringify({ parts: quote.components.map((c) => c.libraryComponentId || '') }) !== JSON.stringify({ parts: JSON.parse(was).parts }), pausedAt, { timeout: 30000 });
   ck(`${label}: Play carries on from the same point`, (await page.evaluate(() => document.getElementById('demoPlayPauseBtn').textContent)) === 'Pause');
 
-  // Chapter 4: live pricing. Sample the screen while the margin is typed - every sample agrees with quoteMaths().
+  // Chapter 4 (Q23): the Components Cost, then the Rod Price typed in, GST included. Your Return follows live; every
+  // sample agrees with quoteMaths().
   await waitChapter(page, 4, 120000);
   const samples = [];
-  const deadline = Date.now() + 25000;
+  const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const f = await figures(page);
+    f.view = await page.evaluate(() => {
+      const section = document.getElementById('workshopPricingSection');
+      return { advanced: section.getAttribute('data-advanced-pricing') === 'true', method: section.getAttribute('data-pricing-method'),
+        margin: document.getElementById('quoteMarginPercent').value, target: document.getElementById('quoteProfit').value,
+        editable: ['quoteTotal', 'quoteProfit', 'quoteMarginPercent'].filter((id) => !document.getElementById(id).readOnly) };
+    });
     samples.push(f);
-    if (String(f.shown.margin).startsWith('25')) break;
-    await page.waitForTimeout(150);
-  }
-  const live = new Set(samples.map((s) => Number(s.shown.customerPrice).toFixed(2)));
-  ck(`${label}: the customer price changes live on screen as the margin is typed (${live.size} different prices seen)`, live.size >= 2, [...live]);
-  const mismatched = samples.filter((s) => !near(Number(s.shown.customerPrice), s.maths.total) || !near(money(s.shown.componentsCost), s.maths.materialCost));
-  ck(`${label}: every live sample (${samples.length}) matches quoteMaths()`, mismatched.length === 0, mismatched.slice(0, 2));
-  // Phase 3 review change: the margin is checked just before the profit is typed (was: once the courier caption showed,
-  // when the margin was still the driver).
-  await page.waitForFunction(() => document.getElementById('quoteProfit').hasAttribute('data-demo-highlight'), null, { timeout: 60000 });
-  const atMargin = await figures(page);
-  checkFigures(`${label} rod price at a 25% margin`, atMargin);
-  ck(`${label}: a 25% margin was set by typing it`, near(atMargin.maths.rodMarginPercent, 25, 0.01), atMargin.maths.rodMarginPercent);
-  // Then by the profit wanted: Required Profit typed in, and the price and margin recalculate live.
-  const profitSamples = [];
-  const profitDeadline = Date.now() + 20000;
-  while (Date.now() < profitDeadline) {
-    const f = await figures(page);
-    profitSamples.push(f);
-    if (Number(f.shown.profit) === PROFIT && !(await page.evaluate(() => document.getElementById('quoteProfit').hasAttribute('data-demo-highlight')))) break;
+    if (/couriered/.test(await page.evaluate(() => document.getElementById('demoCaption').textContent))) break;
     await page.waitForTimeout(120);
   }
-  const profitPrices = new Set(profitSamples.map((f) => Number(f.shown.customerPrice).toFixed(2)));
-  ck(`${label}: typing the profit changes the price live (${profitPrices.size} different prices seen)`, profitPrices.size >= 2, [...profitPrices]);
-  const profitMismatch = profitSamples.filter((f) => !near(Number(f.shown.customerPrice), f.maths.total) || !near(Number(f.shown.margin), f.maths.rodMarginPercent, 0.051));
-  ck(`${label}: every sample while the profit is typed (${profitSamples.length}) matches quoteMaths()`, profitMismatch.length === 0, profitMismatch.slice(0, 2));
-  // Before delivery: the rod alone, priced by the profit wanted.
-  await page.waitForFunction(() => /couriered/.test(document.getElementById('demoCaption').textContent), null, { timeout: 60000 });
+  // Q23 final correction: the short Advanced Pricing moment - a 55% target margin, then a $450 target return, each
+  // recalculating the Rod Price (GST included) from the parts; only the chosen field can be typed into.
+  const byMargin = samples.find((s) => s.view.advanced && s.view.method === 'percent' && Number(s.view.margin) === 55);
+  const byReturn = samples.find((s) => s.view.advanced && s.view.method === 'return' && Number(s.view.target) === 450);
+  ck(`${label}: Advanced - a 55% target margin recalculates the Rod Price (margin on the price excl. GST)`,
+    !!byMargin && near(byMargin.maths.rodPrice, PARTS_COST / 0.45 * 1.15, 0.011) && near(byMargin.maths.earnings, PARTS_COST / 0.45 * 0.55, 0.011)
+      && JSON.stringify(byMargin.view.editable) === '["quoteMarginPercent"]', byMargin && { view: byMargin.view, maths: byMargin.maths });
+  ck(`${label}: Advanced - a $450 target return recalculates the Rod Price; Your Return shows $450`,
+    !!byReturn && near(byReturn.maths.rodPrice, (PARTS_COST + 450) * 1.15, 0.011) && near(money(byReturn.shown.earnings), 450)
+      && JSON.stringify(byReturn.view.editable) === '["quoteProfit"]', byReturn && { view: byReturn.view, maths: byReturn.maths });
+  ck(`${label}: back to Simple before delivery`, !samples[samples.length - 1].view.advanced, samples[samples.length - 1].view);
+  const live = new Set(samples.map((s) => money(s.shown.earnings).toFixed(2)));
+  ck(`${label}: Your Return changes live on screen as the rod price is typed (${live.size} different returns seen)`, live.size >= 2, [...live]);
+  const mismatched = samples.filter((s) => !near(Number(s.shown.rodPrice), s.maths.rodPrice) || !near(money(s.shown.earnings), s.maths.earnings, 0.0051) || !near(money(s.shown.componentsCost), s.maths.materialCost));
+  ck(`${label}: every live sample (${samples.length}) matches quoteMaths()`, mismatched.length === 0, mismatched.slice(0, 2));
+  // Before delivery: the rod alone, at the Rod Price typed in.
   const rodOnly = await figures(page);
   checkFigures(`${label} rod price`, rodOnly);
-  ck(`${label}: a Required Profit of $${PROFIT} was set by typing it; the margin and price were worked out by Studio`, near(rodOnly.maths.rodProfit, PROFIT, 0.0051) && !near(rodOnly.maths.rodMarginPercent, 25, 0.05) && !near(rodOnly.maths.total, atMargin.maths.total), [rodOnly.maths.rodProfit, rodOnly.maths.rodMarginPercent, rodOnly.maths.total, atMargin.maths.total]);
+  ck(`${label}: a Rod Price of $${ROD_PRICE} incl. GST was set by typing it; Your Return = price excl. GST - parts`, near(rodOnly.maths.rodPrice, ROD_PRICE) && near(rodOnly.maths.earnings, ROD_PRICE / 1.15 - PARTS_COST, 0.0051), [rodOnly.maths.rodPrice, rodOnly.maths.earnings]);
   ck(`${label}: no delivery charge yet`, near(rodOnly.maths.deliveryCharge, 0), rodOnly.maths.deliveryCharge);
+  const simple = await page.evaluate(() => ({
+    labourHidden: ['quoteLabourRateField', 'quoteLabourHoursField'].every((id) => document.getElementById(id).hidden),
+    advancedShown: document.getElementById('quoteAdvancedPricing').getClientRects().length > 0,
+    note: !document.getElementById('quoteAdvancedPricingNote').hidden,
+    labourLine: !document.getElementById('quoteLegacyLabourLine').hidden,
+    returnLabel: document.querySelector('#quoteEarningsSummary > span').textContent,
+    returnNote: document.querySelector('#quoteEarningsSummary p').textContent,
+  }));
+  ck(`${label}: the simple pricing screen - no labour, margin, profit or Advanced Pricing; Your Return before overheads and income tax`,
+    simple.labourHidden && !simple.advancedShown && !simple.note && !simple.labourLine && simple.returnLabel === 'Your Return' && simple.returnNote === 'Before overheads and income tax.', simple);
   await waitChapter(page, 5, 120000);
   const priced = await figures(page);
   checkFigures(`${label} pricing`, priced);
-  const partsCost = Object.values(PART_COSTS).reduce((a, b) => a + b, 0);
-  ck(`${label}: the six parts came from the demonstration library at its prices`, priced.parts.length === 6 && priced.parts.every((p) => PART_COSTS[p.name] === p.cost && p.libraryId.startsWith('comp-')) && near(priced.maths.materialCost, partsCost), priced.parts);
-  ck(`${label}: labour is the workshop rate times the hours typed`, Number(priced.rate) === LABOUR.rate && Number(priced.hours) === LABOUR.hours && near(priced.maths.labourCost, LABOUR.rate * LABOUR.hours), [priced.rate, priced.hours, priced.maths.labourCost]);
-  // Courier delivery: Freight + Packaging typed in, added to the price separately; the rod's target profit is unchanged.
+  ck(`${label}: the six parts came from the demonstration library at its prices`, priced.parts.length === 6 && priced.parts.every((p) => PART_COSTS[p.name] === p.cost && p.libraryId.startsWith('comp-')) && near(priced.maths.materialCost, PARTS_COST), priced.parts);
+  const grip = priced.parts.find((p) => p.name === 'EVA Grip 75 mm');
+  ck(`${label}: two identical 75 mm EVA grips are one line at Qty 2, costed at 2 x the unit price`, !!grip && grip.qty === 2 && grip.unitCost === 11 && near(grip.cost, 2 * grip.unitCost), grip);
+  ck(`${label}: no labour is added (Q23)`, near(priced.maths.labourCost, 0) && Number(priced.hours) === 0, [priced.rate, priced.hours, priced.maths.labourCost]);
+  // Courier delivery: Freight + Packaging typed in, added to the price separately; Your Return is unchanged.
   ck(`${label}: courier delivery chosen, with Freight 18 and Packaging 12 typed in`, priced.fulfilment === 'shipping' && Number(priced.freight) === DELIVERY.freight && Number(priced.packaging) === DELIVERY.packaging, [priced.fulfilment, priced.freight, priced.packaging]);
   ck(`${label}: the delivery charge is quoteMaths()'s (cost ${priced.maths.deliveryCost}, charged ${priced.maths.deliveryCharge} incl. GST)`, near(priced.maths.deliveryCost, DELIVERY.freight + DELIVERY.packaging) && near(priced.maths.deliveryCharge, Math.round((DELIVERY.freight + DELIVERY.packaging) * 115) / 100), priced.maths);
   ck(`${label}: delivery is added to the price separately (rod ${rodOnly.maths.total} + delivery ${priced.maths.deliveryCharge} = ${priced.maths.total})`, near(priced.maths.total, rodOnly.maths.total + priced.maths.deliveryCharge), [rodOnly.maths.total, priced.maths.deliveryCharge, priced.maths.total]);
@@ -334,9 +358,7 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   });
   ck(`${label}: Freight, Packaging and the calculated Total Shipping fit under the fulfilment choice`,
     shippingLayout.underChoice && shippingLayout.fitsScreen && shippingLayout.readOnly && shippingLayout.total === '$30.00', shippingLayout);
-  // Phase 3 review change: the profit is now the driver, so it is $PROFIT and the margin is the one Studio worked out
-  // from it (was: the 25% margin).
-  ck(`${label}: the rod's target profit and margin are unchanged by delivery`, near(priced.maths.rodProfit, rodOnly.maths.rodProfit, 0.0051) && near(priced.maths.rodProfit, PROFIT, 0.0051) && near(priced.maths.rodMarginPercent, rodOnly.maths.rodMarginPercent, 0.01), [rodOnly.maths.rodProfit, priced.maths.rodProfit, rodOnly.maths.rodMarginPercent, priced.maths.rodMarginPercent]);
+  ck(`${label}: the Rod Price and Your Return are unchanged by delivery`, near(priced.maths.rodPrice, ROD_PRICE) && near(priced.maths.earnings, rodOnly.maths.earnings, 0.0051), [rodOnly.maths.earnings, priced.maths.earnings, priced.maths.rodPrice]);
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-3-pricing.png`) });
 
   // Chapter 5: the customer quote, watermarked, with the same figures.
@@ -480,7 +502,8 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: every one of the demonstration's ${acts.length} taps and typed characters was on a highlighted control`, acts.length > 300 && unlit.length === 0, unlit.slice(0, 5));
   ck(`${label}: every one of them was on a control fully in view (below the dock, on screen, not clipped)`, outOfView.length === 0, outOfView.slice(0, 5));
   const lit = await page.evaluate(() => window.__highlights);
-  for (const id of ['quoteTotalField', 'quoteProfit', 'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteDeliveryTotalField', 'quoteProfitField', 'quoteMarginPercentField', 'quoteBalanceReceivedAmount']) {
+  // Q23: the Components Cost, Rod Price, customer total and Your Return (was: Required Profit and Margin %).
+  for (const id of ['quoteCostBeforeMarginField', 'quoteTotalField', 'quoteTotal', 'quoteEarningsSummary', 'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteDeliveryTotalField', 'quoteCustomerTotalLine', 'quoteBalanceReceivedAmount']) {
     const seen = lit.filter((h) => h.el === id);
     ck(`${label}: ${id} was highlighted in full view (${seen.length}x)`, seen.length > 0 && seen.every((h) => !h.view), seen);
   }

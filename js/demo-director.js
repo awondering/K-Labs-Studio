@@ -8,7 +8,7 @@
  * visitor watches and only the player's controls respond.
  *
  * The journey follows Jordan Ellis's job from enquiry to paid in full: 1 enquiry and customer, 2 rod specification,
- * 3 components and labour, 4 live pricing and courier delivery, 5 the customer quote, 6 the customer accepts (Confirm
+ * 3 components, 4 live pricing (Rod Price and Your Return) and courier delivery, 5 the customer quote, 6 the customer accepts (Confirm
  * Build), 7 the deposit, 8 workshop progress, 9 the final payment and Mark Complete, 10 the final invoice and the
  * completed build summary. Payments and the invoice go through Studio's own screens to a local demo-only stand-in for
  * the payment service (js/public-entry.js); every document is shown with a DEMO watermark (css/studio.css).
@@ -27,7 +27,7 @@
  * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v271";
+  const DEMO_BUILD = "build148-v275";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -48,7 +48,8 @@
   };
   const toggle = (bodyId) => `[aria-controls="${bodyId}"]`;
   // The journey. Steps: caption(text), tap(selector), type(selector, text), open(section toggle), pick([category,
-  // subcategory, component]) from the component library, date(selector, daysAhead), show(selector or [selectors], ms) - brought into view and
+  // subcategory, component]) from the component library, qty(component, quantity) on its line, name(build name) for the
+  // new build, date(selector, daysAhead), show(selector or [selectors], ms) - brought into view and
   // highlighted for a moment -, until(selector visible), untilHidden(selector), untilValue(selector, value),
   // untilText(selector, text), scroll(selector) and hold(ms) on a key moment.
   const JOURNEY = freeze([
@@ -71,24 +72,21 @@
       ["untilHidden", "#customerFinderSheet"],
       ["until", "#workshopScreen.active"],
       ["untilValue", "#quoteCustomerName", "Jordan Ellis"],
+      // The build starts with its real name; renaming stays in the build's ••• menu and is not demonstrated.
+      ["name", "7' Snapper Spin"],
+      ["untilText", "#quoteBuilderTitle", "7' Snapper Spin"],
     ] },
     { title: "Rod spec", steps: [
-      ["caption", "Name the build so you'll know it on the bench."],
-      ["tap", "#quoteBuildRenameBtn"],
-      ["type", "#quoteBuildRenameInput", "7' Snapper Spin"],
-      ["tap", "#quoteBuildRenameSave"],
       ["caption", "Set the expected completion date and add a note."],
       ["open", toggle("workshopBuildSpecsBody")],
       ["date", "#quoteEstimatedCompletionDate", 21],
       ["type", "#quoteNotes", "Black wraps with gloss finish. Split grip."],
       ["caption", "Record the length, reel seat and grip sizes."],
       ["type", "#quoteSpecFinishedRodLength", "2134"],
+      // Measurement first, then the point of the seat it is measured to, then straight on to the grips.
+      ["type", "#quoteSpecReelSeatPosition", "330 mm"],
       ["tap", "#quoteSpecReelSeatRef [data-layout-seat-ref=\"rear\"]"],
-      ["tap", "#quoteSpecReelSeatRef [data-layout-seat-ref=\"centre\"]"],
-      ["tap", "#quoteSpecReelSeatRef [data-layout-seat-ref=\"front\"]"],
-      ["tap", "#quoteSpecReelSeatRef [data-layout-seat-ref=\"rear\"]"],
-      ["type", "#quoteSpecReelSeatPosition", "330 mm from butt"],
-      ["type", "#quoteSpecRearGripLength", "80 mm"],
+      ["type", "#quoteSpecRearGripLength", "75 mm"],
       ["type", "#quoteSpecGripBelowReelSeatLength", "75 mm"],
       ["type", "#quoteSpecForeGripLength", "100 mm"],
     ] },
@@ -99,22 +97,35 @@
       ["caption", "Guides, reel seat and grip."],
       ["pick", ["Guides", "Spinning Guide Sets", "Medium Spin Guide Set"]],
       ["pick", ["Reel Seats", "Threaded Reel Seats", "DPS 18"]],
-      ["pick", ["Grips", "EVA Grips", "EVA Split Grip"]],
+      // Two identical 75 mm grips: one line at Qty 2, costed at twice the unit price.
+      ["caption", "Two 75 mm EVA grips: one line, Qty 2."],
+      ["pick", ["Grips", "EVA Grips", "EVA Grip 75 mm"]],
+      ["qty", "EVA Grip 75 mm", 2],
       ["caption", "Then the winding check and thread."],
       ["pick", ["Winding Checks", "Grip Winding Checks", "Aluminium Winding Check 16 mm"]],
       ["pick", ["Thread", "Nylon", "NCP Nylon Thread A Black"]],
-      ["caption", "Add the labour: five hours at your rate."],
-      ["open", toggle("workshopQuoteSummaryBody")],
-      ["type", "#quoteLabourHours", "5"],
     ] },
     { title: "Pricing", steps: [
-      ["caption", "Studio prices it as you go: parts, labour and GST."],
-      ["show", "#quoteTotalField", 1500],
-      ["caption", "Price by margin or by the profit you want."],
-      ["type", "#quoteMarginPercent", "25"],
-      ["show", "#quoteTotalField", 1000],
-      ["type", "#quoteProfit", "280"],
-      ["show", ["#quoteTotalField", "#quoteMarginPercentField"], 1200],
+      ["caption", "Studio adds up what the parts cost you."],
+      ["open", toggle("workshopQuoteSummaryBody")],
+      ["show", "#quoteCostBeforeMarginField", 1500],
+      ["caption", "Set your rod price, GST included. Your return updates live."],
+      ["type", "#quoteTotal", "899"],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1500],
+      // Advanced Pricing, in memory only: a target margin, then a target dollar return, each recalculating the Rod Price;
+      // then back to the Rod Price and the simple view.
+      ["caption", "Advanced: set a target margin. Studio works out the price."],
+      ["tap", "[data-pricing-view=\"advanced\"]"],
+      ["tap", "[data-pricing-method=\"percent\"]"],
+      ["type", "#quoteMarginPercent", "55"],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1000],
+      ["caption", "Or the return you want in dollars. Or keep it simple."],
+      ["tap", "[data-pricing-method=\"return\"]"],
+      ["type", "#quoteProfit", "450"],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1000],
+      ["tap", "[data-pricing-method=\"price\"]"],
+      ["type", "#quoteTotal", "899"],
+      ["tap", "[data-pricing-view=\"simple\"]"],
       ["caption", "Jordan wants it couriered, not collected."],
       ["show", "#quoteFulfilmentGroup", 1200],
       ["tap", "[data-fulfilment-method=\"shipping\"]"],
@@ -122,8 +133,8 @@
       ["type", "#quoteFreight", "18"],
       ["type", "#quotePackaging", "12"],
       ["show", "#quoteDeliveryTotalField", 1200],
-      ["caption", "Delivery is charged on top. Profit and margin stay the same."],
-      ["show", ["#quoteProfitField", "#quoteMarginPercentField"], 1800],
+      ["caption", "Delivery is charged on top. Your return stays the same."],
+      ["show", ["#quoteCustomerTotalLine", "#quoteEarningsSummary"], 1800],
     ] },
     { title: "Quote", steps: [
       ["caption", "Open the quote, exactly as Jordan will see it."],
@@ -367,6 +378,21 @@
     for (const name of path) await tap(`#choicePickerList [data-choice-option=${cssString(name)}]`);
     await waitFor(() => !visible(byId("choicePickerSheet")), "the component library closing");
   }
+  // Sets a component line's quantity by typing it into the line's own Quantity field (the library adds one; there is
+  // no quantity before adding). The +/- steppers stay blocked in Demo Mode (js/supabase-client.js), so they are not
+  // used. Then the quantity is shown and the row closed again.
+  async function setQuantity(name, qty) {
+    const open = `#quoteComponentsList [data-component-action="open-row"][aria-label$=${cssString(` for ${name}`)} i]`; // Studio title-cases the line label ("75 Mm")
+    const trigger = await shown(open);
+    const index = trigger.getAttribute("data-component-index");
+    if (trigger.getAttribute("aria-expanded") !== "true") await tap(open);
+    const field = `#quoteComponentsList [data-component-key="quantity"][data-component-index="${index}"]`;
+    await type(field, String(qty));
+    if (Number(document.querySelector(field)?.value || 0) !== qty) throw new Error(`${name} did not reach Qty ${qty}.`);
+    await show(field, 1200);
+    const close = `#quoteComponentsList [data-component-action="open-row"][data-component-index="${index}"][aria-expanded="true"]`;
+    if (document.querySelector(close)) await tap(close);
+  }
   async function scrollThrough(selector) {
     const el = await waitFor(() => { const found = document.querySelector(selector); return visible(found) ? found : null; }, selector);
     const steps = 6;
@@ -490,6 +516,12 @@
       return tap(a);
     }
     if (kind === "pick") return pick(a);
+    if (kind === "qty") return setQuantity(a, b);
+    if (kind === "name") {
+      const named = window.KLABS_UI?.nameCurrentBuild?.(a);
+      if (named === false) throw new Error(`The build could not be named ${a}.`);
+      return named;
+    }
     if (kind === "show") return show(a, b);
     if (kind === "until") return waitFor(() => visible(document.querySelector(a)), a);
     if (kind === "untilHidden") return waitFor(() => !visible(document.querySelector(a)), `${a} closing`);
