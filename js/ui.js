@@ -4034,14 +4034,20 @@ function rodPriceLabel({taxActive,taxName,jobType}={}){
 function rodPriceHintText({currencyCode,taxActive,taxName,rodTax,jobType}={}){
   return taxActive?`${currencyCode} · ${taxName} on the ${jobType==='repair'?'repair':'rod'} ${rodTax}`:String(currencyCode||'');
 }
-function customerTotalLineText({total,totalTax,taxActive,taxName}={}){
-  return `Customer total with delivery: ${total}${taxActive?` (incl. ${taxName} ${totalTax})`:''}`;
+// The tax total is shown once, in the tax row, so this line only says the total includes it.
+function customerTotalLineText({total,taxActive,taxName}={}){
+  return `Customer total with delivery: ${total}${taxActive?` incl. ${taxName}`:''}`;
 }
-function taxAmountLabel({taxName,jobType,withDelivery,componentsJob}={}){
+// Q23 GST cleanup: the tax row shows the one tax total (rod plus any delivery); the rod's own tax stays under the price.
+function taxAmountLabel({taxName,componentsJob}={}){
   if(componentsJob)return `${taxName} Amount`;
-  const item=jobType==='repair'?'repair':'rod';
-  return `${taxName} (${withDelivery?`${item} + delivery`:item})`;
+  return `${taxName} total`;
 }
+function taxRatePercentText(rate){
+  const value=Math.max(0,numberOrZero(rate));
+  return `${Number.isInteger(value)?value:Number(value.toFixed(2))}%`;
+}
+let taxRateEditorOpen=false;
 function targetReturnPercentLabel({taxActive,taxName}={}){
   return taxActive?`Target Margin (% of price excl. ${taxName})`:'Target Margin (% of price)';
 }
@@ -14579,15 +14585,19 @@ function closeBuildRenameEditor(){
   if(editor)editor.hidden=true;
   buildRenameQuoteRef=null;
 }
-// Names the open build through the same save path as Rename Build, without opening the editor.
-// Demo Mode uses it so the demonstration build starts with its real name.
+// Names the open build as an ordinary edit (marked unsaved, then autosaved like any other field), without opening the
+// Rename editor. Demo Mode uses it so the demonstration build starts with its real name. It does not wait for an
+// explicit save, so a slow device cannot leave the name half-applied.
 function nameCurrentBuild(name){
-  const input=$('quoteBuildRenameInput');
   const value=String(name||'').trim();
-  if(!input || !value || !quote)return false;
-  buildRenameQuoteRef=quote;
-  input.value=value;
-  return saveBuildRename();
+  if(!value || !quote)return false;
+  if(value!==specificationValue(quote.buildName)){
+    quote.buildName=value;
+    markQuoteDirty();
+    saveQuoteCurrent();
+  }
+  updateWorkshopBuildOverview();
+  return true;
 }
 function saveBuildRename(){
   const input=$('quoteBuildRenameInput');
@@ -17057,6 +17067,20 @@ function bindWorkshopQuoteBuilder(){
     includeTaxInput.addEventListener('input',onTaxToggle);
     includeTaxInput.addEventListener('change',onTaxToggle);
   }
+  // The rate chip opens (and closes) this build's own tax rate field. Opening it changes nothing.
+  const quoteTaxRateChip=$('quoteTaxRateChip');
+  if(quoteTaxRateChip && quoteTaxRateChip.getAttribute('data-tax-rate-chip-bound')!=='true'){
+    quoteTaxRateChip.setAttribute('data-tax-rate-chip-bound','true');
+    quoteTaxRateChip.addEventListener('click',()=>{
+      taxRateEditorOpen=!taxRateEditorOpen;
+      if(!taxRateEditorOpen && document.activeElement===$('quoteTaxRate'))$('quoteTaxRate').blur();
+      updateQuoteSummary();
+      if(taxRateEditorOpen){
+        const input=$('quoteTaxRate');
+        try{input?.focus({preventScroll:true});}catch{input?.focus();}
+      }
+    });
+  }
   const quoteTaxRateInput=$('quoteTaxRate');
   if(quoteTaxRateInput){
     const onQuoteTaxRateUpdate=()=>{
@@ -17549,7 +17573,20 @@ function updateQuoteSummary(){
   const taxAvailable=quoteTaxAvailable();
   const showTaxDetails=taxAvailable && quote.includeGst!==false;
   if($('quoteIncludeGstField'))$('quoteIncludeGstField').hidden=!taxAvailable;
-  if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!showTaxDetails;
+  if($('quoteTaxSummaryRow'))$('quoteTaxSummaryRow').hidden=!taxAvailable;
+  // Q23 GST cleanup: the rate is a compact chip; this build's own rate field opens from it (and stays open while it is
+  // being edited). The chip says when the build's rate differs from Settings.
+  const rateChip=$('quoteTaxRateChip');
+  if(rateChip){
+    const buildRate=numberOrZero(math.taxRate);
+    const differs=Math.abs(buildRate-activeTaxRate())>1e-9;
+    rateChip.textContent=`${taxRatePercentText(buildRate)}${differs?' · this build':''}`;
+    rateChip.setAttribute('aria-label',`${taxNameText} rate ${taxRatePercentText(buildRate)}${differs?' for this build':''}. Change the rate for this build`);
+    rateChip.hidden=!showTaxDetails;
+    rateChip.setAttribute('aria-expanded',showTaxDetails&&taxRateEditorOpen?'true':'false');
+  }
+  if(!showTaxDetails)taxRateEditorOpen=false;
+  if($('quoteTaxRateField'))$('quoteTaxRateField').hidden=!(showTaxDetails&&(taxRateEditorOpen||document.activeElement===$('quoteTaxRate')));
   if($('quoteGstField'))$('quoteGstField').hidden=!showTaxDetails;
   const gstField=$('quoteGstField');
   const gstStatus=$('quoteGstStatus');

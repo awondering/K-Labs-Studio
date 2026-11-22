@@ -79,9 +79,19 @@ const measure=(page)=>page.evaluate(()=>{
   const segmentGroups=[...panel.querySelectorAll('.ds-segmented,.quote-job-type__options')].filter(vis).map((el)=>Math.round(el.getBoundingClientRect().width));
   return {
     redSelected,inputLookingResults,segments,segmentGroups,
-    gstLabelOneLine:(()=>{const el=document.getElementById('quoteTaxLabel');if(el.getClientRects().length===0)return true;/* folded away at Complete */return el.getClientRects().length===1&&el.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).lineHeight||'20')*1.5+2;})(),
+    gstLabelOneLine:(()=>{const el=document.getElementById('quoteTaxLabel');if(el.getClientRects().length===0)return true;/* folded away at Complete */const s=getComputedStyle(el);const line=parseFloat(s.lineHeight)||parseFloat(s.fontSize)*1.3;return el.getClientRects().length===1&&el.getBoundingClientRect().height<=line*1.5+2;})(),
     rodRed:document.getElementById('quoteTotalField').classList.contains('quote-field--active-target'),
     hint:t('quoteRodPriceHint'),total:t('quoteCustomerTotalLine'),gstLabel:t('quoteTaxLabel'),gst:document.getElementById('quoteGst').value,
+    // Q23 GST cleanup: the tax row (toggle, rate chip, total) on one line, and how often the tax total appears on screen.
+    taxRow:(()=>{const ids=['quoteIncludeGstField','quoteTaxRateChip','quoteGstField'];const els=ids.map((id)=>document.getElementById(id));
+      if(!els.every(vis))return {shown:false};
+      const mids=els.map((el)=>{const b=el.getBoundingClientRect();return b.top+b.height/2;});
+      const section=document.getElementById('workshopPricingFields');
+      const gst=document.getElementById('quoteGst').value;
+      const text=[...section.querySelectorAll('*')].filter((el)=>vis(el)&&!el.children.length).map((el)=>el.textContent).join(' ')+' '+[...section.querySelectorAll('input')].filter(vis).map((i)=>i.value).join(' ');
+      return {shown:true,oneLine:Math.max(...mids)-Math.min(...mids)<=4,chip:els[1].textContent.trim(),rateField:vis(document.getElementById('quoteTaxRateField')),
+        gstTimes:text.split(gst).length-1,rowH:Math.round(document.getElementById('quoteTaxSummaryRow').getBoundingClientRect().height)};})(),
+    deposit:(()=>{const el=document.getElementById('quoteDepositEnabledField');return {inPayment:!!el.closest('#quotePaymentBlock'),shown:vis(el),h:Math.round(el.getBoundingClientRect().height)};})(),
     docs,gridW:Math.round(grid.getBoundingClientRect().width),surfaceW:Math.round(surface.getBoundingClientRect().width),
     pay:vis(pay)?box(pay):null,toggle:vis(document.getElementById('toggleCurrentBuildStatusBtn'))?box(document.getElementById('toggleCurrentBuildStatusBtn')):null,confirm:vis(confirm)?box(confirm):null,
     headings:headings.map((el)=>el?style(el):null),
@@ -99,9 +109,15 @@ async function main(){
         await setState(page,stage);await page.waitForTimeout(150);
         const m=await measure(page);const label=`${size} ${stage}`;
         ck(`${label}: the rod figure says it is GST on the rod`,/^NZD · GST on the rod \$\d+\.\d\d$/.test(m.hint),m.hint);
-        ck(`${label}: the customer total with delivery shows its own GST, equal to the GST Amount box`,
-          m.total===`Customer total with delivery: ${m.total.match(/\$[\d,]+\.\d\d/)?.[0]} (incl. GST ${m.gst})`,[m.total,m.gst]);
-        ck(`${label}: the GST box says it covers the rod and the delivery, on one line`,m.gstLabel==='GST (rod + delivery)'&&m.gstLabelOneLine,[m.gstLabel,m.gstLabelOneLine]);
+        ck(`${label}: the customer total with delivery says it includes GST without repeating the amount`,
+          /^Customer total with delivery: \$[\d,]+\.\d\d incl\. GST$/.test(m.total),m.total);
+        ck(`${label}: the tax total is labelled GST total, on one line`,m.gstLabel==='GST total'&&m.gstLabelOneLine,[m.gstLabel,m.gstLabelOneLine]);
+        if(m.taxRow.shown){
+          ck(`${label}: one compact tax row - Include GST, the 15% chip and GST total line up, with the rate field closed`,
+            m.taxRow.oneLine&&m.taxRow.chip==='15%'&&!m.taxRow.rateField&&m.taxRow.rowH<=48,m.taxRow);
+          ck(`${label}: the GST total appears once on the pricing screen`,m.taxRow.gstTimes===1,m.taxRow);
+        }
+        ck(`${label}: Deposit Required sits with the payment terms in Payment Status, compact`,m.deposit.inPayment&&(!m.deposit.shown||m.deposit.h<=48),m.deposit);
         ck(`${label}: the Rod Price is not marked red on the simple screen`,!m.rodRed,m.rodRed);
         ck(`${label}: Documents has at least two buttons`,m.docs.length>=2,m.docs);
         const rows=[...new Set(m.docs.map((d)=>d.t))].map((top)=>m.docs.filter((d)=>Math.abs(d.t-top)<4));
@@ -162,6 +178,41 @@ async function main(){
       if(size==='mac')ck(`${size}: the reel seat distance and reference sit on one row`,spec.track&&Math.abs(spec.seat.b-spec.track.b)<=1&&spec.track.l>spec.seat.r,spec);
       else ck(`${size}: the reel seat row wraps cleanly inside the card (one row when it fits)`,spec.track&&spec.track.r<=spec.row.r+1&&!spec.overflow&&(spec.track.l>spec.seat.r?Math.abs(spec.seat.b-spec.track.b)<=1:spec.track.t>=spec.seat.b),spec);
       if(process.env.BSD_SHOTS){await page.waitForTimeout(150);await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-spec.png`)});}
+      // Q23 GST cleanup: the rate chip opens this build's rate (an override shows on the chip); tax off hides the tax
+      // wording and amounts; Deposit Required still opens its deposit fields. Everything is put back afterwards.
+      await setState(page,'quote');await page.waitForTimeout(150);
+      const tax=await page.evaluate(()=>{
+        const shown=(id)=>document.getElementById(id).getClientRects().length>0;
+        const saved={rate:quote.gstRate,include:quote.includeGst,deposit:quote.depositEnabled};
+        const out={};
+        document.getElementById('quoteTaxRateChip').click();
+        out.opened={field:shown('quoteTaxRateField'),expanded:document.getElementById('quoteTaxRateChip').getAttribute('aria-expanded'),label:document.getElementById('quoteTaxRateLabel').textContent};
+        const rate=document.getElementById('quoteTaxRate');rate.value='20';rate.dispatchEvent(new Event('input',{bubbles:true}));
+        out.override={chip:document.getElementById('quoteTaxRateChip').textContent,gst:document.getElementById('quoteGst').value,hint:document.getElementById('quoteRodPriceHint').textContent};
+        rate.value=String(saved.rate);rate.dispatchEvent(new Event('input',{bubbles:true}));
+        document.getElementById('quoteTaxRateChip').click();
+        out.closed=!shown('quoteTaxRateField');
+        const include=document.getElementById('quoteIncludeGst');include.click();
+        out.off={chip:shown('quoteTaxRateChip'),total:shown('quoteGstField'),hint:document.getElementById('quoteRodPriceHint').textContent,line:document.getElementById('quoteCustomerTotalLine').textContent,toggle:shown('quoteIncludeGstField')};
+        include.click();
+        const dep=document.getElementById('quoteDepositEnabled');if(!dep.checked)dep.click();
+        out.deposit={type:shown('quoteDepositTypeField'),value:shown('quoteDepositValueField'),inPayment:!!document.getElementById('quoteDepositValueField').closest('#quotePaymentBlock')};
+        if(saved.deposit!==true)dep.click();
+        out.restored=quote.gstRate===saved.rate&&quote.includeGst===saved.include&&!!quote.depositEnabled===!!saved.deposit;
+        return out;
+      });
+      ck(`${size}: the rate chip opens this build's GST rate field`,tax.opened.field&&tax.opened.expanded==='true'&&tax.opened.label==='GST Rate (%)',tax.opened);
+      ck(`${size}: a per-build rate shows on the chip and recalculates the GST`,tax.override.chip==='20% · this build'&&tax.override.gst!==''&&/GST on the rod/.test(tax.override.hint),tax.override);
+      ck(`${size}: the chip closes the rate field again`,tax.closed,tax);
+      ck(`${size}: with GST off, only the Include GST toggle remains - no rate, total or GST wording`,
+        tax.off.toggle&&!tax.off.chip&&!tax.off.total&&tax.off.hint==='NZD'&&!/GST/.test(tax.off.line),tax.off);
+      ck(`${size}: Deposit Required still opens its deposit fields, inside Payment Status`,tax.deposit.type&&tax.deposit.value&&tax.deposit.inPayment,tax.deposit);
+      ck(`${size}: the tax and deposit settings are put back`,tax.restored,tax);
+      if(process.env.BSD_SHOTS){
+        await page.evaluate(()=>document.getElementById('quoteTaxSummaryRow').scrollIntoView({block:'center'}));
+        await page.waitForTimeout(150);
+        await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-tax-row.png`)});
+      }
       // Simple / Advanced and the pricing method are views: switching never changes the build or writes storage.
       await setState(page,'quote');await page.waitForTimeout(150);
       const views=await page.evaluate(()=>{

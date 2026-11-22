@@ -27,7 +27,7 @@
  * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v274";
+  const DEMO_BUILD = "build148-v275";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.

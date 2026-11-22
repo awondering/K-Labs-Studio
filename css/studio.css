@@ -7811,6 +7811,74 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 }
 /* Empty status lines in the pricing grid left blank rows between fields. */
 #workshopScreen #workshopPricingFields > p:empty{display:none}
+/* Q23 GST cleanup: one compact tax row - [Include GST ✓]  15%  GST total $117.26 - wrapping only when narrow. */
+#workshopScreen #workshopPricingSection .build-pricing__tax-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:var(--ds-space-2) var(--ds-space-4);
+  min-height:44px;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-row[hidden]{display:none}
+#workshopScreen #workshopPricingSection .build-pricing__tax-row .build-pricing__tax-toggle{
+  display:inline-flex;
+  flex:0 0 auto;
+  gap:10px;
+  min-height:44px;
+  padding:0;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate{
+  position:relative;
+  flex:0 0 auto;
+  min-height:28px;
+  padding:0 10px;
+  border:var(--ds-stroke);
+  border-radius:999px;
+  background:transparent;
+  color:var(--ds-text-strong);
+  font:inherit;
+  font-size:12px;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  cursor:pointer;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate[aria-expanded="true"]{
+  border-color:color-mix(in srgb,var(--titanium) 55%,transparent);
+  background:color-mix(in srgb,var(--titanium) 14%,transparent);
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate:focus-visible{outline:2px solid var(--titanium);outline-offset:2px}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate[hidden]{display:none}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total{
+  display:inline-flex;
+  flex:0 1 auto;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
+}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total[hidden]{display:none}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total > span{white-space:nowrap}
+#workshopScreen #workshopPricingSection .build-pricing__tax-total > input{width:9ch;min-width:0;min-height:0;height:auto;padding:0;text-align:right}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate-field{max-width:150px}
+#workshopScreen #workshopPricingSection .build-pricing__tax-rate-field[hidden]{display:none}
+/* Deposit Required: a compact payment term at the top of Payment Status. */
+#workshopScreen #quotePaymentBlock .quote-payment__terms{gap:8px}
+#workshopScreen #quotePaymentBlock .quote-payment__terms > p:empty{display:none}
+#workshopScreen #quotePaymentBlock #quoteDepositEnabledField{
+  display:inline-flex;
+  justify-self:start;
+  align-items:center;
+  gap:10px;
+  min-height:44px;
+  padding:0;
+  border:0;
+  background:transparent;
+  cursor:pointer;
+}
+#workshopScreen #quotePaymentBlock #quoteDepositEnabledField input{width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--titanium)}
+@media (max-width:640px){
+  /* The rate chip keeps a 44px touch target without looking bigger. */
+  #workshopScreen #workshopPricingSection .build-pricing__tax-rate::after{content:"";position:absolute;inset:-8px -2px}
+}
 #workshopPricingSection:not([data-job-kind="components"]) .build-pricing__head{
   display:flex;
   flex-wrap:wrap;
@@ -13042,9 +13110,9 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
 /* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
    per-job tax-rate controls are hidden; payments and the invoice appear once the order is confirmed. */
-#workshopPricingSection[data-job-kind="components"] :is(#quoteRodPricingHead,#quotePricingMethodField,#quoteLegacyLabourLine,#quoteAdvancedPricingNote,#quoteAdvancedPricing,#quoteRodPriceHint,#quoteCustomerTotalLine,#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+#workshopPricingSection[data-job-kind="components"] :is(#quoteRodPricingHead,#quotePricingMethodField,#quoteLegacyLabourLine,#quoteAdvancedPricingNote,#quoteAdvancedPricing,#quoteRodPriceHint,#quoteCustomerTotalLine,#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteTaxRateChip,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
 #workshopPricingSection[data-job-kind="components"] #quoteMoreDocumentsWrap,
-#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock{display:none}
+#workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock > :not(#quoteDepositTerms){display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
    For a New Build the two rod-specification wrappers are transparent, so that layout is exactly as before. */
 #workshopScreen .build-details__rod-specs{display:contents}

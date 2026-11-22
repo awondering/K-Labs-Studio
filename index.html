@@ -1024,21 +1024,14 @@
               </div>
             </div>
             <p id="quotePriceWarning" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <label id="quoteIncludeGstField" class="quote-gst-toggle quote-grid__full"><span id="quoteIncludeTaxLabel">Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
-            <label id="quoteTaxRateField"><span id="quoteTaxRateLabel">Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="15.0" /></label>
-            <label id="quoteGstField"><span id="quoteTaxLabel">Tax Amount</span><input id="quoteGst" type="text" readonly /></label>
-            <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <label id="quoteDepositEnabledField" class="quote-gst-toggle quote-grid__full"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
-            <div id="quoteDepositTypeField" class="quote-grid__full quote-pricing-driver" role="group" aria-label="Deposit type" hidden>
-              <span class="quote-pricing-driver__label">Deposit Type</span>
-              <div class="quote-pricing-driver__options">
-                <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="percent" aria-pressed="true">PERCENT</button>
-                <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="fixed" aria-pressed="false">FIXED $</button>
-              </div>
+            <!-- Q23 GST cleanup: one tax row. The tax name and rate come from Settings; the rate chip opens this build's own rate. -->
+            <div id="quoteTaxSummaryRow" class="quote-grid__full build-pricing__tax-row">
+              <label id="quoteIncludeGstField" class="quote-gst-toggle build-pricing__tax-toggle"><span id="quoteIncludeTaxLabel">Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+              <button id="quoteTaxRateChip" class="build-pricing__tax-rate" type="button" aria-expanded="false" aria-controls="quoteTaxRateField" aria-label="Tax rate for this build"></button>
+              <label id="quoteGstField" class="build-pricing__tax-total"><span id="quoteTaxLabel">Tax total</span><input id="quoteGst" type="text" readonly /></label>
             </div>
-            <label id="quoteDepositValueField" hidden><span id="quoteDepositValueLabel">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-describedby="quoteDepositValueError" /></label>
-            <p id="quoteDepositValueError" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <label id="quoteBalanceRemainingField" hidden><span id="quoteBalanceRemainingLabel">Balance After Deposit</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
+            <label id="quoteTaxRateField" class="build-pricing__tax-rate-field" hidden><span id="quoteTaxRateLabel">Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
+            <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
             </div>
             <section class="workshop-build-actions-surface" aria-label="Build actions">
               <div id="quoteFulfilmentGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Fulfilment Method">
@@ -1060,6 +1053,20 @@
               </div>
               <div id="quotePaymentBlock" class="quote-grid quote-grid__full quote-payment">
                 <h3 class="quote-payment__heading build-section-heading">Payment Status</h3>
+                <!-- Q23 GST cleanup: the payment terms (Deposit Required) come first, before what has been received. -->
+                <div id="quoteDepositTerms" class="quote-grid quote-grid__full quote-payment__terms">
+                  <label id="quoteDepositEnabledField" class="quote-gst-toggle quote-grid__full"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
+                  <div id="quoteDepositTypeField" class="quote-grid__full quote-pricing-driver" role="group" aria-label="Deposit type" hidden>
+                    <span class="quote-pricing-driver__label">Deposit Type</span>
+                    <div class="quote-pricing-driver__options">
+                      <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="percent" aria-pressed="true">PERCENT</button>
+                      <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="fixed" aria-pressed="false">FIXED $</button>
+                    </div>
+                  </div>
+                  <label id="quoteDepositValueField" hidden><span id="quoteDepositValueLabel">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-describedby="quoteDepositValueError" /></label>
+                  <p id="quoteDepositValueError" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
+                  <label id="quoteBalanceRemainingField" hidden><span id="quoteBalanceRemainingLabel">Balance After Deposit</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
+                </div>
                 <div class="quote-payment__summary" aria-live="polite">
                   <div><span>Total Received</span><strong id="quotePaymentTotalReceived"></strong></div>
                   <div><span>Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
@@ -1579,7 +1586,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v274" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v275" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>

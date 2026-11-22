@@ -198,7 +198,7 @@ test('the one-time note shows only for accounts whose builds used labour, profit
 });
 
 // ---------- 3. Screen structure ----------
-const pricingBlock=html.slice(html.indexOf('id="workshopPricingFields"'),html.indexOf('id="quoteDepositEnabledField"'));
+const pricingBlock=html.slice(html.indexOf('id="workshopPricingFields"'),html.indexOf('class="workshop-build-actions-surface"'));
 test('the pricing screen order: Components Cost, Rod Price, Your Return, labour line, note, then Advanced Pricing',()=>{
   const order=['quoteCostBeforeMarginField','quoteTotalField','quoteEarningsSummary','quoteLegacyLabourLine','quoteAdvancedPricingNote','quoteAdvancedPricing'];
   const positions=order.map((id)=>pricingBlock.indexOf(`id="${id}"`));
@@ -256,12 +256,13 @@ test('GST: the rod figure, the customer total and the GST Amount box each say wh
   assert.equal(c.rodPriceHintText({currencyCode:'NZD',taxActive:true,taxName:'GST',rodTax:'$117.26',jobType:'build'}),'NZD · GST on the rod $117.26');
   assert.equal(c.rodPriceHintText({currencyCode:'NZD',taxActive:true,taxName:'VAT',rodTax:'$9.00',jobType:'repair'}),'NZD · VAT on the repair $9.00');
   assert.equal(c.rodPriceHintText({currencyCode:'AUD',taxActive:false,taxName:'GST',rodTax:'$0.00',jobType:'build'}),'AUD');
+  // Q23 GST cleanup: the GST total is shown once, in the tax row; the customer total line does not repeat it.
   assert.equal(c.customerTotalLineText({total:'$933.50',totalTax:'$121.76',taxActive:true,taxName:'GST'}),
-    'Customer total with delivery: $933.50 (incl. GST $121.76)');
+    'Customer total with delivery: $933.50 incl. GST');
   assert.equal(c.customerTotalLineText({total:'$812.00',totalTax:'$0.00',taxActive:false,taxName:'GST'}),'Customer total with delivery: $812.00');
-  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:true}),'GST (rod + delivery)');
-  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:false}),'GST (rod)');
-  assert.equal(c.taxAmountLabel({taxName:'VAT',jobType:'repair',withDelivery:true}),'VAT (repair + delivery)');
+  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:true}),'GST total');
+  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:false}),'GST total');
+  assert.equal(c.taxAmountLabel({taxName:'VAT',jobType:'repair',withDelivery:true}),'VAT total');
   assert.equal(c.taxAmountLabel({taxName:'GST',componentsJob:true,withDelivery:true}),'GST Amount','Components jobs keep their label');
 });
 test('the build screen uses one section heading style: Fulfilment Method, Payment Status and Documents',()=>{
@@ -366,4 +367,23 @@ test('Q23 owner corrections: with Rod Price as the method, the return is not rep
   // The field itself, its maths and the other methods are unchanged.
   assert.match(html,/<label id="quoteProfitField"><span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
   assert.match(html,/id="quoteMarginPercentLabel">Target Margin \(% of price\)</);
+});
+
+test('Q23 GST cleanup: one tax row - Include Tax, the rate chip, the tax total - with the per-build rate field behind the chip',()=>{
+  const row=html.slice(html.indexOf('id="quoteTaxSummaryRow"'),html.indexOf('id="quoteTaxRateField"'));
+  const at=(id)=>row.indexOf(`id="${id}"`);
+  assert.ok(at('quoteIncludeGstField')>0 && at('quoteIncludeGstField')<at('quoteTaxRateChip') && at('quoteTaxRateChip')<at('quoteGstField'),row);
+  assert.match(row,/id="quoteTaxRateChip"[^>]*aria-expanded="false"[^>]*aria-controls="quoteTaxRateField"/);
+  assert.match(html,/<label id="quoteTaxRateField"[^>]*hidden>/,'the per-build rate field stays, hidden until the chip is used');
+  assert.doesNotMatch(row,/>GST|15%|15\.0/,'no hard-coded tax name or rate');
+});
+test('Q23 GST cleanup: Deposit Required sits with the payment terms at the top of Payment Status',()=>{
+  const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('id="quoteRecordPaymentBtn"'));
+  const at=(id)=>block.indexOf(`id="${id}"`);
+  for(const id of ['quoteDepositTerms','quoteDepositEnabledField','quoteDepositTypeField','quoteDepositValueField','quoteDepositValueError','quoteBalanceRemainingField'])assert.ok(at(id)>0,id);
+  assert.ok(at('quoteDepositTerms')<at('quotePaymentHistoryDetails'),'terms come before the payments received');
+  const pricing=html.slice(html.indexOf('id="workshopPricingFields"'),html.indexOf('class="workshop-build-actions-surface"'));
+  assert.doesNotMatch(pricing,/id="quoteDeposit/,'no deposit controls left under the tax row');
+  const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
+  assert.match(css,/\[data-has-payments="false"\] #quotePaymentBlock > :not\(#quoteDepositTerms\)\{display:none\}/,'a Components quote keeps its deposit terms');
 });
