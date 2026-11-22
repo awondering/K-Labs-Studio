@@ -54,8 +54,9 @@ async function main(){
     ck('exactly the replaced ids are gone',present.length===REMOVED.length,present);
     ck('one header toggle in the merged card',await page.locator('#workshopPricingSection [data-collapsible-trigger]').count()===1);
     ck('no separate Job Actions card',await page.locator('#workshopActionsSection').count()===0);
-    const docs=await page.locator('.workshop-build-actions-docs__grid button').evaluateAll((b)=>b.map((x)=>x.id));
-    ck('Documents group holds View, Email and Customer Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn']),docs);
+    // The visible Documents buttons (More documents and its menu items are hidden for this job).
+    const docs=await page.locator('.workshop-build-actions-docs__grid button').evaluateAll((b)=>b.filter((x)=>x.getClientRects().length>0).map((x)=>x.id));
+    ck('Documents group shows View, Email and Customer Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn']),docs);
     const summary=await page.locator('#workshopBuildPricingSummaryText').textContent();
     ck('collapsed summary shows status, price and amount owing',/Active/.test(summary)&&/1,?250/.test(summary)&&/Owing/.test(summary),summary);
     const geo=await page.evaluate(()=>{
@@ -78,9 +79,11 @@ async function main(){
     await page.waitForTimeout(150);
     ck('payment history stays hidden until a payment exists',await page.locator('#quotePaymentHistoryDetails').isHidden());
     await page.evaluate(()=>{quote.payments=[{id:'p1',type:'deposit',amount:200,date:'2026-11-10'}];updatePaymentBlock();});
-    ck('payment history appears once a payment exists and expands',await page.locator('#quotePaymentHistoryDetails').isVisible());
-    await page.locator('#quotePaymentHistoryDetails > summary').click();
-    ck('history entry is readable when expanded',/Deposit/.test(await page.locator('#quotePaymentHistory').innerText()));
+    // Q23: the payments are listed directly under the totals - one line each, no collapsible "Payment history" heading.
+    ck('payment entries appear once a payment exists',await page.locator('#quotePaymentHistoryDetails').isVisible());
+    ck('no collapsible payment history heading',await page.locator('#quotePaymentBlock summary').count()===0&&!/payment history/i.test(await page.locator('#quotePaymentBlock').innerText()));
+    const entry=await page.locator('#quotePaymentHistory .quote-payment__entry').first().textContent();
+    ck('the entry is readable without expanding anything: label, amount and date',/^Deposit received\$200\.00 NZD — /.test(entry)&&/2026/.test(entry),entry);
     ck('summary reflects the remaining balance after a payment',/Owing/.test(await page.locator('#workshopBuildPricingSummaryText').textContent()),await page.locator('#workshopBuildPricingSummaryText').textContent());
     if(process.env.JPA_SHOT)await page.locator('#workshopPricingSection').screenshot({path:process.env.JPA_SHOT});
     await page.evaluate(()=>{setWorkshopSectionCollapsed('workshopQuoteSummaryBody',true,{instant:true});});

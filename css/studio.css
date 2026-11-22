@@ -7621,7 +7621,10 @@ textarea::-moz-selection,
 
 /* Q23 Rod Pricing simplification: Components Cost, Rod Price, Your Return by default; Advanced Pricing from Settings. */
 #workshopPricingSection:not([data-advanced-pricing="true"]) #quoteAdvancedPricing{display:none}
-#workshopScreen #workshopPricingSection:not([data-advanced-pricing="true"]) :is(#quotePricingMethodField,#quoteProfitField,#quoteMarginPercentField){display:none}#workshopScreen .build-pricing .build-pricing__hint{
+#workshopScreen #workshopPricingSection:not([data-advanced-pricing="true"]) :is(#quotePricingMethodField,#quoteProfitField,#quoteMarginPercentField){display:none}
+/* With Rod Price as the method, Target Return ($) would repeat Your Return: Your Return stays the one result. */
+#workshopScreen #workshopPricingSection[data-pricing-method="price"] #quoteProfitField{display:none}
+#workshopScreen .build-pricing .build-pricing__hint{
   margin:0;
   color:var(--titanium);
   font-size:11px;
@@ -7781,6 +7784,31 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen #studioWorkflowPanel .quote-job-type{display:grid;gap:6px}
 /* The "Build" / "Repair" group title repeated the page eyebrow directly above it. */
 #workshopScreen #studioWorkflowPanel #buildDetailsGroupRow{display:none}
+/* Finished Rod Length: a compact measurement field (its note keeps the full width below it). */
+#workshopScreen #studioWorkflowPanel .build-details__finished-length > label{max-width:150px}
+#workshopScreen #studioWorkflowPanel .build-details__unit{
+  color:var(--titanium);
+  font-weight:700;
+  letter-spacing:.04em;
+}
+/* Reel Seat Position — From Butt: the distance and the Rear / Centre / Front reference on one row, wrapping when
+   narrow. The field matches the segmented track's height (38px Mac, 46px iPhone). */
+#workshopScreen #studioWorkflowPanel .build-details__seat-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  gap:var(--ds-space-2) var(--ds-space-4);
+}
+#workshopScreen #studioWorkflowPanel .build-details__seat-position{flex:0 0 auto;width:auto;max-width:100%}
+#workshopScreen #studioWorkflowPanel .build-details__seat-position span{white-space:nowrap}
+#workshopScreen #studioWorkflowPanel :is(.build-details__seat-position,.build-details__finished-length > label) input{width:100%;min-width:0;box-sizing:border-box}
+#workshopScreen #studioWorkflowPanel .build-details__seat-position input{width:150px;min-height:38px;height:38px}
+#workshopScreen #studioWorkflowPanel .build-details__seat-ref{display:grid;gap:4px;flex:0 1 auto;min-width:0}
+@media (max-width:640px){
+  #workshopScreen #studioWorkflowPanel .build-details__finished-length > label{max-width:none;width:min(100%,170px)}
+  #workshopScreen #studioWorkflowPanel .build-details__seat-position input{width:170px;max-width:100%}
+  #workshopScreen #studioWorkflowPanel .build-details__seat-position input{min-height:46px;height:46px}
+}
 /* Empty status lines in the pricing grid left blank rows between fields. */
 #workshopScreen #workshopPricingFields > p:empty{display:none}
 #workshopPricingSection:not([data-job-kind="components"]) .build-pricing__head{
@@ -7831,7 +7859,8 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen #workshopPricingSection .build-pricing .quote-gst-toggle{border-color:transparent;background:transparent;padding-left:0;padding-right:0;min-height:44px}
 #workshopScreen #studioWorkflowPanel input[type="checkbox"]{accent-color:var(--titanium)}
 #workshopScreen #workshopPricingSection .workshop-build-actions-surface{border-radius:0}
-#workshopScreen #workshopPricingSection .workshop-build-actions-status-value--active{
+#workshopScreen #workshopPricingSection .workshop-build-actions-status-value--active,
+#workshopScreen .quote-builder__overview-status.saved-build-card__status--active{
   border-color:color-mix(in srgb,var(--titanium) 55%,transparent);
   background:color-mix(in srgb,var(--titanium) 14%,transparent);
   color:var(--ds-text-strong);

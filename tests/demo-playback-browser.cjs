@@ -24,7 +24,7 @@ let passed = 0;
 const ck = (name, cond, detail) => { assert.ok(cond, `${name}${detail === undefined ? '' : ' ' + JSON.stringify(detail)}`); passed++; console.log('PASS', name); };
 
 // The parts the demonstration picks, with the demonstration library's cost prices (js/demo-data.js).
-const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Split Grip': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
+const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Grip 75 mm': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
 const DELIVERY = { freight: 18, packaging: 12 };
 // Q23: the Rod Price typed in chapter 4, GST included (was: labour 5 h at $85, a 25% margin, then a $280 profit).
 const ROD_PRICE = 899;
@@ -59,7 +59,7 @@ async function figures(page) {
       maths: { materialCost: maths.materialCost, labourCost: maths.labourCost, total: maths.total, gst: maths.gst, rodPrice: maths.subtotal - maths.freightCharge,
         earnings: maths.exclusiveRevenue - maths.materialCost - maths.freightCost, balanceOwing: maths.balanceOwing, amountReceived: maths.amountReceived,
         deliveryCost: maths.freightCost, deliveryCharge: maths.freightCharge },
-      parts: quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).map((c) => ({ name: c.category, libraryId: c.libraryComponentId || '', cost: componentRowLineCost(c) })),
+      parts: quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).map((c) => ({ name: c.category, libraryId: c.libraryComponentId || '', cost: componentRowLineCost(c), qty: componentRowQuantity(c), unitCost: Number(c.cost) })),
       rate: quote.labourRate, hours: quote.labourHours, quoteNumber: quote.quoteNumber, prefix: businessProfile.quotePrefix,
       fulfilment: quote.fulfilmentMethod, freight: quote.freight, packaging: quote.packaging, lifecycle: currentBuildLifecycleStatus(), payments: JSON.parse(JSON.stringify(quote.payments || [])),
     };
@@ -206,6 +206,12 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   await waitChapter(page, 2, 120000);
   const numbered = await page.evaluate(() => ({ screen: document.querySelector('.screen.active')?.id, name: document.getElementById('quoteCustomerName').value, number: quote.quoteNumber, prefix: businessProfile.quotePrefix }));
   ck(`${label}: the new build for Jordan Ellis has a local demonstration quote number`, numbered.screen === 'workshopScreen' && numbered.name === 'Jordan Ellis' && numbered.number === `${numbered.prefix}1046`, numbered);
+  // The build is created with its name; Rename is not on the heading (it is Rename Build in the ••• menu) and is not demonstrated.
+  const named = await page.evaluate(() => ({ buildName: quote.buildName, title: document.getElementById('quoteBuilderTitle').textContent,
+    headingRename: !!document.querySelector('.quote-builder__identity button'), editorOpen: !document.getElementById('quoteBuildRenameEditor').hidden,
+    menuRename: document.querySelector('#currentBuildActionsMenu [data-current-build-action="rename"]')?.textContent || '' }));
+  ck(`${label}: the build starts as "Jordan Ellis — 7' Snapper Spin" with no Rename on the heading; Rename Build is in the ••• menu`,
+    named.buildName === "7' Snapper Spin" && named.title === "Jordan Ellis — 7' Snapper Spin" && !named.headingRename && !named.editorOpen && named.menuRename === 'Rename Build', named);
 
   // Pause during chapter 3, while parts are being picked: nothing moves until Play.
   await waitChapter(page, 3, 120000);
@@ -241,11 +247,11 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
       inputs: grips.map(styles),
     };
   });
-  assert.deepEqual(rodSpec.refs, ['rear', 'centre', 'front', 'rear'].map((ref) => ({ ref, position: '' })));
-  assert.deepEqual(rodSpec.selected, ['rear']);
-  ck(`${label}: the reference walkthrough ends at Rear of Seat with 330 mm from the butt`, rodSpec.value === '330 mm from butt', rodSpec);
-  assert.deepEqual(rodSpec.grips, ['80 mm', '75 mm', '100 mm']);
-  assert.deepEqual(rodSpec.geometry, { rearGrip: [0, 80], reelSeat: [330, 460], lowerGrip: [255, 330], foreGrip: [460, 560] });
+  // Q23 owner corrections: the measurement is entered first, then one reference (Rear) is chosen - no cycling.
+  ck(`${label}: 330 mm is entered first, then Rear of seat is chosen once`,
+    JSON.stringify(rodSpec.refs) === JSON.stringify([{ ref: 'rear', position: '330 mm' }]) && JSON.stringify(rodSpec.selected) === '["rear"]' && rodSpec.value === '330 mm', rodSpec);
+  assert.deepEqual(rodSpec.grips, ['75 mm', '75 mm', '100 mm']);
+  assert.deepEqual(rodSpec.geometry, { rearGrip: [0, 75], reelSeat: [330, 460], lowerGrip: [255, 330], foreGrip: [460, 560] });
   ck(`${label}: split grips fit the model without overlap`, rodSpec.valid, rodSpec.geometry);
   // Q23 final correction: Rear / Centre / Front is a compact segmented control, not three full-width slabs. The selected
   // segment is titanium, never red; iPhone segments are 40px with a 44px hit area; Mac segments are slim and sized to content.
@@ -328,6 +334,8 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const priced = await figures(page);
   checkFigures(`${label} pricing`, priced);
   ck(`${label}: the six parts came from the demonstration library at its prices`, priced.parts.length === 6 && priced.parts.every((p) => PART_COSTS[p.name] === p.cost && p.libraryId.startsWith('comp-')) && near(priced.maths.materialCost, PARTS_COST), priced.parts);
+  const grip = priced.parts.find((p) => p.name === 'EVA Grip 75 mm');
+  ck(`${label}: two identical 75 mm EVA grips are one line at Qty 2, costed at 2 x the unit price`, !!grip && grip.qty === 2 && grip.unitCost === 11 && near(grip.cost, 2 * grip.unitCost), grip);
   ck(`${label}: no labour is added (Q23)`, near(priced.maths.labourCost, 0) && Number(priced.hours) === 0, [priced.rate, priced.hours, priced.maths.labourCost]);
   // Courier delivery: Freight + Packaging typed in, added to the price separately; Your Return is unchanged.
   ck(`${label}: courier delivery chosen, with Freight 18 and Packaging 12 typed in`, priced.fulfilment === 'shipping' && Number(priced.freight) === DELIVERY.freight && Number(priced.packaging) === DELIVERY.packaging, [priced.fulfilment, priced.freight, priced.packaging]);

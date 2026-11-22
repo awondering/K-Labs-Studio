@@ -138,6 +138,30 @@ async function main(){
           await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-${stage}-bottom.png`)});
         }
       }
+      // Rod specification: a compact Finished Rod Length, and Reel Seat Position — From Butt on one row with Rear / Centre / Front.
+      await setState(page,'quote');await page.waitForTimeout(150);
+      const spec=await page.evaluate(()=>{
+        expandWorkshopCollapsibleSection('workshopBuildSpecsBody',{instant:true});
+        const toggle=document.getElementById('buildRodSpecsToggle');
+        if(toggle&&toggle.getClientRects().length&&toggle.getAttribute('aria-expanded')!=='true')toggle.click();
+        const r=(el)=>{const b=el.getBoundingClientRect();return {t:Math.round(b.top),b:Math.round(b.bottom),l:Math.round(b.left),r:Math.round(b.right),w:Math.round(b.width),h:Math.round(b.height)};};
+        const length=document.getElementById('quoteSpecFinishedRodLength');const seat=document.getElementById('quoteSpecReelSeatPosition');
+        const track=document.querySelector('#quoteSpecReelSeatRef .quote-job-type__options');
+        document.getElementById('buildRodSpecsPartA').scrollIntoView({block:'start'});
+        return {length:r(length),seat:r(seat),track:track?r(track):null,row:r(document.querySelector('.build-details__seat-row')),
+          seatLabel:document.querySelector('.build-details__seat-position > span').textContent.replace(/\s+/g,' ').trim(),
+          lengthUnit:document.getElementById('quoteSpecFinishedRodLengthUnit').textContent,seatUnit:document.getElementById('quoteSpecReelSeatPositionUnit').textContent,
+          refs:[...document.querySelectorAll('#quoteSpecReelSeatRef [data-layout-seat-ref]')].map((b)=>b.getAttribute('data-layout-seat-ref')),
+          overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth};
+      });
+      ck(`${size}: Finished Rod Length is a compact field (${size==='mac'?'<=150px':'<=170px'}) showing its unit`,
+        spec.length.w<=(size==='mac'?150:170)&&spec.length.w>=100&&spec.lengthUnit==='mm',spec.length);
+      ck(`${size}: Reel Seat Position — From Butt shows its unit and keeps Rear / Centre / Front`,
+        /^Reel Seat Position — From Butt mm$/.test(spec.seatLabel)&&spec.seatUnit==='mm'&&JSON.stringify(spec.refs)==='["rear","centre","front"]',spec);
+      ck(`${size}: the reel seat field matches the segmented control's height`,spec.track&&Math.abs(spec.seat.h-spec.track.h)<=1,spec);
+      if(size==='mac')ck(`${size}: the reel seat distance and reference sit on one row`,spec.track&&Math.abs(spec.seat.b-spec.track.b)<=1&&spec.track.l>spec.seat.r,spec);
+      else ck(`${size}: the reel seat row wraps cleanly inside the card (one row when it fits)`,spec.track&&spec.track.r<=spec.row.r+1&&!spec.overflow&&(spec.track.l>spec.seat.r?Math.abs(spec.seat.b-spec.track.b)<=1:spec.track.t>=spec.seat.b),spec);
+      if(process.env.BSD_SHOTS){await page.waitForTimeout(150);await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-spec.png`)});}
       // Simple / Advanced and the pricing method are views: switching never changes the build or writes storage.
       await setState(page,'quote');await page.waitForTimeout(150);
       const views=await page.evaluate(()=>{
@@ -147,7 +171,9 @@ async function main(){
         const shown=(id)=>document.getElementById(id).getClientRects().length>0;
         const editable=()=>['quoteTotal','quoteProfit','quoteMarginPercent'].filter((id)=>!document.getElementById(id).readOnly&&shown(id));
         press('[data-pricing-view="advanced"]');
-        const advanced={fields:['quoteProfitField','quoteMarginPercentField','quotePricingMethodField'].every(shown),editable:editable()};
+        // With Rod Price as the method, Target Return ($) would repeat Your Return, so only the margin result shows.
+        const advanced={fields:['quoteMarginPercentField','quotePricingMethodField'].every(shown),noRepeatedReturn:!shown('quoteProfitField'),editable:editable(),
+          labels:[...document.querySelectorAll('button[data-pricing-method]')].map((b)=>b.textContent.trim()),marginLabel:document.getElementById('quoteMarginPercentLabel').textContent};
         press('[data-pricing-method="percent"]');const percent=editable();
         press('[data-pricing-method="return"]');const ret=editable();
         press('[data-pricing-method="price"]');
@@ -164,7 +190,10 @@ async function main(){
         await page.evaluate(()=>{document.querySelector('[data-pricing-method="price"]').click();document.querySelector('[data-pricing-view="simple"]').click();});
       }
       ck(`${size}: Advanced shows the three pricing methods; each method makes only its own field editable`,
-        views.advanced.fields&&JSON.stringify(views.percent)==='["quoteMarginPercent"]'&&JSON.stringify(views.ret)==='["quoteProfit"]',views);
+        views.advanced.fields&&JSON.stringify(views.advanced.editable)==='["quoteTotal"]'&&JSON.stringify(views.percent)==='["quoteMarginPercent"]'&&JSON.stringify(views.ret)==='["quoteProfit"]',views);
+      ck(`${size}: the methods are Rod Price, Target Return $ and Target Margin %; the margin field says Target Margin`,
+        JSON.stringify(views.advanced.labels)==='["Rod Price","Target Return $","Target Margin %"]'&&/^Target Margin \(% of price/.test(views.advanced.marginLabel),views.advanced);
+      ck(`${size}: with Rod Price chosen, the return is not shown twice (Your Return is the result)`,views.advanced.noRepeatedReturn,views.advanced);
       ck(`${size}: back in Simple only the Rod Price is editable`,views.simple.hidden&&JSON.stringify(views.simple.editable)==='["quoteTotal"]',views.simple);
       ck(`${size}: switching Simple / Advanced and methods changes nothing saved`,views.unchanged&&views.storeUnchanged,views);
       // Payment Status: one line per payment, no repeated heading, no deposit sentence, Record Payment at its natural width.

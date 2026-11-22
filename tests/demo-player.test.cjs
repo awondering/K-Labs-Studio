@@ -91,6 +91,11 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
     '#invoicePreviewSheet .invoice-preview__actions [data-invoice-preview-action="close"]': () => show('#invoicePreviewSheet', false),
   };
   for (const [key, react] of Object.entries(reactions)) get(key).listeners.click = [react];
+  // Q23 owner corrections: the EVA Grip 75 mm line (index 3) opens; its Quantity field starts at 1 (2 is typed in).
+  const gripRow = get('#quoteComponentsList [data-component-action="open-row"][aria-label$=" for EVA Grip 75 mm" i]');
+  Object.assign(gripRow.attributes, { 'data-component-index': '3', 'aria-expanded': 'false' });
+  const gripQty = get('#quoteComponentsList [data-component-key="quantity"][data-component-index="3"]');
+  gripQty.value = '1';
   // Every caption the visitor is shown is recorded.
   const captionEl = get('#demoCaption');
   let captionText = '';
@@ -131,7 +136,9 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
     // writeCount: how many changes the demo Store has accepted (a test can add some while a pause is settling).
     KLABS_DEMO: { exit() { log.push(['exit']); }, enterUrl: () => '/?demo', writeCount: () => busy.writes },
     // Studio's own "still saving" signal (an autosave in hand); a test can hold it busy.
-    KLABS_UI: { readRecoveryDraft: () => ({ quote: { id: 'build-1' } }), hasUnsavedEdits: () => busy.studio > 0 && busy.studio-- > 0 },
+    KLABS_UI: { readRecoveryDraft: () => ({ quote: { id: 'build-1' } }), hasUnsavedEdits: () => busy.studio > 0 && busy.studio-- > 0,
+      // The new build is named as it is created (no Rename on screen); the heading then shows the name.
+      nameCurrentBuild: (name) => { log.push(['name', name]); get('#quoteBuilderTitle').textContent = `Jordan Ellis — ${name}`; return true; } },
     ResizeObserver: class { observe() {} },
     innerWidth: 1280, innerHeight: 860,
     getComputedStyle: () => ({ overflowX: 'visible', overflowY: 'visible', position: 'static', outlineStyle: 'solid' }),
@@ -184,20 +191,38 @@ test('Q18 2A/2B: the journey has ten chapters in workflow order, each with short
   assert.ok(Object.isFrozen(journey) && journey.every((c) => Object.isFrozen(c) && Object.isFrozen(c.steps)), 'the journey cannot be changed at run time');
 });
 
-test('Rod spec shows each seat reference before entering the final rear measurement', () => {
-  const steps = player(stage()).journey[1].steps;
-  const refs = Array.from(steps, ([kind, selector], index) => ({
-    index, match: kind === 'tap' && selector.match(/^#quoteSpecReelSeatRef \[data-layout-seat-ref="(rear|centre|front)"\]$/),
-  })).filter(({ match }) => match);
-  assert.deepEqual(refs.map(({ match }) => match[1]), ['rear', 'centre', 'front', 'rear']);
-  const entries = Array.from(steps).filter(([kind, selector]) => kind === 'type' && /#quoteSpec(?:ReelSeatPosition|.*Grip.*Length)$/.test(selector));
-  assert.ok(entries.every((entry) => steps.indexOf(entry) > refs.at(-1).index));
+test('Rod spec: the reel seat measurement first, then one reference (Rear), then straight on to the grips', () => {
+  const steps = Array.from(player(stage()).journey[1].steps);
+  const at = (pred) => steps.findIndex(pred);
+  const refs = steps.filter(([kind, selector]) => kind === 'tap' && /^#quoteSpecReelSeatRef \[data-layout-seat-ref=/.test(selector));
+  assert.deepEqual(refs.map(([, selector]) => selector.match(/"(\w+)"/)[1]), ['rear'], 'no cycling through all three references');
+  const seat = at(([kind, selector]) => kind === 'type' && selector === '#quoteSpecReelSeatPosition');
+  const ref = steps.indexOf(refs[0]);
+  const firstGrip = at(([kind, selector]) => kind === 'type' && /Grip.*Length$/.test(selector));
+  assert.ok(seat >= 0 && seat + 1 === ref && ref + 1 === firstGrip, { seat, ref, firstGrip });
+  const entries = steps.filter(([kind, selector]) => kind === 'type' && /#quoteSpec(?:ReelSeatPosition|.*Grip.*Length)$/.test(selector));
   assert.deepEqual(Object.fromEntries(entries.map(([, selector, value]) => [selector, value])), {
-    '#quoteSpecReelSeatPosition': '330 mm from butt',
-    '#quoteSpecRearGripLength': '80 mm',
+    '#quoteSpecReelSeatPosition': '330 mm',
+    '#quoteSpecRearGripLength': '75 mm',
     '#quoteSpecGripBelowReelSeatLength': '75 mm',
     '#quoteSpecForeGripLength': '100 mm',
   });
+});
+
+test('the build is named as it is created: no Rename step anywhere in the demonstration', () => {
+  const journey = player(stage()).journey;
+  const flat = journey.flatMap((c) => Array.from(c.steps));
+  assert.equal(flat.filter(([kind, selector]) => /Rename/.test(String(selector))).length, 0);
+  const enquiry = Array.from(journey[0].steps);
+  assert.equal(JSON.stringify(enquiry.find(([kind]) => kind === 'name')), JSON.stringify(['name', "7' Snapper Spin"]));
+});
+
+test('Components: two identical 75 mm EVA grips are one line at Qty 2, set on the line right after it is added', () => {
+  const steps = Array.from(player(stage()).journey[2].steps);
+  const pick = steps.findIndex(([kind, path]) => kind === 'pick' && path[2] === 'EVA Grip 75 mm');
+  assert.ok(pick >= 0);
+  assert.equal(JSON.stringify(steps[pick + 1]), JSON.stringify(['qty', 'EVA Grip 75 mm', 2]));
+  assert.equal(steps.filter(([kind, path]) => kind === 'pick' && /Grip/.test(path[2] || '')).length, 1, 'one grip line, not two');
 });
 
 test('Q18 2A: the director works the real Studio controls in workflow order: customer, spec, components, pricing, quote', () => {
@@ -729,4 +754,14 @@ test('Q18 Phase 3 review: if something floats over a control after it was brough
   assert.deepEqual(scrolls, ['nearest', 'center']);
   const tap = studioActs(h).find((a) => a.key === '#toggleCurrentBuildStatusBtn');
   assert.ok(tap && tap.highlighted && tap.inView, JSON.stringify(tap));
+});
+
+test('the quantity is typed into the line\'s Quantity field - the +/- steppers stay blocked in Demo Mode and are never used', () => {
+  const flat = player(stage()).journey.flatMap((c) => Array.from(c.steps));
+  assert.equal(flat.filter((step) => /quantity-(increment|decrement)/.test(JSON.stringify(step))).length, 0);
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'demo-director.js'), 'utf8');
+  const fnBody = src.slice(src.indexOf('async function setQuantity'), src.indexOf('async function scrollThrough'));
+  assert.match(fnBody, /await type\(field, String\(qty\)\)/);
+  assert.doesNotMatch(fnBody, /quantity-increment|component-quantity__step/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'js', 'supabase-client.js'), 'utf8'), /control\.matches\("\.layout-control-card__button, \.component-quantity__step/);
 });

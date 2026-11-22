@@ -6,11 +6,12 @@
  * (seedStarterComponentsLibrary) so they match the current record format exactly. Keys ending in ":" are per-account
  * and receive the demonstration account id when seeded. "anchor" is the date the data was written for: dates are
  * shifted to keep the same distance from today when the demonstration opens. The six parts the demonstration builds
- * with (the 7'0" Medium Spin blank, Medium Spin Guide Set, DPS 18, EVA Split Grip, Aluminium Winding Check 16 mm and
- * NCP Nylon Thread A Black) carry realistic New Zealand cost and sell prices instead of the starter placeholders. */
+ * with (the 7'0" Medium Spin blank, Medium Spin Guide Set, DPS 18, EVA Grip 75 mm (used at Qty 2), Aluminium Winding
+ * Check 16 mm and NCP Nylon Thread A Black) carry realistic New Zealand cost and sell prices instead of the starter
+ * placeholders. EVA Grip 75 mm is a demonstration-only record. */
 window.KLABS_DEMO_DATA = {
  // Phase 3 review: the build of the demonstration files (checked by js/public-entry.js before anything is shown).
- build: "build148-v273",
+ build: "build148-v274",
  anchor: "2026-11-20",
  store: {
  "klabs-workshop-component-taxonomy:": {
@@ -1819,6 +1820,26 @@ window.KLABS_DEMO_DATA = {
    "notes": "Starter library record. Edit supplier, pricing, stock and specifications for your shop.",
    "specifications": "EVA Grips; workshop starter specification for EVA Split Grip.",
    "cost": 22,
+   "sizeOptions": []
+  },
+  {
+   "id": "comp-mwo34yco-eva75m",
+   "name": "EVA Grip 75 mm",
+   "categoryId": "",
+   "category": "Grips",
+   "subcategory": "EVA Grips",
+   "supplier": "Mud Hole",
+   "brand": "",
+   "variant": "",
+   "description": "",
+   "customerLabel": "",
+   "unit": "",
+   "unitCost": 11,
+   "unitPrice": 16.5,
+   "stockOnHand": 20,
+   "notes": "Demonstration record: a 75 mm EVA grip section. Two make a split rear grip.",
+   "specifications": "EVA Grips; 75 mm EVA grip section.",
+   "cost": 11,
    "sizeOptions": []
   },
   {

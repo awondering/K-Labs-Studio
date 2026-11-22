@@ -809,7 +809,6 @@
           <p id="workshopJobEyebrow" class="eyebrow">Build</p>
           <div class="quote-builder__identity">
             <h1 id="quoteBuilderTitle">Studio</h1>
-            <button id="quoteBuildRenameBtn" class="studio-component-rename-trigger" type="button" hidden>RENAME</button>
           </div>
           <div id="quoteBuildRenameEditor" class="studio-component-rename-editor" hidden>
             <input id="quoteBuildRenameInput" type="text" aria-label="Build Name" placeholder="Build name" />
@@ -910,10 +909,12 @@
               <label><span>Finished Rod Length <em id="quoteSpecFinishedRodLengthUnit" class="build-details__unit">mm</em></span><input id="quoteSpecFinishedRodLength" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 3962.4" aria-describedby="quoteSpecFinishedRodLengthNote" /></label>
               <small id="quoteSpecFinishedRodLengthNote" class="build-details__length-note" aria-live="polite"></small>
             </div>
-            <label><span>Reel Seat Position</span><input id="quoteSpecReelSeatPosition" type="text" placeholder="e.g. 350 mm from butt" /></label>
-            <div class="quote-grid__full">
-              <small class="build-details__grip-note">Measured from the rod butt to the&hellip;</small>
-              <div id="quoteSpecReelSeatRef"></div>
+            <div class="quote-grid__full build-details__seat-row">
+              <label class="build-details__seat-position"><span>Reel Seat Position &mdash; From Butt <em id="quoteSpecReelSeatPositionUnit" class="build-details__unit">mm</em></span><input id="quoteSpecReelSeatPosition" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 350" aria-describedby="quoteSpecReelSeatRefNote" /></label>
+              <div class="build-details__seat-ref">
+                <small id="quoteSpecReelSeatRefNote" class="build-details__grip-note">Measured from the rod butt to the&hellip;</small>
+                <div id="quoteSpecReelSeatRef"></div>
+              </div>
             </div>
             <div class="quote-grid__full build-details__grips">
               <label><span>Rear Grip</span><input id="quoteSpecRearGripLength" type="text" placeholder="e.g. 280 mm" /></label>
@@ -996,13 +997,13 @@
               <div class="ds-segmented" role="group" aria-labelledby="quotePricingMethodLabel">
                 <button type="button" class="ds-segmented__option" data-pricing-method="price" aria-pressed="true">Rod Price</button>
                 <button type="button" class="ds-segmented__option" data-pricing-method="return" aria-pressed="false">Target Return $</button>
-                <button type="button" class="ds-segmented__option" data-pricing-method="percent" aria-pressed="false">Target Return %</button>
+                <button type="button" class="ds-segmented__option" data-pricing-method="percent" aria-pressed="false">Target Margin %</button>
               </div>
             </div>
             <div id="quotePricingFieldsRow" class="quote-grid__full build-pricing__fields">
               <label id="quoteTotalField" class="build-pricing__total"><span>Rod Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="quoteRodPriceHint" class="build-pricing__hint"></small></label>
               <label id="quoteProfitField"><span id="quoteProfitLabel">Target Return ($)</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
-              <label id="quoteMarginPercentField"><span id="quoteMarginPercentLabel">Target Return (% of price)</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
+              <label id="quoteMarginPercentField"><span id="quoteMarginPercentLabel">Target Margin (% of price)</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
             </div>
             <p id="quoteCustomerTotalLine" class="quote-grid__full build-pricing__hint" hidden></p>
             <div id="quoteEarningsSummary" class="quote-grid__full build-earnings-summary" aria-live="polite">
@@ -1124,6 +1125,7 @@
                   <div class="workshop-build-actions-menu-wrap">
                     <button id="currentBuildActionsMenuBtn" class="ghost-action saved-build-card__menu-toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Build actions">&hellip;</button>
                     <div id="currentBuildActionsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="Build actions menu" hidden>
+                      <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="rename">Rename Build</button>
                       <button class="saved-build-card__menu-item" type="button" role="menuitem" data-current-build-action="statement">Payment Statement</button>
                       <button class="saved-build-card__menu-item saved-build-card__menu-item--danger" type="button" role="menuitem" data-current-build-action="delete">Delete Build</button>
                     </div>
@@ -1577,7 +1579,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v273" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v274" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>

@@ -4043,7 +4043,7 @@ function taxAmountLabel({taxName,jobType,withDelivery,componentsJob}={}){
   return `${taxName} (${withDelivery?`${item} + delivery`:item})`;
 }
 function targetReturnPercentLabel({taxActive,taxName}={}){
-  return taxActive?`Target Return (% of price excl. ${taxName})`:'Target Return (% of price)';
+  return taxActive?`Target Margin (% of price excl. ${taxName})`:'Target Margin (% of price)';
 }
 function legacyLabourLineText(source){
   const cost=savedLabourCost(source);
@@ -14323,8 +14323,8 @@ function applyWorkshopBuildOverview(){
   }
   const renameEditor=$('quoteBuildRenameEditor');
   if(renameEditor && !renameEditor.hidden && (!hasIdentity || buildRenameQuoteRef!==quote))closeBuildRenameEditor();
-  const renameBtn=$('quoteBuildRenameBtn');
-  if(renameBtn)renameBtn.hidden=!hasIdentity || !!(renameEditor && !renameEditor.hidden);
+  const renameItem=document.querySelector('#currentBuildActionsMenu [data-current-build-action="rename"]');
+  if(renameItem)renameItem.hidden=!hasIdentity;
   // Opened individual build: hide the New Build/Find Customer entry actions and intro hint so Customer Details is the first section.
   const entryActionsEl=$('quoteBuilderEntryActions');
   if(entryActionsEl)entryActionsEl.hidden=hasActiveBuildRef||hasIdentity;
@@ -14453,6 +14453,12 @@ function toggleQuotePricingSummary(){
   if(section)syncPricingLayoutState(section,currentBuildLifecycleStatus());
 }
 function handleCurrentBuildAction(action){
+  if(action==='rename'){
+    closeCurrentBuildActionsMenu();
+    openBuildRenameEditor();
+    $('quoteBuildRenameEditor')?.scrollIntoView?.({block:'center'});
+    return;
+  }
   if(action==='statement'){
     closeCurrentBuildActionsMenu();
     openPaymentStatement();
@@ -14565,8 +14571,6 @@ function openBuildRenameEditor(){
   buildRenameQuoteRef=quote;
   input.value=specificationValue(quote&&quote.buildName);
   editor.hidden=false;
-  const renameBtn=$('quoteBuildRenameBtn');
-  if(renameBtn)renameBtn.hidden=true;
   try{input.focus({preventScroll:true});}catch{input.focus();}
   try{input.select();}catch{}
 }
@@ -14574,8 +14578,16 @@ function closeBuildRenameEditor(){
   const editor=$('quoteBuildRenameEditor');
   if(editor)editor.hidden=true;
   buildRenameQuoteRef=null;
-  const renameBtn=$('quoteBuildRenameBtn');
-  if(renameBtn)renameBtn.hidden=!(specificationValue(quote&&quote.customerName)||specificationValue(quote&&quote.buildName));
+}
+// Names the open build through the same save path as Rename Build, without opening the editor.
+// Demo Mode uses it so the demonstration build starts with its real name.
+function nameCurrentBuild(name){
+  const input=$('quoteBuildRenameInput');
+  const value=String(name||'').trim();
+  if(!input || !value || !quote)return false;
+  buildRenameQuoteRef=quote;
+  input.value=value;
+  return saveBuildRename();
 }
 function saveBuildRename(){
   const input=$('quoteBuildRenameInput');
@@ -16110,6 +16122,9 @@ function renderFinishedRodLengthInput(){
   if(finishedRodLengthPending && (finishedRodLengthPending.quote!==quote || finishedRodLengthPending.unitKey!==finishedRodLengthUnitKey()))finishedRodLengthPending=null;
   const unitEl=$('quoteSpecFinishedRodLengthUnit');
   if(unitEl)unitEl.textContent=measurementUnitSuffix();
+  // Reel Seat Position reads a bare number in the same unit, so it shows the same unit.
+  const seatUnitEl=$('quoteSpecReelSeatPositionUnit');
+  if(seatUnitEl)seatUnitEl.textContent=measurementUnitSuffix();
   input.placeholder=`e.g. ${blankMeasurementInputText(3962.4)}`;
   const layout=normalizeBuildLayout(quote.buildSpecifications&&quote.buildSpecifications.layout,{keepEmpty:true});
   const stored=layout.rodLengthMm;
@@ -16851,11 +16866,11 @@ function bindWorkshopQuoteBuilder(){
       window.scrollTo(0,0);
     });
   }
-  const buildRenameBtn=$('quoteBuildRenameBtn');
-  if(buildRenameBtn && buildRenameBtn.getAttribute('data-build-rename-bound')!=='true'){
-    buildRenameBtn.setAttribute('data-build-rename-bound','true');
-    buildRenameBtn.addEventListener('click',openBuildRenameEditor);
-    $('quoteBuildRenameSave')?.addEventListener('click',saveBuildRename);
+  // Rename lives in the build's ••• Actions menu (Rename Build); the editor still opens under the heading.
+  const buildRenameSave=$('quoteBuildRenameSave');
+  if(buildRenameSave && buildRenameSave.getAttribute('data-build-rename-bound')!=='true'){
+    buildRenameSave.setAttribute('data-build-rename-bound','true');
+    buildRenameSave.addEventListener('click',saveBuildRename);
     $('quoteBuildRenameCancel')?.addEventListener('click',closeBuildRenameEditor);
     $('quoteBuildRenameInput')?.addEventListener('keydown',(event)=>{
       if(event.key==='Escape'){
@@ -19183,7 +19198,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible')refreshServerQuoteCounter();
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
-window.KLABS_UI={buildWheels,render,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
+window.KLABS_UI={buildWheels,render,nameCurrentBuild,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
 window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
 window.KLABS_UI.refreshBusinessLogoControls=syncBusinessLogoControls;
 window.KLABS_UI.readRecoveryDraft=()=>({

@@ -144,8 +144,8 @@ test('labels: Rod Price uses the Tax Name; tax off has no tax wording; repairs s
   assert.equal(c.rodPriceLabel({taxActive:true,taxName:'VAT',jobType:'build'}),'Rod Price (incl. VAT)');
   assert.equal(c.rodPriceLabel({taxActive:false,taxName:'GST',jobType:'build'}),'Rod Price');
   assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'repair'}),'Repair Price (incl. GST)');
-  assert.equal(c.targetReturnPercentLabel({taxActive:true,taxName:'GST'}),'Target Return (% of price excl. GST)');
-  assert.equal(c.targetReturnPercentLabel({taxActive:false,taxName:'GST'}),'Target Return (% of price)');
+  assert.equal(c.targetReturnPercentLabel({taxActive:true,taxName:'GST'}),'Target Margin (% of price excl. GST)');
+  assert.equal(c.targetReturnPercentLabel({taxActive:false,taxName:'GST'}),'Target Margin (% of price)');
 });
 
 test('the read-only labour line appears only on saved builds that carry labour',()=>{
@@ -215,7 +215,7 @@ test('no labour split by default: Labour Rate and Labour Hours are not shown',()
   assert.match(pricingBlock,/<label id="quoteLabourRateField" hidden>/);
   assert.match(pricingBlock,/<label id="quoteLabourHoursField" hidden>/);
 });
-test('Advanced Pricing holds Target Return ($), Target Return (%), Build hours and the time helper',()=>{
+test('Advanced Pricing holds Target Return ($), Target Margin (%), Build hours and the time helper',()=>{
   const fields=pricingBlock.slice(pricingBlock.indexOf('id="quotePricingFieldsRow"'),pricingBlock.indexOf('id="quoteCustomerTotalLine"'));
   for(const id of ['quoteTotalField','quoteProfitField','quoteMarginPercentField'])assert.ok(fields.includes(`id="${id}"`),id);
   assert.match(fields,/<span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
@@ -224,7 +224,7 @@ test('Advanced Pricing holds Target Return ($), Target Return (%), Build hours a
     assert.ok(advanced.includes(`id="${id}"`),id);
   }
   assert.match(advanced,/Price from my time/);
-  assert.doesNotMatch(pricingBlock,/Required Profit|Margin %/);
+  assert.doesNotMatch(pricingBlock,/Required Profit|(?<!Target )Margin %/); // the legacy labels; Target Margin % is the approved name
 });
 test('the one-time note has the approved wording and a dismiss control',()=>{
   assert.match(pricingBlock,/id="quoteAdvancedPricingNote"[^>]*hidden/);
@@ -351,11 +351,19 @@ test('the pricing screen: Rod Pricing heading with Simple / Advanced, then the m
   const order=['quoteRodPricingHead','quoteCostBeforeMarginField','quotePricingMethodField','quoteTotalField','quoteProfitField','quoteMarginPercentField','quoteEarningsSummary'];
   const at=order.map((id)=>html.indexOf(`id="${id}"`));
   assert.ok(at.every((i)=>i>0)&&at.every((i,n)=>n===0||i>at[n-1]),JSON.stringify(at));
-  assert.match(html,/data-pricing-method="price"[^>]*>Rod Price<[\s\S]*?data-pricing-method="return"[^>]*>Target Return \$<[\s\S]*?data-pricing-method="percent"[^>]*>Target Return %</);
+  assert.match(html,/data-pricing-method="price"[^>]*>Rod Price<[\s\S]*?data-pricing-method="return"[^>]*>Target Return \$<[\s\S]*?data-pricing-method="percent"[^>]*>Target Margin %</);
 });
 test('payment status: totals, the entries list, then Record Payment; no details/summary heading',()=>{
   const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('workshop-build-actions-docs'));
   assert.doesNotMatch(block,/<summary>/);
   assert.match(block,/id="quotePaymentHistory" class="quote-payment__entries"/);
   assert.ok(block.indexOf('quotePaymentHistory')<block.indexOf('quoteRecordPaymentBtn'),'entries above Record Payment');
+});
+
+test('Q23 owner corrections: with Rod Price as the method, the return is not repeated - Your Return is the one result',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
+  assert.match(css,/#workshopPricingSection\[data-pricing-method="price"\] #quoteProfitField\{display:none\}/);
+  // The field itself, its maths and the other methods are unchanged.
+  assert.match(html,/<label id="quoteProfitField"><span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
+  assert.match(html,/id="quoteMarginPercentLabel">Target Margin \(% of price\)</);
 });
