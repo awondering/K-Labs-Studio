@@ -1043,7 +1043,7 @@
                 <div id="quoteDeliveryFields" class="quote-grid quote-grid__full build-pricing__delivery" role="group" aria-label="Shipping costs" hidden>
                   <label id="quoteFreightField"><span>Freight</span><input id="quoteFreight" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
                   <label id="quotePackagingField"><span>Packaging</span><input id="quotePackaging" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-                  <label id="quoteDeliveryTotalField"><span>Total Shipping</span><input id="quoteDeliveryTotal" type="text" readonly /></label>
+                  <label id="quoteDeliveryTotalField"><span>Total Shipping</span><input id="quoteDeliveryTotal" type="text" readonly tabindex="-1" aria-label="Total Shipping (calculated)" /></label>
                 </div>
                 <details id="quoteDeliveryLegacyNote" class="quote-grid__full build-pricing__note" hidden>
                   <summary>Legacy freight amounts</summary>
@@ -1586,7 +1586,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v275" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v276" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>

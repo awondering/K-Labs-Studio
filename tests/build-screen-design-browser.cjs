@@ -213,6 +213,48 @@ async function main(){
         await page.waitForTimeout(150);
         await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-tax-row.png`)});
       }
+      // Q28 fulfilment polish: Freight/Packaging sized for short amounts, Total Shipping a calculated read-only result in
+      // line with them, the Fulfilment segments styled like Simple / Advanced, and Customer Collection charging no delivery
+      // while keeping the entered freight and packaging for a switch back.
+      await setState(page,'quote');await page.waitForTimeout(150);
+      const ful=await page.evaluate(()=>{
+        const r=(id)=>document.getElementById(id).getBoundingClientRect();
+        const seg=(el)=>{const s=getComputedStyle(el);return [Math.round(el.getBoundingClientRect().height),s.paddingLeft,s.borderRadius,s.backgroundColor,s.borderColor,s.color,s.fontSize,s.fontWeight].join('|');};
+        const total=document.getElementById('quoteDeliveryTotal');const tf=getComputedStyle(document.getElementById('quoteDeliveryTotalField'));
+        const out={
+          freightW:Math.round(r('quoteFreight').width),packW:Math.round(r('quotePackaging').width),inputH:Math.round(r('quoteFreight').height),
+          rowTops:['quoteFreight','quotePackaging','quoteDeliveryTotal'].map((id)=>Math.round(r(id).top)),
+          totalReadonly:total.readOnly,totalTab:total.tabIndex,totalBorder:getComputedStyle(total).borderTopWidth,totalSeparator:tf.borderLeftWidth,totalValue:total.value,
+          totalLeft:Math.round(r('quoteDeliveryTotalField').left),packRight:Math.round(r('quotePackaging').right),
+          segOn:seg(document.querySelector('[data-fulfilment-method][aria-pressed="true"]')),viewOn:seg(document.querySelector('button[data-pricing-view][aria-pressed="true"]')),
+          segOff:seg(document.querySelector('[data-fulfilment-method][aria-pressed="false"]')),viewOff:seg(document.querySelector('button[data-pricing-view][aria-pressed="false"]')),
+          segHit:(()=>{const b=document.querySelector('[data-fulfilment-method]');const a=getComputedStyle(b,'::after');return a.content==='none'?Math.round(b.getBoundingClientRect().height):Math.round(b.getBoundingClientRect().height-2*parseFloat(a.top||0));})(),
+        };
+        const saved={freight:quote.freight,packaging:quote.packaging,method:quote.fulfilmentMethod};
+        document.querySelector('[data-fulfilment-method="collection"]').click();
+        const m=quoteMaths();
+        out.collection={fieldsHidden:document.getElementById('quoteDeliveryFields').hidden,deliveryCharge:m.deliveryCharge,totalIsRod:Math.abs(m.total-899)<0.005,
+          kept:quote.freight===saved.freight&&quote.packaging===saved.packaging,customerLineHidden:document.getElementById('quoteCustomerTotalLine').hidden};
+        document.querySelector('[data-fulfilment-method="shipping"]').click();
+        out.back={total:document.getElementById('quoteDeliveryTotal').value,method:quote.fulfilmentMethod===saved.method};
+        return out;
+      });
+      const narrow=size==='iphone';
+      ck(`${size}: Freight and Packaging are sized for short currency amounts, 44px tall`,
+        ful.freightW===ful.packW&&ful.freightW>=96&&ful.freightW<=(narrow?130:160)&&ful.inputH>=44,ful);
+      ck(`${size}: Total Shipping sits on the same line, after Packaging, as a read-only calculated value set apart by a divider`,
+        Math.max(...ful.rowTops)-Math.min(...ful.rowTops)<=2&&ful.totalLeft>=ful.packRight&&ful.totalReadonly&&ful.totalTab===-1&&ful.totalBorder==='0px'&&ful.totalSeparator!=='0px'&&ful.totalValue==='$30.00',ful);
+      ck(`${size}: Customer Collection / Courier Shipping match the Simple / Advanced segments (height, padding, shape, titanium selection)`,
+        ful.segOn===ful.viewOn&&ful.segOff===ful.viewOff,[ful.segOn,ful.viewOn,ful.segOff,ful.viewOff]);
+      if(narrow)ck(`${size}: the Fulfilment segments keep a 44px touch target`,ful.segHit>=44,ful.segHit);
+      ck(`${size}: Customer Collection charges no delivery and hides the shipping fields, keeping the entered amounts`,
+        ful.collection.fieldsHidden&&ful.collection.deliveryCharge===0&&ful.collection.totalIsRod&&ful.collection.kept&&ful.collection.customerLineHidden,ful.collection);
+      ck(`${size}: switching back to Courier / Shipping restores the $30.00 Total Shipping`,ful.back.total==='$30.00'&&ful.back.method,ful.back);
+      if(process.env.BSD_SHOTS){
+        await page.evaluate(()=>document.getElementById('quoteFulfilmentGroup').scrollIntoView({block:'center'}));
+        await page.waitForTimeout(150);
+        await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-fulfilment.png`)});
+      }
       // Simple / Advanced and the pricing method are views: switching never changes the build or writes storage.
       await setState(page,'quote');await page.waitForTimeout(150);
       const views=await page.evaluate(()=>{
