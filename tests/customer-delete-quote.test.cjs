@@ -7,8 +7,9 @@ const source=fs.readFileSync(path.join(__dirname,'..','js','ui.js'),'utf8');
 const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
 
 function functionSource(name){
-  const start=source.indexOf(`function ${name}(`);
-  assert.ok(start>=0,name);
+  const plainAt=source.indexOf(`\nfunction ${name}(`);
+  const start=plainAt>=0?plainAt+1:source.indexOf(`\nasync function ${name}(`)+1;
+  assert.ok(start>0,name);
   return source.slice(start,source.indexOf('\n}',start)+2);
 }
 
@@ -35,7 +36,7 @@ function harness({failWrites=false}={}){
   };
   vm.createContext(context);
   vm.runInContext("const BUILDS_STORAGE_KEY='klabs-workshop-builds';const QUOTES_STORAGE_KEY='klabs-workshop-quotes';",context);
-  vm.runInContext(['accountScopedStorageKey','buildsStorageKey','quotesStorageKey','activeAccountKey','deleteSavedEntryBySource','deleteSavedEntryById','normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','openIssuedInvoiceDeleteBlock','requestDeleteSavedBuildRecord'].map(functionSource).join('\n'),context);
+  vm.runInContext(['accountScopedStorageKey','buildsStorageKey','quotesStorageKey','activeAccountKey','deleteSavedEntryBySource','deleteSavedEntryById','normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','recordRemovalReady','financialDeleteWarning','invoiceDisplayNumber','requestDeleteSavedBuildRecord'].map(functionSource).join('\n'),context);
   return context;
 }
 

@@ -3987,7 +3987,7 @@ function paymentEntriesMarkup(payments,{money,date,showCorrections=false}={}){
     const type=payment&&payment.type==='balance'?'Balance received':'Deposit received';
     const when=payment&&payment.date?date(payment.date):'Unknown date';
     const correct=showCorrections&&payment?.id&&(payment.type==='balance'||payment.type==='deposit')
-      ?`<button type="button" class="ghost-action quote-payment__correct" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button>`:'';
+      ?`<span class="quote-payment__entry-actions"><button type="button" class="ghost-action quote-payment__correct" data-correct-payment="${escapeHtml(String(payment.id))}">Correct</button><button type="button" class="ghost-action quote-payment__correct" data-remove-payment="${escapeHtml(String(payment.id))}">Remove</button></span>`:'';
     return `<li class="quote-payment__entry"><span>${type}</span><strong>${escapeHtml(money(numberOrZero(payment&&payment.amount)))} — ${escapeHtml(when)}</strong>${correct}</li>`;
   }).join('')}</ul>`;
 }
@@ -9114,18 +9114,33 @@ function deletionNoun(record){
   if(isComponentsJob(record))return 'Order';
   return normalizeJobType(record&&record.jobType)==='repair'?'Repair':'Build';
 }
-function openIssuedInvoiceDeleteBlock(record){
-  const noun=deletionNoun(record);
-  openInfoDialog(`${noun} Cannot Be Deleted`,`This ${noun.toLowerCase()} contains an issued invoice and must be retained.`);
+// Q32: a builder can remove their own issued invoice, payment entries and invoiced builds. The server must allow it
+// (supabase/migrations/20261123000000_q32_record_removal.sql); until it reports that it does, Studio explains and
+// changes nothing, so a removal never fails half-way through a sync.
+async function recordRemovalReady(what){
+  let ready=false;
+  try{ready=!!(await window.KLABS_BUILD_SYNC?.recordRemovalSupported?.());}
+  catch(error){ready=false;}
+  if(!ready)openInfoDialog('Not Available Yet',`Removing ${what} needs a Studio server update that has not been installed yet. Nothing was changed.`);
+  return ready;
 }
-function requestDeleteCurrentBuild(){
+// The extra sentence in a delete confirmation when the job carries an issued invoice or recorded payments.
+function financialDeleteWarning(record){
+  const parts=[];
+  if(record&&record.issuedInvoice)parts.push(`issued invoice ${invoiceDisplayNumber(record.issuedInvoice)}`);
+  const count=Array.isArray(record&&record.payments)?record.payments.length:0;
+  if(count)parts.push(`${count} recorded payment${count===1?'':'s'}`);
+  return parts.length?` Its ${parts.join(' and ')} will be removed from Studio on every device; keep your own copy of the invoice for your records.`:'';
+}
+function requestDeleteCurrentBuild(options){
   const target=findCurrentSavedBuildTarget();
   if(!target){
     flashWorkshopStatus(`Save the ${deletionNoun(quote).toLowerCase()} before deleting`,{pending:true,duration:2000});
     return;
   }
-  if(target.record.issuedInvoice){
-    openIssuedInvoiceDeleteBlock(target.record);
+  if(target.record.issuedInvoice && options?.removalChecked!==true){
+    recordRemovalReady(`a ${deletionNoun(target.record).toLowerCase()} with an issued invoice`)
+      .then((ready)=>{if(ready)requestDeleteCurrentBuild({removalChecked:true});});
     return;
   }
   const noun=deletionNoun(target.record);
@@ -9133,7 +9148,7 @@ function requestDeleteCurrentBuild(){
   const displayName=specificationValue(target.record&&target.record.buildName)||`this ${nounLower}`;
   openConfirmDialog({
     title:`Delete ${noun}`,
-    message:`Delete ${displayName}? This will permanently delete this saved ${nounLower} only.`,
+    message:`Delete ${displayName}? This will permanently delete this saved ${nounLower} only.${financialDeleteWarning(target.record)}`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'delete',label:`Delete ${noun}`,kind:'danger'}]
   },(action)=>{
     if(action!=='delete')return;
@@ -9145,10 +9160,6 @@ function requestDeleteCurrentBuild(){
       return;
     }
     const deletedRecord=records[targetIndex];
-    if(deletedRecord.issuedInvoice){
-      openIssuedInvoiceDeleteBlock(deletedRecord);
-      return;
-    }
     try{
       if(deletedRecord?.id)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedRecord);
       records.splice(targetIndex,1);
@@ -14486,7 +14497,6 @@ function deleteSavedEntryBySource(source,index){
   const numericIndex=Number(index);
   if(!Number.isInteger(numericIndex) || numericIndex<0 || numericIndex>=records.length)return false;
   const deletedRecord=records[numericIndex];
-  if(source==='build' && deletedRecord?.issuedInvoice)throw new Error('A build with an issued invoice cannot be deleted.');
   if(source==='build' && deletedRecord?.id)window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(deletedRecord);
   records.splice(numericIndex,1);
   if(Store.set(storageKey,records)===false)throw new Error('Local build deletion was blocked.');
@@ -14500,7 +14510,6 @@ function deleteSavedEntryById(source,recordId){
   const records=Array.isArray(stored)?stored:[];
   const index=records.findIndex((record)=>record && specificationValue(record.id)===recordId);
   if(index<0)return -1;
-  if(source==='build' && records[index].issuedInvoice)throw new Error('A build with an issued invoice cannot be deleted.');
   if(source==='build')window.KLABS_BUILD_SYNC?.notifyBuildDeleted?.(records[index]);
   records.splice(index,1);
   if(Store.set(storageKey,records)===false)throw new Error('Local build deletion was blocked.');
@@ -14512,12 +14521,14 @@ function requestDeleteSavedBuildRecord(source,index,options){
   const stored=Store.get(storageKey,[]);
   const rawRecord=Array.isArray(stored)?stored[Number(index)]:null;
   if(!rawRecord)return;
-  if(source==='build' && rawRecord.issuedInvoice){
-    openIssuedInvoiceDeleteBlock(rawRecord);
+  if(source==='build' && rawRecord.issuedInvoice && options?.removalChecked!==true){
+    recordRemovalReady(`a ${deletionNoun(rawRecord).toLowerCase()} with an issued invoice`)
+      .then((ready)=>{if(ready)requestDeleteSavedBuildRecord(source,index,{...(options||{}),removalChecked:true});});
     return;
   }
   const recordId=specificationValue(rawRecord.id);
   const settings={title:`Delete this ${deletionNoun(rawRecord).toLowerCase()}?`,message:'This action cannot be undone.',confirmLabel:'Delete',...(options||{})};
+  if(source==='build')settings.message+=financialDeleteWarning(rawRecord);
   closeSavedBuildRowMenu();
   const present=(errorMessage)=>{
     openConfirmDialog({
@@ -15246,7 +15257,7 @@ function openInvoicePreview(){
         <div class="invoice-preview__toolbar"><div class="invoice-preview__pagination"><button class="ghost-action" type="button" data-invoice-preview-action="previous" aria-label="Previous page">Previous</button><span class="invoice-preview__counter" aria-live="polite"></span><button class="ghost-action" type="button" data-invoice-preview-action="next" aria-label="Next page">Next</button></div><button class="ghost-action" type="button" data-invoice-preview-action="zoom">Enlarge / Actual size</button></div>
         <div class="invoice-preview__viewport"><div class="invoice-preview__page"><div class="invoice-preview__paper"><article class="invoice-document invoice-preview__columns"></article></div></div></div>
         <div id="invoicePreviewBody" hidden></div>
-        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
+        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="remove" hidden>Remove Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
       </section>`;
     document.body.appendChild(sheet);
     sheet.addEventListener('click',(event)=>{
@@ -15255,6 +15266,7 @@ function openInvoicePreview(){
       const selected=action.getAttribute('data-invoice-preview-action');
       if(selected==='print')printInvoicePreview();
       else if(selected==='issue')issueCustomerInvoice();
+      else if(selected==='remove')removeIssuedInvoice();
       else if(selected==='previous'||selected==='next'){
         sheet.invoicePreviewPage=Math.max(0,(sheet.invoicePreviewPage||0)+(selected==='next'?1:-1));
         updateInvoicePreview();
@@ -15280,6 +15292,8 @@ function openInvoicePreview(){
     ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
   const issue=sheet.querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=!!quote.issuedInvoice;
+  const remove=sheet.querySelector('[data-invoice-preview-action="remove"]');
+  if(remove)remove.hidden=!quote.issuedInvoice;
   sheet.hidden=false;
   lockModalLayer(document.activeElement);
   refreshInvoicePreview();
@@ -15292,11 +15306,64 @@ function openPaymentStatement(){
   refreshInvoicePreview();
   const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=true;
+  const remove=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="remove"]');
+  if(remove)remove.hidden=true;
   const print=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="print"]');
   if(print)print.hidden=false;
 }
+// Q32: removes the issued invoice from this build (payments, prices and the rest of the build stay). The builder can then
+// correct the build and issue a new invoice through the normal Issue Invoice. Saved like any edit, so it syncs.
+async function saveFinancialRemoval(change,doneMessage){
+  const target=quote;
+  change();
+  markQuoteDirty();
+  clearQuoteAutosaveTimer();
+  saveQuoteCurrent();
+  if(!await persistCurrentQuoteRecord() || quote!==target){
+    flashWorkshopStatus('Could not save the change - check the build and try again',{pending:true,duration:3200});
+    return false;
+  }
+  markQuoteSaved();
+  updateQuoteSummary();
+  updatePaymentBlock();
+  flashWorkshopStatus(doneMessage);
+  return true;
+}
+async function removeIssuedInvoice(){
+  if(!quote.issuedInvoice)return;
+  const sheet=$('invoicePreviewSheet');
+  if(sheet && !sheet.hidden){sheet.hidden=true;unlockModalLayer({restoreFocus:false});}
+  if(!await recordRemovalReady('an issued invoice'))return;
+  const number=invoiceDisplayNumber(quote.issuedInvoice);
+  const target=quote;
+  openConfirmDialog({
+    title:'Remove Invoice',
+    message:`Remove invoice ${number} from this ${deletionNoun(quote).toLowerCase()}? The ${deletionNoun(quote).toLowerCase()}, its payments and prices stay, so you can correct them and issue a new invoice. Keep your own copy of the removed invoice for your records.`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove Invoice',kind:'danger'}]
+  },(action)=>{
+    if(action!=='remove' || quote!==target || !quote.issuedInvoice)return;
+    saveFinancialRemoval(()=>{delete quote.issuedInvoice;},'Invoice removed - correct the build, then issue a new invoice');
+  });
+}
+async function removePaymentEntry(id){
+  const payment=(Array.isArray(quote.payments)?quote.payments:[]).find((item)=>item&&String(item.id)===String(id));
+  if(!payment)return;
+  if(!await recordRemovalReady('a payment entry'))return;
+  const target=quote;
+  const kind=payment.type==='balance'?'payment':'deposit';
+  const when=payment.date?formatDateDisplay(`${payment.date}T00:00:00`):'an unknown date';
+  openConfirmDialog({
+    title:payment.type==='balance'?'Remove Payment':'Remove Deposit',
+    message:`Remove the ${currencyWithCode(numberOrZero(payment.amount))} ${kind} received on ${when}? Amount received and balance owing are recalculated.`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove',kind:'danger'}]
+  },(action)=>{
+    if(action!=='remove' || quote!==target)return;
+    saveFinancialRemoval(()=>{quote.payments=quote.payments.filter((item)=>!(item&&String(item.id)===String(id)));},
+      payment.type==='balance'?'Payment removed':'Deposit removed');
+  });
+}
 async function issueCustomerInvoice(){
-  if(quote.issuedInvoice){openInfoDialog('Invoice Already Issued','The original invoice cannot be changed.');return;}
+  if(quote.issuedInvoice){openInfoDialog('Invoice Already Issued','To issue a corrected invoice, open the invoice and use Remove Invoice first.');return;}
   if(blockedByPendingPricing('issuing an invoice'))return;
   if(!quote.id){openInfoDialog('Save Build First','Save and synchronise this build before issuing an invoice.');return;}
   const invoiceQuote=quote;
@@ -17130,6 +17197,8 @@ function bindWorkshopQuoteBuilder(){
   if(paymentHistory && paymentHistory.getAttribute('data-payment-bound')!=='true'){
     paymentHistory.setAttribute('data-payment-bound','true');
     paymentHistory.addEventListener('click',(event)=>{
+      const removeButton=event.target.closest('[data-remove-payment]');
+      if(removeButton){removePaymentEntry(removeButton.getAttribute('data-remove-payment'));return;}
       const button=event.target.closest('[data-correct-payment]');
       if(!button)return;
       const id=button.getAttribute('data-correct-payment');
@@ -17522,7 +17591,8 @@ function updateQuoteSummary(){
     :rodPriceLabel({taxActive:taxActiveForPrice,taxName:taxNameText,jobType:normalizeJobType(quote.jobType)});
   const rodPriceHint=$('quoteRodPriceHint');
   if(rodPriceHint){
-    rodPriceHint.textContent=componentsPricing?'':rodPriceHintText({currencyCode:activeCurrencyCode(),taxActive:taxActiveForPrice,
+    // Q32: a Components job's Customer Price comes from its components, so say where to change it.
+    rodPriceHint.textContent=componentsPricing?'Set by the component Sell Prices - change them in Components.':rodPriceHintText({currencyCode:activeCurrencyCode(),taxActive:taxActiveForPrice,
       taxName:taxNameText,rodTax:currency(rodFigures.rodTax),jobType:normalizeJobType(quote.jobType)});
   }
   // Shown as soon as Courier / Shipping is chosen (not on the first Freight keystroke), so the fields below do not move

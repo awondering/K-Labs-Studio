@@ -7973,6 +7973,8 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen #quotePaymentBlock .quote-payment__entry > span{flex:1 0 100%;color:var(--titanium);font-size:11px;letter-spacing:.03em}
 #workshopScreen #quotePaymentBlock .quote-payment__entry > strong{color:var(--ds-text-strong);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
 #workshopScreen #quotePaymentBlock .quote-payment__correct{min-height:32px;padding:0 12px}
+/* Q32: Correct and Remove stay together as one pair of actions, wrapping as a pair on narrow screens. */
+#workshopScreen #quotePaymentBlock .quote-payment__entry > .quote-payment__entry-actions{display:inline-flex;flex:0 0 auto;gap:8px;color:inherit;font-size:inherit;letter-spacing:normal}
 #workshopScreen #quotePaymentBlock .quote-payment__status:empty{display:none}
 #workshopScreen #quotePaymentBlock .quote-payment__actions{grid-column:1 / -1;justify-content:flex-start}
 #workshopScreen #quotePaymentBlock .quote-payment__actions > button{flex:0 0 auto}
