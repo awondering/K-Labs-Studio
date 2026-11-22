@@ -7811,6 +7811,37 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 }
 /* Empty status lines in the pricing grid left blank rows between fields. */
 #workshopScreen #workshopPricingFields > p:empty{display:none}
+/* Q28 fulfilment polish: Freight and Packaging sized for short currency amounts; Total Shipping a calculated, read-only
+   result on the same line, set apart by a divider rather than looking like a third input. */
+#workshopScreen #studioWorkflowPanel #quoteDeliveryFields{
+  grid-template-columns:repeat(2,minmax(96px,140px)) auto;
+  justify-content:start;
+  align-items:end;
+  column-gap:12px;
+}
+#workshopScreen #studioWorkflowPanel #quoteDeliveryTotalField{
+  align-self:stretch;
+  justify-content:flex-end;
+  padding-left:14px;
+  border-left:1px solid rgba(214,210,200,.18);
+}
+#workshopScreen #studioWorkflowPanel #quoteDeliveryTotal{
+  width:9ch;
+  min-width:0;
+  min-height:44px;
+  padding:8px 0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  color:var(--ds-text-strong);
+  font-weight:600;
+  pointer-events:none;
+}
+@media (max-width:640px){
+  #workshopScreen #studioWorkflowPanel #quoteDeliveryFields{grid-template-columns:repeat(2,minmax(0,1fr)) auto;column-gap:8px}
+  #workshopScreen #studioWorkflowPanel #quoteDeliveryTotalField{padding-left:10px}
+  #workshopScreen #studioWorkflowPanel #quoteDeliveryTotalField > span{white-space:nowrap}
+}
 /* Q23 GST cleanup: one compact tax row - [Include GST ✓]  15%  GST total $117.26 - wrapping only when narrow. */
 #workshopScreen #workshopPricingSection .build-pricing__tax-row{
   display:flex;
