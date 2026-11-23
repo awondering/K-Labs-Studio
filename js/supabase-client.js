@@ -29,7 +29,9 @@ let klabsDemoMessageTimer = null;
 const DEMO_DIRECTOR_CONTROLS = ["#quoteSpecReelSeatRef [data-layout-seat-ref]", "#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteDeliveryToggle", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
   "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quoteBalanceReceivedSave",
   "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
-  "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]", "#choicePickerSheet [data-pick-step]", "#choicePickerAddToBuild"].join(", ");
+  "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]", "#choicePickerSheet [data-pick-step]", "#choicePickerAddToBuild",
+  // Q24: the Components Library demonstration's Generate Sizes (its label is otherwise refused as a document control).
+  "#studioComponentsGenerateSizesBtn"].join(", ");
 
 function klabsApplyReadOnlyControls() {
   const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;

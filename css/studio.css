@@ -12137,6 +12137,18 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
 }
 
+/* Q24: the body scrolls, so nothing in it is squeezed (the note ran under the price table's headings once the sizes
+   were listed), and each placement line keeps a space between its label and value ("Category Guides"). */
+#studioFamilySizeSheet .component-sheet__body > *{
+  flex-shrink:0;
+}
+
+#studioFamilySizeSheet .studio-component-duplicate__placement > div{
+  display:flex;
+  gap:8px;
+  align-items:baseline;
+}
+
 .studio-family-size__fields{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));

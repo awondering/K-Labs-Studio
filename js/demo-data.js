@@ -8,10 +8,11 @@
  * shifted to keep the same distance from today when the demonstration opens. The six parts the demonstration builds
  * with (the 7'0" Medium Spin blank, Medium Spin Guide Set, DPS 18, EVA Grip 75 mm (used at Qty 2), Aluminium Winding
  * Check 16 mm and NCP Nylon Thread A Black) carry realistic New Zealand cost and sell prices instead of the starter
- * placeholders. EVA Grip 75 mm is a demonstration-only record. */
+ * placeholders. EVA Grip 75 mm is a demonstration-only record. Q24: the taxonomy has one brand, Fuji, which the
+ * Components Library demonstration chooses on the component form. */
 window.KLABS_DEMO_DATA = {
  // Phase 3 review: the build of the demonstration files (checked by js/public-entry.js before anything is shown).
- build: "build148-v280",
+ build: "build148-v281",
  anchor: "2026-11-20",
  store: {
  "klabs-workshop-component-taxonomy:": {
@@ -259,7 +260,12 @@ window.KLABS_DEMO_DATA = {
     "name": "Unassigned"
    }
   ],
-  "brands": []
+  "brands": [
+   {
+    "id": "brand-demo-fuji",
+    "name": "Fuji"
+   }
+  ]
  },
  "klabs-workshop-component-library:": [
   {
