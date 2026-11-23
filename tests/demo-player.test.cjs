@@ -63,6 +63,11 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
       classList: { add() {}, remove() {}, toggle() {} },
     };
     elements.set(key, el);
+    // As in Studio's component library: tapping a component chooses it at Qty 1 and its + adds one, before Add to Build.
+    const leaf = /^#choicePickerList \[data-choice-option=(".*")\]$/.exec(key);
+    if (leaf) el.listeners.click = [() => { const v = get(`#choicePickerList .component-sheet__row--pick[data-pick-name=${leaf[1]}] .component-pick__value`); if (!Number(v.textContent)) v.textContent = '1'; }];
+    const plus = /^(#choicePickerList \.component-sheet__row--pick\[data-pick-name=".*"\]) \[data-pick-step="1"\]$/.exec(key);
+    if (plus) el.listeners.click = [() => { const v = get(`${plus[1]} .component-pick__value`); v.textContent = String(Number(v.textContent || 0) + 1); }];
     return el;
   };
   const act = (el, kind) => acts.push({ kind, key: el.key, at: clock, highlighted: 'data-demo-highlight' in el.attributes, inView: el.inView && !el.underDock });
@@ -217,11 +222,12 @@ test('the build is named as it is created: no Rename step anywhere in the demons
   assert.equal(JSON.stringify(enquiry.find(([kind]) => kind === 'name')), JSON.stringify(['name', "7' Snapper Spin"]));
 });
 
-test('Components: two identical 75 mm EVA grips are one line at Qty 2, set on the line right after it is added', () => {
+test('Components: two identical 75 mm EVA grips are one line at Qty 2, set in the library before Add to Build', () => {
   const steps = Array.from(player(stage()).journey[2].steps);
   const pick = steps.findIndex(([kind, path]) => kind === 'pick' && path[2] === 'EVA Grip 75 mm');
   assert.ok(pick >= 0);
-  assert.equal(JSON.stringify(steps[pick + 1]), JSON.stringify(['qty', 'EVA Grip 75 mm', 2]));
+  assert.equal(JSON.stringify(steps[pick]), JSON.stringify(['pick', ['Grips', 'EVA Grips', 'EVA Grip 75 mm'], 2]));
+  assert.equal(steps.filter(([kind]) => kind === 'qty').length, 0, 'no second visit to the line to change the quantity');
   assert.equal(steps.filter(([kind, path]) => kind === 'pick' && /Grip/.test(path[2] || '')).length, 1, 'one grip line, not two');
 });
 

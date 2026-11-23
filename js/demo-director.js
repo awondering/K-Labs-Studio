@@ -27,7 +27,7 @@
  * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v279";
+  const DEMO_BUILD = "build148-v280";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -48,7 +48,8 @@
   };
   const toggle = (bodyId) => `[aria-controls="${bodyId}"]`;
   // The journey. Steps: caption(text), tap(selector), type(selector, text), open(section toggle), pick([category,
-  // subcategory, component]) from the component library, qty(component, quantity) on its line, name(build name) for the
+  // subcategory, component], quantity) from the component library - the quantity is set in the library before Add to
+  // Build -, qty(component, quantity) on its line, name(build name) for the
   // new build, date(selector, daysAhead), show(selector or [selectors], ms) - brought into view and
   // highlighted for a moment -, until(selector visible), untilHidden(selector), untilValue(selector, value),
   // untilText(selector, text), scroll(selector) and hold(ms) on a key moment.
@@ -97,10 +98,9 @@
       ["caption", "Guides, reel seat and grip."],
       ["pick", ["Guides", "Spinning Guide Sets", "Medium Spin Guide Set"]],
       ["pick", ["Reel Seats", "Threaded Reel Seats", "DPS 18"]],
-      // Two identical 75 mm grips: one line at Qty 2, costed at twice the unit price.
-      ["caption", "Two 75 mm EVA grips: one line, Qty 2."],
-      ["pick", ["Grips", "EVA Grips", "EVA Grip 75 mm"]],
-      ["qty", "EVA Grip 75 mm", 2],
+      // Two identical 75 mm grips: the quantity is set in the library, then one line at Qty 2, costed at twice the unit price.
+      ["caption", "Two 75 mm EVA grips: set Qty 2, then Add to Build."],
+      ["pick", ["Grips", "EVA Grips", "EVA Grip 75 mm"], 2],
       ["caption", "Then the winding check and thread."],
       ["pick", ["Winding Checks", "Grip Winding Checks", "Aluminium Winding Check 16 mm"]],
       ["pick", ["Thread", "Nylon", "NCP Nylon Thread A Black"]],
@@ -368,14 +368,18 @@
     await wait(PACE.beat);
     highlight([el], false);
   }
-  async function pick(path) {
+  // Category and family, then the component (chosen at 1), its + to the quantity, and Add to Build.
+  async function pick(path, qty = 1) {
     await tap("#addComponentBtn");
     for (const name of path) await tap(`#choicePickerList [data-choice-option=${cssString(name)}]`);
+    const leaf = `#choicePickerList .component-sheet__row--pick[data-pick-name=${cssString(path[path.length - 1])}]`;
+    for (let n = 1; n < qty; n++) await tap(`${leaf} [data-pick-step="1"]`);
+    if (Number(document.querySelector(`${leaf} .component-pick__value`)?.textContent || 0) !== qty) throw new Error(`${path[path.length - 1]} did not reach Qty ${qty}.`);
+    await tap("#choicePickerAddToBuild");
     await waitFor(() => !visible(byId("choicePickerSheet")), "the component library closing");
   }
-  // Sets a component line's quantity by typing it into the line's own Quantity field (the library adds one; there is
-  // no quantity before adding). The +/- steppers stay blocked in Demo Mode (js/supabase-client.js), so they are not
-  // used. Then the quantity is shown and the row closed again.
+  // Sets a component line's quantity by typing it into the line's own Quantity field. The line's +/- steppers stay
+  // blocked in Demo Mode (js/supabase-client.js), so they are not used. Then the quantity is shown and the row closed again.
   async function setQuantity(name, qty) {
     const open = `#quoteComponentsList [data-component-action="open-row"][aria-label$=${cssString(` for ${name}`)} i]`; // Studio title-cases the line label ("75 Mm")
     const trigger = await shown(open);
@@ -510,7 +514,7 @@
       if (trigger.getAttribute("aria-expanded") === "true") return undefined;
       return tap(a);
     }
-    if (kind === "pick") return pick(a);
+    if (kind === "pick") return pick(a, b);
     if (kind === "qty") return setQuantity(a, b);
     if (kind === "name") {
       const named = window.KLABS_UI?.nameCurrentBuild?.(a);
