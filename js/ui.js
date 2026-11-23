@@ -15277,7 +15277,7 @@ async function saveFinancialRemoval(change,doneMessage){
   markQuoteDirty();
   clearQuoteAutosaveTimer();
   saveQuoteCurrent();
-  if(!await persistCurrentQuoteRecord() || quote!==target){
+  if(!await persistCurrentQuoteRecord() || !isSameOpenBuild(target)){
     flashWorkshopStatus('Could not save the change - check the build and try again',{pending:true,duration:3200});
     return false;
   }
@@ -15299,7 +15299,7 @@ async function removeIssuedInvoice(){
     message:`Remove invoice ${number} from this ${deletionNoun(quote).toLowerCase()}? The ${deletionNoun(quote).toLowerCase()}, its payments and prices stay, so you can correct them and issue a new invoice. Keep your own copy of the removed invoice for your records.`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove Invoice',kind:'danger'}]
   },(action)=>{
-    if(action!=='remove' || quote!==target || !quote.issuedInvoice)return;
+    if(action!=='remove' || !isSameOpenBuild(target) || !quote.issuedInvoice)return;
     saveFinancialRemoval(()=>{delete quote.issuedInvoice;},'Invoice removed - correct the build, then issue a new invoice');
   });
 }
@@ -15314,7 +15314,7 @@ async function removePaymentEntry(id){
     message:`${paymentTypeLabel(payment)} of ${currencyWithCode(numberOrZero(payment.amount))} received on ${when}.`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove',kind:'danger'}]
   },(action)=>{
-    if(action!=='remove' || quote!==target)return;
+    if(action!=='remove' || !isSameOpenBuild(target))return;
     saveFinancialRemoval(()=>{quote.payments=quote.payments.filter((item)=>!(item&&String(item.id)===String(id)));},
       payment.type==='balance'?'Payment removed':'Deposit removed');
   });
@@ -17812,6 +17812,13 @@ function paymentErrorMessage(error){
   if(/changed on another device|conflict/i.test(text))return 'This build changed on another device. Reload it, then try again.';
   return text||'The payment could not be saved. Try again.';
 }
+// Sync replaces the open build's object with a fresh copy of the SAME build whenever the cloud copy arrives
+// (KLABS_UI.refreshOpenBuild), including during a payment's own save. That is still this build: compare by id, not by object.
+function isSameOpenBuild(target){
+  if(quote===target)return true;
+  const id=specificationValue(target&&target.id);
+  return !!id && specificationValue(quote&&quote.id)===id;
+}
 async function commitFinancialOperation(kind,data,retry=false,doneMessage='Saved'){
   if(financialOperationInFlight)throw new Error('Still saving the last change.');
   if(quotePricePending())throw new Error('Pricing to be confirmed: add a Sell Price to every component first.');
@@ -17830,7 +17837,7 @@ async function commitFinancialOperation(kind,data,retry=false,doneMessage='Saved
     const result=retry?await window.KLABS_BUILD_SYNC.retryFinancial():
       await window.KLABS_BUILD_SYNC.financialOperation(String(quote.id),kind,data);
     if(result.conflict)throw new Error('Saved, but the build changed on another device. Review the sync conflict before continuing.');
-    if(quote!==originalQuote || window.KLABS_ACCOUNT_ID!==account){
+    if(!isSameOpenBuild(originalQuote) || window.KLABS_ACCOUNT_ID!==account){
       // Saved to the build that was open when Save was pressed; that build shows it when opened.
       flashWorkshopStatus(`${doneMessage} to the previous build`);
       return result;
@@ -19252,6 +19259,21 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible')refreshServerQuoteCounter();
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
+// Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
+window.KLABS_UI_BUILD='build148-v279';
+// An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
+(function checkShellRelease(){
+  if(window.KLABS_SHELL_BUILD)return;
+  const shell=document.getElementById('demoModeBar')?.getAttribute('data-demo-build');
+  if(!shell || shell===window.KLABS_UI_BUILD)return;
+  let last=0;
+  try{last=Number(sessionStorage.getItem('klabs-shell-recovery')||0);}catch{}
+  console.error(`[K-Labs Studio] This page is ${shell} but Studio\u2019s code is ${window.KLABS_UI_BUILD}. Loading the complete release again.`);
+  if(Date.now()-last<60000)return;
+  try{sessionStorage.setItem('klabs-shell-recovery',String(Date.now()));}catch{}
+  const clear='caches' in window?caches.keys().then((keys)=>Promise.all(keys.map((key)=>caches.delete(key)))):Promise.resolve();
+  clear.catch(()=>{}).then(()=>location.reload());
+})();
 window.KLABS_UI={buildWheels,render,nameCurrentBuild,renderBlanks,renderBuilds,loadDemoBuild,startNewBuildFlow,enterStudio,enterStudioFromBottomNav,openActiveBuildsList,onScreenChange,onAccountChange:()=>{reloadBusinessProfileForAccount();resetComponentLibraryCacheForAccountChange();reloadQuoteForAccount();refreshBuildViewsSafely();},readQuarantinedLegacyRecords,openCustomerFinder:(intent)=>{openCustomerFinderSheet(intent==='new-build'?'new-build':'browse');},prepareWorkshopEntry:(mode)=>{preserveWorkshopQuoteOnEntry=(mode==='preserve');},prepareWorkshopLanding:prepareWorkshopLandingEntry,renderComponentSyncStatus,onComponentLibraryMigrationPending,refreshComponentLibraryViews,applyCloudComponentTaxonomy,componentLibraryRecords,saveComponentLibraryRecords,ensureStudioComponentTaxonomyLoaded,readAnonymousComponentLibraryRecords,readAnonymousComponentTaxonomy,isStarterComponentRecord,maybeSeedStarterComponents,migrateComponentHierarchyLabels,readStudioSettingsSyncPayload,applyStudioSettingsSyncPayload,onSettingsSyncStatus,refreshBuildViews:()=>{renderBuilds();renderCustomerFinder();}};
 window.KLABS_UI.onBuildSyncStatus=updateQuoteActionPriority;
 window.KLABS_UI.refreshBusinessLogoControls=syncBusinessLogoControls;

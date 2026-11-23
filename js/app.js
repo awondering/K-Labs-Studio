@@ -55,11 +55,15 @@ function wireServiceWorkerUpdateFlow(registration){
 	}
 }
 
+// Q33 production fix: reload for EVERY new release, not only the first one of a session. The old flag was never cleared, so in a
+// long-lived tab or home-screen app a later release took over without a reload and the open page kept running older code.
+// The time window only stops a reload loop.
 function reloadOnceForNewController(){
 	const reloadKey='klabs-sw-controller-reload';
 	try{
-		if(sessionStorage.getItem(reloadKey)==='1')return;
-		sessionStorage.setItem(reloadKey,'1');
+		const last=Number(sessionStorage.getItem(reloadKey)||0);
+		if(Date.now()-last<30000)return;
+		sessionStorage.setItem(reloadKey,String(Date.now()));
 	}catch{}
 	location.reload();
 }

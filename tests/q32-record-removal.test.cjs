@@ -39,7 +39,7 @@ function harness({supported=true,persist=true}={}){
   };
   vm.createContext(c);
   vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','invoiceDisplayNumber','recordRemovalReady',
-    'saveFinancialRemoval','removeIssuedInvoice','removePaymentEntry','paymentTypeLabel','paymentEntriesMarkup'].map(functionSource).join('\n'),c);
+    'specificationValue','isSameOpenBuild','saveFinancialRemoval','removeIssuedInvoice','removePaymentEntry','paymentTypeLabel','paymentEntriesMarkup'].map(functionSource).join('\n'),c);
   return c;
 }
 
@@ -80,6 +80,25 @@ test('Remove (payment) removes only that entry and saves; the other entry and th
   d.dialogs[0].handler('remove');await settle();
   assert.deepEqual(plain(d.quote.payments),[balance]);
   assert.deepEqual(d.flashes,['Deposit removed']);
+});
+
+// Q33 production regression: sync replaces the open build's object with a fresh copy of the same build
+// (KLABS_UI.refreshOpenBuild). A removal confirmed after that must still happen - and never on a different build.
+test('Remove still works after sync refreshed the open build while the question was showing; another build is never touched',async()=>{
+  const c=harness();
+  await c.removePaymentEntry('bal-1');
+  c.quote=JSON.parse(JSON.stringify(c.quote)); // the same build, delivered again by sync
+  c.dialogs[0].handler('remove');
+  await settle();
+  assert.deepEqual(plain(c.quote.payments),[deposit]);
+  assert.deepEqual(c.flashes,['Payment removed']);
+  const d=harness();
+  await d.removePaymentEntry('bal-1');
+  d.quote={...JSON.parse(JSON.stringify(d.quote)),id:'another-build'};
+  d.dialogs[0].handler('remove');
+  await settle();
+  assert.equal(d.quote.payments.length,2,'a different build is never changed');
+  assert.deepEqual(d.steps,[]);
 });
 
 test('before the server allows removal, both actions explain and change nothing',async()=>{
