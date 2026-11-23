@@ -1890,7 +1890,6 @@ body.component-sheet-open .workshop-back-to-top{
   letter-spacing:.05em;
 }
 
-
 .quote-section__subtle{
   margin:0;
   color:#70746f;
@@ -7343,36 +7342,6 @@ textarea::-moz-selection,
   gap:4px;
 }
 
-#workshopScreen .build-pricing__delivery{
-  display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:6px;
-}
-
-#workshopScreen .build-pricing__delivery label{
-  min-width:0;
-  gap:2px;
-}
-
-#workshopScreen .build-pricing__delivery input{
-  min-width:0;
-  min-height:44px;
-  padding:8px 6px;
-  font-size:16px;
-  width:100%;
-  font-variant-numeric:tabular-nums;
-}
-
-#workshopScreen .build-pricing__delivery label > span{
-  color:var(--titanium);
-  font-size:11px;
-  line-height:1.4;
-}
-
-#workshopScreen .build-pricing__delivery input[readonly]{
-  border-color:rgba(214,210,200,.24);
-}
-
 #workshopScreen .build-pricing > label > span,
 #workshopScreen .build-pricing .quote-pricing-driver__label{
   color:var(--titanium);
@@ -7390,43 +7359,6 @@ textarea::-moz-selection,
   font-size:16px;
   scroll-margin-top:calc(66px + var(--safe-top));
   scroll-margin-bottom:calc(140px + var(--safe-bottom));
-}
-
-#workshopScreen .build-pricing .build-pricing__result{
-  grid-template-columns:minmax(0,1fr) minmax(100px,.8fr);
-  align-items:center;
-  gap:8px;
-  padding-left:10px;
-  border-radius:var(--ds-radius-sm);
-  background:var(--ds-surface-soft);
-}
-
-#workshopScreen .build-pricing .build-pricing__result input{
-  border-color:transparent;
-  background:transparent;
-  color:var(--titanium);
-  text-align:right;
-  cursor:default;
-}
-
-#workshopScreen .build-pricing .build-pricing__total{
-  gap:6px;
-  padding:8px;
-  border:0;
-  border-radius:var(--ds-radius-md);
-  background:var(--ds-surface-soft);
-}
-
-#workshopScreen .build-pricing .build-pricing__total > span{
-  color:var(--ds-text-strong);
-  font-size:12px;
-  font-weight:700;
-}
-
-#workshopScreen .build-pricing .build-pricing__total input{
-  border-color:rgba(214,210,200,.24);
-  font-size:24px;
-  font-weight:700;
 }
 
 #workshopScreen .build-pricing .quote-gst-toggle{
@@ -7535,61 +7467,6 @@ textarea::-moz-selection,
   position:static;
 }
 
-#workshopScreen .build-pricing .build-pricing__result{
-  min-height:32px;
-  padding:0 10px;
-}
-
-#workshopScreen .build-pricing .build-pricing__result > span{
-  font-size:12px;
-}
-
-#workshopScreen .build-pricing .build-pricing__result input:not([type="checkbox"]){
-  min-height:32px;
-  padding:0;
-  font-size:14px;
-  font-weight:600;
-}
-
-#workshopScreen .build-pricing .build-earnings-summary{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  align-items:baseline;
-  gap:4px 12px;
-  margin-top:2px;
-  padding:7px 10px;
-  border:var(--ds-stroke);
-  border-radius:var(--ds-radius-sm);
-  background:var(--ds-surface-soft);
-  color:var(--titanium);
-  font-size:12px;
-}
-
-#workshopScreen .build-pricing .build-earnings-summary strong{
-  text-align:right;
-  color:var(--ds-text-strong);
-  font-variant-numeric:tabular-nums;
-}
-
-#workshopScreen .build-pricing .build-earnings-summary p{
-  grid-column:1 / -1;
-  margin:0;
-  color:var(--titanium);
-  font-size:10px;
-  line-height:1.35;
-}
-
-#workshopScreen .build-pricing .build-pricing__total{
-  gap:3px;
-  padding:0;
-  border:0;
-  background:transparent;
-}
-
-#workshopScreen .build-pricing .build-pricing__total input{
-  font-size:20px;
-}
-
 @media (max-width:299px){
   #workshopScreen .build-pricing{
     grid-template-columns:minmax(0,1fr);
@@ -7620,101 +7497,8 @@ textarea::-moz-selection,
 }
 
 /* Q23 Rod Pricing simplification: Components Cost, Rod Price, Your Return by default; Advanced Pricing from Settings. */
-#workshopPricingSection:not([data-advanced-pricing="true"]) #quoteAdvancedPricing{display:none}
-#workshopScreen #workshopPricingSection:not([data-advanced-pricing="true"]) :is(#quotePricingMethodField,#quoteProfitField,#quoteMarginPercentField){display:none}
+
 /* With Rod Price as the method, Target Return ($) would repeat Your Return: Your Return stays the one result. */
-#workshopScreen #workshopPricingSection[data-pricing-method="price"] #quoteProfitField{display:none}
-#workshopScreen .build-pricing .build-pricing__hint{
-  margin:0;
-  color:var(--titanium);
-  font-size:11px;
-  line-height:1.4;
-  font-variant-numeric:tabular-nums;
-}
-#workshopScreen .build-pricing .build-pricing__hint:empty{display:none}
-#workshopScreen .build-pricing #quoteTotalField .build-pricing__hint{padding:0 2px}
-#workshopScreen .build-pricing .build-pricing__notice{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 44px;
-  align-items:center;
-  gap:8px;
-  margin:2px 0 0;
-  padding:4px 4px 4px 10px;
-  border:var(--ds-stroke);
-  border-radius:var(--ds-radius-sm);
-  background:var(--ds-surface-soft);
-  color:var(--ds-text-strong);
-  font-size:12px;
-  line-height:1.4;
-}
-#workshopScreen .build-pricing .build-pricing__notice[hidden]{display:none}
-#workshopScreen .build-pricing .build-pricing__notice-dismiss{
-  min-width:44px;
-  min-height:44px;
-  padding:0;
-  justify-content:center;
-}
-#workshopScreen .build-pricing .build-pricing__advanced{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:4px 8px;
-  margin-top:4px;
-  padding-top:8px;
-  border-top:1px solid rgba(214,210,200,.1);
-}
-#workshopScreen .build-pricing .build-pricing__advanced > label{
-  display:grid;
-  min-width:0;
-  gap:2px;
-}
-#workshopScreen .build-pricing .build-pricing__advanced > label > span,
-#workshopScreen .build-pricing .build-pricing__advanced-title,
-#workshopScreen .build-pricing .build-pricing__time-label{
-  color:var(--titanium);
-  font-size:11px;
-  line-height:1.4;
-  letter-spacing:.03em;
-}
-#workshopScreen .build-pricing .build-pricing__advanced-title{
-  grid-column:1 / -1;
-  color:var(--ds-text-strong);
-  font-weight:700;
-}
-#workshopScreen .build-pricing #quoteEffectiveHourly{
-  align-self:end;
-  padding-bottom:12px;
-}
-#workshopScreen .build-pricing .build-pricing__time{
-  grid-column:1 / -1;
-  display:grid;
-  grid-template-columns:auto auto auto minmax(72px,1fr) auto;
-  align-items:center;
-  gap:6px;
-  min-width:0;
-}
-#workshopScreen .build-pricing .build-pricing__time-hours{
-  color:var(--ds-text-strong);
-  font-size:13px;
-  font-variant-numeric:tabular-nums;
-}
-#workshopScreen .build-pricing .build-pricing__time-apply{
-  min-height:44px;
-  white-space:nowrap;
-}
-@media (max-width:420px){
-  #workshopScreen .build-pricing .build-pricing__time{
-    grid-template-columns:auto auto auto minmax(0,1fr);
-  }
-  #workshopScreen .build-pricing .build-pricing__time-label{grid-column:1 / -1}
-  #workshopScreen .build-pricing .build-pricing__time-apply{grid-column:1 / -1}
-}
-#settingsScreen #settingsPricingTaxCard .settings-pricing-tax-fields > #settingsShowAdvancedPricingField .settings-pricing-hint{
-  grid-column:1 / -1;
-  margin:-4px 0 0;
-  color:var(--titanium);
-  font-size:11px;
-  line-height:1.4;
-}
 
 /* Q23 review fixes (22 Nov 2026), build screen layout only:
    - Fulfilment Method, Payment Status and Documents share one section heading style;
@@ -7813,35 +7597,7 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen #workshopPricingFields > p:empty{display:none}
 /* Q28 fulfilment polish: Freight and Packaging sized for short currency amounts; Total Shipping a calculated, read-only
    result on the same line, set apart by a divider rather than looking like a third input. */
-#workshopScreen #studioWorkflowPanel #quoteDeliveryFields{
-  grid-template-columns:repeat(2,minmax(96px,140px)) auto;
-  justify-content:start;
-  align-items:end;
-  column-gap:12px;
-}
-#workshopScreen #studioWorkflowPanel #quoteDeliveryTotalField{
-  align-self:stretch;
-  justify-content:flex-end;
-  padding-left:14px;
-  border-left:1px solid rgba(214,210,200,.18);
-}
-#workshopScreen #studioWorkflowPanel #quoteDeliveryTotal{
-  width:9ch;
-  min-width:0;
-  min-height:44px;
-  padding:8px 0;
-  border:0;
-  background:transparent;
-  box-shadow:none;
-  color:var(--ds-text-strong);
-  font-weight:600;
-  pointer-events:none;
-}
-@media (max-width:640px){
-  #workshopScreen #studioWorkflowPanel #quoteDeliveryFields{grid-template-columns:repeat(2,minmax(0,1fr)) auto;column-gap:8px}
-  #workshopScreen #studioWorkflowPanel #quoteDeliveryTotalField{padding-left:10px}
-  #workshopScreen #studioWorkflowPanel #quoteDeliveryTotalField > span{white-space:nowrap}
-}
+
 /* Q23 GST cleanup: one compact tax row - [Include GST ✓]  15%  GST total $117.26 - wrapping only when narrow. */
 #workshopScreen #workshopPricingSection .build-pricing__tax-row{
   display:flex;
@@ -7892,53 +7648,16 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen #workshopPricingSection .build-pricing__tax-rate-field{max-width:150px}
 #workshopScreen #workshopPricingSection .build-pricing__tax-rate-field[hidden]{display:none}
 /* Deposit Required: a compact payment term at the top of Payment Status. */
-#workshopScreen #quotePaymentBlock .quote-payment__terms{gap:8px}
 #workshopScreen #quotePaymentBlock .quote-payment__terms > p:empty{display:none}
-#workshopScreen #quotePaymentBlock #quoteDepositEnabledField{
-  display:inline-flex;
-  justify-self:start;
-  align-items:center;
-  gap:10px;
-  min-height:44px;
-  padding:0;
-  border:0;
-  background:transparent;
-  cursor:pointer;
-}
-#workshopScreen #quotePaymentBlock #quoteDepositEnabledField input{width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--titanium)}
 @media (max-width:640px){
   /* The rate chip keeps a 44px touch target without looking bigger. */
   #workshopScreen #workshopPricingSection .build-pricing__tax-rate::after{content:"";position:absolute;inset:-8px -2px}
 }
-#workshopPricingSection:not([data-job-kind="components"]) .build-pricing__head{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-}
-#workshopScreen #workshopPricingSection .build-pricing__method{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
-#workshopScreen #workshopPricingSection .build-pricing__method-label{color:var(--titanium);font-size:11px;letter-spacing:.03em}
-#workshopScreen #workshopPricingSection .build-pricing__fields{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:flex-start;
-  gap:8px 12px;
-}
-#workshopScreen #workshopPricingSection .build-pricing__fields > label{display:grid;gap:2px;flex:0 1 200px;min-width:0}
-#workshopScreen #workshopPricingSection .build-pricing__fields > label > input{width:100%;font-size:17px}
+
 /* The three price fields share one label style, so the chosen method is shown by the switch, not by a bigger label. */
-#workshopScreen #workshopPricingSection .build-pricing__fields > label > span{
-  color:var(--ds-text-strong);
-  font-size:11px;
-  font-weight:700;
-  line-height:1.3;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
+
 /* Your Time: inputs sized to their content, not stretched across the card. */
-#workshopScreen #workshopPricingSection #quoteBuildHoursField{max-width:200px}
-#workshopScreen #workshopPricingSection .build-pricing__time{grid-template-columns:auto auto auto minmax(72px,120px) auto;justify-content:start}
+
 /* Calculated and read-only values read as results: no input box. */
 #workshopScreen #workshopPricingSection input[readonly]{
   border-color:transparent;
@@ -7954,7 +7673,7 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen #workshopPricingSection input[readonly]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 /* Fewer nested boxes: Your Return is a summary panel without a border; the tax and deposit switches are plain rows;
    the actions start under a hairline, not a rounded box edge. */
-#workshopScreen #workshopPricingSection .build-earnings-summary{border-color:transparent}
+
 #workshopScreen #workshopPricingSection .build-pricing .quote-gst-toggle{border-color:transparent;background:transparent;padding-left:0;padding-right:0;min-height:44px}
 #workshopScreen #studioWorkflowPanel input[type="checkbox"]{accent-color:var(--titanium)}
 #workshopScreen #workshopPricingSection .workshop-build-actions-surface{border-radius:0}
@@ -7966,15 +7685,11 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 }
 /* Payment Status: totals as figures, one line per payment, then Record Payment at its natural width. */
 #workshopScreen #quotePaymentBlock{gap:8px}
-#workshopScreen #quotePaymentBlock .quote-payment__summary strong{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ds-text-strong)}
+
 #workshopScreen #quotePaymentBlock .quote-payment__history-details{grid-column:1 / -1}
-#workshopScreen #quotePaymentBlock .quote-payment__entries ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}
-#workshopScreen #quotePaymentBlock .quote-payment__entry{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
-#workshopScreen #quotePaymentBlock .quote-payment__entry > span{flex:1 0 100%;color:var(--titanium);font-size:11px;letter-spacing:.03em}
-#workshopScreen #quotePaymentBlock .quote-payment__entry > strong{color:var(--ds-text-strong);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
-#workshopScreen #quotePaymentBlock .quote-payment__correct{min-height:32px;padding:0 12px}
+
 /* Q32: Correct and Remove stay together as one pair of actions, wrapping as a pair on narrow screens. */
-#workshopScreen #quotePaymentBlock .quote-payment__entry > .quote-payment__entry-actions{display:inline-flex;flex:0 0 auto;gap:8px;color:inherit;font-size:inherit;letter-spacing:normal}
+
 #workshopScreen #quotePaymentBlock .quote-payment__status:empty{display:none}
 #workshopScreen #quotePaymentBlock .quote-payment__actions{grid-column:1 / -1;justify-content:flex-start}
 #workshopScreen #quotePaymentBlock .quote-payment__actions > button{flex:0 0 auto}
@@ -7990,12 +7705,12 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
   /* 44px touch targets without bulky visuals: the hit area reaches 2px past the 40px segment. */
   #workshopScreen #studioWorkflowPanel :is(.ds-segmented__option,.quote-job-type__option)::after{content:'';position:absolute;inset:-2px 0}
   /* Three-way switches use equal columns on iPhone, so long labels wrap inside their segment, not the whole group. */
-  #workshopScreen #workshopPricingSection .build-pricing__method .ds-segmented{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:100%;border-radius:14px}
-  #workshopScreen #workshopPricingSection .build-pricing__method .ds-segmented__option{white-space:normal;text-wrap:balance;line-height:1.15;padding:0 6px;border-radius:12px}
-  #workshopScreen #workshopPricingSection .build-pricing__fields > #quoteTotalField{flex:1 1 100%}
-  #workshopScreen #workshopPricingSection .build-pricing__fields > label{flex:1 1 calc(50% - 6px)}
+  
+  
+  
+  
   #workshopScreen #quotePaymentBlock .quote-payment__actions > button{min-height:44px}
-  #workshopScreen #quotePaymentBlock .quote-payment__correct{min-height:44px}
+  
 }
 
 /* Sprint 2: Active Builds production refinements */
@@ -8390,14 +8105,10 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
      Payment Statement under ••• once an invoice is issued. */
 #workshopPricingSection:not([data-pricing-collapsible="true"]) #quotePricingSummaryBtn{display:none}
 #workshopPricingSection[data-pricing-collapsed="true"] #workshopPricingFields > :not(#quotePricingSummaryBtn){display:none}
-#workshopScreen .build-pricing .build-pricing__summary-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:0 12px;text-align:left}
-#workshopScreen .build-pricing .build-pricing__summary-toggle strong{margin-left:auto;font-variant-numeric:tabular-nums}
-#workshopScreen .build-pricing .build-pricing__summary-toggle::after{content:'\25B8';opacity:.6}
-#workshopScreen .build-pricing .build-pricing__summary-toggle[aria-expanded="true"]::after{content:'\25BE'}
-#workshopPricingSection:not([data-lifecycle="quote"])[data-deposit-received="true"] :is(#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+
+#workshopPricingSection:not([data-lifecycle="quote"])[data-deposit-received="true"] :is(#quoteDepositEnabledField,#quoteDepositValueRow,#quoteDepositValueError){display:none}
 #workshopPricingSection[data-paid-in-full="true"]:not([data-job-kind="components"]) #quoteRecordPaymentBtn{display:none}
-#workshopPricingSection[data-lifecycle="quote"][data-has-payments="false"] .quote-payment__summary{display:none}
-#workshopScreen .quote-payment__form .quote-payment__type{grid-column:1/-1}
+
 #workshopPricingSection[data-lifecycle="quote"] #viewInvoicePreviewBtn{display:none}
 /* Quote stage: a compact "More documents" menu holds Customer Invoice. Opening it only shows the menu. */
 #workshopPricingSection:not([data-lifecycle="quote"]) #quoteMoreDocumentsWrap{display:none}
@@ -8411,8 +8122,6 @@ html:not(.klabs-demo){scroll-padding-bottom:calc(108px + var(--safe-bottom,0px))
 #workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-value{flex:0 1 auto;min-width:0;max-width:100%;min-height:26px;padding:0 12px;white-space:normal;overflow-wrap:anywhere}
 #workshopScreen .workshop-build-actions-row--status .workshop-build-actions-status-toggle{flex:0 0 auto;margin-left:auto;width:auto;min-width:132px;min-height:44px;padding:0 18px;white-space:nowrap}
 #workshopScreen .quote-payment__history-details[hidden]{display:none}
-#workshopScreen .quote-payment__history-details > .quote-payment__history > span{display:none}
-#workshopScreen .quote-payment__history-details > summary{cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--ds-text-muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 
 @media (max-width:520px){
   .saved-build-card{
@@ -13087,26 +12796,19 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 
 /* Deposit Received: compact status + inline form inside Build Pricing. */
 .quote-payment{display:grid;gap:8px;min-width:0}
-.quote-payment__heading{margin:8px 0 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#ddd6ca}
-.quote-payment__summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.quote-payment__summary div{display:grid;gap:3px;min-width:0}
-.quote-payment__summary span,.quote-payment__history{font-size:12px;color:#b8b2aa}
-.quote-payment__summary strong{font-size:16px;color:#eee9e1;overflow-wrap:anywhere}
-.quote-payment__history ul{margin:4px 0 0;padding-left:18px}
-.quote-payment__history li{margin:3px 0;overflow-wrap:anywhere}
+
+.quote-payment__history{font-size:12px;color:#b8b2aa}
+
 .quote-payment__history:empty{display:none}
 .quote-payment__notice{grid-column:1/-1;margin:0;font-size:13px;color:#e4aeb4}
 .quote-payment__status{margin:0;font-size:13px;color:#ddd6ca;overflow-wrap:anywhere}
 .quote-payment__status:empty{display:none}
 .quote-payment__actions{display:flex;flex-wrap:wrap;gap:8px}
 .quote-payment__actions button{min-height:44px;flex:1 1 auto}
-.quote-payment__form{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:0}
-.quote-payment__form[hidden]{display:none}
-.quote-payment__form .quote-payment__actions,.quote-payment__form .quote-payment__error{grid-column:1/-1}
+
 .quote-payment__error{margin:0;min-height:0;font-size:12px;color:#e4aeb4}
 .quote-payment__error:empty{display:none}
-.quote-payment__form input{min-width:0;box-sizing:border-box;font-size:16px}
-@media (max-width:420px){.quote-payment__form{grid-template-columns:1fr}}
+
 #invoicePreviewSheet .quote-preview-actions{position:static;background:none}
 .invoice-preview__print-frame{position:fixed;width:1px;height:1px;border:0;left:-10000px;top:0}
 
@@ -13141,9 +12843,10 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 #workshopScreen .build-details[data-job-kind="components"] > #quoteJobTypeGroup,
 #workshopScreen .build-details[data-job-kind="components"] > #buildRodSpecsToggle,
 #workshopScreen .build-details[data-job-kind="components"] > .build-details__rod-specs{display:none}
-/* Components job pricing: Sell Prices x quantities plus delivery and tax only. Rod-build pricing, labour, deposit and
-   per-job tax-rate controls are hidden; payments and the invoice appear once the order is confirmed. */
-#workshopPricingSection[data-job-kind="components"] :is(#quoteRodPricingHead,#quotePricingMethodField,#quoteLegacyLabourLine,#quoteAdvancedPricingNote,#quoteAdvancedPricing,#quoteRodPriceHint,#quoteCustomerTotalLine,#quoteLabourRateField,#quoteLabourHoursField,#quoteCostBeforeMarginField,#quoteProfitField,#quoteMarginPercentField,#quoteEarningsSummary,#quotePriceWarning,#quoteTaxRateField,#quoteTaxRateChip,#quoteDepositEnabledField,#quoteDepositTypeField,#quoteDepositValueField,#quoteDepositValueError,#quoteBalanceRemainingField){display:none}
+/* Components job pricing: Sell Prices x quantities plus delivery and tax. Q33: Components Cost, Job Price (read-only,
+   from the Sell Prices) and Your Return show as for every job; Advanced Pricing, labour, deposit and per-job tax-rate
+   controls are hidden; payments and the invoice appear once the order is confirmed. */
+#workshopPricingSection[data-job-kind="components"] :is(#quoteLegacyLabourLine,#quoteAdvancedToggle,#quoteAdvancedPricing,#quoteLabourRateField,#quoteLabourHoursField,#quotePriceWarning,#quoteTaxRateField,#quoteTaxRateChip,#quoteDepositEnabledField,#quoteDepositValueRow,#quoteDepositValueError){display:none}
 #workshopPricingSection[data-job-kind="components"] #quoteMoreDocumentsWrap,
 #workshopPricingSection[data-job-kind="components"][data-lifecycle="quote"][data-has-payments="false"] #quotePaymentBlock > :not(#quoteDepositTerms){display:none}
 /* Build Details, Repair / Refurbishment: a short form with the rod measurements in an optional collapsed section.
@@ -13719,6 +13422,176 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 }
 /* End Guide Train Designer */
 
+/* Pricing, Delivery and Payments (one top-to-bottom flow). Rows of label + figure on hairlines, one slim input per value,
+   one primary action at a time. Built from the existing tokens: satin surfaces, titanium labels, restrained red. */
+#workshopScreen #workshopPricingSection .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+#workshopScreen #workshopPricingSection #workshopPricingFields.price-flow{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+#workshopScreen #workshopPricingSection .price-flow__heading,
+#workshopScreen #workshopPricingSection .price-flow__group > .build-section-heading{margin:0 0 2px}
+#workshopScreen #workshopPricingSection .price-flow__row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;margin:0;padding:4px 0;border-bottom:1px solid rgba(214,210,200,.07)}
+#workshopScreen #workshopPricingSection .price-flow__row[hidden]{display:none}
+#workshopScreen #workshopPricingSection .price-flow__row > span:first-child{display:grid;gap:1px;min-width:0;color:var(--titanium);font-size:13px;line-height:1.3;letter-spacing:.01em}
+#workshopScreen #workshopPricingSection .price-flow__row > span:first-child small{color:var(--ds-text-muted);font-size:11px;letter-spacing:0}
+#workshopScreen #workshopPricingSection .price-flow__row > :is(strong,output){flex:0 0 auto;color:var(--ds-text-strong);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+#workshopScreen #workshopPricingSection .price-flow__row--input{cursor:text}
+#workshopScreen #workshopPricingSection .price-flow__field{flex:0 0 auto;display:block}
+#workshopScreen #workshopPricingSection .price-flow__field > input{box-sizing:border-box;width:136px;min-width:0;height:40px;min-height:40px;padding:0 10px;border:var(--ds-stroke-strong);border-radius:var(--ds-radius-sm);background:var(--ds-surface);color:var(--ds-text-strong);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+#workshopScreen #workshopPricingSection .price-flow__field > input[readonly]{border-color:transparent;background:transparent;padding-right:0}
+#workshopScreen #workshopPricingSection .price-flow__row--return{border-bottom:0}
+#workshopScreen #workshopPricingSection .price-flow__row--return > strong{font-size:16px}
+#workshopScreen #workshopPricingSection .price-flow__row--total > span:first-child{color:var(--ds-text-strong);font-weight:600}
+#workshopScreen #workshopPricingSection .price-flow__row--total > strong{font-size:17px}
+#workshopScreen #workshopPricingSection :is(.price-flow__hint,.price-flow__warning,.price-flow__error){margin:2px 0 4px;color:var(--ds-text-muted);font-size:11.5px;line-height:1.4}
+#workshopScreen #workshopPricingSection :is(.price-flow__hint,.price-flow__warning,.price-flow__error):empty,
+#workshopScreen #workshopPricingSection :is(.price-flow__hint,.price-flow__warning)[hidden]{display:none}
+#workshopScreen #workshopPricingSection .price-flow__warning{color:var(--ds-text-strong);padding-left:8px;border-left:2px solid rgba(var(--kl-red-rgb),.6)}
+#workshopScreen #workshopPricingSection .price-flow__error{color:#e4aeb4}
+/* Advanced pricing: one quiet row; the panel is subordinate to the Rod price above it. */
+#workshopScreen #workshopPricingSection .price-flow__disclosure{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:40px;margin:0;padding:0;border:0;border-top:1px solid rgba(214,210,200,.07);background:transparent;color:var(--ds-text-muted);font:inherit;font-size:12px;letter-spacing:.02em;text-align:left;cursor:pointer}
+#workshopScreen #workshopPricingSection .price-flow__disclosure[hidden]{display:none}
+/* The label reads like the other row labels (the generic section-button style must not make it a tiny caps label). */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteAdvancedToggle,
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteAdvancedToggle > span{font-size:13px;font-weight:400;letter-spacing:.01em;text-transform:none;color:var(--titanium)}
+#workshopScreen #workshopPricingSection .price-flow__disclosure b{font-size:16px;font-weight:400;line-height:1;transition:transform var(--ds-transition)}
+#workshopScreen #workshopPricingSection .price-flow__disclosure[aria-expanded="true"]{color:var(--titanium)}
+#workshopScreen #workshopPricingSection .price-flow__disclosure[aria-expanded="true"] b{transform:rotate(90deg)}
+#workshopScreen #workshopPricingSection .price-flow__disclosure:focus-visible{outline:2px solid rgba(var(--kl-red-rgb),.65);outline-offset:2px}
+#workshopScreen #workshopPricingSection .price-flow__advanced{display:grid;gap:2px;margin:0 0 6px;padding:8px 10px 10px;border:var(--ds-stroke);border-radius:var(--ds-radius-md);background:var(--ds-surface-soft)}
+#workshopScreen #workshopPricingSection .price-flow__advanced[hidden]{display:none}
+#workshopScreen #workshopPricingSection .price-flow__advanced .price-flow__row:last-of-type{border-bottom:0}
+#workshopScreen #workshopPricingSection .price-flow__methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;margin-bottom:4px}
+#workshopScreen #workshopPricingSection .price-flow__apply{justify-self:end;min-height:40px;padding:0 16px}
+#workshopScreen #workshopPricingSection .price-flow__apply:disabled{opacity:.45;cursor:default}
+/* Delivery, Total and Payments: each a short group under a hairline. */
+#workshopScreen #workshopPricingSection .workshop-build-actions-surface > .price-flow__group{display:grid;gap:6px;min-width:0;margin:0;padding:10px 0 0;border-top:1px solid rgba(214,210,200,.1)}
+#workshopScreen #workshopPricingSection .workshop-build-actions-surface > .price-flow__group:first-child{padding-top:0;border-top:0}
+#workshopScreen #workshopPricingSection .price-flow__total{gap:0}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-row{min-height:40px;border-bottom:1px solid rgba(214,210,200,.07)}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-total > span{color:var(--titanium);font-size:13px}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-total > output{color:var(--ds-text-strong);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-rate-field{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:none;padding:4px 0}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-rate-field > span{color:var(--titanium);font-size:13px}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-rate-field > input{width:96px;height:40px;min-height:40px;text-align:right;font-size:16px}
+#workshopScreen #workshopPricingSection .price-flow__pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#workshopScreen #workshopPricingSection .price-flow__pair[hidden]{display:none}
+/* Freight and Packaging are short currency amounts: two compact fields on one line (Q28), not stretched. */
+#workshopScreen #workshopPricingSection #quoteDeliveryFields.price-flow__pair{grid-template-columns:repeat(2,140px)}
+@media (max-width:640px){#workshopScreen #workshopPricingSection #quoteDeliveryFields.price-flow__pair{grid-template-columns:repeat(2,124px)}}
+#workshopScreen #workshopPricingSection .price-flow__pair > label{display:grid;gap:3px;min-width:0}
+#workshopScreen #workshopPricingSection .price-flow__pair > label > span{color:var(--titanium);font-size:11px;letter-spacing:.03em}
+#workshopScreen #workshopPricingSection .price-flow__pair input{box-sizing:border-box;width:100%;min-width:0;height:40px;min-height:40px;padding:0 10px;border:var(--ds-stroke-strong);border-radius:var(--ds-radius-sm);background:var(--ds-surface);color:var(--ds-text-strong);font-size:16px;font-variant-numeric:tabular-nums}
+#workshopScreen #workshopPricingSection .price-flow__pair input[type="number"]{text-align:right}
+/* Payments. */
+#workshopScreen #workshopPricingSection #quotePaymentBlock{gap:6px}
+#workshopScreen #workshopPricingSection .quote-payment__terms{display:grid;gap:4px;margin:0}
+#workshopScreen #workshopPricingSection .price-flow__switch{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;margin:0;padding:0;border:0;background:transparent;color:var(--titanium);font-size:13px;cursor:pointer}
+#workshopScreen #workshopPricingSection .price-flow__switch input{width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--titanium)}
+#workshopScreen #workshopPricingSection .price-flow__deposit{display:flex;align-items:center;gap:8px;min-height:40px}
+#workshopScreen #workshopPricingSection .price-flow__deposit[hidden]{display:none}
+#workshopScreen #workshopPricingSection .price-flow__deposit > label{display:block;margin:0}
+#workshopScreen #workshopPricingSection .price-flow__deposit input{box-sizing:border-box;width:96px;height:40px;min-height:40px;padding:0 10px;border:var(--ds-stroke-strong);border-radius:var(--ds-radius-sm);background:var(--ds-surface);color:var(--ds-text-strong);font-size:16px;font-variant-numeric:tabular-nums;text-align:right}
+#workshopScreen #workshopPricingSection .price-flow__unit{display:inline-grid;grid-template-columns:repeat(2,40px)}
+#workshopScreen #workshopPricingSection .price-flow__deposit-amount{margin-left:auto;color:var(--ds-text-strong);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+#workshopScreen #workshopPricingSection .price-flow__payments{display:grid;margin:0;padding:0;list-style:none}
+#workshopScreen #workshopPricingSection .price-flow__payments > li{display:block;margin:0;padding:0}
+#workshopScreen #workshopPricingSection .price-flow__payment{display:grid;grid-template-columns:auto minmax(0,1fr) auto 14px;align-items:center;gap:10px;width:100%;min-height:40px;margin:0;padding:0;border:0;border-bottom:1px solid rgba(214,210,200,.07);border-radius:0;background:transparent;color:var(--ds-text-strong);font:inherit;text-align:left;cursor:pointer}
+#workshopScreen #workshopPricingSection span.price-flow__payment{grid-template-columns:auto minmax(0,1fr) auto;cursor:default}
+#workshopScreen #workshopPricingSection .price-flow__payment-type{color:var(--titanium);font-size:13px}
+#workshopScreen #workshopPricingSection .price-flow__payment-date{color:var(--ds-text-muted);font-size:12px;font-variant-numeric:tabular-nums}
+#workshopScreen #workshopPricingSection .price-flow__payment > strong{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+#workshopScreen #workshopPricingSection .price-flow__payment > b{color:var(--ds-text-muted);font-size:16px;font-weight:400;text-align:right}
+#workshopScreen #workshopPricingSection .price-flow__payment[aria-expanded="true"]{border-bottom-color:transparent}
+#workshopScreen #workshopPricingSection .price-flow__payment[aria-expanded="true"] > b{transform:rotate(90deg)}
+#workshopScreen #workshopPricingSection .price-flow__payment:focus-visible{outline:2px solid rgba(var(--kl-red-rgb),.65);outline-offset:2px}
+#workshopScreen #workshopPricingSection .quote-payment__summary{display:grid;gap:0;margin:0}
+#workshopScreen #workshopPricingSection .quote-payment__summary[hidden]{display:none}
+#workshopScreen #workshopPricingSection .quote-payment__summary .price-flow__row:last-child{border-bottom:0}
+#workshopScreen #workshopPricingSection[data-paid-in-full="true"] #quotePaymentBalanceOwing{color:var(--titanium)}
+#workshopScreen #workshopPricingSection .quote-payment__status{margin:0}
+#workshopScreen #workshopPricingSection .price-flow__form{display:grid;gap:8px;margin:4px 0 6px;padding:8px 10px 10px;border:var(--ds-stroke);border-radius:var(--ds-radius-md);background:var(--ds-surface-soft)}
+#workshopScreen #workshopPricingSection .price-flow__form[hidden]{display:none}
+#workshopScreen #workshopPricingSection .price-flow__form-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+#workshopScreen #workshopPricingSection .price-flow__form-actions > button{flex:0 0 auto;min-height:40px;padding:0 16px}
+#workshopScreen #workshopPricingSection .price-flow__form-actions > .primary-action{min-width:96px}
+#workshopScreen #workshopPricingSection .price-flow__form-actions > button:disabled{opacity:.55}
+#workshopScreen #workshopPricingSection #quotePaymentBlock .quote-payment__actions{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+#workshopScreen #workshopPricingSection #quotePaymentBlock .quote-payment__actions > button{flex:0 0 auto;min-height:40px;padding:0 18px}
+#workshopScreen #workshopPricingSection[data-payment-form="add"] #quoteRecordPaymentBtn{display:none}
+/* The collapsed "Rod price" line, once an invoice is issued or the job is complete. */
+#workshopScreen #workshopPricingSection .price-flow__summary{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:40px;margin:0;padding:0;border:0;border-bottom:1px solid rgba(214,210,200,.07);background:transparent;color:var(--titanium);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+#workshopScreen #workshopPricingSection .price-flow__summary strong{margin-left:auto;color:var(--ds-text-strong);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+#workshopScreen #workshopPricingSection .price-flow__summary::after{content:'\203A';color:var(--ds-text-muted);font-size:16px;transition:transform var(--ds-transition)}
+#workshopScreen #workshopPricingSection .price-flow__summary[aria-expanded="true"]::after{transform:rotate(90deg)}
+/* iPhone: 44px touch targets; the rows stay slim. */
+@media (max-width:640px){
+  #workshopScreen #workshopPricingSection :is(.price-flow__row,.price-flow__disclosure,.price-flow__summary,.price-flow__switch,.price-flow__payment){min-height:44px}
+  #workshopScreen #workshopPricingSection :is(.price-flow__field > input,.price-flow__pair input,.price-flow__deposit input,.price-flow__total .build-pricing__tax-rate-field > input){height:44px;min-height:44px}
+  #workshopScreen #workshopPricingSection .price-flow__field > input{width:128px}
+  #workshopScreen #workshopPricingSection :is(.price-flow__form-actions > button,#quotePaymentBlock .quote-payment__actions > button,.price-flow__apply){min-height:44px}
+  #workshopScreen #workshopPricingSection .price-flow__unit{grid-template-columns:repeat(2,44px)}
+}
+@media (max-width:359px){
+  #workshopScreen #workshopPricingSection .price-flow__field > input{width:112px}
+  #workshopScreen #workshopPricingSection .price-flow__payment{gap:8px}
+}
+#workshopScreen #workshopPricingSection:not([data-pricing-collapsible="true"]) #quotePricingSummaryBtn.price-flow__summary{display:none}
+#workshopScreen #workshopPricingSection:not([data-lifecycle="quote"])[data-deposit-received="true"] #quoteDepositTerms{display:none}
+#workshopScreen #workshopPricingSection :is(.price-flow,.price-flow__group) :is(.price-flow__row > span:first-child,.price-flow__disclosure > span,.price-flow__switch > span,.price-flow__pair > label > span,.build-pricing__tax-toggle > span,.build-pricing__tax-total > span){text-transform:none;font-weight:400}
+#workshopScreen #workshopPricingSection .price-flow__total .build-pricing__tax-toggle > span{color:var(--titanium);font-size:13px;letter-spacing:.01em}
+#workshopScreen #workshopPricingSection :is(.price-flow__field,.price-flow__pair,.price-flow__deposit,.build-pricing__tax-rate-field) input::-webkit-inner-spin-button,
+#workshopScreen #workshopPricingSection :is(.price-flow__field,.price-flow__pair,.price-flow__deposit,.build-pricing__tax-rate-field) input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+#workshopScreen #workshopPricingSection :is(.price-flow__field,.price-flow__pair,.price-flow__deposit,.build-pricing__tax-rate-field) input[type="number"]{-moz-appearance:textfield;appearance:textfield}
+#workshopScreen #workshopPricingSection #quoteFulfilmentGroup .quote-job-type__options{width:100%}
+#workshopScreen #workshopPricingSection .price-flow__total > .price-flow__row--total{border-bottom:0}
+#workshopScreen #workshopPricingSection .price-flow__advanced .price-flow__row{border-bottom:0}
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteFulfilmentGroup .quote-job-type__options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteFulfilmentGroup .quote-job-type__option{min-width:0;padding:0 6px;white-space:normal;line-height:1.15}
+#workshopScreen #workshopPricingSection .price-flow__disclosure{font-size:13px;letter-spacing:.01em}
+@media (min-width:641px){
+  #workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteFulfilmentGroup .quote-job-type__options,
+  #workshopScreen #workshopPricingSection #quoteFulfilmentGroup .price-flow__pair{max-width:440px}
+  #workshopScreen #workshopPricingSection .price-flow__form{max-width:440px}
+}
+
+
+/* Q33 refinement: Delivery is one row (choice and charge) that opens to Collection | Courier / Shipping. */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection .price-flow__delivery{gap:0;padding-top:0;border-top:0}
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteDeliveryToggle{gap:10px;border-top:1px solid rgba(214,210,200,.07);font-size:13px;font-weight:400;letter-spacing:.01em;text-transform:none;color:var(--titanium)}
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteDeliveryToggle > span{font-size:13px;font-weight:400;letter-spacing:.01em;text-transform:none;color:var(--titanium)}
+#workshopScreen #workshopPricingSection #quoteDeliverySummary{margin-left:auto;color:var(--ds-text-strong);font-size:14px;font-style:normal;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+#workshopScreen #workshopPricingSection .price-flow__delivery-panel{display:grid;gap:8px;padding:0 0 10px}
+#workshopScreen #workshopPricingSection .price-flow__delivery-panel[hidden]{display:none}
+#workshopScreen #workshopPricingSection .price-flow__delivery-panel .build-pricing__note{margin:0}
+/* Advanced Pricing: the proposed Job Price and Apply share one row. */
+#workshopScreen #workshopPricingSection .price-flow__row--apply > strong{margin-left:auto}
+#workshopScreen #workshopPricingSection .price-flow__row--apply > .price-flow__apply{flex:0 0 auto;min-height:36px;padding:0 14px}
+#workshopScreen #workshopPricingSection .price-flow__advanced{margin:0 0 8px;padding:6px 10px 4px}
+/* Payments: Add Payment is the last row of the list, not a floating button. */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteRecordPaymentBtn{width:100%;justify-content:space-between;padding:0;border:0;border-top:1px solid rgba(214,210,200,.07);border-radius:0;background:transparent;box-shadow:none;color:var(--ds-text-strong);font-size:13px;font-weight:600;letter-spacing:.01em;text-transform:none}
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteRecordPaymentBtn > span{font-size:13px;font-weight:600;letter-spacing:.01em;text-transform:none;color:var(--ds-text-strong)}
+#workshopScreen #workshopPricingSection #quoteRecordPaymentBtn > b{color:var(--titanium);font-size:18px}
+#workshopScreen #workshopPricingSection #quotePaymentBlock .quote-payment__actions{display:grid;grid-template-columns:minmax(0,1fr);justify-content:stretch;gap:0}
+/* Components jobs take no deposit (the earlier hide rule is outranked by the switch layout rule above). */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection[data-job-kind="components"] :is(#quoteDepositEnabledField,#quoteDepositValueRow){display:none}
+#workshopScreen #workshopPricingSection #quotePaymentBlock{gap:0}
+#workshopScreen #workshopPricingSection #quotePaymentBlock > .quote-payment__heading{margin-bottom:2px}
+#workshopScreen #workshopPricingSection #quotePaymentBlock .price-flow__payments > li:last-child .price-flow__payment{border-bottom:0}
+#workshopScreen #workshopPricingSection .quote-payment__summary{border-top:1px solid rgba(214,210,200,.07)}
+#workshopScreen #workshopPricingSection .quote-payment__status:empty{display:none}
+/* The payment form: Amount and Date, then Save and Cancel at equal width. */
+#workshopScreen #workshopPricingSection .price-flow__form{gap:8px;margin:2px 0 8px;padding:8px 10px}
+#workshopScreen #workshopPricingSection .price-flow__form-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#workshopScreen #workshopPricingSection .price-flow__form-actions > button{min-width:0;padding:0 12px}
+#workshopScreen #workshopPricingSection .price-flow__form-actions > #retryFinancialBtn{grid-column:1 / -1}
+/* The pricing rows run straight on into Delivery: one hairline, no second surface edge or gap. */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection .workshop-build-actions-surface{margin-top:0;padding-top:0;border-top:0;border-top-left-radius:0;border-top-right-radius:0}
+#workshopScreen #studioWorkflowPanel #workshopQuoteSummaryBody > #workshopPricingFields + .workshop-build-actions-surface{margin-top:-8px}
+/* Delivery and the tax row meet on one hairline, like every other pricing row (no group gap or padding between them). */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteFulfilmentGroup + #quoteTotalBlock{margin-top:-10px;padding-top:0;border-top:1px solid rgba(214,210,200,.07)}
+/* Job Price reads like the other row labels. */
+#workshopScreen #studioWorkflowPanel #workshopPricingSection #quoteRodPriceLabel{color:var(--titanium);font-size:13px;font-weight:400;letter-spacing:.01em;line-height:1.3;text-transform:none}
+#workshopScreen #workshopPricingSection #quoteJobPriceNote[hidden],#workshopScreen #workshopPricingSection #quoteTotalNote[hidden]{display:none}
+#workshopScreen #workshopPricingSection #quoteTotalNote{color:var(--ds-text-muted);font-size:11px;font-weight:400;letter-spacing:0}
 /* KR Guide Layout (Workshop): hosts the self-contained KR Guide Layout document in a frame that grows to its content, so the
    Workshop page scrolls as it does for every other tool. Every rule is scoped to its own card. */
 .kr-guide-card{

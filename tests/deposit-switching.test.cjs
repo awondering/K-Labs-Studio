@@ -101,7 +101,7 @@ test('out-of-range input and changed customer price block autosave without overw
   const h=harness();
   h.edit('2500.01');
   assert.equal(h.context.quote.depositValue,1180.75);
-  assert.match(h.elements.quoteDepositValueError.textContent,/customer price/);
+  assert.match(h.elements.quoteDepositValueError.textContent,/more than the total price/);
   h.switchTo('percent');
   assert.equal(h.context.quote.depositType,'fixed');
   assert.equal(await h.context.persistCurrentQuoteRecord(),null);
@@ -118,7 +118,7 @@ test('out-of-range input and changed customer price block autosave without overw
 test('invalid saved values remain unchanged and require explicit correction',async()=>{
   const h=harness({depositValue:29518.75});
   assert.equal(h.elements.quoteDepositValue.value,'29518.75');
-  assert.match(h.elements.quoteDepositValueError.textContent,/preserved/);
+  assert.match(h.elements.quoteDepositValueError.textContent,/more than the total price/,'the saved value is shown unchanged with a plain error');
   h.switchTo('percent');
   assert.equal(h.context.quote.depositValue,29518.75);
   assert.equal(h.context.quote.depositType,'fixed');
@@ -149,15 +149,15 @@ test('limits cover zero, 100 percent, fixed total, negatives and zero customer p
   h.switchTo('percent');
   assert.equal(h.context.quote.depositValue,100);
   h.edit('100.01');
-  assert.match(h.context.depositValidationMessage(),/between 0 and 100/);
+  assert.match(h.context.depositValidationMessage(),/from 0 to 100/);
   h.edit('-1');
-  assert.match(h.context.depositValidationMessage(),/between 0 and 100/);
+  assert.match(h.context.depositValidationMessage(),/from 0 to 100/);
   h.edit('0');
   h.switchTo('fixed');
   assert.equal(h.context.quote.depositValue,0);
   h.state.total=0;
   h.edit('0.01');
-  assert.match(h.context.depositValidationMessage(),/customer price/);
+  assert.match(h.context.depositValidationMessage(),/more than the total price/);
   h.edit('0');
   h.switchTo('percent');
   assert.equal(h.context.quote.depositValue,0);

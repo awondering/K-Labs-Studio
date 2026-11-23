@@ -179,7 +179,7 @@ async function main(){
     const pdfCapture=async(label)=>{
       await page.evaluate(()=>{document.body.insertAdjacentHTML('beforeend','<div id="pdfHost"></div><button id="pdfBtn"></button>');});
       const run=async()=>{await page.evaluate(()=>{const snap=buildInvoiceSnapshot(true);const h=document.getElementById('pdfHost');h.innerHTML=invoiceDocumentMarkup(snap,snap.payments,false,true);KLABS_INVOICE_PDF.prepare(h.firstElementChild,document.getElementById('pdfBtn'));});
-        await page.waitForFunction(()=>document.getElementById('pdfBtn').textContent==='Print / Save as PDF'&&!document.getElementById('pdfBtn').disabled,null,{timeout:20000});};
+        await page.waitForFunction(()=>document.getElementById('pdfBtn').textContent==='PDF'&&!document.getElementById('pdfBtn').disabled,null,{timeout:20000});};
       await run();   // loads the PDF libraries
       await page.evaluate(()=>{window.__defs=[];const o=pdfMake.createPdf.bind(pdfMake);pdfMake.createPdf=(d)=>{window.__defs.push(JSON.stringify(d));return o(d);};});
       await run();

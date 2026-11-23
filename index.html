@@ -977,141 +977,107 @@
             <b class="quote-section__chevron" aria-hidden="true">▾</b>
           </button>
           <div id="workshopQuoteSummaryBody" class="quote-section__body">
-            <div id="workshopPricingFields" class="quote-grid quote-grid--two build-pricing">
-            <button id="quotePricingSummaryBtn" class="ghost-action quote-grid__full build-pricing__summary-toggle" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span>Pricing</span><strong id="quotePricingSummaryValue"></strong></button>
+            <!-- Pricing, Delivery and Payments: one top-to-bottom flow. Components cost and Your return are calculated; the
+                 Rod price (excluding tax) is the one price the builder sets. Advanced pricing only proposes a Rod price. -->
+            <div id="workshopPricingFields" class="quote-grid build-pricing price-flow">
+            <button id="quotePricingSummaryBtn" class="price-flow__summary quote-grid__full" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span id="quotePricingSummaryLabel">Job Price</span><strong id="quotePricingSummaryValue"></strong></button>
             <!-- Q23: the labour split is no longer offered. The fields stay (hidden) so saved builds keep their labour exactly. -->
             <label id="quoteLabourRateField" hidden><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField" hidden><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-            <!-- Rod Pricing: Simple / Advanced is a view only (never saved). Advanced offers three ways to price; only the chosen
-                 field is typed into and the other two show as calculated results. -->
-            <div id="quoteRodPricingHead" class="quote-grid__full build-pricing__head">
-              <h3 class="build-section-heading">Rod Pricing</h3>
-              <div class="ds-segmented" role="group" aria-label="Pricing view">
-                <button type="button" class="ds-segmented__option" data-pricing-view="simple" aria-pressed="true">Simple</button>
-                <button type="button" class="ds-segmented__option" data-pricing-view="advanced" aria-pressed="false">Advanced</button>
+            <h3 id="quoteRodPricingHead" class="build-section-heading price-flow__heading quote-grid__full">Pricing</h3>
+            <div id="quoteCostBeforeMarginField" class="price-flow__row quote-grid__full"><span>Components Cost</span><output id="quoteCostBeforeMargin" for="quoteComponentsList"></output></div>
+            <label id="quoteTotalField" class="price-flow__row price-flow__row--input quote-grid__full"><span><span id="quoteRodPriceLabel">Job Price</span><small id="quoteJobPriceNote" hidden></small></span><span class="price-flow__field"><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></span></label>
+            <p id="quoteRodPriceHint" class="price-flow__hint quote-grid__full"></p>
+            <p id="quotePriceWarning" class="price-flow__hint quote-grid__full" aria-live="polite"></p>
+            <div id="quoteEarningsSummary" class="price-flow__row price-flow__row--return quote-grid__full" aria-live="polite">
+              <span>Your Return<small>Before overheads and income tax.</small></span><strong id="quoteEstimatedEarnings">$0.00</strong>
+            </div>
+            <p id="quoteLegacyLabourLine" class="price-flow__hint quote-grid__full" hidden></p>
+            <button id="quoteAdvancedToggle" class="price-flow__disclosure quote-grid__full" type="button" aria-expanded="false" aria-controls="quoteAdvancedPricing"><span>Advanced Pricing</span><b aria-hidden="true">&#8250;</b></button>
+            <div id="quoteAdvancedPricing" class="price-flow__advanced quote-grid__full" role="group" aria-label="Advanced Pricing" hidden>
+              <div class="ds-segmented price-flow__methods" role="group" aria-label="Price from">
+                <button type="button" class="ds-segmented__option" data-advanced-method="return" aria-pressed="true">Target Return</button>
+                <button type="button" class="ds-segmented__option" data-advanced-method="percent" aria-pressed="false">Target Margin</button>
               </div>
+              <label class="price-flow__row price-flow__row--input"><span id="quoteAdvancedTargetLabel">Target Return ($)</span><span class="price-flow__field"><input id="quoteAdvancedTarget" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></span></label>
+              <div class="price-flow__row price-flow__row--apply"><span>Job Price</span><strong id="quoteAdvancedProposed"></strong><button id="quoteAdvancedApply" class="ghost-action price-flow__apply" type="button">Apply</button></div>
+              <p id="quoteAdvancedError" class="price-flow__error" role="alert"></p>
             </div>
-            <label id="quoteCostBeforeMarginField" class="quote-grid__full build-pricing__result"><span>Components Cost</span><input id="quoteCostBeforeMargin" type="text" readonly tabindex="-1" /></label>
-            <div id="quotePricingMethodField" class="quote-grid__full build-pricing__method">
-              <span id="quotePricingMethodLabel" class="build-pricing__method-label">Calculate from</span>
-              <div class="ds-segmented" role="group" aria-labelledby="quotePricingMethodLabel">
-                <button type="button" class="ds-segmented__option" data-pricing-method="price" aria-pressed="true">Rod Price</button>
-                <button type="button" class="ds-segmented__option" data-pricing-method="return" aria-pressed="false">Target Return $</button>
-                <button type="button" class="ds-segmented__option" data-pricing-method="percent" aria-pressed="false">Target Margin %</button>
-              </div>
             </div>
-            <div id="quotePricingFieldsRow" class="quote-grid__full build-pricing__fields">
-              <label id="quoteTotalField" class="build-pricing__total"><span>Rod Price</span><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="quoteRodPriceHint" class="build-pricing__hint"></small></label>
-              <label id="quoteProfitField"><span id="quoteProfitLabel">Target Return ($)</span><input id="quoteProfit" type="number" inputmode="decimal" step="0.01" placeholder="0.00" /></label>
-              <label id="quoteMarginPercentField"><span id="quoteMarginPercentLabel">Target Margin (% of price)</span><input id="quoteMarginPercent" type="number" inputmode="decimal" step="0.1" placeholder="0.0" /></label>
-            </div>
-            <p id="quoteCustomerTotalLine" class="quote-grid__full build-pricing__hint" hidden></p>
-            <div id="quoteEarningsSummary" class="quote-grid__full build-earnings-summary" aria-live="polite">
-              <span>Your Return</span><strong id="quoteEstimatedEarnings">$0.00</strong>
-              <p>Before overheads and income tax.</p>
-            </div>
-            <p id="quoteLegacyLabourLine" class="quote-grid__full build-pricing__hint" hidden></p>
-            <p id="quoteAdvancedPricingNote" class="quote-grid__full build-pricing__notice" role="note" hidden><span>Margin and target pricing are now in Settings → Show Advanced Pricing</span><button id="quoteAdvancedPricingNoteDismiss" class="ghost-action build-pricing__notice-dismiss" type="button" aria-label="Dismiss this note">✕</button></p>
-            <div id="quoteAdvancedPricing" class="quote-grid__full build-pricing__advanced" role="group" aria-labelledby="quoteAdvancedPricingTitle">
-              <span id="quoteAdvancedPricingTitle" class="build-pricing__advanced-title">Your Time (optional)</span>
-              <label id="quoteBuildHoursField"><span>Build hours (optional)</span><input id="quoteBuildHours" type="number" inputmode="decimal" min="0" step="0.25" placeholder="0" /></label>
-              <p id="quoteEffectiveHourly" class="build-pricing__hint" aria-live="polite"></p>
-              <div id="quoteTimePricingRow" class="build-pricing__time">
-                <span class="build-pricing__time-label">Price from my time</span>
-                <span id="quoteTimeHours" class="build-pricing__time-hours">0 h</span><span aria-hidden="true">×</span>
-                <input id="quoteTimeRate" class="build-pricing__time-rate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Rate" aria-label="Hourly rate" />
-                <button id="quoteTimePricingApply" class="ghost-action build-pricing__time-apply" type="button">Set Target Return</button>
-              </div>
-            </div>
-            <p id="quotePriceWarning" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            <!-- Q23 GST cleanup: one tax row. The tax name and rate come from Settings; the rate chip opens this build's own rate. -->
-            <div id="quoteTaxSummaryRow" class="quote-grid__full build-pricing__tax-row">
-              <label id="quoteIncludeGstField" class="quote-gst-toggle build-pricing__tax-toggle"><span id="quoteIncludeTaxLabel">Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
-              <button id="quoteTaxRateChip" class="build-pricing__tax-rate" type="button" aria-expanded="false" aria-controls="quoteTaxRateField" aria-label="Tax rate for this build"></button>
-              <label id="quoteGstField" class="build-pricing__tax-total"><span id="quoteTaxLabel">Tax total</span><input id="quoteGst" type="text" readonly /></label>
-            </div>
-            <label id="quoteTaxRateField" class="build-pricing__tax-rate-field" hidden><span id="quoteTaxRateLabel">Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-            <p id="quoteGstStatus" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-            </div>
-            <section class="workshop-build-actions-surface" aria-label="Build actions">
-              <div id="quoteFulfilmentGroup" class="quote-job-type quote-grid__full" role="group" aria-label="Fulfilment Method">
-                <span class="quote-job-type__label build-section-heading">Fulfilment Method</span>
+            <section class="workshop-build-actions-surface" aria-label="Delivery, total and payments">
+              <div id="quoteFulfilmentGroup" class="quote-job-type price-flow__group price-flow__delivery quote-grid__full" role="group" aria-labelledby="quoteDeliveryHeading">
+                <button id="quoteDeliveryToggle" class="price-flow__disclosure price-flow__delivery-toggle" type="button" aria-expanded="false" aria-controls="quoteDeliveryPanel"><span id="quoteDeliveryHeading">Delivery</span><em id="quoteDeliverySummary"></em><b aria-hidden="true">&#8250;</b></button>
+                <div id="quoteDeliveryPanel" class="price-flow__delivery-panel" hidden>
                 <div class="quote-job-type__options">
-                  <button type="button" class="quote-job-type__option" data-fulfilment-method="collection" aria-pressed="false">Customer Collection</button>
+                  <button type="button" class="quote-job-type__option" data-fulfilment-method="collection" aria-pressed="false">Collection</button>
                   <button type="button" class="quote-job-type__option" data-fulfilment-method="shipping" aria-pressed="false" aria-controls="quoteDeliveryFields">Courier / Shipping</button>
                 </div>
-                <div id="quoteDeliveryFields" class="quote-grid quote-grid__full build-pricing__delivery" role="group" aria-label="Shipping costs" hidden>
+                <div id="quoteDeliveryFields" class="price-flow__pair" role="group" aria-label="Shipping costs" hidden>
                   <label id="quoteFreightField"><span>Freight</span><input id="quoteFreight" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
                   <label id="quotePackagingField"><span>Packaging</span><input id="quotePackaging" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-                  <label id="quoteDeliveryTotalField"><span>Total Shipping</span><input id="quoteDeliveryTotal" type="text" readonly tabindex="-1" aria-label="Total Shipping (calculated)" /></label>
                 </div>
-                <details id="quoteDeliveryLegacyNote" class="quote-grid__full build-pricing__note" hidden>
+                <details id="quoteDeliveryLegacyNote" class="build-pricing__note" hidden>
                   <summary>Legacy freight amounts</summary>
                   <p id="quoteDeliveryLegacyText"></p>
                 </details>
                 <p id="quoteFulfilmentNote" class="build-pricing__note" hidden></p>
-              </div>
-              <div id="quotePaymentBlock" class="quote-grid quote-grid__full quote-payment">
-                <h3 class="quote-payment__heading build-section-heading">Payment Status</h3>
-                <!-- Q23 GST cleanup: the payment terms (Deposit Required) come first, before what has been received. -->
-                <div id="quoteDepositTerms" class="quote-grid quote-grid__full quote-payment__terms">
-                  <label id="quoteDepositEnabledField" class="quote-gst-toggle quote-grid__full"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
-                  <div id="quoteDepositTypeField" class="quote-grid__full quote-pricing-driver" role="group" aria-label="Deposit type" hidden>
-                    <span class="quote-pricing-driver__label">Deposit Type</span>
-                    <div class="quote-pricing-driver__options">
-                      <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="percent" aria-pressed="true">PERCENT</button>
-                      <button class="ghost-action quote-pricing-driver__button" type="button" data-deposit-type="fixed" aria-pressed="false">FIXED $</button>
-                    </div>
-                  </div>
-                  <label id="quoteDepositValueField" hidden><span id="quoteDepositValueLabel">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-describedby="quoteDepositValueError" /></label>
-                  <p id="quoteDepositValueError" class="quote-gst-status quote-grid__full" aria-live="polite"></p>
-                  <label id="quoteBalanceRemainingField" hidden><span id="quoteBalanceRemainingLabel">Balance After Deposit</span><input id="quoteBalanceRemaining" type="text" readonly /></label>
                 </div>
-                <div class="quote-payment__summary" aria-live="polite">
-                  <div><span>Total Received</span><strong id="quotePaymentTotalReceived"></strong></div>
-                  <div><span>Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
+              </div>
+              <div id="quoteTotalBlock" class="price-flow__group price-flow__total">
+                <!-- Q23 GST cleanup: one tax row. The tax name and rate come from Settings; the rate chip opens this build's own rate. -->
+                <div id="quoteTaxSummaryRow" class="build-pricing__tax-row">
+                  <label id="quoteIncludeGstField" class="quote-gst-toggle build-pricing__tax-toggle"><span id="quoteIncludeTaxLabel">Include Tax</span><input id="quoteIncludeGst" type="checkbox" checked /></label>
+                  <button id="quoteTaxRateChip" class="build-pricing__tax-rate" type="button" aria-expanded="false" aria-controls="quoteTaxRateField" aria-label="Tax rate for this build"></button>
+                  <label id="quoteGstField" class="build-pricing__tax-total"><span id="quoteTaxLabel">Tax</span><output id="quoteGst"></output></label>
+                </div>
+                <label id="quoteTaxRateField" class="build-pricing__tax-rate-field" hidden><span id="quoteTaxRateLabel">Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
+                <div id="quoteTotalPriceRow" class="price-flow__row price-flow__row--total"><span>Total Price<small id="quoteTotalNote" hidden></small></span><strong id="quoteTotalPrice"></strong></div>
+                <p id="quoteInvoiceMismatch" class="price-flow__warning" role="status" hidden></p>
+              </div>
+              <div id="quotePaymentBlock" class="price-flow__group quote-payment">
+                <h3 class="quote-payment__heading build-section-heading">Payments</h3>
+                <div id="quoteDepositTerms" class="quote-payment__terms">
+                  <label id="quoteDepositEnabledField" class="price-flow__switch"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
+                  <div id="quoteDepositValueRow" class="price-flow__deposit" hidden>
+                    <label id="quoteDepositValueField"><span id="quoteDepositValueLabel" class="visually-hidden">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-describedby="quoteDepositValueError" /></label>
+                    <div id="quoteDepositTypeField" class="ds-segmented price-flow__unit" role="group" aria-label="Deposit as">
+                      <button type="button" class="ds-segmented__option" data-deposit-type="percent" aria-pressed="true" aria-label="Percent of total">%</button>
+                      <button type="button" class="ds-segmented__option" data-deposit-type="fixed" aria-pressed="false" aria-label="Dollar amount">$</button>
+                    </div>
+                    <strong id="quoteDepositAmount" class="price-flow__deposit-amount"></strong>
+                  </div>
+                  <p id="quoteDepositValueError" class="price-flow__error" aria-live="polite"></p>
                 </div>
                 <div id="quotePaymentHistoryDetails" class="quote-payment__history-details" hidden>
                   <div id="quotePaymentHistory" class="quote-payment__entries" aria-label="Payments received"></div>
                 </div>
-                <p id="quoteDepositReceivedStatus" class="quote-payment__status" aria-live="polite"></p>
-                <div class="quote-payment__actions">
-                  <button id="quoteRecordPaymentBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Record Payment</button>
-                  <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Confirm Pending Transaction</button>
+                <div class="quote-payment__summary" aria-live="polite">
+                  <div id="quotePaymentReceivedRow" class="price-flow__row"><span>Payments Received</span><strong id="quotePaymentTotalReceived"></strong></div>
+                  <div id="quotePaymentBalanceRow" class="price-flow__row price-flow__row--total"><span id="quotePaymentBalanceLabel">Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
                 </div>
-                <div id="quoteDepositReceivedForm" class="quote-payment__form" hidden>
-                  <label><span>Amount Received</span><input id="quoteDepositReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-                  <label><span>Date Received</span><input id="quoteDepositReceivedDate" type="date" /></label>
-                  <label id="quoteDepositCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteDepositCorrectionReason" type="text" /></label>
-                  <p id="quoteDepositReceivedError" class="quote-payment__error" role="alert"></p>
-                  <div class="quote-payment__actions">
-                    <button id="quoteDepositReceivedSave" class="primary-action" type="button">Save</button>
-                    <button id="quoteDepositReceivedCancel" class="ghost-action" type="button">Cancel</button>
+                <p id="quoteDepositReceivedStatus" class="quote-payment__status price-flow__hint" aria-live="polite"></p>
+                <div id="quoteBalanceReceivedForm" class="price-flow__form" role="group" aria-labelledby="quotePaymentFormTitle" hidden>
+                  <span id="quotePaymentFormTitle" class="visually-hidden">Payment</span>
+                  <div class="price-flow__pair">
+                    <label><span>Amount</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
+                    <label><span>Date</span><input id="quoteBalanceReceivedDate" type="date" /></label>
                   </div>
-                </div>
-                <div id="quoteBalanceReceivedForm" class="quote-payment__form" hidden>
-                  <div id="quotePaymentTypeField" class="quote-pricing-driver quote-payment__type" role="group" aria-label="Payment type" hidden>
-                    <div class="quote-pricing-driver__options">
-                      <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="deposit" aria-pressed="false">DEPOSIT</button>
-                      <button class="ghost-action quote-pricing-driver__button" type="button" data-payment-type="balance" aria-pressed="true">BALANCE</button>
-                    </div>
-                  </div>
-                  <label><span>Amount Received</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
-                  <label><span>Date Received</span><input id="quoteBalanceReceivedDate" type="date" /></label>
-                  <label id="quoteBalanceCorrectionReasonField" hidden><span>Correction Reason</span><input id="quoteBalanceCorrectionReason" type="text" /></label>
-                  <p id="quoteBalanceReceivedError" class="quote-payment__error" role="alert"></p>
-                  <div class="quote-payment__actions">
+                  <p id="quoteBalanceReceivedError" class="price-flow__error" role="alert"></p>
+                  <div class="price-flow__form-actions">
                     <button id="quoteBalanceReceivedSave" class="primary-action" type="button">Save</button>
                     <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Cancel</button>
                   </div>
+                </div>
+                <div class="quote-payment__actions">
+                  <button id="quoteRecordPaymentBtn" class="price-flow__disclosure price-flow__add" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm"><span id="quoteRecordPaymentLabel">Add Payment</span><b aria-hidden="true">+</b></button>
+                  <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Retry saving payment</button>
                 </div>
               </div>
               <div class="workshop-build-actions-docs" role="group" aria-label="Documents">
                 <span class="workshop-build-actions-docs__label build-section-heading">Documents</span>
                 <div class="workshop-build-actions-docs__grid">
-                  <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
-                  <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
-                  <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
+                  <button id="viewQuoteBtn" class="ghost-action" type="button">Quote</button>
+                  <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Invoice</button>
                   <div id="quoteMoreDocumentsWrap" class="workshop-build-actions-more">
                     <button id="quoteMoreDocumentsBtn" class="ghost-action workshop-build-actions-more__toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quoteMoreDocumentsMenu">More documents</button>
                     <div id="quoteMoreDocumentsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="More documents" hidden>
@@ -1222,7 +1188,6 @@
           <label class="settings-pricing-field settings-pricing-field--stacked" id="settingsTaxNameField"><span class="settings-pricing-label">Tax name</span><input id="settingsTaxName" type="text" maxlength="40" placeholder="GST" value="GST" autocomplete="off" /></label>
           <label class="settings-pricing-field settings-pricing-field--stacked"><span class="settings-pricing-label" id="settingsTaxRegistrationLabel">GST Number</span><input id="settingsBusinessGstNumber" type="text" autocomplete="off" placeholder="Optional" /></label>
           <label class="settings-pricing-field"><span class="settings-pricing-label">Labour rate (per hr)</span><input id="settingsDefaultLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /><small id="settingsDefaultLabourRateSaved" class="settings-inline-saved" hidden>Saved</small></label>
-          <div class="settings-pricing-field" id="settingsShowAdvancedPricingField"><span class="settings-pricing-label" id="settingsShowAdvancedPricingLabel">Show Advanced Pricing</span><label class="settings-toggle" for="settingsShowAdvancedPricing"><input id="settingsShowAdvancedPricing" type="checkbox" aria-labelledby="settingsShowAdvancedPricingLabel" aria-describedby="settingsShowAdvancedPricingHint" /><span class="settings-toggle__control" aria-hidden="true"><span class="settings-toggle__thumb"></span></span></label><small id="settingsShowAdvancedPricingHint" class="settings-pricing-hint">Target Return ($ or %), build hours and pricing from your time.</small></div>
           <label class="settings-pricing-field settings-pricing-field--stacked" id="settingsCurrencyField"><span class="settings-pricing-label">Currency</span><select id="settingsCurrency" aria-label="Currency">
             <option value="NZD">NZD — New Zealand dollar</option>
             <option value="AUD">AUD — Australian dollar</option>
@@ -1586,7 +1551,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v277" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v278" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>

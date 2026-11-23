@@ -27,7 +27,7 @@
  * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v277";
+  const DEMO_BUILD = "build148-v278";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -109,32 +109,28 @@
       ["caption", "Studio adds up what the parts cost you."],
       ["open", toggle("workshopQuoteSummaryBody")],
       ["show", "#quoteCostBeforeMarginField", 1500],
-      ["caption", "Set your rod price, GST included. Your return updates live."],
-      ["type", "#quoteTotal", "899"],
+      ["caption", "Set the Job Price, before GST. Your Return updates live."],
+      ["type", "#quoteTotal", "780"],
       ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1500],
-      // Advanced Pricing, in memory only: a target margin, then a target dollar return, each recalculating the Rod Price;
-      // then back to the Rod Price and the simple view.
-      ["caption", "Advanced: set a target margin. Studio works out the price."],
-      ["tap", "[data-pricing-view=\"advanced\"]"],
-      ["tap", "[data-pricing-method=\"percent\"]"],
-      ["type", "#quoteMarginPercent", "55"],
-      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1000],
-      ["caption", "Or the return you want in dollars. Or keep it simple."],
-      ["tap", "[data-pricing-method=\"return\"]"],
-      ["type", "#quoteProfit", "450"],
-      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 1000],
-      ["tap", "[data-pricing-method=\"price\"]"],
-      ["type", "#quoteTotal", "899"],
-      ["tap", "[data-pricing-view=\"simple\"]"],
+      // Advanced pricing only proposes a price: it opens on Return $ with the current return filled in, then a margin is
+      // typed. The demo closes it without applying, so the Job Price stays as typed.
+      ["caption", "Advanced Pricing: a Target Return, in dollars."],
+      ["tap", "#quoteAdvancedToggle"],
+      ["show", ["#quoteAdvancedTarget", "#quoteAdvancedProposed"], 1000],
+      ["caption", "Or a Target Margin. Studio proposes a Job Price."],
+      ["tap", "[data-advanced-method=\"percent\"]"],
+      ["type", "#quoteAdvancedTarget", "40"],
+      ["show", "#quoteAdvancedProposed", 1000],
+      ["tap", "#quoteAdvancedToggle"],
       ["caption", "Jordan wants it couriered, not collected."],
       ["show", "#quoteFulfilmentGroup", 1200],
       ["tap", "[data-fulfilment-method=\"shipping\"]"],
       ["caption", "Add the freight and packaging."],
       ["type", "#quoteFreight", "18"],
       ["type", "#quotePackaging", "12"],
-      ["show", "#quoteDeliveryTotalField", 1200],
+      ["show", "#quoteTotalPriceRow", 1200],
       ["caption", "Delivery is charged on top. Your return stays the same."],
-      ["show", ["#quoteCustomerTotalLine", "#quoteEarningsSummary"], 1800],
+      ["show", ["#quoteTotalPriceRow", "#quoteEarningsSummary"], 1800],
     ] },
     { title: "Quote", steps: [
       ["caption", "Open the quote, exactly as Jordan will see it."],
@@ -160,7 +156,6 @@
       ["caption", "Jordan pays a $300 deposit. Record it."],
       ["tap", "#quoteRecordPaymentBtn"],
       ["until", "#quoteBalanceReceivedForm"],
-      ["tap", "#quotePaymentTypeField [data-payment-type=\"deposit\"]"],
       ["type", "#quoteBalanceReceivedAmount", "300"],
       ["tap", "#quoteBalanceReceivedSave"],
       ["untilHidden", "#quoteBalanceReceivedForm"],

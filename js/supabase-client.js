@@ -26,8 +26,8 @@ window.KLABS_SUPABASE_CLIENT = window.KLABS_DEMO?.active ? null : window.supabas
 let klabsReadOnlyObserver = null;
 let klabsDemoMessageTimer = null;
 // Q18: the Studio controls the demonstration director may use in Demo Mode (see the click guard below).
-const DEMO_DIRECTOR_CONTROLS = ["#quoteSpecReelSeatRef [data-layout-seat-ref]", "#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
-  "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quotePaymentTypeField [data-payment-type]", "#quoteBalanceReceivedSave",
+const DEMO_DIRECTOR_CONTROLS = ["#quoteSpecReelSeatRef [data-layout-seat-ref]", "#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteDeliveryToggle", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
+  "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quoteBalanceReceivedSave",
   "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
   "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]"].join(", ");
 
@@ -342,8 +342,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const offlineSession = document.body.classList.contains("klabs-offline-session");
     // Q18: Demo Mode blocks the same documents, plus account, sign-out, sync, recovery and administration controls,
     // for every click - visitor or director.
+    // The tax row (#quoteTotalBlock) moved into the actions surface in the pricing redesign; it stays as usable as before.
+    // Q33: the Delivery row only opens and closes the delivery choice (display only), so it is never blocked.
     const blockedOffline = (offlineSession || demo) && (
-      control.closest(".workshop-build-actions-surface, [data-current-build-action], [data-more-document], #currentBuildActionsMenu")
+      (control.closest(".workshop-build-actions-surface") && !control.closest("#quoteTotalBlock, #quoteDeliveryToggle"))
+      || control.closest("[data-current-build-action], [data-more-document], #currentBuildActionsMenu")
       || /\b(invoice|statement|documents?|pdf|share|download|issue|payment|deposit|generate|template)\b/i.test(label));
     const blockedDemo = demo && (
       control.closest("#settingsAccountCard, #settingsRecoveryCard, #settingsAdminEntry, #adminAccessScreen, #buildSyncNotice, #retryFinancialBtn")

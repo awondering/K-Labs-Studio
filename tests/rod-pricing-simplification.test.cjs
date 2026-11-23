@@ -1,8 +1,6 @@
-// Q23 Rod Pricing simplification (approved 22 Nov 2026).
-// Simple default: Components Cost, Rod Price (entered including tax), Your Return ("Before overheads and income tax.").
-// Advanced Pricing (Settings → Show Advanced Pricing, off by default): Target Return ($), Target Return (% of price excl. tax,
-// a margin), optional Build hours → effective hourly return, and a one-line "price from my time" helper.
-// Saved jobs keep exactly the same figures and documents (golden snapshot taken from build148-v271 before Q23).
+// Rod pricing. Pricing redesign (23 Nov 2026): Components cost, Rod price (entered EXCLUDING tax), Your return
+// ("Before overheads and income tax."), then Advanced pricing (collapsed) with two methods - Return $ and Margin % -
+// that only propose a Rod price. Saved jobs keep exactly the same figures and documents (golden snapshot from v271).
 // Uses the real ui.js functions through tests/helpers/job-record-loader.cjs. Synthetic data only.
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
@@ -37,11 +35,9 @@ test('the golden snapshot covers labour with Required Profit, Margin %, tax off,
 // ---------- 2. Pricing behaviour (real quoteMaths and the new helpers) ----------
 function pricing(job,settings={}){
   const studioSettings={taxRate:15,taxEnabled:true,taxType:'gst',currency:'NZD',defaultLabourRate:85,...settings};
-  const c=loadRecordFunctions(['normalizeQuote','quoteMaths','rodPricingFigures','applyManualRodPrice','applyManualTargetReturn',
-    'applyManualTargetReturnPercent','rodPriceLabel','targetReturnPercentLabel','legacyLabourLineText','effectiveHourlyReturn',
-    'timePricingAmount','accountUsesAdvancedPricing','shouldShowAdvancedPricingNote','advancedPricingEnabled',
-    'rodPriceHintText','customerTotalLineText','taxAmountLabel','pricingMethodForDriver','editablePricingFieldId',
-    'pricingViewAdvanced','setPricingView','paymentEntriesMarkup'],{
+  const c=loadRecordFunctions(['normalizeQuote','quoteMaths','rodPricingFigures','applyManualRodPrice','rodPriceTaxMultiplier',
+    'applyManualRodPriceExclusive','keepRodPriceExclusive','advancedRodPrice','rodPriceLabel','jobPriceNote','legacyLabourLineText',
+    'paymentTypeLabel','paymentEntriesMarkup'],{
     studioSettings,
     activeTaxEnabled:()=>studioSettings.taxEnabled!==false,
     activeTaxRate:()=>studioSettings.taxRate,
@@ -59,331 +55,257 @@ const newBuild=(extra={})=>({id:'build-q23-new',jobType:'build',quoteStatus:'quo
     {category:'Guides',description:'Synthetic guides',cost:60,unitCost:60,unitPrice:90,quantity:1}],
   labourRate:85,labourHours:0,priceAdjustment:0,pricingDriver:'price',includeGst:true,gstRate:15,fulfilmentMethod:'collection',
   payments:[],...extra}); // as a new build starts: the template's zero price adjustment, priced from the Sell Prices
+const figures=(c)=>c.rodPricingFigures(c.quoteMaths());
 
 test('a new build starts at the components\' Sell Prices; Your Return = rod price excl. tax - components cost',()=>{
-  const c=pricing(newBuild());
-  const f=c.rodPricingFigures(c.quoteMaths());
+  const f=figures(pricing(newBuild()));
   assert.ok(near(f.componentsCost,210));
-  assert.ok(near(f.rodPrice,300),'Sell Prices 210 + 90');
+  assert.ok(near(f.rodPrice,300),'Sell Prices 210 + 90 (stored including tax)');
   assert.ok(near(f.rodExclusive,300/1.15));
   assert.ok(near(f.yourReturn,300/1.15-210));
   assert.equal(f.labourCost,0);
 });
 
-test('Rod Price is entered including tax and Your Return is worked out excluding tax',()=>{
+test('the Rod price is entered excluding tax; the stored customer price still includes it',()=>{
   const c=pricing(newBuild());
-  c.applyManualRodPrice('690');
+  c.applyManualRodPriceExclusive('600');
   const math=c.quoteMaths();
   const f=c.rodPricingFigures(math);
-  assert.ok(near(f.rodPrice,690));
-  assert.ok(near(math.total,690),'collection: the customer pays the rod price');
+  assert.ok(near(f.rodExclusive,600));
   assert.ok(near(math.gst,90));
-  assert.ok(near(f.yourReturn,600-210));
+  assert.ok(near(math.total,690),'collection: the customer pays the rod price plus GST');
+  assert.ok(near(c.quote.finalCustomerPrice,690),'stored model unchanged: tax included');
+  assert.ok(near(f.yourReturn,390));
   assert.equal(c.quote.pricingDriver,'price');
 });
 
-test('with tax off the Rod Price has no tax in it',()=>{
+test('ex-tax entry round-trips to the cent at 15% and 20%',()=>{
+  for(const [rate,settings] of [[15,{}],[20,{taxRate:20,taxType:'vat'}]]){
+    for(const cents of [1,33,99,12345,78001,99999]){
+      const c=pricing(newBuild({gstRate:rate}),settings);
+      const value=(cents/100).toFixed(2);
+      c.applyManualRodPriceExclusive(value);
+      assert.equal(Math.round(figures(c).rodExclusive*100),cents,`${rate}% ${value}`);
+    }
+  }
+});
+
+test('with tax off the Rod price has no tax in it',()=>{
   const c=pricing(newBuild({includeGst:false}));
-  c.applyManualRodPrice('500');
-  const f=c.rodPricingFigures(c.quoteMaths());
+  c.applyManualRodPriceExclusive('500');
+  const f=figures(c);
   assert.ok(near(f.rodPrice,500));
   assert.ok(near(f.rodExclusive,500));
   assert.ok(near(f.yourReturn,290));
 });
 
-test('shipping is charged on top of the Rod Price and leaves Your Return unchanged',()=>{
+test('delivery is charged on top of the Rod price and leaves Your return unchanged',()=>{
   const c=pricing(newBuild({fulfilmentMethod:'shipping',deliveryEntryMode:'breakdown',freight:18,packaging:12}));
-  c.applyManualRodPrice('690');
+  c.applyManualRodPriceExclusive('600');
   const math=c.quoteMaths();
   const f=c.rodPricingFigures(math);
-  assert.ok(near(f.rodPrice,690));
-  assert.ok(near(math.total,690+30*1.15),'delivery cost recovered including tax');
+  assert.ok(near(f.rodExclusive,600));
+  assert.ok(near(math.total,690+30*1.15),'delivery recovered including tax');
   assert.ok(near(f.yourReturn,390));
 });
 
-test('Target Return ($) sets the price so Your Return equals it; later cost changes keep the return',()=>{
+test('turning tax off or changing the rate keeps the ex-tax Rod price; only tax and total move',()=>{
   const c=pricing(newBuild());
-  c.applyManualTargetReturn('400');
-  let f=c.rodPricingFigures(c.quoteMaths());
-  assert.equal(c.quote.pricingDriver,'profit');
-  assert.ok(near(f.yourReturn,400));
-  assert.ok(near(f.rodPrice,(210+400)*1.15));
-  c.quote.components[0].cost=170;c.quote.components[0].unitCost=170;
-  f=c.rodPricingFigures(c.quoteMaths());
-  assert.ok(near(f.yourReturn,400),'still 400 after the blank cost changes');
+  c.applyManualRodPriceExclusive('600');
+  c.keepRodPriceExclusive(()=>{c.quote.includeGst=false;});
+  let math=c.quoteMaths();
+  assert.ok(near(c.rodPricingFigures(math).rodExclusive,600));
+  assert.ok(near(math.total,600));
+  c.keepRodPriceExclusive(()=>{c.quote.includeGst=true;c.quote.gstRate=10;});
+  math=c.quoteMaths();
+  assert.ok(near(c.rodPricingFigures(math).rodExclusive,600));
+  assert.ok(near(math.total,660));
+  assert.ok(near(c.rodPricingFigures(math).yourReturn,390),'the return never moves with tax');
 });
 
-test('Target Return (%) is a margin: Your Return as a % of the rod price excluding tax',()=>{
+test('Advanced pricing Return $: price = components cost + return wanted',()=>{
   const c=pricing(newBuild());
-  c.applyManualTargetReturnPercent('40');
-  const f=c.rodPricingFigures(c.quoteMaths());
-  assert.equal(c.quote.pricingDriver,'margin');
-  assert.ok(near(f.returnPercent,40,0.01));
-  assert.ok(near(f.rodExclusive,210/0.6));
-  assert.ok(near(f.yourReturn,f.rodExclusive*0.4));
+  assert.deepEqual(plain(c.advancedRodPrice('return','285',495)),{price:780});
+  assert.deepEqual(plain(c.advancedRodPrice('return','0',495)),{price:495});
+  assert.deepEqual(plain(c.advancedRodPrice('return','12.345',100)),{price:112.35});
 });
 
-test('a saved build with labour: Your Return includes the labour, and Target Return edits convert exactly',()=>{
-  const c=pricing(LEGACY_DRIVER_JOBS.legacyMarginDriverWithLabour);
-  const before=c.rodPricingFigures(c.quoteMaths());
-  assert.ok(near(before.labourCost,340));
-  assert.ok(near(before.yourReturn,before.rodExclusive-210),'labour + profit');
-  c.applyManualTargetReturn('600');
-  let f=c.rodPricingFigures(c.quoteMaths());
-  assert.ok(near(f.yourReturn,600));
-  assert.equal(c.quote.labourHours,4,'saved labour is kept');
-  assert.equal(c.quote.labourRate,85);
-  c.applyManualTargetReturnPercent('55');
-  f=c.rodPricingFigures(c.quoteMaths());
-  assert.ok(near(f.returnPercent,55,0.01));
-});
-
-test('labels: Rod Price uses the Tax Name; tax off has no tax wording; repairs say Repair Price',()=>{
+test('Advanced pricing Margin %: price = cost / (1 - margin), a margin on the selling price, not markup',()=>{
   const c=pricing(newBuild());
-  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'build'}),'Rod Price (incl. GST)');
-  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'VAT',jobType:'build'}),'Rod Price (incl. VAT)');
-  assert.equal(c.rodPriceLabel({taxActive:false,taxName:'GST',jobType:'build'}),'Rod Price');
-  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'repair'}),'Repair Price (incl. GST)');
-  assert.equal(c.targetReturnPercentLabel({taxActive:true,taxName:'GST'}),'Target Margin (% of price excl. GST)');
-  assert.equal(c.targetReturnPercentLabel({taxActive:false,taxName:'GST'}),'Target Margin (% of price)');
+  assert.deepEqual(plain(c.advancedRodPrice('percent','50',210)),{price:420});
+  assert.deepEqual(plain(c.advancedRodPrice('percent','40',210)),{price:350});
+  assert.deepEqual(plain(c.advancedRodPrice('percent','0',210)),{price:210});
 });
 
-test('the read-only labour line appears only on saved builds that carry labour',()=>{
+test('Advanced pricing rejects blank, non-numeric, negative and impossible values in plain words',()=>{
+  const c=pricing(newBuild());
+  assert.deepEqual(plain(c.advancedRodPrice('return','',210)),{error:''},'blank is no proposal and no error');
+  assert.deepEqual(plain(c.advancedRodPrice('return','abc',210)),{error:'Enter a number.'});
+  assert.deepEqual(plain(c.advancedRodPrice('return','-5',210)),{error:'Enter a return of zero or more.'});
+  assert.deepEqual(plain(c.advancedRodPrice('percent','-1',210)),{error:'Enter a margin from 0 to 99.'});
+  assert.deepEqual(plain(c.advancedRodPrice('percent','100',210)),{error:'Enter a margin from 0 to 99.'});
+  assert.deepEqual(plain(c.advancedRodPrice('percent','30',0)),{error:'Add components first.'});
+});
+
+test('applying an Advanced proposal sets the Rod price exactly and is reversible (GST, VAT, tax off, delivery)',()=>{
+  for(const [name,settings,job] of [
+    ['GST 15%',{},{}],
+    ['tax off',{taxEnabled:false},{includeGst:false}],
+    ['VAT 20%',{taxRate:20,taxType:'vat'},{gstRate:20}],
+    ['GST 15% with delivery',{},{fulfilmentMethod:'shipping',deliveryEntryMode:'breakdown',freight:18,packaging:12}],
+  ]){
+    const c=pricing(newBuild(job),settings);
+    c.applyManualRodPriceExclusive('780');
+    const a=figures(c);
+    const byReturn=c.advancedRodPrice('return',a.yourReturn.toFixed(2),a.componentsCost).price;
+    c.applyManualRodPriceExclusive(byReturn);
+    assert.ok(near(figures(c).rodExclusive,780),`${name} return`);
+    const byMargin=c.advancedRodPrice('percent',a.returnPercent.toFixed(4),a.componentsCost).price;
+    c.applyManualRodPriceExclusive(byMargin);
+    assert.ok(near(figures(c).rodExclusive,780,0.011),`${name} margin`);
+    assert.ok(near(figures(c).yourReturn,a.yourReturn,0.011));
+    assert.equal(c.quote.pricingDriver,'price','Advanced pricing never stores a target');
+  }
+});
+
+test('a saved build with labour keeps it in Your return and shows the read-only labour line',()=>{
   const legacy=pricing(LEGACY_DRIVER_JOBS.legacyProfitDriverWithLabourShipping);
-  assert.equal(legacy.legacyLabourLineText(legacy.quote),'Includes labour 4 h × $85.00 = $340.00 (saved with this build)');
+  const before=figures(legacy);
+  assert.ok(near(before.labourCost,340));
+  assert.equal(legacy.legacyLabourLineText(legacy.quote),'Includes saved labour: 4 h × $85.00 = $340.00');
+  legacy.applyManualRodPriceExclusive('900');
+  assert.ok(near(figures(legacy).rodExclusive,900));
+  assert.equal(legacy.quote.labourHours,4,'saved labour is kept');
   const fresh=pricing(newBuild());
   assert.equal(fresh.legacyLabourLineText(fresh.quote),'');
   const components=pricing({...LEGACY_DRIVER_JOBS.legacyProfitDriverWithLabourShipping,jobKind:'components'});
   assert.equal(components.legacyLabourLineText(components.quote),'','never on a Components job');
 });
 
-test('build hours give an effective hourly return; the time helper is hours × rate',()=>{
+test('labels: Job Price for every job type; the tax basis is its own quiet line; tax off has no tax wording',()=>{
   const c=pricing(newBuild());
-  assert.equal(c.effectiveHourlyReturn(390,6.5),60);
-  assert.equal(c.effectiveHourlyReturn(390,0),null);
-  assert.equal(c.effectiveHourlyReturn(390,''),null);
-  assert.equal(c.timePricingAmount(6.5,85),552.5);
-  assert.equal(c.timePricingAmount(0,85),0);
-  assert.equal(c.timePricingAmount(6,-5),0);
+  // Q33: one selling-price label for New Build, Refurbishment and Components.
+  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'build'}),'Job Price');
+  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'repair'}),'Job Price');
+  assert.equal(c.jobPriceNote({taxActive:true,taxName:'GST'}),'Excl. GST');
+  assert.equal(c.jobPriceNote({taxActive:true,taxName:'VAT'}),'Excl. VAT');
+  assert.equal(c.jobPriceNote({taxActive:false,taxName:'GST'}),'');
+  assert.equal(c.jobPriceNote({taxActive:true,taxName:'GST',componentsPricing:true}),'From Sell Prices · Excl. GST');
+  assert.match(pricingBlock,/<span id="quoteRodPriceLabel">Job Price<\/span><small id="quoteJobPriceNote" hidden><\/small>/);
+  assert.doesNotMatch(html,/>Rod price|>Repair price|Customer price \(/);
 });
 
-test('Advanced Pricing is off by default and follows the Settings switch',()=>{
-  assert.equal(pricing(newBuild()).advancedPricingEnabled(),false);
-  assert.equal(pricing(newBuild(),{showAdvancedPricing:true}).advancedPricingEnabled(),true);
-});
-
-test('the one-time note shows only for accounts whose builds used labour, profit or margin, until dismissed',()=>{
+test('payment rows: type, date and amount; tappable to edit only when editable; escaped',()=>{
   const c=pricing(newBuild());
-  const usesLabour=[{labourRate:85,labourHours:2,pricingDriver:'price'}];
-  const usesMargin=[{labourRate:85,labourHours:0,pricingDriver:'margin'}];
-  const simple=[{labourRate:85,labourHours:0,pricingDriver:'price'}];
-  assert.equal(c.accountUsesAdvancedPricing(usesLabour),true);
-  assert.equal(c.accountUsesAdvancedPricing(usesMargin),true);
-  assert.equal(c.accountUsesAdvancedPricing([{pricingDriver:'profit'}]),true);
-  assert.equal(c.accountUsesAdvancedPricing(simple),false);
-  assert.equal(c.accountUsesAdvancedPricing([{labourHours:3,jobKind:'components'}]),false,'Components jobs never count');
-  const show=(settings,records,extra={})=>c.shouldShowAdvancedPricingNote({settings,records,componentsJob:false,demo:false,...extra});
-  assert.equal(show({},usesLabour),true);
-  assert.equal(show({advancedPricingNoteDismissed:true},usesLabour),false);
-  assert.equal(show({showAdvancedPricing:true},usesLabour),false);
-  assert.equal(show({},simple),false);
-  assert.equal(show({},usesLabour,{componentsJob:true}),false);
-  assert.equal(show({},usesLabour,{demo:true}),false);
-  let reads=0;
-  const lazy=()=>{reads+=1;return usesLabour;};
-  assert.equal(show({advancedPricingNoteDismissed:true},lazy),false);
-  assert.equal(reads,0,'saved builds are not read once the note is dismissed');
-  assert.equal(show({},lazy),true);
-  assert.equal(reads,1);
+  const money=(v)=>`$${Number(v).toFixed(2)}`;const date=(d)=>`[${d}]`;
+  assert.equal(c.paymentEntriesMarkup([],{money,date}),'');
+  const list=[{id:'p1',type:'deposit',amount:300,date:'2026-11-22'},{id:'p<2>',type:'balance',amount:633.5,date:'2026-12-10'}];
+  const read=c.paymentEntriesMarkup(list,{money,date});
+  assert.doesNotMatch(read,/<button|data-edit-payment/);
+  const out=c.paymentEntriesMarkup(list,{money,date,editable:true});
+  assert.match(out,/data-edit-payment="p1"[^>]*>.*Deposit<\/span><span class="price-flow__payment-date">\[2026-11-22\]<\/span><strong>\$300\.00<\/strong>/);
+  assert.match(out,/data-edit-payment="p&lt;2&gt;"[^>]*>.*Payment<\/span>/);
+  assert.doesNotMatch(out,/Correct|correction|reason|received/i,'no audit language');
 });
 
 // ---------- 3. Screen structure ----------
 const pricingBlock=html.slice(html.indexOf('id="workshopPricingFields"'),html.indexOf('class="workshop-build-actions-surface"'));
-test('the pricing screen order: Components Cost, Rod Price, Your Return, labour line, note, then Advanced Pricing',()=>{
-  const order=['quoteCostBeforeMarginField','quoteTotalField','quoteEarningsSummary','quoteLegacyLabourLine','quoteAdvancedPricingNote','quoteAdvancedPricing'];
-  const positions=order.map((id)=>pricingBlock.indexOf(`id="${id}"`));
-  assert.ok(positions.every((p)=>p>=0),JSON.stringify(positions));
-  assert.deepEqual([...positions].sort((a,b)=>a-b),positions);
-  assert.ok(pricingBlock.indexOf('id="quoteIncludeGstField"')>positions.at(-1),'tax controls stay below');
+const actions=html.slice(html.indexOf('class="workshop-build-actions-surface"'),html.indexOf('class="workshop-build-actions-docs"'));
+test('the pricing order: Components cost, Rod price, Your return, then Advanced pricing (collapsed)',()=>{
+  const order=['quoteRodPricingHead','quoteCostBeforeMarginField','quoteTotalField','quoteEarningsSummary','quoteAdvancedToggle','quoteAdvancedPricing'];
+  const at=order.map((id)=>pricingBlock.indexOf(`id="${id}"`));
+  assert.ok(at.every((p)=>p>=0)&&at.every((p,n)=>n===0||p>at[n-1]),JSON.stringify(at));
+  assert.match(pricingBlock,/id="quoteAdvancedToggle"[^>]*aria-expanded="false"/);
+  assert.match(pricingBlock,/id="quoteAdvancedPricing"[^>]*hidden/);
 });
-test('Your Return is labelled with the approved note',()=>{
-  assert.match(pricingBlock,/<span>Your Return<\/span><strong id="quoteEstimatedEarnings">/);
-  assert.match(pricingBlock,/<p>Before overheads and income tax\.<\/p>/);
+test('Your return carries the approved note',()=>{
+  assert.match(pricingBlock,/Your Return<small>Before overheads and income tax\.<\/small>/);
   assert.doesNotMatch(pricingBlock,/Estimated Earnings|Includes labour and profit/);
 });
-test('no labour split by default: Labour Rate and Labour Hours are not shown',()=>{
+test('Advanced pricing has exactly two methods, one value, a proposed price and one Apply',()=>{
+  const adv=pricingBlock.slice(pricingBlock.indexOf('id="quoteAdvancedPricing"'));
+  assert.equal((adv.match(/data-advanced-method="/g)||[]).length,2);
+  assert.match(adv,/data-advanced-method="return"[^>]*>Target Return</);
+  assert.match(adv,/data-advanced-method="percent"[^>]*>Target Margin</);
+  assert.match(adv,/id="quoteAdvancedTargetLabel">Target Return \(\$\)</,'only the chosen method\'s input, labelled');
+  assert.match(adv,/<span>Job Price<\/span><strong id="quoteAdvancedProposed"><\/strong><button id="quoteAdvancedApply"[^>]*>Apply</,'the proposed Job Price and Apply share one row');
+  for(const id of ['quoteAdvancedTarget','quoteAdvancedProposed','quoteAdvancedError','quoteAdvancedApply'])assert.ok(adv.includes(`id="${id}"`),id);
+  assert.equal((adv.match(/<button[^>]*id="quoteAdvancedApply"/g)||[]).length,1);
+});
+test('the old modes, targets, build hours and hourly return are gone',()=>{
+  for(const id of ['quoteProfit','quoteMarginPercent','quotePricingMethodField','quoteBuildHoursField','quoteEffectiveHourly',
+    'quoteTimePricingRow','quoteAdvancedPricingNote','quoteCustomerTotalLine','quoteDeliveryTotal','settingsShowAdvancedPricing'])
+    assert.doesNotMatch(html,new RegExp(`id="${id}"`),id);
+  assert.doesNotMatch(html,/data-pricing-view=|data-pricing-method=|Required Profit|hourly/i);
+  // Q33: "Target Return" / "Target Margin" name the two Advanced Pricing methods only; no target is stored or shown elsewhere.
+  const outsideAdvanced=html.replace(/<div id="quoteAdvancedPricing"[\s\S]*?<\/div>\n            <\/div>/,'');
+  assert.doesNotMatch(outsideAdvanced,/Target Return|Target Margin/);
+  const ui=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
+  for(const name of ['applyManualTargetReturn','effectiveHourlyReturn','timePricingAmount','advancedPricingEnabled','setPricingView'])
+    assert.doesNotMatch(ui,new RegExp(`function ${name}\\(`),name);
+});
+test('no labour split: Labour Rate and Labour Hours stay hidden',()=>{
   assert.match(pricingBlock,/<label id="quoteLabourRateField" hidden>/);
   assert.match(pricingBlock,/<label id="quoteLabourHoursField" hidden>/);
 });
-test('Advanced Pricing holds Target Return ($), Target Margin (%), Build hours and the time helper',()=>{
-  const fields=pricingBlock.slice(pricingBlock.indexOf('id="quotePricingFieldsRow"'),pricingBlock.indexOf('id="quoteCustomerTotalLine"'));
-  for(const id of ['quoteTotalField','quoteProfitField','quoteMarginPercentField'])assert.ok(fields.includes(`id="${id}"`),id);
-  assert.match(fields,/<span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
-  const advanced=pricingBlock.slice(pricingBlock.indexOf('id="quoteAdvancedPricing"'));
-  for(const id of ['quoteBuildHoursField','quoteEffectiveHourly','quoteTimePricingRow','quoteTimeRate','quoteTimePricingApply']){
-    assert.ok(advanced.includes(`id="${id}"`),id);
-  }
-  assert.match(advanced,/Price from my time/);
-  assert.doesNotMatch(pricingBlock,/Required Profit|(?<!Target )Margin %/); // the legacy labels; Target Margin % is the approved name
+test('Delivery, Total price and Payments follow in that order; freight and packaging only for sending',()=>{
+  const at=['quoteFulfilmentGroup','quoteTotalBlock','quotePaymentBlock'].map((id)=>actions.indexOf(`id="${id}"`));
+  assert.ok(at.every((p)=>p>=0)&&at[0]<at[1]&&at[1]<at[2],JSON.stringify(at));
+  // Q33: one Delivery row; tapping it shows Collection | Courier / Shipping, and Freight/Packaging only for shipping.
+  assert.match(actions,/id="quoteDeliveryToggle"[^>]*aria-expanded="false"[^>]*aria-controls="quoteDeliveryPanel"[^>]*><span id="quoteDeliveryHeading">Delivery<\/span><em id="quoteDeliverySummary"><\/em>/);
+  const panel=actions.slice(actions.indexOf('id="quoteDeliveryPanel"'));
+  assert.match(panel,/^id="quoteDeliveryPanel"[^>]*hidden>/);
+  assert.match(panel,/data-fulfilment-method="collection"[^>]*>Collection</);
+  assert.match(panel,/data-fulfilment-method="shipping"[^>]*>Courier \/ Shipping</);
+  assert.doesNotMatch(html,/Customer collects|Send to customer/);
+  const fields=actions.slice(actions.indexOf('id="quoteDeliveryFields"'));
+  assert.match(fields.slice(0,600),/Freight[\s\S]*Packaging/);
+  assert.match(actions,/id="quoteTotalPriceRow"[\s\S]*?Total Price<small id="quoteTotalNote" hidden><\/small>[\s\S]*?id="quoteTotalPrice"/);
 });
-test('the one-time note has the approved wording and a dismiss control',()=>{
-  assert.match(pricingBlock,/id="quoteAdvancedPricingNote"[^>]*hidden/);
-  assert.match(pricingBlock,/Margin and target pricing are now in Settings → Show Advanced Pricing/);
-  assert.match(pricingBlock,/id="quoteAdvancedPricingNoteDismiss"/);
-});
-test('Settings → Pricing & Tax has the Show Advanced Pricing switch, and the tax, labour-rate and currency settings stay',()=>{
-  const card=html.slice(html.indexOf('id="settingsPricingTaxCard"'),html.indexOf('id="settingsPaymentDetailsCard"'));
-  assert.match(card,/id="settingsShowAdvancedPricingLabel">Show Advanced Pricing</);
-  assert.match(card,/<input id="settingsShowAdvancedPricing" type="checkbox"/);
-  for(const id of ['settingsTaxEnabled','settingsTaxRate','settingsTaxName','settingsBusinessGstNumber','settingsDefaultLabourRate','settingsCurrency']){
-    assert.ok(card.includes(`id="${id}"`),id);
-  }
-});
-test('Components jobs keep their own pricing: the new rod-pricing elements are hidden there',()=>{
-  const rule=css.slice(css.indexOf('#workshopPricingSection[data-job-kind="components"] :is('));
-  const selector=rule.slice(0,rule.indexOf('{'));
-  for(const id of ['quoteLegacyLabourLine','quoteAdvancedPricingNote','quoteAdvancedPricing','quoteRodPriceHint','quoteCustomerTotalLine']){
-    assert.ok(selector.includes(`#${id}`),id);
-  }
-});
-test('Advanced Pricing is hidden unless the pricing section says it is on',()=>{
-  assert.match(css,/#workshopPricingSection:not\(\[data-advanced-pricing="true"\]\) #quoteAdvancedPricing\{display:none\}/);
-});
-
-// ---------- 4. Review fixes (22 Nov 2026): GST clarity, document buttons, one heading style ----------
-test('GST: the rod figure, the customer total and the GST Amount box each say what they cover',()=>{
-  const c=pricing(newBuild());
-  assert.equal(c.rodPriceHintText({currencyCode:'NZD',taxActive:true,taxName:'GST',rodTax:'$117.26',jobType:'build'}),'NZD · GST on the rod $117.26');
-  assert.equal(c.rodPriceHintText({currencyCode:'NZD',taxActive:true,taxName:'VAT',rodTax:'$9.00',jobType:'repair'}),'NZD · VAT on the repair $9.00');
-  assert.equal(c.rodPriceHintText({currencyCode:'AUD',taxActive:false,taxName:'GST',rodTax:'$0.00',jobType:'build'}),'AUD');
-  // Q23 GST cleanup: the GST total is shown once, in the tax row; the customer total line does not repeat it.
-  assert.equal(c.customerTotalLineText({total:'$933.50',totalTax:'$121.76',taxActive:true,taxName:'GST'}),
-    'Customer total with delivery: $933.50 incl. GST');
-  assert.equal(c.customerTotalLineText({total:'$812.00',totalTax:'$0.00',taxActive:false,taxName:'GST'}),'Customer total with delivery: $812.00');
-  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:true}),'GST total');
-  assert.equal(c.taxAmountLabel({taxName:'GST',jobType:'build',withDelivery:false}),'GST total');
-  assert.equal(c.taxAmountLabel({taxName:'VAT',jobType:'repair',withDelivery:true}),'VAT total');
-  assert.equal(c.taxAmountLabel({taxName:'GST',componentsJob:true,withDelivery:true}),'GST Amount','Components jobs keep their label');
-});
-test('the build screen uses one section heading style: Fulfilment Method, Payment Status and Documents',()=>{
-  assert.match(html,/<span class="quote-job-type__label build-section-heading">Fulfilment Method<\/span>/);
-  assert.match(html,/<h3 class="quote-payment__heading build-section-heading">Payment Status<\/h3>/);
-  assert.match(html,/<span class="workshop-build-actions-docs__label build-section-heading">Documents<\/span>/);
-  assert.match(css,/#workshopScreen #workshopPricingSection \.build-section-heading\{[^}]*font-size:11px[^}]*\}/);
-});
-test('Documents are one compact row of secondary buttons; iPhone two per row at 44px; no full-width Customer Invoice',()=>{
-  assert.doesNotMatch(css,/#viewInvoicePreviewBtn\{grid-column:1\/-1\}/);
-  assert.match(css,/#workshopScreen \.workshop-build-actions-docs__grid\{display:flex;flex-wrap:wrap;gap:8px\}/);
-  assert.match(css,/@media \(max-width:640px\)\{[^@]*#workshopPricingSection \.workshop-build-actions-docs__grid > \*\{flex:1 1 calc\(50% - 4px\)[^}]*\}[^@]*min-height:44px/);
-});
-test('the red active-target marker is not used on the rod pricing fields',()=>{
-  const src=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
-  assert.match(src,/classList\.toggle\('quote-field--active-target',false\)/);
-});
-
-// ---------- 5. Final correction brief (22 Nov 2026): three pricing methods, Simple / Advanced, payment entries ----------
-for(const [name,settings,job] of [
-  ['GST 15%',{},{}],
-  ['tax off',{taxEnabled:false},{includeGst:false}],
-  ['VAT 20%',{taxRate:20,taxType:'vat'},{gstRate:20}],
-  ['GST 15% with courier delivery',{},{fulfilmentMethod:'shipping',deliveryEntryMode:'breakdown',freight:18,packaging:12}],
-]){
-  test(`the three pricing methods agree and are reversible (${name})`,()=>{
-    const c=pricing(newBuild(job),settings);
-    c.applyManualRodPrice('899');                                   // A. Set Rod Price
-    const a=c.rodPricingFigures(c.quoteMaths());
-    const rate=job.includeGst===false?0:(job.gstRate||15);
-    assert.ok(near(a.rodPrice,899));
-    assert.ok(near(a.rodExclusive,899/(1+rate/100)));
-    assert.ok(near(a.yourReturn,a.rodExclusive-210),'Your Return = Rod Price excl. tax - Components Cost');
-    assert.ok(near(a.returnPercent,a.yourReturn/a.rodExclusive*100,0.01),'margin on the ex-tax price, not markup');
-    c.applyManualTargetReturn(a.yourReturn.toFixed(2));             // B. Target Return ($)
-    assert.ok(near(c.rodPricingFigures(c.quoteMaths()).rodPrice,899,0.011));
-    c.applyManualTargetReturnPercent(String(a.returnPercent));      // C. Target Return (%)
-    const m=c.rodPricingFigures(c.quoteMaths());
-    assert.ok(near(m.rodPrice,899,0.011),[m.rodPrice]);
-    assert.ok(near(m.yourReturn,a.yourReturn,0.011));
-    c.applyManualRodPrice('899');                                   // and back to A
-    assert.ok(near(c.rodPricingFigures(c.quoteMaths()).rodPrice,899));
-    if(job.fulfilmentMethod==='shipping'){
-      const math=c.quoteMaths();
-      assert.ok(near(math.total,899+30*1.15),'delivery is charged on top');
-      assert.ok(near(c.rodPricingFigures(math).yourReturn,a.yourReturn),'delivery does not inflate the return');
-    }
-  });
-}
-test('Target Return (%) 50 means the ex-tax price is double the components cost (margin, not markup)',()=>{
-  const c=pricing(newBuild());
-  c.applyManualTargetReturnPercent('50');
-  const f=c.rodPricingFigures(c.quoteMaths());
-  assert.ok(near(f.rodExclusive,420));
-  assert.ok(near(f.rodPrice,483));
-});
-test('each pricing method has one editable field; a saved driver opens on its method',()=>{
-  const c=pricing(newBuild());
-  assert.deepEqual(['price','profit','margin','other'].map((d)=>c.pricingMethodForDriver(d)),['price','return','percent','price']);
-  assert.deepEqual(['price','return','percent'].map((m)=>c.editablePricingFieldId(m)),['quoteTotal','quoteProfit','quoteMarginPercent']);
-});
-test('Simple / Advanced is a view only: it starts from the Settings preference and never changes the build',()=>{
-  const c=pricing(newBuild());
-  const before=JSON.stringify(c.quote);
-  assert.equal(c.pricingViewAdvanced(),false,'Simple by default');
-  c.setPricingView('advanced');
-  assert.equal(c.pricingViewAdvanced(),true);
-  c.setPricingView('simple');
-  assert.equal(c.pricingViewAdvanced(),false);
-  assert.equal(JSON.stringify(c.quote),before,'switching does not change the build');
-  assert.equal(c.studioSettings.showAdvancedPricing,undefined,'nor the Settings preference');
-  const d=pricing(newBuild(),{showAdvancedPricing:true});
-  assert.equal(d.pricingViewAdvanced(),true,'Settings → Show Advanced Pricing opens on Advanced');
-});
-test('payment entries: one line per payment with amount and date; no heading; corrections kept',()=>{
-  const c=pricing(newBuild());
-  const money=(v)=>`$${Number(v).toFixed(2)}`;const date=(d)=>`[${d}]`;
-  assert.equal(c.paymentEntriesMarkup([],{money,date}),'');
-  const out=c.paymentEntriesMarkup([{id:'p1',type:'deposit',amount:300,date:'2026-11-22'},{id:'p2',type:'balance',amount:633.5,date:'2026-12-10'}],{money,date,showCorrections:true});
-  assert.doesNotMatch(out,/Payment history/i);
-  assert.match(out,/<li[^>]*><span>Deposit received<\/span><strong>\$300\.00 — \[2026-11-22\]<\/strong>/);
-  assert.match(out,/<li[^>]*><span>Balance received<\/span><strong>\$633\.50 — \[2026-12-10\]<\/strong>/);
-  assert.match(out,/data-correct-payment="p2"/);
-});
-test('the pricing screen: Rod Pricing heading with Simple / Advanced, then the method switch and the three fields',()=>{
-  assert.match(html,/id="quoteRodPricingHead"[\s\S]*?Rod Pricing[\s\S]*?data-pricing-view="simple"[^>]*>Simple<[\s\S]*?data-pricing-view="advanced"[^>]*>Advanced</);
-  const order=['quoteRodPricingHead','quoteCostBeforeMarginField','quotePricingMethodField','quoteTotalField','quoteProfitField','quoteMarginPercentField','quoteEarningsSummary'];
-  const at=order.map((id)=>html.indexOf(`id="${id}"`));
-  assert.ok(at.every((i)=>i>0)&&at.every((i,n)=>n===0||i>at[n-1]),JSON.stringify(at));
-  assert.match(html,/data-pricing-method="price"[^>]*>Rod Price<[\s\S]*?data-pricing-method="return"[^>]*>Target Return \$<[\s\S]*?data-pricing-method="percent"[^>]*>Target Margin %</);
-});
-test('payment status: totals, the entries list, then Record Payment; no details/summary heading',()=>{
-  const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('workshop-build-actions-docs'));
-  assert.doesNotMatch(block,/<summary>/);
-  assert.match(block,/id="quotePaymentHistory" class="quote-payment__entries"/);
-  assert.ok(block.indexOf('quotePaymentHistory')<block.indexOf('quoteRecordPaymentBtn'),'entries above Record Payment');
-});
-
-test('Q23 owner corrections: with Rod Price as the method, the return is not repeated - Your Return is the one result',()=>{
-  const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
-  assert.match(css,/#workshopPricingSection\[data-pricing-method="price"\] #quoteProfitField\{display:none\}/);
-  // The field itself, its maths and the other methods are unchanged.
-  assert.match(html,/<label id="quoteProfitField"><span id="quoteProfitLabel">Target Return \(\$\)<\/span>/);
-  assert.match(html,/id="quoteMarginPercentLabel">Target Margin \(% of price\)</);
-});
-
-test('Q23 GST cleanup: one tax row - Include Tax, the rate chip, the tax total - with the per-build rate field behind the chip',()=>{
+test('one tax row - Include tax, the rate chip, the tax total - with the per-build rate field behind the chip',()=>{
   const row=html.slice(html.indexOf('id="quoteTaxSummaryRow"'),html.indexOf('id="quoteTaxRateField"'));
   const at=(id)=>row.indexOf(`id="${id}"`);
   assert.ok(at('quoteIncludeGstField')>0 && at('quoteIncludeGstField')<at('quoteTaxRateChip') && at('quoteTaxRateChip')<at('quoteGstField'),row);
   assert.match(row,/id="quoteTaxRateChip"[^>]*aria-expanded="false"[^>]*aria-controls="quoteTaxRateField"/);
-  assert.match(html,/<label id="quoteTaxRateField"[^>]*hidden>/,'the per-build rate field stays, hidden until the chip is used');
+  assert.match(html,/<label id="quoteTaxRateField"[^>]*hidden>/);
   assert.doesNotMatch(row,/>GST|15%|15\.0/,'no hard-coded tax name or rate');
 });
-test('Q23 GST cleanup: Deposit Required sits with the payment terms at the top of Payment Status',()=>{
-  const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('id="quoteRecordPaymentBtn"'));
+test('Payments: Deposit Required, the payment rows, Payments Received/Balance Owing, then Add Payment; one form for add and edit',()=>{
+  const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('class="workshop-build-actions-docs"'));
   const at=(id)=>block.indexOf(`id="${id}"`);
-  for(const id of ['quoteDepositTerms','quoteDepositEnabledField','quoteDepositTypeField','quoteDepositValueField','quoteDepositValueError','quoteBalanceRemainingField'])assert.ok(at(id)>0,id);
-  assert.ok(at('quoteDepositTerms')<at('quotePaymentHistoryDetails'),'terms come before the payments received');
-  const pricing=html.slice(html.indexOf('id="workshopPricingFields"'),html.indexOf('class="workshop-build-actions-surface"'));
-  assert.doesNotMatch(pricing,/id="quoteDeposit/,'no deposit controls left under the tax row');
-  const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
-  assert.match(css,/\[data-has-payments="false"\] #quotePaymentBlock > :not\(#quoteDepositTerms\)\{display:none\}/,'a Components quote keeps its deposit terms');
+  for(const id of ['quoteDepositTerms','quoteDepositEnabledField','quoteDepositTypeField','quoteDepositValueField','quotePaymentHistory',
+    'quotePaymentBalanceOwing','quoteBalanceReceivedForm','quoteBalanceReceivedAmount','quoteBalanceReceivedDate',
+    'quoteBalanceReceivedSave','quoteBalanceReceivedCancel','quoteRecordPaymentBtn'])assert.ok(at(id)>0,id);
+  // Q33: no separate Remove button; an edited payment saved as $0 asks "Remove this payment?".
+  assert.doesNotMatch(block,/quotePaymentRemoveBtn|Remove payment/);
+  assert.match(block,/<span>Deposit Required<\/span>/);
+  assert.match(block,/<span>Payments Received<\/span>/);
+  assert.match(block,/id="quotePaymentBalanceLabel">Balance Owing</);
+  assert.match(block,/id="quoteRecordPaymentBtn" class="price-flow__disclosure price-flow__add"[^>]*><span id="quoteRecordPaymentLabel">Add Payment<\/span>/);
+  assert.ok(at('quoteDepositTerms')<at('quotePaymentHistory')&&at('quotePaymentHistory')<at('quotePaymentBalanceOwing')&&at('quotePaymentBalanceOwing')<at('quoteRecordPaymentBtn'));
+  assert.match(block,/id="quoteBalanceReceivedSave"[^>]*class="[^"]*primary-action/);
+  assert.doesNotMatch(block,/Correct|Correction|Reason|quotePaymentTypeField|quoteDepositReceivedForm|quoteBalanceRemaining/);
+  assert.doesNotMatch(block,/<summary>/);
+});
+test('Components jobs keep their own pricing: rod-only elements are hidden there',()=>{
+  const rule=css.slice(css.indexOf('#workshopPricingSection[data-job-kind="components"] :is('));
+  const selector=rule.slice(0,rule.indexOf('{'));
+  for(const id of ['quoteLegacyLabourLine','quoteAdvancedToggle','quoteAdvancedPricing'])assert.ok(selector.includes(`#${id}`),id);
+});
+test('the build screen uses one section heading style',()=>{
+  for(const label of ['Pricing','Payments'])assert.match(html,new RegExp(`build-section-heading[^>]*>${label}<`),label);
+  // Q33: Delivery is a row like Advanced Pricing, not a section heading with permanent buttons.
+  assert.match(html,/class="price-flow__disclosure price-flow__delivery-toggle"[^>]*><span id="quoteDeliveryHeading">Delivery</);
+  assert.match(html,/<span class="workshop-build-actions-docs__label build-section-heading">Documents<\/span>/);
+  assert.match(css,/#workshopScreen #workshopPricingSection \.build-section-heading\{[^}]*font-size:11px[^}]*\}/);
+});
+test('Documents are one compact row of secondary buttons; iPhone two per row at 44px',()=>{
+  assert.doesNotMatch(css,/#viewInvoicePreviewBtn\{grid-column:1\/-1\}/);
+  assert.match(css,/#workshopScreen \.workshop-build-actions-docs__grid\{display:flex;flex-wrap:wrap;gap:8px\}/);
+  assert.match(css,/@media \(max-width:640px\)\{[^@]*#workshopPricingSection \.workshop-build-actions-docs__grid > \*\{flex:1 1 calc\(50% - 4px\)[^}]*\}[^@]*min-height:44px/);
+});
+test('iPhone: the new rows, inputs and buttons get 44px touch targets',()=>{
+  const media=css.slice(css.indexOf('/* iPhone: 44px touch targets; the rows stay slim. */'));
+  assert.match(media,/\.price-flow__row,\.price-flow__disclosure,\.price-flow__summary,\.price-flow__switch,\.price-flow__payment\)\{min-height:44px\}/);
+  assert.match(media,/height:44px;min-height:44px/);
 });

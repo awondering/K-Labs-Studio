@@ -36,8 +36,9 @@ test('Q14: selector is outside the collapsible pricing-fields block and immediat
   const firstChild = /<section[^>]*>\s*<div id="([^"]+)"/.exec(surface)[1];
   assert.equal(firstChild, 'quoteFulfilmentGroup', 'first item of the actions area');
   assert.match(html, /<\/div>\s*<section class="workshop-build-actions-surface"[^>]*>\s*<div id="quoteFulfilmentGroup"/);
-  assert.match(block('quoteFulfilmentGroup'), /id="quoteDeliveryFields"[^>]*hidden[\s\S]*Freight[\s\S]*Packaging[\s\S]*Total Shipping/);
-  assert.match(block('quoteDeliveryFields'), /id="quoteDeliveryTotal"[^>]*readonly/);
+  assert.match(block('quoteFulfilmentGroup'), /id="quoteDeliveryFields"[^>]*hidden[\s\S]*Freight[\s\S]*Packaging/);
+  // Pricing redesign: no separate shipping total - the Total price below already includes delivery.
+  assert.doesNotMatch(block('quoteDeliveryFields'), /quoteDeliveryTotal|Total Shipping/);
   assert.ok(surface.indexOf('quoteFulfilmentGroup') < surface.indexOf('aria-label="Documents"'));
   assert.ok(block('workshopQuoteSummaryBody').includes('id="quoteFulfilmentGroup"'), 'still inside Job Pricing & Actions');
   assert.equal((html.match(/id="quoteFulfilmentGroup"/g) || []).length, 1, 'one selector only');
@@ -80,6 +81,8 @@ function dom(jobType) {
     quote: { jobType, fulfilmentMethod: '', fulfilmentChoiceRequired: true },
     $: (id) => ids[id] || null,
     setWorkshopSectionCollapsed: (id, collapsed, o) => calls.push(['expand', id, collapsed, o && o.instant]),
+    // Q33: the choice sits behind the one Delivery row, which the reveal opens.
+    setDeliveryPanelOpen: (open) => calls.push(['delivery', open]),
     window: { setTimeout: (f, ms) => timers.push([f, ms]) },
   };
   vm.createContext(c);
@@ -93,6 +96,7 @@ for (const jobType of ['build', 'repair', 'components']) {
     c.revealFulfilmentSelector();
     assert.equal(c.section.hidden, false, 'section shown');
     assert.deepEqual(c.calls.find((x) => x[0] === 'expand'), ['expand', 'workshopQuoteSummaryBody', false, true], 'section opened');
+    assert.deepEqual(c.calls.find((x) => x[0] === 'delivery'), ['delivery', true], 'the Delivery row is opened to show the two choices');
     const scroll = c.calls.find((x) => x[0] === 'scroll');
     assert.ok(scroll, 'scrolled into view');
     assert.equal(c.calls.at(-1)[0], 'focus');

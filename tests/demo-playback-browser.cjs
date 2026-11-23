@@ -26,8 +26,9 @@ const ck = (name, cond, detail) => { assert.ok(cond, `${name}${detail === undefi
 // The parts the demonstration picks, with the demonstration library's cost prices (js/demo-data.js).
 const PART_COSTS = { "7'0\" Medium Spin 6-10 kg": 168, 'Medium Spin Guide Set': 74, 'DPS 18': 28, 'EVA Grip 75 mm': 22, 'Aluminium Winding Check 16 mm': 6, 'NCP Nylon Thread A Black': 8 };
 const DELIVERY = { freight: 18, packaging: 12 };
-// Q23: the Rod Price typed in chapter 4, GST included (was: labour 5 h at $85, a 25% margin, then a $280 profit).
-const ROD_PRICE = 899;
+// The Job Price typed in chapter 4, excluding GST (pricing redesign; Q23 typed $899 including GST).
+const ROD_PRICE_EXCL = 780;
+const ROD_PRICE = ROD_PRICE_EXCL * 1.15; // stored including GST: $897
 const PARTS_COST = Object.values(PART_COSTS).reduce((a, b) => a + b, 0);
 const STOPPED = /^Demonstration paused\. Press Replay/;
 
@@ -53,10 +54,12 @@ async function figures(page) {
     const v = (id) => { const el = document.getElementById(id); return el ? (el.value !== undefined && el.tagName === 'INPUT' ? el.value : el.textContent) : null; };
     const maths = depositMaths();
     return {
-      shown: { componentsCost: v('quoteCostBeforeMargin'), rodPrice: v('quoteTotal'), rodPriceLabel: document.querySelector('#quoteTotalField > span').textContent, gst: v('quoteGst'),
-        customerTotal: v('quoteCustomerTotalLine'), customerTotalHidden: document.getElementById('quoteCustomerTotalLine').hidden,
+      shown: { componentsCost: v('quoteCostBeforeMargin'), rodPrice: v('quoteTotal'), rodPriceLabel: document.getElementById('quoteRodPriceLabel').textContent, jobNote: document.getElementById('quoteJobPriceNote').textContent, gst: v('quoteGst'),
+        customerTotal: v('quoteTotalPrice'), customerTotalHidden: document.getElementById('quoteTotalPriceRow').getClientRects().length === 0,
+        totalNote: v('quoteTotalNote'),
         earnings: v('quoteEstimatedEarnings'), summary: v('quotePricingSummaryValue'), headline: v('workshopBuildPricingSummaryText'), labourRate: v('quoteLabourRate'), labourHours: v('quoteLabourHours') },
       maths: { materialCost: maths.materialCost, labourCost: maths.labourCost, total: maths.total, gst: maths.gst, rodPrice: maths.subtotal - maths.freightCharge,
+        rodExcl: rodPricingFigures(maths).rodExclusive,
         earnings: maths.exclusiveRevenue - maths.materialCost - maths.freightCost, balanceOwing: maths.balanceOwing, amountReceived: maths.amountReceived,
         deliveryCost: maths.freightCost, deliveryCharge: maths.freightCharge },
       parts: quote.components.filter((c) => !componentRowIsEffectivelyEmpty(c)).map((c) => ({ name: c.category, libraryId: c.libraryComponentId || '', cost: componentRowLineCost(c), qty: componentRowQuantity(c), unitCost: Number(c.cost) })),
@@ -68,14 +71,17 @@ async function figures(page) {
 function checkFigures(label, f) {
   const { shown, maths } = f;
   ck(`${label}: Components Cost shown = quoteMaths() materials`, near(money(shown.componentsCost), maths.materialCost), [shown.componentsCost, maths.materialCost]);
-  ck(`${label}: Rod Price shown = quoteMaths() total less delivery`, near(Number(shown.rodPrice), maths.rodPrice), [shown.rodPrice, maths.rodPrice]);
-  ck(`${label}: the price is labelled Rod Price (incl. GST)`, shown.rodPriceLabel === 'Rod Price (incl. GST)', shown.rodPriceLabel);
+  // Pricing redesign: the Job Price is shown and typed excluding GST; the stored price (quoteMaths) still includes it.
+  ck(`${label}: Job Price shown = quoteMaths() rod price excl. GST`, near(Number(shown.rodPrice), maths.rodExcl), [shown.rodPrice, maths.rodExcl]);
+  ck(`${label}: the price is labelled Job Price, Excl. GST`, shown.rodPriceLabel === 'Job Price' && shown.jobNote === 'Excl. GST', [shown.rodPriceLabel, shown.jobNote]);
   ck(`${label}: GST shown = quoteMaths() GST`, near(money(shown.gst), maths.gst, 0.0051), [shown.gst, maths.gst]);
   ck(`${label}: Your Return shown = quoteMaths()`, near(money(shown.earnings), maths.earnings, 0.0051), [shown.earnings, maths.earnings]);
-  ck(`${label}: the customer total with delivery is shown only for Courier / Shipping, and = quoteMaths() total`,
-    (f.fulfilment === 'shipping' || maths.deliveryCharge > 0) ? (!shown.customerTotalHidden && near(money(shown.customerTotal), maths.total)) : shown.customerTotalHidden, [f.fulfilment, shown.customerTotal, shown.customerTotalHidden, maths.total]);
-  ck(`${label}: pricing summary shown = quoteMaths() total`, near(money(shown.summary), maths.total), [shown.summary, maths.total]);
-  ck(`${label}: build headline shows the same total`, shown.headline.includes(money(shown.summary).toLocaleString('en-NZ', { minimumFractionDigits: 2 })) || near(money(shown.headline.split('·')[1]), maths.total), shown.headline);
+  ck(`${label}: one Total price = quoteMaths() total; delivery is noted under it only when charged`,
+    !shown.customerTotalHidden && near(money(shown.customerTotal), maths.total)
+      && (maths.deliveryCharge > 0 ? new RegExp(`^Includes delivery \\$${maths.deliveryCharge.toFixed(2)}$`).test(shown.totalNote) : shown.totalNote === ''),
+    [f.fulfilment, shown.customerTotal, shown.totalNote, maths.total]);
+  ck(`${label}: the folded Job Price line = the Job Price excl. GST`, near(money(shown.summary), maths.rodExcl), [shown.summary, maths.rodExcl]);
+  ck(`${label}: build headline shows the total price`, near(money(shown.headline.split('·')[1]), maths.total), shown.headline);
 }
 
 async function boot(browser, base, contextOptions, search = '?demo') {
@@ -290,46 +296,46 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     const f = await figures(page);
-    f.view = await page.evaluate(() => {
-      const section = document.getElementById('workshopPricingSection');
-      return { advanced: section.getAttribute('data-advanced-pricing') === 'true', method: section.getAttribute('data-pricing-method'),
-        margin: document.getElementById('quoteMarginPercent').value, target: document.getElementById('quoteProfit').value,
-        editable: ['quoteTotal', 'quoteProfit', 'quoteMarginPercent'].filter((id) => !document.getElementById(id).readOnly) };
-    });
+    f.view = await page.evaluate(() => ({
+      advanced: document.getElementById('quoteAdvancedToggle').getAttribute('aria-expanded') === 'true',
+      method: document.querySelector('button[data-advanced-method][aria-pressed="true"]')?.getAttribute('data-advanced-method') || '',
+      target: document.getElementById('quoteAdvancedTarget').value, proposed: document.getElementById('quoteAdvancedProposed').textContent,
+    }));
     samples.push(f);
-    if (/couriered/.test(await page.evaluate(() => document.getElementById('demoCaption').textContent))) break;
+    if (/couriered, not collected/.test(await page.evaluate(() => document.getElementById('demoCaption').textContent))) break;
     await page.waitForTimeout(120);
   }
-  // Q23 final correction: the short Advanced Pricing moment - a 55% target margin, then a $450 target return, each
-  // recalculating the Rod Price (GST included) from the parts; only the chosen field can be typed into.
-  const byMargin = samples.find((s) => s.view.advanced && s.view.method === 'percent' && Number(s.view.margin) === 55);
-  const byReturn = samples.find((s) => s.view.advanced && s.view.method === 'return' && Number(s.view.target) === 450);
-  ck(`${label}: Advanced - a 55% target margin recalculates the Rod Price (margin on the price excl. GST)`,
-    !!byMargin && near(byMargin.maths.rodPrice, PARTS_COST / 0.45 * 1.15, 0.011) && near(byMargin.maths.earnings, PARTS_COST / 0.45 * 0.55, 0.011)
-      && JSON.stringify(byMargin.view.editable) === '["quoteMarginPercent"]', byMargin && { view: byMargin.view, maths: byMargin.maths });
-  ck(`${label}: Advanced - a $450 target return recalculates the Rod Price; Your Return shows $450`,
-    !!byReturn && near(byReturn.maths.rodPrice, (PARTS_COST + 450) * 1.15, 0.011) && near(money(byReturn.shown.earnings), 450)
-      && JSON.stringify(byReturn.view.editable) === '["quoteProfit"]', byReturn && { view: byReturn.view, maths: byReturn.maths });
-  ck(`${label}: back to Simple before delivery`, !samples[samples.length - 1].view.advanced, samples[samples.length - 1].view);
+  // Pricing redesign: the short Advanced pricing moment opens on Return $ with the current return filled in, then a 40%
+  // margin proposes parts / 0.6 (a margin on the price excl. GST). It is closed without applying: the price never moves.
+  const byReturn = samples.find((s) => s.view.advanced && s.view.method === 'return' && /^\d+\.\d\d$/.test(s.view.target));
+  const byMargin = samples.find((s) => s.view.advanced && s.view.method === 'percent' && Number(s.view.target) === 40);
+  ck(`${label}: Advanced - opens on Return $ with the current return filled in`,
+    !!byReturn && near(Number(byReturn.view.target), byReturn.maths.earnings, 0.0051), byReturn && { view: byReturn.view, maths: byReturn.maths });
+  ck(`${label}: Advanced - a 40% margin proposes parts / 0.6 as the Job Price excl. GST`,
+    !!byMargin && near(money(byMargin.view.proposed), Math.round(PARTS_COST / 0.6 * 100) / 100, 0.0051), byMargin && { view: byMargin.view, maths: byMargin.maths });
+  const advancedSamples = samples.filter((s) => s.view.advanced);
+  ck(`${label}: Advanced only proposes - the Job Price stays $${ROD_PRICE_EXCL} throughout`,
+    advancedSamples.length > 0 && advancedSamples.every((s) => near(s.maths.rodExcl, ROD_PRICE_EXCL)), advancedSamples.map((s) => s.maths.rodExcl));
+  ck(`${label}: Advanced pricing is closed again before delivery`, !samples[samples.length - 1].view.advanced, samples[samples.length - 1].view);
   const live = new Set(samples.map((s) => money(s.shown.earnings).toFixed(2)));
   ck(`${label}: Your Return changes live on screen as the rod price is typed (${live.size} different returns seen)`, live.size >= 2, [...live]);
-  const mismatched = samples.filter((s) => !near(Number(s.shown.rodPrice), s.maths.rodPrice) || !near(money(s.shown.earnings), s.maths.earnings, 0.0051) || !near(money(s.shown.componentsCost), s.maths.materialCost));
+  const mismatched = samples.filter((s) => !near(Number(s.shown.rodPrice), s.maths.rodExcl) || !near(money(s.shown.earnings), s.maths.earnings, 0.0051) || !near(money(s.shown.componentsCost), s.maths.materialCost));
   ck(`${label}: every live sample (${samples.length}) matches quoteMaths()`, mismatched.length === 0, mismatched.slice(0, 2));
   // Before delivery: the rod alone, at the Rod Price typed in.
   const rodOnly = await figures(page);
   checkFigures(`${label} rod price`, rodOnly);
-  ck(`${label}: a Rod Price of $${ROD_PRICE} incl. GST was set by typing it; Your Return = price excl. GST - parts`, near(rodOnly.maths.rodPrice, ROD_PRICE) && near(rodOnly.maths.earnings, ROD_PRICE / 1.15 - PARTS_COST, 0.0051), [rodOnly.maths.rodPrice, rodOnly.maths.earnings]);
+  ck(`${label}: a Job Price of $${ROD_PRICE_EXCL} excl. GST was set by typing it ($${ROD_PRICE} stored incl. GST); Your Return = price excl. GST - parts`,
+    near(rodOnly.maths.rodExcl, ROD_PRICE_EXCL) && near(rodOnly.maths.rodPrice, ROD_PRICE) && near(rodOnly.maths.earnings, ROD_PRICE_EXCL - PARTS_COST, 0.0051), [rodOnly.maths.rodExcl, rodOnly.maths.rodPrice, rodOnly.maths.earnings]);
   ck(`${label}: no delivery charge yet`, near(rodOnly.maths.deliveryCharge, 0), rodOnly.maths.deliveryCharge);
   const simple = await page.evaluate(() => ({
     labourHidden: ['quoteLabourRateField', 'quoteLabourHoursField'].every((id) => document.getElementById(id).hidden),
     advancedShown: document.getElementById('quoteAdvancedPricing').getClientRects().length > 0,
-    note: !document.getElementById('quoteAdvancedPricingNote').hidden,
     labourLine: !document.getElementById('quoteLegacyLabourLine').hidden,
-    returnLabel: document.querySelector('#quoteEarningsSummary > span').textContent,
-    returnNote: document.querySelector('#quoteEarningsSummary p').textContent,
+    returnLabel: document.querySelector('#quoteEarningsSummary > span').firstChild.textContent,
+    returnNote: document.querySelector('#quoteEarningsSummary small').textContent,
   }));
-  ck(`${label}: the simple pricing screen - no labour, margin, profit or Advanced Pricing; Your Return before overheads and income tax`,
-    simple.labourHidden && !simple.advancedShown && !simple.note && !simple.labourLine && simple.returnLabel === 'Your Return' && simple.returnNote === 'Before overheads and income tax.', simple);
+  ck(`${label}: the pricing screen - no labour, and Advanced Pricing folded; Your Return before overheads and income tax`,
+    simple.labourHidden && !simple.advancedShown && !simple.labourLine && simple.returnLabel === 'Your Return' && simple.returnNote === 'Before overheads and income tax.', simple);
   await waitChapter(page, 5, 120000);
   const priced = await figures(page);
   checkFigures(`${label} pricing`, priced);
@@ -352,12 +358,11 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
         const { left, right } = input.getBoundingClientRect();
         return left >= 0 && right > left && right <= document.documentElement.clientWidth;
       }),
-      total: amounts[2].value,
-      readOnly: amounts[2].readOnly,
+      inputs: amounts.length,
     };
   });
-  ck(`${label}: Freight, Packaging and the calculated Total Shipping fit under the fulfilment choice`,
-    shippingLayout.underChoice && shippingLayout.fitsScreen && shippingLayout.readOnly && shippingLayout.total === '$30.00', shippingLayout);
+  ck(`${label}: Freight and Packaging (and no separate shipping total) fit under the delivery choice`,
+    shippingLayout.underChoice && shippingLayout.fitsScreen && shippingLayout.inputs === 2, shippingLayout);
   ck(`${label}: the Rod Price and Your Return are unchanged by delivery`, near(priced.maths.rodPrice, ROD_PRICE) && near(priced.maths.earnings, rodOnly.maths.earnings, 0.0051), [rodOnly.maths.earnings, priced.maths.earnings, priced.maths.rodPrice]);
   if (shots) await page.screenshot({ path: path.join(shots, `${label}-3-pricing.png`) });
 
@@ -405,9 +410,9 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const accepted = await figures(page);
   ck(`${label}: Confirm Build makes the same job Active with the same quote number and price`, accepted.lifecycle === 'active' && accepted.quoteNumber === `${accepted.prefix}1046` && near(accepted.maths.total, priced.maths.total), [accepted.lifecycle, accepted.quoteNumber, accepted.maths.total]);
 
-  // Chapter 7: the deposit, through Studio's Record Payment form. The visitor's taps and typing in the form do nothing.
+  // Chapter 7: the deposit, through Studio's payment form. The visitor's taps and typing in the form do nothing.
   await page.waitForSelector('#quoteBalanceReceivedForm:not([hidden])', { timeout: 60000 });
-  for (const target of ['[data-payment-type="balance"]', '#quoteBalanceReceivedCancel', '#quoteBalanceReceivedSave', '#quoteBalanceReceivedAmount']) await visitorPress(page, target, touch);
+  for (const target of ['#quoteBalanceReceivedCancel', '#quoteBalanceReceivedSave', '#quoteBalanceReceivedAmount']) await visitorPress(page, target, touch);
   await page.keyboard.type('9999');
   await page.waitForFunction(() => (quote.payments || []).length === 1, null, { timeout: 60000 });
   const deposit = await figures(page);
@@ -435,7 +440,7 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   const complete = await figures(page);
   ck(`${label}: the final payment is the balance owing worked out by Studio (${complete.payments[1] && complete.payments[1].amount})`, complete.payments.length === 2 && complete.payments[1].type === 'balance' && near(complete.payments[1].amount, priced.maths.total - 300), complete.payments);
   ck(`${label}: paid in full = depositMaths() (received ${complete.maths.amountReceived}, owing ${complete.maths.balanceOwing})`, near(complete.maths.amountReceived, priced.maths.total) && near(complete.maths.balanceOwing, 0), complete.maths);
-  ck(`${label}: Payment Status shows PAID IN FULL`, /PAID IN FULL/.test(await page.evaluate(() => document.getElementById('quotePaymentBalanceOwing').textContent)));
+  ck(`${label}: Payments shows Paid in full`, /^Paid in full$/.test(await page.evaluate(() => document.getElementById('quotePaymentBalanceOwing').textContent)));
 
   // Chapter 10: the final invoice, issued through the local stand-in, watermarked and paid in full; then the summary.
   await page.waitForFunction(() => /ready to print or send/.test(document.getElementById('demoCaption').textContent), null, { timeout: 120000 });
@@ -458,7 +463,7 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: invoice received = both payments = the total`, near(money(row(/^Total received/)[1]), priced.maths.total) && invoice.record.payments.length === 2, row(/^Total received/));
   // Studio writes "Paid in full" (shown in capitals) in the balance row once nothing is owing.
   ck(`${label}: invoice balance = Paid in full, 0.00`, !!row(/^Paid in full$/i) && near(money(row(/^Paid in full$/i)[1]), 0) && !row(/^Balance owing$/i), invoice.amounts);
-  ck(`${label}: Print / Save as PDF and More documents are hidden`, !invoice.print.shown && invoice.print.disabled && invoice.more === 0, [invoice.print, invoice.more]);
+  ck(`${label}: PDF and More documents are hidden`, !invoice.print.shown && invoice.print.disabled && invoice.more === 0, [invoice.print, invoice.more]);
   const completed = await page.evaluate(() => ({
     estimate: quote.estimatedCompletionDate,
     actual: Date.parse(quote.completedAt),
@@ -502,8 +507,9 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: every one of the demonstration's ${acts.length} taps and typed characters was on a highlighted control`, acts.length > 300 && unlit.length === 0, unlit.slice(0, 5));
   ck(`${label}: every one of them was on a control fully in view (below the dock, on screen, not clipped)`, outOfView.length === 0, outOfView.slice(0, 5));
   const lit = await page.evaluate(() => window.__highlights);
-  // Q23: the Components Cost, Rod Price, customer total and Your Return (was: Required Profit and Margin %).
-  for (const id of ['quoteCostBeforeMarginField', 'quoteTotalField', 'quoteTotal', 'quoteEarningsSummary', 'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteDeliveryTotalField', 'quoteCustomerTotalLine', 'quoteBalanceReceivedAmount']) {
+  // The Components cost, Job Price, Your Return, Advanced Pricing, delivery and the Total price.
+  for (const id of ['quoteCostBeforeMarginField', 'quoteTotalField', 'quoteTotal', 'quoteEarningsSummary', 'quoteAdvancedToggle', 'quoteAdvancedTarget', 'quoteAdvancedProposed',
+    'quoteFulfilmentGroup', 'shipping', 'quoteFreight', 'quotePackaging', 'quoteTotalPriceRow', 'quoteBalanceReceivedAmount']) {
     const seen = lit.filter((h) => h.el === id);
     ck(`${label}: ${id} was highlighted in full view (${seen.length}x)`, seen.length > 0 && seen.every((h) => !h.view), seen);
   }

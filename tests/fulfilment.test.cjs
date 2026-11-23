@@ -42,11 +42,13 @@ function ctx(over={},status='quote'){
     markQuoteDirty:()=>{c.dirty=true;},
     saveQuoteCurrent:()=>{},
     updateQuoteSummary:()=>c.syncFulfilmentSelector(),
+    currency:money,activeAccountKey:()=>'acct',
     $:()=>null,
     document:{querySelectorAll:()=>[]},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','revealFulfilmentSelector','fulfilmentStudioNote','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
+  vm.runInContext('var deliveryPanelOpen=false,deliveryPanelQuote=null;',c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','revealFulfilmentSelector','fulfilmentStudioNote','deliverySummaryText','setDeliveryPanelOpen','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
   return c;
 }
 const full={addressLine1:'5 River Rd',cityTown:'Taupo',postcode:'3330'};
@@ -141,11 +143,11 @@ test('new job without a method is blocked before a document or email',()=>{
   let ran=false;c.runWithFulfilmentCheck(()=>{ran=true;});
   assert.ok(!ran);
   assert.equal(c.dialogs[0].type,'confirm');
-  assert.equal(c.dialogs[0].o.title,'Fulfilment Method Needed');
-  assert.match(c.dialogs[0].o.message,/Fulfilment Method/);
+  assert.equal(c.dialogs[0].o.title,'Delivery Needed');
+  assert.match(c.dialogs[0].o.message,/Choose Delivery \(Collection or Courier \/ Shipping\)/);
   // Q14: the warning offers a way to the selector; OK just closes. Neither creates the document.
   assert.equal(c.dialogs[0].o.actions.map((a)=>a.id).join(','),'choose,ok');
-  assert.equal(c.dialogs[0].o.actions[0].label,'Choose Fulfilment Method');
+  assert.equal(c.dialogs[0].o.actions[0].label,'Choose Delivery');
   const scheduled=[];c.window={setTimeout:(f)=>scheduled.push(f)};
   c.confirmCb('ok');assert.equal(scheduled.length,0);assert.ok(!ran);
   c.confirmCb('choose');assert.equal(scheduled.length,1);assert.ok(!ran);
@@ -170,9 +172,9 @@ test('shipping with complete address and collection proceed without warning',()=
 });
 
 test('Studio notes: saved-shipping exclusion, shipping incomplete, choose prompt',()=>{
-  assert.match(ctx({fulfilmentMethod:'collection',freightCharge:12}).fulfilmentStudioNote(),/saved shipping costs are excluded/i);
+  assert.match(ctx({fulfilmentMethod:'collection',freightCharge:12}).fulfilmentStudioNote(),/saved shipping costs are not charged while the customer collects/i);
   assert.equal(ctx({fulfilmentMethod:'collection'}).fulfilmentStudioNote(),'');
-  assert.match(ctx({fulfilmentMethod:'shipping'}).fulfilmentStudioNote(),/Delivery details needed/);
+  assert.match(ctx({fulfilmentMethod:'shipping'}).fulfilmentStudioNote(),/Add the delivery address/);
   assert.equal(ctx({...full,fulfilmentMethod:'shipping'}).fulfilmentStudioNote(),'');
   assert.match(ctx({fulfilmentChoiceRequired:true}).fulfilmentStudioNote(),/Choose/);
   assert.equal(ctx({}).fulfilmentStudioNote(),'');

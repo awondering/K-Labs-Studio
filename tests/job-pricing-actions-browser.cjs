@@ -34,7 +34,16 @@ async function boot(browser,base,viewport){
 const BEFORE=fs.readFileSync(path.join(__dirname,'fixtures-job-pricing-actions-ids.txt'),'utf8').split('\n').filter(Boolean);
 // The two old card containers, plus the controls the iPhone layout replaced: one Record Payment button (Deposit | Balance in
 // its form) and Payment Statement under the ••• menu.
-const REMOVED=['workshopActionsSection','workshopBuildActionsBody','quoteRecordDepositBtn','quoteRecordBalanceBtn','viewPaymentStatementBtn'];
+const REMOVED=['workshopActionsSection','workshopBuildActionsBody','quoteRecordDepositBtn','quoteRecordBalanceBtn','viewPaymentStatementBtn',
+  // Pricing, delivery and payments redesign: no separate shipping total, no target fields (Advanced pricing proposes a
+  // price instead), no tax status line or Balance After Deposit, and one payment form with no correction reason.
+  'quoteDeliveryTotalField','quoteDeliveryTotal','quoteProfitField','quoteProfit','quoteMarginPercentField','quoteMarginPercent',
+  'quoteGstStatus','quoteBalanceRemainingField','quoteBalanceRemainingLabel','quoteBalanceRemaining',
+  'quoteDepositReceivedForm','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositCorrectionReasonField',
+  'quoteDepositCorrectionReason','quoteDepositReceivedError','quoteDepositReceivedSave','quoteDepositReceivedCancel',
+  'quoteBalanceCorrectionReasonField','quoteBalanceCorrectionReason',
+  // Q33: no separate email button on the build; Email is in the document preview.
+  'emailQuoteBtn'];
 const open=(page)=>page.evaluate(()=>{
   goScreen('workshopScreen');showStudioWorkflow();
   Object.assign(quote,{customerName:'Synthetic Customer',buildName:'Rod',status:'active',quoteStatus:'active'});
@@ -56,9 +65,10 @@ async function main(){
     ck('no separate Job Actions card',await page.locator('#workshopActionsSection').count()===0);
     // The visible Documents buttons (More documents and its menu items are hidden for this job).
     const docs=await page.locator('.workshop-build-actions-docs__grid button').evaluateAll((b)=>b.filter((x)=>x.getClientRects().length>0).map((x)=>x.id));
-    ck('Documents group shows View, Email and Customer Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn']),docs);
+    ck('Documents group shows the customer document and the Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','viewInvoicePreviewBtn']),docs);
     const summary=await page.locator('#workshopBuildPricingSummaryText').textContent();
-    ck('collapsed summary shows status, price and amount owing',/Active/.test(summary)&&/1,?250/.test(summary)&&/Owing/.test(summary),summary);
+    // The Rod price is typed excluding GST: $1,250 + 15% = a $1,437.50 total price.
+    ck('collapsed summary shows status, price and amount owing',/Active/.test(summary)&&/1,?437\.50/.test(summary)&&/Owing/.test(summary),summary);
     const geo=await page.evaluate(()=>{
       const r=(id)=>document.getElementById(id).getBoundingClientRect();
       return {docW:document.documentElement.scrollWidth,vw:innerWidth,hs:r('workshopBuildLifecycleStatus'),tg:r('toggleCurrentBuildStatusBtn'),inv:r('viewInvoicePreviewBtn'),menu:r('currentBuildActionsMenuBtn'),sync:r('workshopBuildActionsStatus'),
@@ -83,7 +93,15 @@ async function main(){
     ck('payment entries appear once a payment exists',await page.locator('#quotePaymentHistoryDetails').isVisible());
     ck('no collapsible payment history heading',await page.locator('#quotePaymentBlock summary').count()===0&&!/payment history/i.test(await page.locator('#quotePaymentBlock').innerText()));
     const entry=await page.locator('#quotePaymentHistory .quote-payment__entry').first().textContent();
-    ck('the entry is readable without expanding anything: label, amount and date',/^Deposit received\$200\.00 NZD — /.test(entry)&&/2026/.test(entry),entry);
+    ck('the entry is readable without expanding anything: type, date and amount',/^Deposit.*2026.*\$200\.00/.test(entry),entry);
+    // Tapping the row opens its edit form in place; tapping again closes it. Nothing is written.
+    await page.locator('#quotePaymentHistory [data-edit-payment="p1"]').click();
+    // Q33: Amount, Date, Save and Cancel only - saving $0 asks "Remove this payment?" instead of a separate Remove button.
+    ck('tapping a payment opens its edit form with the amount filled in, and no separate Remove button',await page.locator('#quoteBalanceReceivedForm').isVisible()
+      &&await page.locator('#quoteBalanceReceivedAmount').inputValue()==='200.00'&&await page.locator('#quotePaymentRemoveBtn').count()===0);
+    await page.locator('#quotePaymentHistory [data-edit-payment="p1"]').click();
+    ck('tapping it again closes the form',await page.locator('#quoteBalanceReceivedForm').isHidden());
+    ck('the payment is unchanged',await page.evaluate(()=>JSON.stringify(quote.payments))==='[{"id":"p1","type":"deposit","amount":200,"date":"2026-11-10"}]');
     ck('summary reflects the remaining balance after a payment',/Owing/.test(await page.locator('#workshopBuildPricingSummaryText').textContent()),await page.locator('#workshopBuildPricingSummaryText').textContent());
     if(process.env.JPA_SHOT)await page.locator('#workshopPricingSection').screenshot({path:process.env.JPA_SHOT});
     await page.evaluate(()=>{setWorkshopSectionCollapsed('workshopQuoteSummaryBody',true,{instant:true});});

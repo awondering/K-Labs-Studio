@@ -81,9 +81,9 @@ test('settings control exists, persists via saveStudioSettings and resyncs on ac
 test('pricing labels and neutral headings',()=>{
   assert.ok(!/includes delivery/i.test(html));
   assert.ok(!/includes delivery/i.test(source.replace(/Delivery \(included in Total Price\)/g,'')));
-  // Q23: builds and repairs show the Rod Price (label set from the Tax Name); Components jobs keep Customer Price.
-  assert.match(html,/<span>Rod Price<\/span>/);
-  assert.match(source,/`Customer Price \(\$\{activeCurrencyCode\(\)\}\)`/);
+  // Q33: every job type shows the Job Price; the tax basis (and, for Components, the Sell Prices) is a quiet second line.
+  assert.match(html,/<span id="quoteRodPriceLabel">Job Price<\/span>/);
+  assert.doesNotMatch(source,/Customer price \(/);
   assert.match(html,/quote-section__toggle-title">Job Pricing &amp; Actions</);
   assert.ok(!/quote-section__toggle-title">Job Actions</.test(html));
   assert.ok(!/>Build Pricing</.test(html));
@@ -97,9 +97,11 @@ test('saved fulfilment method is highlighted when the job is rendered',()=>{
     const attrs={};
     return {attrs,getAttribute:(k)=>k==='data-fulfilment-method'?m:attrs[k],setAttribute:(k,v)=>{attrs[k]=v;}};
   });
-  const c={quote:{fulfilmentMethod:'shipping'},document:{querySelectorAll:()=>buttons},$:()=>null,fulfilmentStudioNote:()=>''};
+  const c={quote:{fulfilmentMethod:'shipping'},document:{querySelectorAll:()=>buttons},$:()=>null,fulfilmentStudioNote:()=>'',
+    deliveryAmounts:()=>({charge:0}),currency:(v)=>String(v)};
   vm.createContext(c);
-  vm.runInContext(['normalizeFulfilmentMethod','syncFulfilmentSelector'].map(fn).join('\n'),c);
+  vm.runInContext('var deliveryPanelOpen=false,deliveryPanelQuote=null;',c);
+  vm.runInContext(['normalizeFulfilmentMethod','deliverySummaryText','syncFulfilmentSelector'].map(fn).join('\n'),c);
   c.syncFulfilmentSelector();
   assert.equal(buttons[0].attrs['aria-pressed'],'false');
   assert.equal(buttons[1].attrs['aria-pressed'],'true');

@@ -37,7 +37,7 @@
   const api = {
     active,
     // Phase 3 review: the build of the demonstration files (checked by js/public-entry.js before anything is shown).
-    build: "build148-v277",
+    build: "build148-v278",
     accountId: DEMO_ACCOUNT_ID,
     isolated: false,
     failure: "",
@@ -276,9 +276,9 @@
   const DOWNLOAD_LINKS = 'a[download], a[href^="blob:"], a[href^="data:"], a[href^="mailto:"]';
   // Controls that would take something out of the app - an email draft, printing or a PDF, a file, an external page -
   // and More documents. In Demo Mode they are hidden and disabled (not only guarded), including those Studio builds
-  // later, such as the customer quote sheet's Open Email Draft and the invoice preview's Print / Save as PDF, and those
-  // Studio shows again by itself (Print / Save as PDF once an invoice is issued).
-  const OUTPUT_CONTROLS = ['#emailQuoteBtn', '#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
+  // later, such as the customer quote sheet's Email and the invoice preview's PDF, and those
+  // Studio shows again by itself (PDF once an invoice is issued).
+  const OUTPUT_CONTROLS = ['#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
     '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]',
     '#quoteMoreDocumentsWrap'];
   function lockOutputControls(doc) {
