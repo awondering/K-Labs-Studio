@@ -29,7 +29,7 @@ let klabsDemoMessageTimer = null;
 const DEMO_DIRECTOR_CONTROLS = ["#quoteSpecReelSeatRef [data-layout-seat-ref]", "#viewQuoteBtn", "#viewQuoteCloseBtn", "#quoteDeliveryToggle", "#quoteFulfilmentGroup [data-fulfilment-method]", "#confirmBuildBtn",
   "#confirmSheet [data-confirm-action]", "#quoteRecordPaymentBtn", "#quoteBalanceReceivedSave",
   "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
-  "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]"].join(", ");
+  "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]", "#choicePickerSheet [data-pick-step]", "#choicePickerAddToBuild"].join(", ");
 
 function klabsApplyReadOnlyControls() {
   const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;

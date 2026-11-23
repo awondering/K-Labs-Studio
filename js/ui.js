@@ -169,6 +169,8 @@ let holdDelayTimer=null;
 let holdContext=null;
 let activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:'',brandName:''};
 let activeChoicePickerSizeSelections=new Set();
+// Add Component: quantities chosen in the picker before anything is added, keyed by component + size (0 = not chosen).
+let componentPickQuantities=new Map();
 let studioCustomSelectState=null;
 let studioCustomSelectObserver=null;
 let studioCustomSelectSequence=0;
@@ -8018,6 +8020,7 @@ function startComponentCreateFromPicker(){
     query:search?search.value:'',
     opener,
     draft:null,
+    picks:new Map(componentPickQuantities),
   };
   closeComponentSheet();
   beginStudioComponentAdd(destination.categoryName,destination.subcategoryName);
@@ -8052,6 +8055,12 @@ function returnToComponentPicker(savedRecord){
   activeChoicePicker.categoryId=restored.categoryId;
   activeChoicePicker.subcategoryId=restored.subcategoryId;
   activeChoicePicker.brandName=savedRecord?'':context.brandName;
+  // Quantities chosen before Create Component are kept; the new component is chosen at 1 (a sized one opens its sizes).
+  componentPickQuantities=new Map(context.picks||[]);
+  if(savedRecord && componentPickerUsesQuantities(activeChoicePicker) && componentRecordSizeOptions(savedRecord).length<=1
+    && !componentPickQuantity(componentPickKey(savedRecord.id,savedRecord.name,componentRecordSizeOptions(savedRecord)[0]||''))){
+    setComponentPickQuantity({id:savedRecord.id,name:savedRecord.name,size:componentRecordSizeOptions(savedRecord)[0]||''},1);
+  }
   const search=$('choicePickerSearch');
   if(search)search.value=savedRecord?'':context.query;
   if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(activeChoicePicker.type,activeChoicePicker.index);
@@ -10426,7 +10435,11 @@ function advanceComponentPickerStage(name){
 }
 function retreatComponentPickerStage(){
   if(activeChoicePicker.type!=='category')return;
-  if(activeChoicePicker.stage==='component'){
+  if(activeChoicePicker.stage==='size'){
+    activeChoicePicker.stage='component';
+    activeChoicePicker.sizeComponent='';
+    activeChoicePicker.sizeComponentId='';
+  }else if(activeChoicePicker.stage==='component'){
     const hasSubcategories=componentPickerSubcategoryStageOptions(activeChoicePicker.categoryName,'').length>0;
     if(hasSubcategories){
       activeChoicePicker.stage='subcategory';
@@ -10492,6 +10505,7 @@ function ensureChoicePicker(){
         </select>
         <div id="choicePickerList" class="component-sheet__list"></div>
         <button id="choicePickerSizeAdd" class="primary-action component-sheet__size-add" type="button" data-choice-size-add hidden disabled>Add Component</button>
+        <button id="choicePickerAddToBuild" class="primary-action component-sheet__size-add" type="button" data-pick-add hidden disabled>Add to Build<span class="component-sheet__pick-count" hidden></span></button>
         <div id="choicePickerMenu" class="component-picker-menu" hidden>
           <button id="choicePickerMenuSelect" class="component-picker-menu__item" type="button">Select</button>
           <button id="choicePickerMenuRename" class="component-picker-menu__item" type="button">Rename</button>
@@ -10536,6 +10550,29 @@ function ensureChoicePicker(){
       const selectedSizes=Array.from(activeChoicePickerSizeSelections);
       closeComponentSheet();
       applyComponentSizeSelections(pickerContext.index,pickerContext.sizeComponent,selectedSizes,pickerContext.sizeComponentId);
+      return;
+    }
+    if(event.target.closest('[data-pick-add]')){
+      event.preventDefault();
+      commitComponentPicks();
+      return;
+    }
+    const pickStep=event.target.closest('button[data-pick-step]');
+    if(pickStep){
+      event.preventDefault();
+      if(!pickStep.disabled)changeComponentPickFromElement(pickStep,'step',Number(pickStep.getAttribute('data-pick-step'))||0);
+      return;
+    }
+    const pickSizes=event.target.closest('button[data-pick-sizes]');
+    if(pickSizes){
+      event.preventDefault();
+      openComponentPickSizes(pickSizes.getAttribute('data-pick-sizes')||'',pickSizes.getAttribute('data-pick-name')||'');
+      return;
+    }
+    const pickOption=event.target.closest('button.component-sheet__option[data-pick-key]');
+    if(pickOption){
+      event.preventDefault();
+      changeComponentPickFromElement(pickOption,'select',0);
       return;
     }
     const menuTrigger=event.target.closest('button[data-choice-menu-option]');
@@ -11165,7 +11202,11 @@ function applyComponentLibraryRecordToRow(index,name,libraryComponentId){
   const id=String(libraryComponentId||'').trim();
   const record=(id&&componentLibraryRecords().find((item)=>String(item.id||'').trim()===id))||findComponentLibraryRecordByName(name);
   if(!record)return;
-  const row=quote.components[index];
+  applyComponentLibraryRecordFields(quote.components[index],record);
+  saveQuoteCurrent();
+  markQuoteDirty();
+}
+function applyComponentLibraryRecordFields(row,record){
   row.libraryComponentId=String(record.id||'').trim();
   if(record.stockOnHand!==undefined)row.stockOnHand=numberOrZero(record.stockOnHand);
   row.subcategory=String(record.subcategory||'').trim();
@@ -11175,8 +11216,6 @@ function applyComponentLibraryRecordToRow(index,name,libraryComponentId){
   if(record.unitCost!==undefined)row.unitCost=numberOrZero(record.unitCost);
   if(record.unitPrice!==undefined)row.unitPrice=numberOrZero(record.unitPrice);
   if(record.cost!==undefined)row.cost=numberOrZero(record.cost);
-  saveQuoteCurrent();
-  markQuoteDirty();
 }
 function syncComponentRowEditorInputs(index){
   const row=quote.components[index];
@@ -11604,6 +11643,194 @@ function applyComponentSizeSelections(index,componentName,sizes,libraryComponent
   renderQuoteComponents();
   updateQuoteSummary();
 }
+// ---- Add Component quantities: select once, set quantities (and sizes), add once. ----
+// Used for a new line only (+ Add Component). Changing the component on an existing line stays a single choice.
+function componentPickerUsesQuantities(context){
+  const picker=context||activeChoicePicker;
+  if(!picker || picker.type!=='category' || !Number.isInteger(picker.index))return false;
+  const row=quote.components[picker.index];
+  return !!row && (pendingComponentDraftRows.has(row) || componentRowIsEffectivelyEmpty(row));
+}
+function componentPickKey(id,name,size){
+  const libraryId=specificationValue(id);
+  return `${libraryId?`id:${libraryId}`:`name:${normalizeNameKey(name)}`}::${normalizeNameKey(size)}`;
+}
+function componentPickQuantity(key){
+  const pick=componentPickQuantities.get(key);
+  return pick?pick.quantity:0;
+}
+function setComponentPickQuantity(pick,quantity){
+  const next=Math.max(0,Math.min(999,Math.round(Number(quantity))||0));
+  const key=componentPickKey(pick.id,pick.name,pick.size);
+  if(next>0){
+    componentPickQuantities.set(key,{id:specificationValue(pick.id),name:specificationValue(pick.name),size:specificationValue(pick.size),quantity:next});
+  }else{
+    componentPickQuantities.delete(key);
+  }
+  return next;
+}
+function componentPickTotals(){
+  let lines=0,items=0;
+  componentPickQuantities.forEach((pick)=>{lines+=1;items+=pick.quantity;});
+  return {lines,items};
+}
+// Same library component (id, else name for an unlinked line) and the same size, as the build's own de-duplication.
+// Different sizes and different components are never merged; an "Other" line never is.
+function componentLineMatchesPick(row,pick){
+  if(!row || componentRowIsEffectivelyEmpty(row) || !shouldMergeDuplicateComponentCategory(row.category))return false;
+  const id=specificationValue(pick&&pick.id);
+  const rowId=specificationValue(row.libraryComponentId);
+  const sameComponent=id?rowId===id:(!rowId && normalizeNameKey(row.category)===normalizeNameKey(pick&&pick.name));
+  return sameComponent && normalizeNameKey(row.selectedSize)===normalizeNameKey(pick&&pick.size);
+}
+// Adds every chosen component and size at its quantity in one change. A line already on the build gains the quantity;
+// each new size is its own line with the library's Buy and Sell prices. The empty draft line is removed.
+function addComponentPicksToBuild(draftIndex,picks){
+  const list=(picks||[]).filter((pick)=>pick && specificationValue(pick.name) && Number(pick.quantity)>0);
+  if(!list.length)return {added:0,increased:0};
+  const draft=quote.components[draftIndex];
+  const dropDraft=!!draft && (pendingComponentDraftRows.has(draft) || componentRowIsEffectivelyEmpty(draft));
+  const records=componentLibraryRecords();
+  const fresh=[];
+  let increased=0;
+  list.forEach((pick)=>{
+    const quantity=clampComponentQuantity(pick.quantity);
+    const existing=fresh.find((row)=>componentLineMatchesPick(row,pick))
+      || quote.components.find((row)=>row!==draft && componentLineMatchesPick(row,pick));
+    if(existing){
+      if(!fresh.includes(existing))increased+=1;
+      existing.quantity=clampComponentQuantity(componentRowQuantity(existing)+quantity);
+      return;
+    }
+    const row=defaultComponentRow();
+    row.category=specificationValue(pick.name);
+    const id=specificationValue(pick.id);
+    const record=(id && records.find((item)=>String(item.id||'').trim()===id)) || findComponentLibraryRecordByName(row.category);
+    if(record)applyComponentLibraryRecordFields(row,record);
+    else if(id)row.libraryComponentId=id;
+    if(specificationValue(pick.size))row.selectedSize=specificationValue(pick.size);
+    row.quantity=quantity;
+    fresh.push(row);
+  });
+  if(dropDraft)pendingComponentDraftRows.delete(draft);
+  // Newest lines sit directly below + Add Component, in the order they were listed.
+  quote.components=fresh.concat(quote.components.filter((row)=>!(dropDraft && row===draft)));
+  if(!quote.components.length)quote.components=[defaultComponentRow()];
+  saveQuoteCurrent();
+  markQuoteDirty();
+  expandedComponentRowIndex=-1;
+  shouldAnimateComponentRows=fresh.length>0;
+  renderQuoteComponents();
+  updateQuoteSummary();
+  return {added:fresh.length,increased};
+}
+function componentPickRowMarkup(pick,title,meta){
+  const key=componentPickKey(pick.id,pick.name,pick.size);
+  const quantity=componentPickQuantity(key);
+  const label=pick.size?`${pick.name} ${pick.size}`:pick.name;
+  const data=`data-pick-key="${escapeHtml(key)}" data-pick-id="${escapeHtml(pick.id||'')}" data-pick-name="${escapeHtml(pick.name)}" data-pick-size="${escapeHtml(pick.size||'')}"`;
+  return `<div class="component-sheet__row component-sheet__row--pick${quantity?' is-selected':''}" ${data}><button class="component-sheet__option" data-choice-option="${escapeHtml(pick.size||pick.name)}" data-choice-id="${escapeHtml(pick.id||'')}" ${data} type="button" title="${escapeHtml(label)}"><span class="component-sheet__option-title">${escapeHtml(title)}</span>${meta?`<small class="component-sheet__option-meta">${escapeHtml(meta)}</small>`:''}</button><div class="component-pick" role="group" aria-label="${escapeHtml(`Quantity of ${label}`)}"><button class="component-pick__step" data-pick-step="-1" ${data} type="button" aria-label="${escapeHtml(`Decrease ${label}`)}"${quantity?'':' disabled'}>&minus;</button><output class="component-pick__value" aria-live="polite">${quantity}</output><button class="component-pick__step" data-pick-step="1" ${data} type="button" aria-label="${escapeHtml(`Increase ${label}`)}">+</button></div></div>`;
+}
+function componentPickSizeSummary(record){
+  const sizes=componentRecordSizeOptions(record);
+  return sizes.map((size)=>({size,quantity:componentPickQuantity(componentPickKey(record.id,record.name,size))}))
+    .filter((item)=>item.quantity>0)
+    .map((item)=>`${item.size} ×${item.quantity}`).join(' · ');
+}
+function renderComponentPickQuantityRows(query){
+  const list=$('choicePickerList');
+  const stage=activeChoicePicker.stage;
+  if(stage==='size'){
+    const record=componentPickSizeRecord();
+    const normalized=normalizeNameKey(query);
+    const sizes=componentRecordSizeOptions(record).filter((size)=>!normalized || normalizeNameKey(size).includes(normalized));
+    const meta=componentPickerLeafSecondaryText({...record,sizeOptions:[]});
+    list.innerHTML=sizes.length
+      ?sizes.map((size)=>componentPickRowMarkup({id:String(record.id||''),name:record.name,size},size,meta)).join('')
+      :'<div class="component-sheet__empty">No matching sizes</div>';
+    return;
+  }
+  const options=componentPickerStageOptions(query).slice(0,200);
+  const createButton='<button class="component-sheet__add component-sheet__add--create" data-choice-create-component="true" type="button">+ CREATE COMPONENT</button>';
+  if(!options.length){
+    list.innerHTML=String(query||'').trim()
+      ?`<div class="component-sheet__empty">No matching results</div>${createButton}`
+      :`<div class="component-sheet__empty-state"><div class="component-sheet__empty-icon" aria-hidden="true">&#9676;</div><p class="component-sheet__empty">Nothing here yet. Create a component to add it to this family.</p>${createButton}</div>`;
+    return;
+  }
+  list.innerHTML=createButton+options.map((item)=>{
+    const record=item.record||{};
+    const title=componentDisplayIdentity({category:item.name},{record,includeSize:false,fallback:item.name});
+    const sizes=componentRecordSizeOptions(record);
+    if(sizes.length>1){
+      const chosen=componentPickSizeSummary(record);
+      return `<div class="component-sheet__row${chosen?' is-selected':''}" data-choice-row="${escapeHtml(item.name)}" data-choice-id="${escapeHtml(item.id||'')}"><button class="component-sheet__option" data-pick-sizes="${escapeHtml(item.id||'')}" data-pick-name="${escapeHtml(item.name)}" type="button" title="${escapeHtml(title)}"><span class="component-sheet__option-title">${escapeHtml(title)}</span><small class="component-sheet__option-meta">${escapeHtml(chosen||componentPickerLeafSecondaryText(record))}</small></button><span class="component-sheet__row-tools" aria-hidden="true">&#8250;</span></div>`;
+    }
+    return componentPickRowMarkup({id:item.id||'',name:item.name,size:sizes[0]||''},title,componentPickerLeafSecondaryText(record));
+  }).join('');
+}
+function componentPickSizeRecord(){
+  const id=specificationValue(activeChoicePicker.sizeComponentId);
+  return (id && componentLibraryRecords().find((item)=>String(item.id||'').trim()===id))
+    || findComponentLibraryRecordByName(activeChoicePicker.sizeComponent) || {id,name:activeChoicePicker.sizeComponent,sizeOptions:[]};
+}
+function openComponentPickSizes(id,name){
+  activeChoicePicker.stage='size';
+  activeChoicePicker.sizeComponentId=String(id||'');
+  activeChoicePicker.sizeComponent=String(name||'');
+  if($('choicePickerSearch'))$('choicePickerSearch').value='';
+  if($('choicePickerTitle'))$('choicePickerTitle').textContent=choicePickerTitle(activeChoicePicker.type,activeChoicePicker.index);
+  syncComponentPickerBackButton();
+  renderChoicePickerOptions('');
+  const list=$('choicePickerList');
+  if(list)list.scrollTop=0;
+}
+// Updates one row in place (no re-render, so the list keeps its scroll position under the finger).
+function syncComponentPickRow(key){
+  const quantity=componentPickQuantity(key);
+  document.querySelectorAll('#choicePickerList .component-sheet__row--pick').forEach((row)=>{
+    if(row.getAttribute('data-pick-key')!==key)return;
+    row.classList.toggle('is-selected',quantity>0);
+    const value=row.querySelector('.component-pick__value');
+    if(value)value.textContent=String(quantity);
+    const minus=row.querySelector('[data-pick-step="-1"]');
+    if(minus)minus.disabled=quantity<1;
+  });
+  syncComponentPickAddAction();
+}
+function changeComponentPickFromElement(el,mode,step){
+  const pick={id:el.getAttribute('data-pick-id')||'',name:el.getAttribute('data-pick-name')||'',size:el.getAttribute('data-pick-size')||''};
+  const key=componentPickKey(pick.id,pick.name,pick.size);
+  const current=componentPickQuantity(key);
+  if(mode==='select'){
+    if(current>0)return;
+    setComponentPickQuantity(pick,1);
+  }else{
+    setComponentPickQuantity(pick,current+step);
+  }
+  syncComponentPickRow(key);
+}
+function syncComponentPickAddAction(){
+  const action=$('choicePickerAddToBuild');
+  if(!action)return;
+  const useQuantities=componentPickerUsesQuantities(activeChoicePicker);
+  const totals=componentPickTotals();
+  const stage=activeChoicePicker.stage||'category';
+  action.hidden=!useQuantities || (!totals.lines && stage!=='component' && stage!=='size');
+  action.disabled=!totals.lines;
+  const count=action.querySelector('.component-sheet__pick-count');
+  if(count){
+    count.textContent=totals.items?String(totals.items):'';
+    count.hidden=!totals.items;
+  }
+}
+function commitComponentPicks(){
+  const context={...activeChoicePicker};
+  const picks=Array.from(componentPickQuantities.values());
+  if(!picks.length)return;
+  closeComponentSheet();
+  addComponentPicksToBuild(context.index,picks);
+}
 function recordsForChoiceType(type,query){
   if(type==='supplier')return supplierOptionRecords(query).map((record)=>({...record,id:''}));
   if(type==='blank')return blankOptionRecords(query);
@@ -11673,6 +11900,7 @@ function choicePickerTitle(type,index){
   if(type==='category'){
     const stage=activeChoicePicker.stage||'category';
     if(stage==='subcategory')return `${activeChoicePicker.categoryName||'Category'} \u2013 Select Subcategory`;
+    if(stage==='size')return `${activeChoicePicker.sizeComponent||'Component'} \u2013 Select Sizes`;
     if(stage==='component'){
       const scope=activeChoicePicker.subcategoryName||activeChoicePicker.categoryName||'';
       return scope?`${scope} \u2013 Select Component`:'Select Component';
@@ -11721,6 +11949,12 @@ function renderChoicePickerOptions(query){
 function renderComponentPickerCascadeOptions(query){
   const list=$('choicePickerList');
   if(!list)return;
+  syncComponentPickAddAction();
+  if(componentPickerUsesQuantities(activeChoicePicker) && (activeChoicePicker.stage==='component' || activeChoicePicker.stage==='size')){
+    hideChoicePickerMenu();
+    renderComponentPickQuantityRows(query);
+    return;
+  }
   const options=componentPickerStageOptions(query).slice(0,200);
   hideChoicePickerMenu();
   const hasQuery=!!String(query||'').trim();
@@ -12259,6 +12493,7 @@ function openChoicePicker(type,index,openerEl,options){
     brandName:'',
   };
   activeChoicePickerSizeSelections=new Set();
+  componentPickQuantities=new Map();
   choicePickerCategoryFilter='all';
   const sheet=$('choicePickerSheet');
   if(!sheet)return;
@@ -12304,7 +12539,9 @@ function closeComponentSheet(){
   if($('choicePickerAdd'))$('choicePickerAdd').hidden=false;
   activeChoicePicker={type:'category',index:-1,stage:'category',categoryName:'',subcategoryName:''};
   activeChoicePickerSizeSelections=new Set();
+  componentPickQuantities=new Map();
   syncComponentSizePickerAddAction();
+  syncComponentPickAddAction();
   activeChoiceEditor={mode:'add',originalName:'',blankId:''};
   syncComponentPickerBackButton();
   unlockModalLayer({restoreFocus:true});
@@ -19260,7 +19497,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v279';
+window.KLABS_UI_BUILD='build148-v280';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

@@ -35,7 +35,7 @@ function harness(records,components){
     document:{querySelector:()=>null},
   };
   vm.createContext(c);
-  const names=['normalizeNameKey','normalizeComponent','mergeComponentRecord','normalizeUniqueComponents','enforceSingleSourceComponents','componentRowIsEffectivelyEmpty','componentRowHasMeaningfulData','findComponentLibraryRecordByName','applyComponentLibraryRecordToRow','setChoiceValue','applyChoiceSelection','applyComponentSizeSelection','prependComponentDraftRow','applyComponentSizeSelections','defaultComponentRow'];
+  const names=['normalizeNameKey','normalizeComponent','mergeComponentRecord','normalizeUniqueComponents','enforceSingleSourceComponents','componentRowIsEffectivelyEmpty','componentRowHasMeaningfulData','findComponentLibraryRecordByName','applyComponentLibraryRecordToRow','applyComponentLibraryRecordFields','setChoiceValue','applyChoiceSelection','applyComponentSizeSelection','prependComponentDraftRow','applyComponentSizeSelections','defaultComponentRow'];
   vm.runInContext(names.map(functionSource).join('\n'),c);
   vm.runInContext('quote.components=quote.components.map((r)=>r);',c);
   return c;

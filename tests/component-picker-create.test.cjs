@@ -38,6 +38,8 @@ function harness({failSave=false,records=[],picker}={}){
     UNASSIGNED_COMPONENT_CATEGORY:'Unassigned',
     normalizeNameKey:(n)=>String(n||'').trim().toLowerCase(),
     hideChoicePickerMenu(){},
+    // Add Component quantities (js/ui.js): this harness is a line being changed, where the picker stays a single choice.
+    componentPickQuantities:new Map(),componentPickerUsesQuantities:()=>false,syncComponentPickAddAction(){},
     componentPickerStageOptions:()=>c.options||[],
     componentPickerLeafSecondaryText:()=>'',
     componentDisplayIdentity:(x)=>x.category,
