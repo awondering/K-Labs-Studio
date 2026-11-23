@@ -449,7 +449,7 @@ function confirmationRows(context){
   assert.ok(pricing,'customer pricing is present');
   const preview=Array.from(pricing[1].matchAll(/<span>([^<]+)<\/span><strong>([^<]+)<\/strong>/g),match=>`${match[1].toLowerCase()}: ${match[2]}`);
   const email=Array.from(context.customerEmailLines())
-    .filter(line=>/^(Total|Deposit required|Deposit received|Deposit still required|Balance owing|Balance remaining): /.test(line))
+    .filter(line=>/^(Total|Deposit required|Deposit received|Total received|Deposit still required|Balance owing|Balance remaining): /.test(line))
     .map(line=>line.toLowerCase().replace(/^total:/,'total price:'));
   assert.deepEqual(email,preview.map(line=>line.toLowerCase()),'email and preview payment amounts agree');
   return preview;
@@ -476,6 +476,20 @@ test('Build confirmation keeps meaningful partial-deposit amounts and fully paid
     payments:[{id:'p1',type:'deposit',amount:2500,date:'2026-10-18'}]});
   assert.deepEqual(confirmationRows(paid),[
     'total price: $2500.00 NZD','deposit received: $2500.00 NZD','balance owing: $0.00 NZD',
+  ]);
+});
+
+test('Q33: a confirmation with a deposit and a further payment calls the money Total Received and asks for no more deposit once it is covered',()=>{
+  const covered=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:1000,
+    payments:[{id:'d',type:'deposit',amount:900,date:'2026-10-18'},{id:'b',type:'balance',amount:300,date:'2026-10-20'}]});
+  assert.deepEqual(confirmationRows(covered),[
+    'total price: $2500.00 NZD','deposit required: $1000.00 NZD','total received: $1200.00 NZD','balance owing: $1300.00 NZD',
+  ]);
+  const short=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:1000,
+    payments:[{id:'d',type:'deposit',amount:400,date:'2026-10-18'},{id:'b',type:'balance',amount:100,date:'2026-10-20'}]});
+  assert.deepEqual(confirmationRows(short),[
+    'total price: $2500.00 NZD','deposit required: $1000.00 NZD','total received: $500.00 NZD',
+    'deposit still required: $600.00 NZD','balance owing: $2000.00 NZD',
   ]);
 });
 

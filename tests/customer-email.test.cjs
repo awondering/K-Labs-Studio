@@ -24,7 +24,7 @@ function build({status='quote',quote={},profile:p=profile}={}){
     depositMaths:()=>{
       const received=q.payments.reduce((s,x)=>s+x.amount,0);
       const dep=q.depositEnabled?200:0;
-      return{total,depositEnabled:q.depositEnabled,depositAmount:dep,remainingBalance:total-dep,amountReceived:received,balanceOwing:total-received,depositOutstanding:q.depositEnabled&&received<dep,depositStillRequired:Math.max(0,dep-received)};
+      return{total,depositEnabled:q.depositEnabled,depositAmount:dep,remainingBalance:total-dep,amountReceived:received,depositReceivedAmount:received,balanceOwing:total-received,depositOutstanding:q.depositEnabled&&received<dep,depositStillRequired:Math.max(0,dep-received)};
     },
     customerIncludedParts:()=>['3 × Two Part Clear Coat','1 × Tip Top · Fuji'],
     specificationValue:(v)=>String(v==null?'':v).trim(),

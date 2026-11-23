@@ -4004,7 +4004,8 @@ function rodPricingFigures(math){
   const componentsCost=numberOrZero(math&&math.materialCost);
   const labourCost=numberOrZero(math&&math.labourCost);
   const rodPrice=Math.max(0,numberOrZero(math&&math.subtotal)-numberOrZero(math&&math.freightCharge));
-  const rodExclusive=numberOrZero(math&&math.rodProfit)+componentsCost+labourCost;
+  // Never below zero: a build with delivery but no price yet shows 0.00, as v277's rod price did (Q33 verification).
+  const rodExclusive=Math.max(0,numberOrZero(math&&math.rodProfit)+componentsCost+labourCost);
   const yourReturn=numberOrZero(math&&math.exclusiveRevenue)-componentsCost-numberOrZero(math&&math.freightCost);
   const returnPercent=rodExclusive>0?(yourReturn/rodExclusive)*100:0;
   return{componentsCost,labourCost,rodPrice,rodExclusive,rodTax:rodPrice-rodExclusive,yourReturn,returnPercent};
@@ -14918,11 +14919,14 @@ function customerQuoteSummaryMarkup(){
   const labels=customerDocumentLabels();
   const buildSummary=labels.key==='complete'&&labels.jobType==='build';
   const paidInFull=buildSummary&&math.total>0&&math.balanceOwing===0;
-  const receivedLabel=buildSummary&&(paidInFull||math.amountReceived!==math.depositReceivedAmount)?'Total Received':'Deposit Received';
+  // Q33 verification: money beyond the deposit payment is never called a deposit, on any document.
+  const receivedLabel=(buildSummary&&paidInFull)||math.amountReceived!==math.depositReceivedAmount?'Total Received':'Deposit Received';
   const balanceLabel=paidInFull?'Paid in full':'Balance Owing';
   const buildConfirmation=labels.key==='active'&&labels.jobType==='build';
   const showDepositRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total));
-  const showDepositStillRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing));
+  // Once the customer has paid at least the deposit in total, no further deposit is asked for on a document.
+  const depositCoveredByPayments=math.amountReceived+0.005>=math.depositAmount;
+  const showDepositStillRequired=shortfall&&!depositCoveredByPayments&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing));
   const pricingRows=pricePending
     ?`${totalRow}${math.amountReceived>0?`<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>`:''}`
     :math.amountReceived>0
@@ -15604,8 +15608,8 @@ function customerEmailLines(){
       const shortfall=math.depositEnabled&&math.depositOutstanding;
       const buildConfirmation=docLabels.key==='active'&&docLabels.jobType==='build';
       if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total)))lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`);
-      lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
-      if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing)))lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
+      lines.push(`${math.amountReceived!==math.depositReceivedAmount?'Total received':'Deposit received'}: ${currencyWithCode(math.amountReceived)}`);
+      if(shortfall&&math.amountReceived+0.005<math.depositAmount&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing)))lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
       lines.push(`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
     }else if(!isComponents&&(docLabels.key!=='active'||isRepair||math.depositEnabled)&&(docLabels.key!=='quote'||depositRequired)){
       lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`,`Balance remaining: ${currencyWithCode(math.remainingBalance)}`);
