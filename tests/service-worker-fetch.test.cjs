@@ -24,20 +24,21 @@ function harness(){
   const puts=[];
   const fetches=[];
   let network=(request)=>Promise.resolve(response(`network:${request.url}`));
+  const match=async(request,options={})=>{
+    const url=typeof request==='string'?request:request.url;
+    if(store.has(url))return store.get(url);
+    if(options.ignoreSearch){
+      const bare=url.split('?')[0];
+      for(const [key,value] of store)if(key.split('?')[0]===bare)return value;
+    }
+    return undefined;
+  };
   const caches={
     open:async()=>({
-      put:async(request,value)=>{puts.push({url:request.url,value});store.set(request.url,value);},
-      addAll:async(requests)=>{requests.forEach(request=>store.set(request.url,response(`precached:${request.url}`)));},
+      put:async(request,value)=>{const url=typeof request==='string'?request:request.url;puts.push({url,value});store.set(url,value);},
+      match,
     }),
-    match:async(request,options={})=>{
-      const url=typeof request==='string'?request:request.url;
-      if(store.has(url))return store.get(url);
-      if(options.ignoreSearch){
-        const bare=url.split('?')[0];
-        for(const [key,value] of store)if(key.split('?')[0]===bare)return value;
-      }
-      return undefined;
-    },
+    match,
     keys:async()=>[],delete:async()=>true,
   };
   const sandbox={
@@ -56,30 +57,25 @@ function harness(){
   return {dispatch,store,puts,fetches,setNetwork(fn){network=fn;},listeners};
 }
 
-test('a cached navigation opens at once without waiting for the network, and refreshes the cache afterwards',async()=>{
+// Q33 production regression: v278's page ran v277's ui.js on real devices because each file was refreshed on its own in the
+// background. A release is now installed and served as one complete set; nothing refreshes a single file.
+test('a cached navigation opens at once from this release, with no network request and no single-file refresh',async()=>{
   const h=harness();
   h.store.set(`${SCOPE}index.html`,response('cached-index'));
-  let finish;
-  h.setNetwork(()=>new Promise(resolve=>{finish=()=>resolve(response('fresh-index'));}));
   const result=await h.dispatch(SCOPE,{mode:'navigate'});
-  assert.equal((await result.responded).body,'cached-index','served from the cache while the network is still pending');
-  assert.equal(h.fetches.length,1);
-  assert.equal(h.fetches[0].cache,'no-store','the background refresh bypasses the HTTP cache');
-  assert.equal(result.waited.length,1,'the worker stays alive until the refresh completes');
-  finish();
-  await Promise.all(result.waited);
-  assert.equal(h.puts.length,1);
-  assert.equal(h.puts[0].value.body,'fresh-index');
+  assert.equal((await result.responded).body,'cached-index');
+  assert.equal(h.fetches.length,0,'no request: the page never changes apart from its code');
+  assert.equal(h.puts.length,0,'nothing is rewritten in the release cache');
 });
 
-test('a cached script or stylesheet is served at once and refreshed with revalidation',async()=>{
-  for(const file of ['js/ui.js','css/studio.css','manifest.json','kr-guide-layout/index.html']){
+test('a cached script, stylesheet or page is served from this release and never refreshed on its own',async()=>{
+  for(const file of ['js/ui.js','css/studio.css','manifest.json','kr-guide-layout/index.html','js/public-entry.js']){
     const h=harness();
     h.store.set(`${SCOPE}${file}`,response(`cached:${file}`));
-    h.setNetwork(()=>new Promise(()=>{}));
     const result=await h.dispatch(`${SCOPE}${file}`);
     assert.equal((await result.responded).body,`cached:${file}`);
-    assert.equal(h.fetches[0].cache,'no-cache',file);
+    assert.equal(h.fetches.length,0,`${file}: no background request`);
+    assert.equal(h.puts.length,0,`${file}: the release copy is not replaced`);
   }
 });
 
@@ -105,15 +101,28 @@ test('offline navigation falls back to the cached index, including for query str
   }
 });
 
-test('a failed background refresh keeps serving the cached copy and does not replace it with an error',async()=>{
+test('install downloads every file for this release (version in the query, no HTTP cache) and stores each under its own address',async()=>{
   const h=harness();
-  h.store.set(`${SCOPE}js/app.js`,response('cached-app'));
-  h.setNetwork(()=>Promise.resolve(response('server error',500)));
-  const result=await h.dispatch(`${SCOPE}js/app.js`);
-  assert.equal((await result.responded).body,'cached-app');
-  await Promise.all(result.waited);
-  assert.equal(h.puts.length,0,'a non-200 response is never cached');
-  assert.equal(h.store.get(`${SCOPE}js/app.js`).body,'cached-app');
+  let installed;
+  h.listeners.install({waitUntil(value){installed=value;}});
+  await installed;
+  const version=/const APP_SHELL_VERSION='([^']+)'/.exec(source)[1];
+  assert.ok(h.fetches.length>40);
+  for(const request of h.fetches){
+    assert.equal(request.cache,'reload',request.url);
+    assert.equal(new URL(request.url).searchParams.get('shell'),version,request.url);
+  }
+  assert.ok(h.store.has(`${SCOPE}js/ui.js`) && h.store.has(`${SCOPE}index.html`));
+  assert.ok(![...h.store.keys()].some((url)=>url.includes('shell=')),'stored under the plain address the page asks for');
+});
+
+test('one file that cannot be downloaded fails the whole install and stores nothing, so the previous release keeps running',async()=>{
+  const h=harness();
+  h.setNetwork((request)=>Promise.resolve(request.url.includes('js/ui.js')?response('server error',500):response(`network:${request.url}`)));
+  let installed;
+  h.listeners.install({waitUntil(value){installed=value;}});
+  await assert.rejects(installed,/ui\.js could not be downloaded/);
+  assert.equal(h.puts.length,0);
 });
 
 test('requests the worker does not own are left alone',async()=>{

@@ -15,6 +15,45 @@
 <link rel="canonical" href="https://studio.klabs.co.nz/" />
 <meta name="robots" content="index, follow" />
 
+  <script>
+  /* Q33 production fix: this page and Studio's code must come from the same release. An older service worker refreshed
+     files one at a time, so a device could run this page with an older ui.js (dead Delivery and Advanced Pricing rows,
+     a blank Total Price, old payment buttons). If Studio's code is not this release, clear the cached files and reload
+     once; if that does not help, say so plainly instead of showing a half-working screen. */
+  (function () {
+    var BUILD = 'build148-v279';
+    window.KLABS_SHELL_BUILD = BUILD;
+    function notice(text) {
+      var show = function () {
+        var box = document.getElementById('klabsShellNotice') || document.createElement('div');
+        box.id = 'klabsShellNotice';
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;background:#050606;color:#e8e4da;font:600 16px/1.5 -apple-system,system-ui,sans-serif;text-align:center';
+        box.textContent = text;
+        if (!box.parentNode) document.body.appendChild(box);
+      };
+      if (document.body) show(); else document.addEventListener('DOMContentLoaded', show, { once: true });
+    }
+    window.KLABS_SHELL_RECOVER = function (found) {
+      var key = 'klabs-shell-recovery', last = 0;
+      console.error('[K-Labs Studio] This page is ' + BUILD + ' but Studio’s code is ' + found + '. Loading the complete release again.');
+      try { last = Number(sessionStorage.getItem(key) || 0); } catch (e) {}
+      if (Date.now() - last < 60000) { notice('Studio is finishing an update. Close Studio completely, then open it again.'); return; }
+      try { sessionStorage.setItem(key, String(Date.now())); } catch (e) {}
+      notice('Updating Studio…');
+      var clear = 'caches' in window ? caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }) : Promise.resolve();
+      var update = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (list) { return Promise.all(list.map(function (r) { return r.update().catch(function () {}); })); }) : Promise.resolve();
+      Promise.all([clear.catch(function () {}), update.catch(function () {})]).then(function () { location.reload(); });
+    };
+    var ui;
+    Object.defineProperty(window, 'KLABS_UI', { configurable: true, enumerable: true,
+      get: function () { return ui; },
+      set: function (value) {
+        ui = value;
+        if (value && window.KLABS_UI_BUILD !== BUILD) window.KLABS_SHELL_RECOVER(window.KLABS_UI_BUILD || 'an older release');
+      } });
+  })();
+  </script>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
@@ -1551,7 +1590,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v278" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v279" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>

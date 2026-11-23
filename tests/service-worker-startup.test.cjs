@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'..','js','app.js'),'utf8');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
-function harness({readyState='loading',local=false,controlled=false}={}){
+function harness({readyState='loading',local=false,controlled=false,sessionValues={}}={}){
   const windowListeners={};
   const documentListeners={};
   const workerListeners={};
@@ -27,7 +27,7 @@ function harness({readyState='loading',local=false,controlled=false}={}){
     addEventListener(name,fn){workerListeners[name]=fn;},
     ready:Promise.resolve(registration),
   };
-  const session=new Map();
+  const session=new Map(Object.entries(sessionValues));
   const location={protocol:'https:',hostname:local?'localhost':'studio.klabs.co.nz',href:'https://studio.klabs.co.nz/',reload(){calls.reloads++;},replace(){calls.reloads++;}};
   const window={addEventListener(name,fn){(windowListeners[name] ||= []).push(fn);}};
   const document={readyState,visibilityState:'visible',getElementById:id=>labels[id]||null,
@@ -91,4 +91,22 @@ test('late local development startup still unregisters workers and reloads once'
   assert.equal(h.calls.unregister,1);
   assert.equal(h.calls.reloads,1);
   assert.equal(h.calls.register.length,0);
+});
+
+// Q33 production regression: the reload flag was set to '1' once and never cleared, so after one update in a long-lived tab or
+// home-screen app, every later release took over WITHOUT a reload and the open page kept running the older code.
+test('a later release in the same session still reloads the page (the old one-time flag does not block it)',async()=>{
+  const h=harness({readyState:'complete',controlled:true,sessionValues:{'klabs-sw-controller-reload':'1'}});
+  await settle();
+  h.workerListeners.controllerchange();
+  assert.equal(h.calls.reloads,1,'a flag left by an earlier update does not stop this reload');
+});
+
+test('an update an hour after the last reload reloads again; a second takeover within seconds does not loop',async()=>{
+  const h=harness({readyState:'complete',controlled:true,sessionValues:{'klabs-sw-controller-reload':String(Date.now()-3600000)}});
+  await settle();
+  h.workerListeners.controllerchange();
+  assert.equal(h.calls.reloads,1);
+  h.workerListeners.controllerchange();
+  assert.equal(h.calls.reloads,1,'no reload loop');
 });
