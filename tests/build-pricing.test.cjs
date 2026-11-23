@@ -407,8 +407,8 @@ test('Customer document and email render received-payment wording and markup wir
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   // Pricing redesign: Studio has one payment form (Amount, Date, Save) for deposits and payments; customer documents unchanged.
   ['quoteRecordPaymentBtn','quoteBalanceReceivedAmount','quoteBalanceReceivedDate','quoteBalanceReceivedSave'].forEach(id=>assert.match(html,new RegExp(`id="${id}"`)));
-  assert.match(html,/id="quoteRecordPaymentBtn"[^>]*>Add payment</);
-  assert.match(html,/id="quotePaymentBalanceLabel">Balance owing</);
+  assert.match(html,/id="quoteRecordPaymentBtn"[^>]*><span id="quoteRecordPaymentLabel">Add Payment</);
+  assert.match(html,/id="quotePaymentBalanceLabel">Balance Owing</);
   assert.doesNotMatch(html,/quoteDepositReceivedAmount|quoteBalanceRemainingLabel|Balance After Deposit/);
 });
 

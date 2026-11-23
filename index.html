@@ -980,37 +980,37 @@
             <!-- Pricing, Delivery and Payments: one top-to-bottom flow. Components cost and Your return are calculated; the
                  Rod price (excluding tax) is the one price the builder sets. Advanced pricing only proposes a Rod price. -->
             <div id="workshopPricingFields" class="quote-grid build-pricing price-flow">
-            <button id="quotePricingSummaryBtn" class="price-flow__summary quote-grid__full" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span id="quotePricingSummaryLabel">Rod price</span><strong id="quotePricingSummaryValue"></strong></button>
+            <button id="quotePricingSummaryBtn" class="price-flow__summary quote-grid__full" type="button" aria-expanded="false" aria-controls="workshopPricingFields"><span id="quotePricingSummaryLabel">Job Price</span><strong id="quotePricingSummaryValue"></strong></button>
             <!-- Q23: the labour split is no longer offered. The fields stay (hidden) so saved builds keep their labour exactly. -->
             <label id="quoteLabourRateField" hidden><span>Labour Rate</span><input id="quoteLabourRate" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
             <label id="quoteLabourHoursField" hidden><span>Labour Hours</span><input id="quoteLabourHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
             <h3 id="quoteRodPricingHead" class="build-section-heading price-flow__heading quote-grid__full">Pricing</h3>
-            <div id="quoteCostBeforeMarginField" class="price-flow__row quote-grid__full"><span>Components cost</span><output id="quoteCostBeforeMargin" for="quoteComponentsList"></output></div>
-            <label id="quoteTotalField" class="price-flow__row price-flow__row--input quote-grid__full"><span id="quoteRodPriceLabel">Rod price</span><span class="price-flow__field"><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></span></label>
+            <div id="quoteCostBeforeMarginField" class="price-flow__row quote-grid__full"><span>Components Cost</span><output id="quoteCostBeforeMargin" for="quoteComponentsList"></output></div>
+            <label id="quoteTotalField" class="price-flow__row price-flow__row--input quote-grid__full"><span><span id="quoteRodPriceLabel">Job Price</span><small id="quoteJobPriceNote" hidden></small></span><span class="price-flow__field"><input id="quoteTotal" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></span></label>
             <p id="quoteRodPriceHint" class="price-flow__hint quote-grid__full"></p>
             <p id="quotePriceWarning" class="price-flow__hint quote-grid__full" aria-live="polite"></p>
             <div id="quoteEarningsSummary" class="price-flow__row price-flow__row--return quote-grid__full" aria-live="polite">
-              <span>Your return<small>Before overheads and income tax.</small></span><strong id="quoteEstimatedEarnings">$0.00</strong>
+              <span>Your Return<small>Before overheads and income tax.</small></span><strong id="quoteEstimatedEarnings">$0.00</strong>
             </div>
             <p id="quoteLegacyLabourLine" class="price-flow__hint quote-grid__full" hidden></p>
-            <button id="quoteAdvancedToggle" class="price-flow__disclosure quote-grid__full" type="button" aria-expanded="false" aria-controls="quoteAdvancedPricing"><span>Advanced pricing</span><b aria-hidden="true">&#8250;</b></button>
-            <div id="quoteAdvancedPricing" class="price-flow__advanced quote-grid__full" role="group" aria-label="Advanced pricing" hidden>
-              <div class="ds-segmented price-flow__methods" role="group" aria-label="Work out the rod price from">
-                <button type="button" class="ds-segmented__option" data-advanced-method="return" aria-pressed="true">Return $</button>
-                <button type="button" class="ds-segmented__option" data-advanced-method="percent" aria-pressed="false">Margin %</button>
+            <button id="quoteAdvancedToggle" class="price-flow__disclosure quote-grid__full" type="button" aria-expanded="false" aria-controls="quoteAdvancedPricing"><span>Advanced Pricing</span><b aria-hidden="true">&#8250;</b></button>
+            <div id="quoteAdvancedPricing" class="price-flow__advanced quote-grid__full" role="group" aria-label="Advanced Pricing" hidden>
+              <div class="ds-segmented price-flow__methods" role="group" aria-label="Price from">
+                <button type="button" class="ds-segmented__option" data-advanced-method="return" aria-pressed="true">Target Return</button>
+                <button type="button" class="ds-segmented__option" data-advanced-method="percent" aria-pressed="false">Target Margin</button>
               </div>
-              <label class="price-flow__row price-flow__row--input"><span id="quoteAdvancedTargetLabel">Return wanted</span><span class="price-flow__field"><input id="quoteAdvancedTarget" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></span></label>
-              <div class="price-flow__row"><span>Rod price</span><strong id="quoteAdvancedProposed"></strong></div>
+              <label class="price-flow__row price-flow__row--input"><span id="quoteAdvancedTargetLabel">Target Return ($)</span><span class="price-flow__field"><input id="quoteAdvancedTarget" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></span></label>
+              <div class="price-flow__row price-flow__row--apply"><span>Job Price</span><strong id="quoteAdvancedProposed"></strong><button id="quoteAdvancedApply" class="ghost-action price-flow__apply" type="button">Apply</button></div>
               <p id="quoteAdvancedError" class="price-flow__error" role="alert"></p>
-              <button id="quoteAdvancedApply" class="ghost-action price-flow__apply" type="button">Use this price</button>
             </div>
             </div>
             <section class="workshop-build-actions-surface" aria-label="Delivery, total and payments">
-              <div id="quoteFulfilmentGroup" class="quote-job-type price-flow__group quote-grid__full" role="group" aria-labelledby="quoteDeliveryHeading">
-                <h3 id="quoteDeliveryHeading" class="quote-job-type__label build-section-heading">Delivery</h3>
+              <div id="quoteFulfilmentGroup" class="quote-job-type price-flow__group price-flow__delivery quote-grid__full" role="group" aria-labelledby="quoteDeliveryHeading">
+                <button id="quoteDeliveryToggle" class="price-flow__disclosure price-flow__delivery-toggle" type="button" aria-expanded="false" aria-controls="quoteDeliveryPanel"><span id="quoteDeliveryHeading">Delivery</span><em id="quoteDeliverySummary"></em><b aria-hidden="true">&#8250;</b></button>
+                <div id="quoteDeliveryPanel" class="price-flow__delivery-panel" hidden>
                 <div class="quote-job-type__options">
-                  <button type="button" class="quote-job-type__option" data-fulfilment-method="collection" aria-pressed="false">Customer collects</button>
-                  <button type="button" class="quote-job-type__option" data-fulfilment-method="shipping" aria-pressed="false" aria-controls="quoteDeliveryFields">Send to customer</button>
+                  <button type="button" class="quote-job-type__option" data-fulfilment-method="collection" aria-pressed="false">Collection</button>
+                  <button type="button" class="quote-job-type__option" data-fulfilment-method="shipping" aria-pressed="false" aria-controls="quoteDeliveryFields">Courier / Shipping</button>
                 </div>
                 <div id="quoteDeliveryFields" class="price-flow__pair" role="group" aria-label="Shipping costs" hidden>
                   <label id="quoteFreightField"><span>Freight</span><input id="quoteFreight" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
@@ -1021,6 +1021,7 @@
                   <p id="quoteDeliveryLegacyText"></p>
                 </details>
                 <p id="quoteFulfilmentNote" class="build-pricing__note" hidden></p>
+                </div>
               </div>
               <div id="quoteTotalBlock" class="price-flow__group price-flow__total">
                 <!-- Q23 GST cleanup: one tax row. The tax name and rate come from Settings; the rate chip opens this build's own rate. -->
@@ -1030,14 +1031,13 @@
                   <label id="quoteGstField" class="build-pricing__tax-total"><span id="quoteTaxLabel">Tax</span><output id="quoteGst"></output></label>
                 </div>
                 <label id="quoteTaxRateField" class="build-pricing__tax-rate-field" hidden><span id="quoteTaxRateLabel">Tax Rate (%)</span><input id="quoteTaxRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" /></label>
-                <div id="quoteTotalPriceRow" class="price-flow__row price-flow__row--total"><span>Total price</span><strong id="quoteTotalPrice"></strong></div>
-                <p id="quoteTotalNote" class="price-flow__hint" hidden></p>
+                <div id="quoteTotalPriceRow" class="price-flow__row price-flow__row--total"><span>Total Price<small id="quoteTotalNote" hidden></small></span><strong id="quoteTotalPrice"></strong></div>
                 <p id="quoteInvoiceMismatch" class="price-flow__warning" role="status" hidden></p>
               </div>
               <div id="quotePaymentBlock" class="price-flow__group quote-payment">
                 <h3 class="quote-payment__heading build-section-heading">Payments</h3>
                 <div id="quoteDepositTerms" class="quote-payment__terms">
-                  <label id="quoteDepositEnabledField" class="price-flow__switch"><span>Deposit requested</span><input id="quoteDepositEnabled" type="checkbox" /></label>
+                  <label id="quoteDepositEnabledField" class="price-flow__switch"><span>Deposit Required</span><input id="quoteDepositEnabled" type="checkbox" /></label>
                   <div id="quoteDepositValueRow" class="price-flow__deposit" hidden>
                     <label id="quoteDepositValueField"><span id="quoteDepositValueLabel" class="visually-hidden">Deposit %</span><input id="quoteDepositValue" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-describedby="quoteDepositValueError" /></label>
                     <div id="quoteDepositTypeField" class="ds-segmented price-flow__unit" role="group" aria-label="Deposit as">
@@ -1052,12 +1052,12 @@
                   <div id="quotePaymentHistory" class="quote-payment__entries" aria-label="Payments received"></div>
                 </div>
                 <div class="quote-payment__summary" aria-live="polite">
-                  <div id="quotePaymentReceivedRow" class="price-flow__row"><span>Received</span><strong id="quotePaymentTotalReceived"></strong></div>
-                  <div id="quotePaymentBalanceRow" class="price-flow__row price-flow__row--total"><span id="quotePaymentBalanceLabel">Balance owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
+                  <div id="quotePaymentReceivedRow" class="price-flow__row"><span>Payments Received</span><strong id="quotePaymentTotalReceived"></strong></div>
+                  <div id="quotePaymentBalanceRow" class="price-flow__row price-flow__row--total"><span id="quotePaymentBalanceLabel">Balance Owing</span><strong id="quotePaymentBalanceOwing"></strong></div>
                 </div>
                 <p id="quoteDepositReceivedStatus" class="quote-payment__status price-flow__hint" aria-live="polite"></p>
                 <div id="quoteBalanceReceivedForm" class="price-flow__form" role="group" aria-labelledby="quotePaymentFormTitle" hidden>
-                  <span id="quotePaymentFormTitle" class="price-flow__form-title">Payment</span>
+                  <span id="quotePaymentFormTitle" class="visually-hidden">Payment</span>
                   <div class="price-flow__pair">
                     <label><span>Amount</span><input id="quoteBalanceReceivedAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" /></label>
                     <label><span>Date</span><input id="quoteBalanceReceivedDate" type="date" /></label>
@@ -1066,20 +1066,18 @@
                   <div class="price-flow__form-actions">
                     <button id="quoteBalanceReceivedSave" class="primary-action" type="button">Save</button>
                     <button id="quoteBalanceReceivedCancel" class="ghost-action" type="button">Cancel</button>
-                    <button id="quotePaymentRemoveBtn" class="ghost-action price-flow__remove" type="button" hidden>Remove payment</button>
                   </div>
                 </div>
                 <div class="quote-payment__actions">
-                  <button id="quoteRecordPaymentBtn" class="ghost-action" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm">Add payment</button>
+                  <button id="quoteRecordPaymentBtn" class="price-flow__disclosure price-flow__add" type="button" aria-expanded="false" aria-controls="quoteBalanceReceivedForm"><span id="quoteRecordPaymentLabel">Add Payment</span><b aria-hidden="true">+</b></button>
                   <button id="retryFinancialBtn" class="ghost-action" type="button" hidden>Retry saving payment</button>
                 </div>
               </div>
               <div class="workshop-build-actions-docs" role="group" aria-label="Documents">
                 <span class="workshop-build-actions-docs__label build-section-heading">Documents</span>
                 <div class="workshop-build-actions-docs__grid">
-                  <button id="viewQuoteBtn" class="ghost-action" type="button">View Quote</button>
-                  <button id="emailQuoteBtn" class="ghost-action" type="button">Open Email Draft</button>
-                  <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Customer Invoice</button>
+                  <button id="viewQuoteBtn" class="ghost-action" type="button">Quote</button>
+                  <button id="viewInvoicePreviewBtn" class="ghost-action" type="button">Invoice</button>
                   <div id="quoteMoreDocumentsWrap" class="workshop-build-actions-more">
                     <button id="quoteMoreDocumentsBtn" class="ghost-action workshop-build-actions-more__toggle" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quoteMoreDocumentsMenu">More documents</button>
                     <div id="quoteMoreDocumentsMenu" class="saved-build-card__menu workshop-build-actions-menu" role="menu" aria-label="More documents" hidden>

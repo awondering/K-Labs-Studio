@@ -81,6 +81,8 @@ function dom(jobType) {
     quote: { jobType, fulfilmentMethod: '', fulfilmentChoiceRequired: true },
     $: (id) => ids[id] || null,
     setWorkshopSectionCollapsed: (id, collapsed, o) => calls.push(['expand', id, collapsed, o && o.instant]),
+    // Q33: the choice sits behind the one Delivery row, which the reveal opens.
+    setDeliveryPanelOpen: (open) => calls.push(['delivery', open]),
     window: { setTimeout: (f, ms) => timers.push([f, ms]) },
   };
   vm.createContext(c);
@@ -94,6 +96,7 @@ for (const jobType of ['build', 'repair', 'components']) {
     c.revealFulfilmentSelector();
     assert.equal(c.section.hidden, false, 'section shown');
     assert.deepEqual(c.calls.find((x) => x[0] === 'expand'), ['expand', 'workshopQuoteSummaryBody', false, true], 'section opened');
+    assert.deepEqual(c.calls.find((x) => x[0] === 'delivery'), ['delivery', true], 'the Delivery row is opened to show the two choices');
     const scroll = c.calls.find((x) => x[0] === 'scroll');
     assert.ok(scroll, 'scrolled into view');
     assert.equal(c.calls.at(-1)[0], 'focus');

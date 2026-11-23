@@ -4017,9 +4017,15 @@ function savedLabourCost(source){
 function applyManualRodPrice(value){
   applyManualFinalCustomerPrice(Math.max(0,numberOrZero(value))+deliveryAmounts(quote).charge);
 }
-function rodPriceLabel({taxActive,taxName,jobType}={}){
-  const base=jobType==='repair'?'Repair price':'Rod price';
-  return taxActive?`${base} excl. ${taxName}`:base;
+// Q33: one selling-price label for New Build, Refurbishment and Components. The tax basis sits on its own quiet line.
+function rodPriceLabel(){
+  return 'Job Price';
+}
+function jobPriceNote({taxActive,taxName,componentsPricing}={}){
+  const parts=[];
+  if(componentsPricing)parts.push('From Sell Prices');
+  if(taxActive)parts.push(`Excl. ${taxName}`);
+  return parts.join(' · ');
 }
 function taxRatePercentText(rate){
   const value=Math.max(0,numberOrZero(rate));
@@ -4381,7 +4387,7 @@ function customerFulfilmentSection(){
 // Returns a blocking message, a warning, or nothing, before a customer-facing document or email is produced.
 function customerFulfilmentCheck(){
   const method=normalizeFulfilmentMethod(quote.fulfilmentMethod);
-  if(!method && quote.fulfilmentChoiceRequired)return{block:'Choose Delivery (Customer collects or Send to customer) before creating a customer document or email.'};
+  if(!method && quote.fulfilmentChoiceRequired)return{block:'Choose Delivery (Collection or Courier / Shipping) before creating a customer document or email.'};
   if(method==='shipping' && deliveryAddressIncomplete())return{warn:'The delivery address is incomplete. The document will show only the details entered. Continue anyway?'};
   return {};
 }
@@ -14245,7 +14251,11 @@ function updateWorkshopBuildActionsUi(){
   }
   const isQuote=lifecycle==='quote';
   const viewDocBtn=$('viewQuoteBtn');
-  if(viewDocBtn)viewDocBtn.textContent=customerDocumentLabels(lifecycle).viewLabel;
+  if(viewDocBtn){
+    const labels=customerDocumentLabels(lifecycle);
+    viewDocBtn.textContent=labels.key==='complete'?'Summary':labels.key==='active'?'Confirmation':'Quote';
+    viewDocBtn.setAttribute('aria-label',labels.viewLabel);
+  }
   const confirmBtn=$('confirmBuildBtn');
   if(confirmBtn)confirmBtn.hidden=!isQuote;
   const componentsKind=isComponentsJob(quote);
@@ -15201,7 +15211,7 @@ function openInvoicePreview(){
         <div class="invoice-preview__toolbar"><div class="invoice-preview__pagination"><button class="ghost-action" type="button" data-invoice-preview-action="previous" aria-label="Previous page">Previous</button><span class="invoice-preview__counter" aria-live="polite"></span><button class="ghost-action" type="button" data-invoice-preview-action="next" aria-label="Next page">Next</button></div><button class="ghost-action" type="button" data-invoice-preview-action="zoom">Enlarge / Actual size</button></div>
         <div class="invoice-preview__viewport"><div class="invoice-preview__page"><div class="invoice-preview__paper"><article class="invoice-document invoice-preview__columns"></article></div></div></div>
         <div id="invoicePreviewBody" hidden></div>
-        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="remove" hidden>Remove Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="print">Print / Save as PDF</button></div>
+        <div class="invoice-preview__actions"><button class="ghost-action" type="button" data-invoice-preview-action="close">Close</button><button class="primary-action" type="button" data-invoice-preview-action="issue">Issue Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="remove" hidden>Remove Invoice</button><button class="ghost-action" type="button" data-invoice-preview-action="print">PDF</button></div>
       </section>`;
     document.body.appendChild(sheet);
     sheet.addEventListener('click',(event)=>{
@@ -15294,11 +15304,10 @@ async function removePaymentEntry(id){
   if(!payment)return;
   if(!await recordRemovalReady('a payment entry'))return;
   const target=quote;
-  const kind=payment.type==='balance'?'payment':'deposit';
   const when=payment.date?formatDateDisplay(`${payment.date}T00:00:00`):'an unknown date';
   openConfirmDialog({
-    title:payment.type==='balance'?'Remove Payment':'Remove Deposit',
-    message:`Remove the ${currencyWithCode(numberOrZero(payment.amount))} ${kind} received on ${when}? Amount received and balance owing are recalculated.`,
+    title:'Remove this payment?',
+    message:`${paymentTypeLabel(payment)} of ${currencyWithCode(numberOrZero(payment.amount))} received on ${when}.`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove',kind:'danger'}]
   },(action)=>{
     if(action!=='remove' || quote!==target)return;
@@ -15394,7 +15403,7 @@ function ensureViewQuoteSheet(){
       <div class="component-sheet__body">
         <div id="viewQuoteBody"></div>
         <div class="quote-preview-actions">
-          <button id="viewQuoteEmailBtn" type="button" class="ghost-action">Open Email Draft</button>
+          <button id="viewQuoteEmailBtn" type="button" class="ghost-action" aria-label="Open an email draft">Email</button>
           <button id="viewQuoteCloseBtn" type="button" class="primary-action">Close</button>
         </div>
       </div>
@@ -15971,8 +15980,29 @@ function fulfilmentStudioNote(){
   if(!method)return quote&&quote.fulfilmentChoiceRequired?'Choose collection or delivery.':'';
   return '';
 }
+// Q33: Delivery is one row showing the choice (and the delivery charge). It opens by itself while no choice is made.
+let deliveryPanelOpen=false;
+let deliveryPanelQuote=null;
+function deliverySummaryText(method){
+  if(method==='collection')return 'Collection';
+  if(method!=='shipping')return 'Choose';
+  const charge=deliveryAmounts(quote).charge;
+  return charge>0?`Courier / Shipping · ${currency(charge)}`:'Courier / Shipping';
+}
+function setDeliveryPanelOpen(open){
+  deliveryPanelOpen=!!open;
+  syncFulfilmentSelector();
+}
 function syncFulfilmentSelector(){
   const method=normalizeFulfilmentMethod(quote&&quote.fulfilmentMethod);
+  // Reset only when another build is opened (a first save giving this build an id must not fold the row mid-entry).
+  if(quote!==deliveryPanelQuote){deliveryPanelQuote=quote;deliveryPanelOpen=!method;}
+  const panel=$('quoteDeliveryPanel');
+  if(panel)panel.hidden=!deliveryPanelOpen;
+  const toggle=$('quoteDeliveryToggle');
+  if(toggle)toggle.setAttribute('aria-expanded',String(deliveryPanelOpen));
+  const summary=$('quoteDeliverySummary');
+  if(summary)summary.textContent=deliverySummaryText(method);
   const fields=$('quoteDeliveryFields');
   if(fields)fields.hidden=method!=='shipping';
   const legacyNote=$('quoteDeliveryLegacyNote');
@@ -15994,6 +16024,7 @@ function revealFulfilmentSelector(){
   const section=$('workshopPricingSection');
   if(section)section.hidden=false;
   setWorkshopSectionCollapsed('workshopQuoteSummaryBody',false,{instant:true});
+  setDeliveryPanelOpen(true);
   const target=group.querySelector('[data-fulfilment-method][aria-pressed="true"]')||group.querySelector('[data-fulfilment-method]');
   try{group.scrollIntoView({block:'center',behavior:'smooth'});}catch{group.scrollIntoView();}
   if(target)try{target.focus({preventScroll:true});}catch{}
@@ -16930,8 +16961,14 @@ function bindWorkshopQuoteBuilder(){
   if(fulfilmentGroup && fulfilmentGroup.getAttribute('data-fulfilment-bound')!=='true'){
     fulfilmentGroup.setAttribute('data-fulfilment-bound','true');
     fulfilmentGroup.addEventListener('click',(event)=>{
+      if(event.target.closest('#quoteDeliveryToggle')){setDeliveryPanelOpen(!deliveryPanelOpen);return;}
       const button=event.target.closest('[data-fulfilment-method]');
-      if(button)setQuoteFulfilmentMethod(button.getAttribute('data-fulfilment-method'));
+      if(!button)return;
+      const method=button.getAttribute('data-fulfilment-method');
+      // Collection needs nothing more, so the row folds back; Courier / Shipping stays open for Freight and Packaging.
+      if(normalizeFulfilmentMethod(method)==='collection')deliveryPanelOpen=false;
+      setQuoteFulfilmentMethod(method);
+      syncFulfilmentSelector();
     });
   }
   const rodSpecsToggle=$('buildRodSpecsToggle');
@@ -17073,7 +17110,7 @@ function bindWorkshopQuoteBuilder(){
     depositEnabledInput.addEventListener('change',onDepositToggle);
   }
   bindDepositTypeAndValue();
-  [['quoteRecordPaymentBtn',openRecordPaymentForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['quotePaymentRemoveBtn',removeEditedPayment],['viewInvoicePreviewBtn',openInvoicePreview],['retryFinancialBtn',retryFinancialOperation],['quotePricingSummaryBtn',toggleQuotePricingSummary]].forEach(([id,handler])=>{
+  [['quoteRecordPaymentBtn',openRecordPaymentForm],['quoteBalanceReceivedSave',saveBalanceReceived],['quoteBalanceReceivedCancel',closeBalanceReceivedForm],['viewInvoicePreviewBtn',openInvoicePreview],['retryFinancialBtn',retryFinancialOperation],['quotePricingSummaryBtn',toggleQuotePricingSummary]].forEach(([id,handler])=>{
     const el=$(id);
     if(!el || el.getAttribute('data-payment-bound')==='true')return;
     el.setAttribute('data-payment-bound','true');
@@ -17284,13 +17321,6 @@ function bindWorkshopQuoteBuilder(){
       openViewQuote();
     });
   }
-  const emailQuoteBtn=$('emailQuoteBtn');
-  if(emailQuoteBtn && emailQuoteBtn.getAttribute('data-email-quote-bound')!=='true'){
-    emailQuoteBtn.setAttribute('data-email-quote-bound','true');
-    emailQuoteBtn.addEventListener('click',()=>{
-      emailCurrentQuote();
-    });
-  }
   const currentBuildActionsMenuBtn=$('currentBuildActionsMenuBtn');
   if(currentBuildActionsMenuBtn && currentBuildActionsMenuBtn.getAttribute('data-build-actions-bound')!=='true'){
     currentBuildActionsMenuBtn.setAttribute('data-build-actions-bound','true');
@@ -17454,7 +17484,7 @@ function updateAdvancedPricingPanel(rodFigures){
     button.setAttribute('aria-pressed',String(button.getAttribute('data-advanced-method')===advancedPricingMethod));
   });
   const label=$('quoteAdvancedTargetLabel');
-  if(label)label.textContent=advancedPricingMethod==='percent'?'Margin wanted (%)':'Return wanted ($)';
+  if(label)label.textContent=advancedPricingMethod==='percent'?'Target Margin (%)':'Target Return ($)';
   const input=$('quoteAdvancedTarget');
   if(input){
     input.step=advancedPricingMethod==='percent'?'0.1':'0.01';
@@ -17493,7 +17523,7 @@ function applyAdvancedPricing(){
   saveQuoteCurrent();
   markQuoteDirty();
   updateQuoteSummary();
-  flashWorkshopStatus(`Rod price set to ${currency(result.price)}`);
+  flashWorkshopStatus(`Job Price set to ${currency(result.price)}`);
 }
 
 // Internal only. Additional build profit is the existing pre-tax profit (pre-tax price - component buy costs - labour allowance),
@@ -17512,25 +17542,29 @@ function updateQuoteSummary(){
   const taxNameText=activeTaxName();
   const taxActiveForPrice=quoteTaxAvailable() && quote.includeGst!==false;
   const pending=quotePricePending();
-  if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=currency(rodFigures.yourReturn);
+  if($('quoteEstimatedEarnings'))$('quoteEstimatedEarnings').textContent=pending?'—':currency(rodFigures.yourReturn);
   if($('quoteGst'))$('quoteGst').value=currency(math.gst);
   const totalInput=$('quoteTotal');
   if(totalInput){
     if(document.activeElement!==totalInput){
-      const shownPrice=componentsPricing?math.total:rodFigures.rodExclusive;
+      const shownPrice=rodFigures.rodExclusive;
       totalInput.value=pending?'':roundMoney(numberOrZero(shownPrice)).toFixed(2);
     }
     totalInput.setAttribute('placeholder',pending?'To be confirmed':'0.00');
     totalInput.readOnly=componentsPricing;
   }
   const rodPriceLabelEl=$('quoteRodPriceLabel');
-  if(rodPriceLabelEl)rodPriceLabelEl.textContent=componentsPricing
-    ?`Customer price (${activeCurrencyCode()})`
-    :rodPriceLabel({taxActive:taxActiveForPrice,taxName:taxNameText,jobType:normalizeJobType(quote.jobType)});
+  if(rodPriceLabelEl)rodPriceLabelEl.textContent=rodPriceLabel();
+  const jobPriceNoteEl=$('quoteJobPriceNote');
+  if(jobPriceNoteEl){
+    const text=jobPriceNote({taxActive:taxActiveForPrice,taxName:taxNameText,componentsPricing});
+    jobPriceNoteEl.textContent=text;
+    jobPriceNoteEl.hidden=!text;
+  }
   const rodPriceHint=$('quoteRodPriceHint');
   if(rodPriceHint){
     // Q32: a Components job's Customer Price comes from its components, so say where to change it.
-    rodPriceHint.textContent=componentsPricing?'Set by the component Sell Prices - change them in Components.':'';
+    rodPriceHint.textContent='';
   }
   const legacyLabourLine=$('quoteLegacyLabourLine');
   if(legacyLabourLine){
@@ -17563,7 +17597,8 @@ function updateQuoteSummary(){
   // Total price = rod price + tax + delivery. Shown once; a Components job's Customer Price already is its total.
   const totalPrice=$('quoteTotalPrice');
   if(totalPrice)totalPrice.textContent=pending?'To be confirmed':currencyWithCode(math.total);
-  if($('quoteTotalPriceRow'))$('quoteTotalPriceRow').hidden=componentsPricing&&!(numberOrZero(math.freightCharge)>0);
+  // Q33: every job type shows Total Price (a Components job's Job Price now excludes tax and delivery, like the others).
+  if($('quoteTotalPriceRow'))$('quoteTotalPriceRow').hidden=false;
   const totalNote=$('quoteTotalNote');
   if(totalNote){
     const parts=[];
@@ -17649,8 +17684,6 @@ function closeBalanceReceivedForm(){
   if(date)date.value='';
   const error=$('quoteBalanceReceivedError');
   if(error)error.textContent='';
-  const remove=$('quotePaymentRemoveBtn');
-  if(remove)remove.hidden=true;
   $('quoteRecordPaymentBtn')?.setAttribute('aria-expanded','false');
   document.querySelectorAll('#quotePaymentHistory [data-edit-payment]').forEach((row)=>row.setAttribute('aria-expanded','false'));
   $('workshopPricingSection')?.setAttribute('data-payment-form','closed');
@@ -17669,10 +17702,10 @@ function updatePaymentFormTitle(){
   if(!title)return;
   if(editingPaymentId){
     const payment=(quote.payments||[]).find((item)=>item&&item.id===editingPaymentId);
-    title.textContent=`Edit ${paymentTypeLabel(payment).toLowerCase()}`;
+    title.textContent=`Edit ${paymentTypeLabel(payment)}`;
     return;
   }
-  title.textContent=newPaymentType($('quoteBalanceReceivedAmount')?.value)==='deposit'?'New deposit':'New payment';
+  title.textContent=newPaymentType($('quoteBalanceReceivedAmount')?.value)==='deposit'?'New Deposit':'New Payment';
 }
 function openRecordPaymentForm(){
   if(blockedByPendingPricing('recording a payment'))return;
@@ -17701,8 +17734,6 @@ function openPaymentEditor(id){
   row?.querySelector('[data-edit-payment]')?.setAttribute('aria-expanded','true');
   $('quoteBalanceReceivedAmount').value=Number(payment.amount).toFixed(2);
   $('quoteBalanceReceivedDate').value=String(payment.date||'');
-  const remove=$('quotePaymentRemoveBtn');
-  if(remove){remove.hidden=false;remove.innerHTML=`Remove<span class="price-flow__remove-noun"> ${paymentTypeLabel(payment).toLowerCase()}</span>`;remove.setAttribute('aria-label',`Remove ${paymentTypeLabel(payment).toLowerCase()}`);}
   paymentFormElement().hidden=false;
   updatePaymentFormTitle();
   $('workshopPricingSection')?.setAttribute('data-payment-form','edit');
@@ -17724,7 +17755,7 @@ function updatePaymentBlock(){
   const balance=$('quotePaymentBalanceOwing');
   if(received)received.textContent=currencyWithCode(math.amountReceived);
   if(balance)balance.textContent=paidInFull?'Paid in full':currencyWithCode(math.balanceOwing);
-  if($('quotePaymentBalanceLabel'))$('quotePaymentBalanceLabel').textContent=paidInFull?'Balance':'Balance owing';
+  if($('quotePaymentBalanceLabel'))$('quotePaymentBalanceLabel').textContent=paidInFull?'Balance':'Balance Owing';
   const summary=document.querySelector('#quotePaymentBlock .quote-payment__summary');
   if(summary)summary.hidden=!hasPayments;
   // Re-render the list only when it changes, so an open edit form is not thrown away by an unrelated update.
@@ -17750,11 +17781,10 @@ function updatePaymentBlock(){
     try{retry.hidden=!window.KLABS_BUILD_SYNC?.pendingFinancial?.();}
     catch(error){retry.hidden=false;console.error('[K-Labs Studio] Financial operation could not be read:',error);}
   }
-  // One short line, only while a requested deposit is still due.
-  status.textContent=math.depositEnabled&&math.depositOutstanding&&!paidInFull
-    ?`Deposit due ${currencyWithCode(math.depositStillRequired)}`:'';
-  const add=$('quoteRecordPaymentBtn');
-  if(add)add.textContent=!hasPayments&&!isComponentsJob(quote)&&math.depositEnabled?'Add deposit':'Add payment';
+  // Deposit Required shows the amount asked for; the Deposit row shows what was received. No extra status line.
+  status.textContent='';
+  const addLabel=$('quoteRecordPaymentLabel');
+  if(addLabel)addLabel.textContent=!hasPayments&&!isComponentsJob(quote)&&math.depositEnabled?'Add Deposit':'Add Payment';
   const section=$('workshopPricingSection');
   if(section){
     section.setAttribute('data-paid-in-full',String(paidInFull));
@@ -17830,6 +17860,13 @@ async function saveBalanceReceived(){
   const error=$('quoteBalanceReceivedError');
   const save=$('quoteBalanceReceivedSave');
   if(financialOperationInFlight)return;
+  // An existing payment saved as $0 is removed (after "Remove this payment?"), never kept as a zero payment.
+  if(editingPaymentId && /^0*(\.0{0,2})?$/.test(String($('quoteBalanceReceivedAmount').value||'').trim())
+     && String($('quoteBalanceReceivedAmount').value||'').trim()!==''){
+    error.textContent='';
+    removePaymentEntry(editingPaymentId);
+    return;
+  }
   const values=paymentFormValues();
   if(values.error){error.textContent=values.error;return;}
   const math=depositMaths();
@@ -17854,12 +17891,6 @@ async function saveBalanceReceived(){
     closeBalanceReceivedForm();
   }catch(failure){error.textContent=paymentErrorMessage(failure);}
   finally{if(save)save.disabled=false;}
-}
-function removeEditedPayment(){
-  const id=editingPaymentId;
-  if(!id)return;
-  closeBalanceReceivedForm();
-  removePaymentEntry(id);
 }
 // Deposit requested (optional quote term): a % or $ amount of the total. Shown until a deposit has been received.
 function updateDepositFields(){

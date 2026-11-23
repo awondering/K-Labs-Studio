@@ -37,7 +37,7 @@ async function boot(browser,base,options){
   await page.evaluate((a)=>{window.KLABS_ACCOUNT_ID=a;document.body.classList.remove('klabs-logged-out','klabs-auth-resolving');},ACCOUNT);
   return {context,page,errors};
 }
-// One synthetic build: $780 rod price excl. GST ($897 incl.), Send to customer with $34.50 delivery charged
+// One synthetic build: $780 Job Price excl. GST ($897 incl.), Courier / Shipping with $34.50 delivery charged
 // ($18 freight, $12 packaging, + GST): a $931.50 total price.
 const setState=(page,stage)=>page.evaluate((stage)=>{
   goScreen('workshopScreen');showStudioWorkflow();
@@ -47,6 +47,7 @@ const setState=(page,stage)=>page.evaluate((stage)=>{
     const el=document.getElementById(id);el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));
   }
   updateWorkshopSectionVisibility();updateWorkshopBuildActionsUi();updateQuoteSummary();
+  setDeliveryPanelOpen(true);
   expandWorkshopCollapsibleSection('workshopQuoteSummaryBody',{instant:true});
 },stage);
 const measure=(page)=>page.evaluate(()=>{
@@ -55,7 +56,7 @@ const measure=(page)=>page.evaluate(()=>{
   const grid=document.querySelector('.workshop-build-actions-docs__grid');
   const docs=[...grid.children].filter(vis).map((el)=>({id:el.id,...box(el)}));
   const style=(el)=>{const s=getComputedStyle(el);return [s.fontSize,s.fontWeight,s.letterSpacing,s.color,s.textTransform].join('|');};
-  const headings=[document.querySelector('#quoteFulfilmentGroup > .build-section-heading'),document.querySelector('#quotePaymentBlock > .build-section-heading'),
+  const headings=[document.getElementById('quoteRodPricingHead'),document.querySelector('#quotePaymentBlock > .build-section-heading'),
     document.querySelector('.workshop-build-actions-docs > .build-section-heading')];
   const t=(id)=>document.getElementById(id)?.textContent||'';
   const surface=document.querySelector('.workshop-build-actions-surface');
@@ -82,7 +83,8 @@ const measure=(page)=>page.evaluate(()=>{
     redSelected,inputLookingResults,segments,segmentGroups,
     gstLabelOneLine:(()=>{const el=document.getElementById('quoteTaxLabel');if(el.getClientRects().length===0)return true;/* folded away at Complete */const s=getComputedStyle(el);const line=parseFloat(s.lineHeight)||parseFloat(s.fontSize)*1.3;return el.getClientRects().length===1&&el.getBoundingClientRect().height<=line*1.5+2;})(),
     rodRed:document.getElementById('quoteTotalField').classList.contains('quote-field--active-target'),
-    hint:t('quoteRodPriceHint'),rodLabel:t('quoteRodPriceLabel'),rodShown:vis(document.getElementById('quoteTotalField')),
+    hint:t('quoteRodPriceHint'),rodLabel:t('quoteRodPriceLabel'),jobNote:t('quoteJobPriceNote'),rodShown:vis(document.getElementById('quoteTotalField')),
+    docLabels:docs.map((d)=>(d.id==='quoteMoreDocumentsWrap'?document.getElementById('quoteMoreDocumentsBtn'):document.getElementById(d.id)).textContent.trim()),
     totalPrice:t('quoteTotalPrice'),totalNote:t('quoteTotalNote'),totalShown:vis(document.getElementById('quoteTotalPriceRow')),
     gstLabel:t('quoteTaxLabel'),gst:document.getElementById('quoteGst').value,
     // Q23 GST cleanup: the tax row (toggle, rate chip, total) on one line, and how often the tax total appears on screen.
@@ -111,8 +113,12 @@ async function main(){
       for(const stage of ['quote','active','complete']){
         await setState(page,stage);await page.waitForTimeout(150);
         const m=await measure(page);const label=`${size} ${stage}`;
-        // Pricing redesign: the Rod price is labelled excl. GST with no hint line; one Total price, with delivery noted once.
-        if(m.rodShown)ck(`${label}: the Rod price says it excludes GST, with no extra hint line`,m.rodLabel==='Rod price excl. GST'&&m.hint==='',[m.rodLabel,m.hint]);
+        // Q33: the Job Price, with "Excl. GST" on its quiet second line and no hint; one Total price, with delivery noted once.
+        if(m.rodShown)ck(`${label}: the Job Price says it excludes GST, with no extra hint line`,m.rodLabel==='Job Price'&&m.jobNote==='Excl. GST'&&m.hint==='',[m.rodLabel,m.jobNote,m.hint]);
+        // Q33: the customer document by its short name, then the Invoice (at Quote the draft invoice stays in More documents,
+        // as before); no separate email button - Email is in the document preview.
+        ck(`${label}: Documents read ${stage==='quote'?'Quote and More documents':`${stage==='active'?'Confirmation':'Summary'} and Invoice`}`,
+          m.docLabels[0]===(stage==='quote'?'Quote':stage==='active'?'Confirmation':'Summary')&&m.docLabels.includes(stage==='quote'?'More documents':'Invoice')&&!m.docLabels.some((t)=>/email/i.test(t)),m.docLabels);
         if(m.totalShown){
           ck(`${label}: one Total price including GST and delivery`,m.totalPrice==='$931.50 NZD',m.totalPrice);
           ck(`${label}: the note under the total names delivery only (GST has its own row)`,m.totalNote==='Includes delivery $34.50',m.totalNote);
@@ -124,22 +130,23 @@ async function main(){
           ck(`${label}: the GST total appears once on the pricing screen`,m.taxRow.gstTimes===1,m.taxRow);
         }
         ck(`${label}: Deposit requested sits with the payment terms in Payments, compact`,m.deposit.inPayment&&(!m.deposit.shown||m.deposit.h<=48),m.deposit);
-        ck(`${label}: the Rod price is not marked red`,!m.rodRed,m.rodRed);
+        ck(`${label}: the Job Price is not marked red`,!m.rodRed,m.rodRed);
         ck(`${label}: Documents has at least two buttons`,m.docs.length>=2,m.docs);
         const rows=[...new Set(m.docs.map((d)=>d.t))].map((top)=>m.docs.filter((d)=>Math.abs(d.t-top)<4));
         if(size==='mac'){
           ck(`${label}: Documents are one row of compact buttons`,rows.length===1&&m.docs.every((d)=>d.w<=m.gridW*0.4),{rows:rows.length,docs:m.docs,gridW:m.gridW});
           ck(`${label}: Document buttons are 40px tall`,m.docs.every((d)=>d.h===40),m.docs);
-          if(m.pay)ck(`${label}: Record Payment is a sensible width, not edge to edge, 40px tall`,m.pay.w<=m.surfaceW*0.5&&m.pay.h===40,[m.pay,m.surfaceW]);
+          // Q33: Add Payment is the last row of the payment list (full width, 40px), not a floating button.
+          if(m.pay)ck(`${label}: Add Payment is a full-width list row, 40px tall`,m.pay.w>=m.surfaceW*0.95&&m.pay.h===40,[m.pay,m.surfaceW]);
           if(m.confirm)ck(`${label}: Confirm Build is a sensible width, not edge to edge, 40px tall`,m.confirm.w<=m.surfaceW*0.5&&m.confirm.h===40,[m.confirm,m.surfaceW]);
           if(m.toggle)ck(`${label}: Mark Complete is 40px tall like the other actions`,m.toggle.h===40,m.toggle);
         }else{
           ck(`${label}: Documents are two per row, and a row with one button spans the full width (no lone half-width button)`,
             rows.every((row)=>row.length===2||(row.length===1&&row[0].w>=m.gridW-1)),{rows,gridW:m.gridW});
           ck(`${label}: Document buttons are 44-48px tall`,m.docs.every((d)=>d.h>=44&&d.h<=48),m.docs);
-          if(m.pay)ck(`${label}: Record Payment is at least 44px tall`,m.pay.h>=44&&m.pay.h<=48,m.pay);
+          if(m.pay)ck(`${label}: Add Payment is a full-width list row, 44-48px tall`,m.pay.w>=m.surfaceW*0.95&&m.pay.h>=44&&m.pay.h<=48,[m.pay,m.surfaceW]);
         }
-        ck(`${label}: Delivery, Payments and Documents share one heading style`,
+        ck(`${label}: Pricing, Payments and Documents share one heading style`,
           m.headings.every((h)=>h&&h===m.headings[0]),m.headings);
         ck(`${label}: the last controls clear the bottom nav bar by at least 16px`,m.clearance>=16,m.clearance);
         ck(`${label}: no selected state is red (segmented selections are titanium)`,m.redSelected.length===0,m.redSelected);
@@ -200,7 +207,7 @@ async function main(){
         document.getElementById('quoteTaxRateChip').click();
         out.closed=!shown('quoteTaxRateField');
         const include=document.getElementById('quoteIncludeGst');include.click();
-        out.off={chip:shown('quoteTaxRateChip'),total:shown('quoteGstField'),label:document.getElementById('quoteRodPriceLabel').textContent,
+        out.off={chip:shown('quoteTaxRateChip'),total:shown('quoteGstField'),label:document.getElementById('quoteRodPriceLabel').textContent,jobNote:shown('quoteJobPriceNote'),
           note:document.getElementById('quoteTotalNote').textContent,rodExcl:document.getElementById('quoteTotal').value,toggle:shown('quoteIncludeGstField')};
         include.click();
         const dep=document.getElementById('quoteDepositEnabled');if(!dep.checked)dep.click();
@@ -211,21 +218,52 @@ async function main(){
         return out;
       });
       ck(`${size}: the rate chip opens this build's GST rate field`,tax.opened.field&&tax.opened.expanded==='true'&&tax.opened.label==='GST rate (%)',tax.opened);
-      // Pricing redesign: a new rate keeps the Rod price excl. GST; only the GST and the Total price move.
-      ck(`${size}: a per-build rate shows on the chip, keeps the Rod price excl. GST and recalculates the GST and total`,
+      // Pricing redesign: a new rate keeps the Job Price excl. GST; only the GST and the Total price move.
+      ck(`${size}: a per-build rate shows on the chip, keeps the Job Price excl. GST and recalculates the GST and total`,
         tax.override.chip==='20% · this build'&&tax.override.gst!==''&&tax.override.rodExcl==='780.00'&&tax.override.total==='$972.00 NZD',tax.override);
       ck(`${size}: the chip closes the rate field again`,tax.closed,tax);
-      ck(`${size}: with GST off, only the Include GST toggle remains - no rate, total or GST wording; the Rod price stays`,
-        tax.off.toggle&&!tax.off.chip&&!tax.off.total&&tax.off.label==='Rod price'&&!/GST/.test(tax.off.note)&&tax.off.rodExcl==='780.00',tax.off);
-      ck(`${size}: Deposit requested still opens its deposit fields, inside Payments`,tax.deposit.type&&tax.deposit.value&&tax.deposit.inPayment,tax.deposit);
+      ck(`${size}: with GST off, only the Include GST toggle remains - no rate, total or GST wording; the Job Price stays`,
+        tax.off.toggle&&!tax.off.chip&&!tax.off.total&&tax.off.label==='Job Price'&&!tax.off.jobNote&&!/GST/.test(tax.off.note)&&tax.off.rodExcl==='780.00',tax.off);
+      ck(`${size}: Deposit Required still opens its deposit fields, inside Payments`,tax.deposit.type&&tax.deposit.value&&tax.deposit.inPayment,tax.deposit);
       ck(`${size}: the tax and deposit settings are put back`,tax.restored,tax);
       if(process.env.BSD_SHOTS){
         await page.evaluate(()=>document.getElementById('quoteTaxSummaryRow').scrollIntoView({block:'center'}));
         await page.waitForTimeout(150);
         await page.screenshot({path:path.join(process.env.BSD_SHOTS,`${size}-tax-row.png`)});
       }
+      // Q33 Delivery: one row aligned with Advanced Pricing, showing the choice and its charge. Tapping it shows Collection |
+      // Courier / Shipping; Collection folds it back; Courier / Shipping keeps it open for Freight and Packaging.
+      await setState(page,'quote');await page.waitForTimeout(150);
+      const row=await page.evaluate(()=>{
+        const $id=(id)=>document.getElementById(id);
+        const shown=(id)=>$id(id).getClientRects().length>0;
+        const box=(id)=>{const b=$id(id).getBoundingClientRect();return {l:Math.round(b.left),r:Math.round(b.right),h:Math.round(b.height)};};
+        setDeliveryPanelOpen(false);
+        const out={closed:{panel:shown('quoteDeliveryPanel'),fields:shown('quoteDeliveryFields'),expanded:$id('quoteDeliveryToggle').getAttribute('aria-expanded'),
+          summary:$id('quoteDeliverySummary').textContent,row:box('quoteDeliveryToggle'),advanced:box('quoteAdvancedToggle'),
+          note:$id('quoteTotalNote').textContent,saved:quote.fulfilmentMethod}};
+        $id('quoteDeliveryToggle').click();
+        out.opened={panel:shown('quoteDeliveryPanel'),fields:shown('quoteDeliveryFields'),expanded:$id('quoteDeliveryToggle').getAttribute('aria-expanded'),
+          choices:[...document.querySelectorAll('#quoteDeliveryPanel [data-fulfilment-method]')].filter((b)=>b.getClientRects().length).map((b)=>b.textContent.trim())};
+        document.querySelector('[data-fulfilment-method="collection"]').click();
+        out.collection={panel:shown('quoteDeliveryPanel'),summary:$id('quoteDeliverySummary').textContent,total:$id('quoteTotalPrice').textContent};
+        $id('quoteDeliveryToggle').click();
+        document.querySelector('[data-fulfilment-method="shipping"]').click();
+        out.shipping={panel:shown('quoteDeliveryPanel'),fields:shown('quoteDeliveryFields'),summary:$id('quoteDeliverySummary').textContent,total:$id('quoteTotalPrice').textContent};
+        return out;
+      });
+      ck(`${size}: Delivery is one row showing the choice and its charge, aligned with Advanced Pricing; no choices or fields until tapped`,
+        !row.closed.panel&&!row.closed.fields&&row.closed.expanded==='false'&&row.closed.summary==='Courier / Shipping · $34.50'
+          &&row.closed.row.l===row.closed.advanced.l&&row.closed.row.r===row.closed.advanced.r&&row.closed.row.h===row.closed.advanced.h
+          &&row.closed.row.h>=(size==='mac'?40:44)&&row.closed.note==='Includes delivery $34.50',row.closed);
+      ck(`${size}: tapping Delivery shows Collection | Courier / Shipping and the Freight and Packaging fields`,
+        row.opened.panel&&row.opened.fields&&row.opened.expanded==='true'&&JSON.stringify(row.opened.choices)==='["Collection","Courier / Shipping"]',row.opened);
+      ck(`${size}: choosing Collection folds Delivery back to "Collection" and removes the delivery charge`,
+        !row.collection.panel&&row.collection.summary==='Collection'&&row.collection.total==='$897.00 NZD',row.collection);
+      ck(`${size}: choosing Courier / Shipping keeps Delivery open with Freight and Packaging, and restores the charge`,
+        row.shipping.panel&&row.shipping.fields&&row.shipping.summary==='Courier / Shipping · $34.50'&&row.shipping.total==='$931.50 NZD',row.shipping);
       // Delivery (Q28 polish, kept): Freight and Packaging sized for short amounts on one line, the delivery segments styled
-      // like the other segmented controls, and Customer collects charging no delivery while keeping the entered amounts.
+      // like the other segmented controls, and Collection charging no delivery while keeping the entered amounts.
       // Pricing redesign: no separate shipping total - the Total price is the one total.
       await setState(page,'quote');await page.waitForTimeout(150);
       const ful=await page.evaluate(()=>{
@@ -244,6 +282,7 @@ async function main(){
         toggleAdvancedPricing();
         const saved={freight:quote.freight,packaging:quote.packaging,method:quote.fulfilmentMethod};
         document.querySelector('[data-fulfilment-method="collection"]').click();
+        setDeliveryPanelOpen(true); // Collection folds the row; open it again to see the fields stay hidden
         const m=quoteMaths();
         out.collection={fieldsHidden:document.getElementById('quoteDeliveryFields').hidden,deliveryCharge:m.deliveryCharge,total:document.getElementById('quoteTotalPrice').textContent,
           kept:quote.freight===saved.freight&&quote.packaging===saved.packaging,note:document.getElementById('quoteTotalNote').textContent};
@@ -255,13 +294,13 @@ async function main(){
       ck(`${size}: Freight and Packaging are sized for short currency amounts, on one line, 44px tall`,
         ful.freightW===ful.packW&&ful.freightW>=96&&ful.freightW<=(narrow?130:160)&&ful.inputH>=(narrow?44:38)&&ful.rowTops[0]===ful.rowTops[1],ful);
       ck(`${size}: no separate shipping total`,ful.noShippingTotal,ful);
-      ck(`${size}: the choice reads Customer collects / Send to customer`,JSON.stringify(ful.labels)==='["Customer collects","Send to customer"]',ful.labels);
+      ck(`${size}: the choice reads Collection / Courier / Shipping`,JSON.stringify(ful.labels)==='["Collection","Courier / Shipping"]',ful.labels);
       ck(`${size}: the delivery segments match the Advanced pricing segments (height, shape, titanium selection)`,
         ful.segOn===ful.viewOn&&ful.segOff===ful.viewOff,[ful.segOn,ful.viewOn,ful.segOff,ful.viewOff]);
       if(narrow)ck(`${size}: the delivery segments keep a 44px touch target`,ful.segHit>=44,ful.segHit);
-      ck(`${size}: Customer collects charges no delivery and hides the shipping fields, keeping the entered amounts`,
+      ck(`${size}: Collection charges no delivery and hides the shipping fields, keeping the entered amounts`,
         ful.collection.fieldsHidden&&ful.collection.deliveryCharge===0&&ful.collection.total==='$897.00 NZD'&&ful.collection.kept&&ful.collection.note==='',ful.collection);
-      ck(`${size}: switching back to Send to customer restores the delivery in the Total price`,ful.back.total==='$931.50 NZD'&&ful.back.method,ful.back);
+      ck(`${size}: switching back to Courier / Shipping restores the delivery in the Total price`,ful.back.total==='$931.50 NZD'&&ful.back.method,ful.back);
       if(process.env.BSD_SHOTS){
         await page.evaluate(()=>document.getElementById('quoteFulfilmentGroup').scrollIntoView({block:'center'}));
         await page.waitForTimeout(150);
@@ -294,7 +333,8 @@ async function main(){
         const before={quote:JSON.stringify(quote),store:store()};
         $id('quoteAdvancedToggle').click();
         out.open={shown:shown('quoteAdvancedPricing'),labels:[...document.querySelectorAll('button[data-advanced-method]')].map((b)=>b.textContent.trim()),
-          prefilled:$id('quoteAdvancedTarget').value,targetLabel:$id('quoteAdvancedTargetLabel').textContent,applyDisabled:$id('quoteAdvancedApply').disabled};
+          prefilled:$id('quoteAdvancedTarget').value,targetLabel:$id('quoteAdvancedTargetLabel').textContent,applyDisabled:$id('quoteAdvancedApply').disabled,
+          inputs:[...$id('quoteAdvancedPricing').querySelectorAll('input')].filter((i)=>i.getClientRects().length).length,apply:$id('quoteAdvancedApply').textContent};
         document.querySelector('[data-advanced-method="percent"]').click();
         typeIn('40');
         out.margin={label:$id('quoteAdvancedTargetLabel').textContent,proposed:$id('quoteAdvancedProposed').textContent,expected:cost2/0.6};
@@ -314,15 +354,15 @@ async function main(){
       });
       const money=(v)=>`$${Number(v).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
       ck(`${size}: Advanced pricing is collapsed by default`,adv.closed,adv);
-      ck(`${size}: it has exactly two methods, Return $ and Margin %, opening on Return $ with the current return filled in`,
-        adv.open.shown&&JSON.stringify(adv.open.labels)==='["Return $","Margin %"]'&&adv.open.targetLabel==='Return wanted ($)'&&/^\d+\.\d\d$/.test(adv.open.prefilled)&&adv.open.applyDisabled,adv.open);
-      ck(`${size}: with no components cost, Margin % asks for components first`,adv.noCost.cost===0&&adv.noCost.error==='Add components first.',adv.noCost);
-      ck(`${size}: Margin % proposes cost / (1 - margin)`,adv.margin.label==='Margin wanted (%)'&&adv.margin.proposed.startsWith(money(adv.margin.expected)),adv.margin);
+      ck(`${size}: it has exactly two methods, Target Return and Target Margin, opening on Target Return with the current return filled in`,
+        adv.open.shown&&JSON.stringify(adv.open.labels)==='["Target Return","Target Margin"]'&&adv.open.targetLabel==='Target Return ($)'&&/^\d+\.\d\d$/.test(adv.open.prefilled)&&adv.open.applyDisabled&&adv.open.inputs===1&&adv.open.apply==='Apply',adv.open);
+      ck(`${size}: with no components cost, Target Margin asks for components first`,adv.noCost.cost===0&&adv.noCost.error==='Add components first.',adv.noCost);
+      ck(`${size}: Target Margin proposes cost / (1 - margin)`,adv.margin.label==='Target Margin (%)'&&adv.margin.proposed.startsWith(money(adv.margin.expected)),adv.margin);
       ck(`${size}: an impossible margin or a negative return is refused in plain words, with Apply disabled`,
         adv.badMargin.error==='Enter a margin from 0 to 99.'&&adv.badMargin.applyDisabled&&adv.badReturn.error==='Enter a return of zero or more.'&&adv.badReturn.applyDisabled,[adv.badMargin,adv.badReturn]);
-      ck(`${size}: Return $ proposes cost + return`,adv.ret.proposed.startsWith(money(adv.ret.expected)),adv.ret);
+      ck(`${size}: Target Return proposes cost + return`,adv.ret.proposed.startsWith(money(adv.ret.expected)),adv.ret);
       ck(`${size}: opening, switching and typing in Advanced pricing changes nothing saved`,adv.unchanged,adv);
-      ck(`${size}: "Use this price" sets the Rod price, gives exactly that return, stores no target and collapses the panel`,
+      ck(`${size}: Apply sets the Job Price, gives exactly that return, stores no target and collapses the panel`,
         Number(adv.applied.rod)===adv.ret.expected&&adv.applied.yourReturn===300&&adv.applied.collapsed&&adv.applied.expanded==='false'&&adv.applied.driver==='price',adv.applied);
       if(process.env.BSD_SHOTS){
         await page.evaluate(()=>{toggleAdvancedPricing();document.getElementById('quoteRodPricingHead').scrollIntoView({block:'start'});});
@@ -337,13 +377,42 @@ async function main(){
         const entries=[...document.querySelectorAll('#quotePaymentHistory .quote-payment__entry')].filter((el)=>el.getClientRects().length).map((el)=>el.textContent.replace(/\s*Correct$/,'').replace(/\s+/g,' ').trim());
         const block=document.getElementById('quotePaymentBlock');
         const btn=document.getElementById('quoteRecordPaymentBtn').getBoundingClientRect();
-        const out={entries,text:block.innerText,status:document.getElementById('quoteDepositReceivedStatus').textContent,btnW:Math.round(btn.width),btnH:Math.round(btn.height),blockW:Math.round(block.getBoundingClientRect().width)};
-        quote.payments=[];updatePaymentBlock();
-        return out;
+        const top=(id)=>Math.round(document.getElementById(id).getBoundingClientRect().top);
+        const out={entries,text:block.innerText,status:document.getElementById('quoteDepositReceivedStatus').textContent,btnW:Math.round(btn.width),btnH:Math.round(btn.height),blockW:Math.round(block.getBoundingClientRect().width),
+          order:[top('quoteDepositEnabledField'),top('quotePaymentHistory'),top('quotePaymentReceivedRow'),top('quotePaymentBalanceRow'),top('quoteRecordPaymentBtn')],
+          received:document.querySelector('#quotePaymentReceivedRow > span').textContent,owing:document.getElementById('quotePaymentBalanceLabel').textContent};
+        // Tap the payment: Amount, Date, Save and Cancel only.
+        document.querySelector('#quotePaymentHistory [data-edit-payment="p2"]').click();
+        const form=document.getElementById('quoteBalanceReceivedForm');
+        out.form={shown:form.getClientRects().length>0,buttons:[...form.querySelectorAll('button')].filter((b)=>b.getClientRects().length).map((b)=>b.textContent.trim()),
+          inputs:[...form.querySelectorAll('input')].filter((i)=>i.getClientRects().length).map((i)=>i.type)};
+        // Saving it as $0 asks first; Cancel keeps the payment exactly as it was.
+        const amount=document.getElementById('quoteBalanceReceivedAmount');amount.value='0';
+        const before=JSON.stringify(quote.payments);
+        // This offline test page has no server: report removal as supported for this one step, then put it back.
+        const savedSync=window.KLABS_BUILD_SYNC;
+        window.KLABS_BUILD_SYNC={...(savedSync||{}),recordRemovalSupported:async()=>true};
+        document.getElementById('quoteBalanceReceivedSave').click();
+        return new Promise((resolve)=>setTimeout(()=>{
+          window.KLABS_BUILD_SYNC=savedSync;
+          const sheet=document.getElementById('confirmSheet');
+          out.zero={title:document.getElementById('confirmSheetTitle')?.textContent.trim()||'',
+            actions:[...document.querySelectorAll('#confirmSheetActions button')].filter((b)=>b.getClientRects().length).map((b)=>b.textContent.trim())};
+          sheet?.querySelector('[data-confirm-action="cancel"]')?.click();
+          out.zero.kept=JSON.stringify(quote.payments)===before;
+          closeBalanceReceivedForm();quote.payments=[];updatePaymentBlock();
+          resolve(out);
+        },300));
       });
       ck(`${size}: Payments lists each payment with its type, date and amount, with no repeated heading, deposit sentence or audit wording`,
         pay.entries.length===2&&/^Deposit.*2026.*\$300\.00/.test(pay.entries[0])&&/^Payment.*2026.*\$100\.00/.test(pay.entries[1])&&!/payment history|correct|reason/i.test(pay.text)&&pay.status==='',pay);
-      ck(`${size}: Add payment is a compact secondary button at its natural width`,pay.btnW<pay.blockW*0.6&&pay.btnH>=(size==='mac'?36:44),pay);
+      ck(`${size}: Payments reads Deposit Required, the payments, Payments Received, Balance Owing, then Add Payment`,
+        pay.order.every((t,i)=>i===0||t>pay.order[i-1])&&pay.received==='Payments Received'&&pay.owing==='Balance Owing',pay.order);
+      ck(`${size}: Add Payment is the last row of the list, full width`,pay.btnW>=pay.blockW-1&&pay.btnH>=(size==='mac'?40:44),pay);
+      ck(`${size}: tapping a payment shows only Amount, Date, Save and Cancel (no Remove button)`,
+        pay.form.shown&&JSON.stringify(pay.form.buttons)==='["Save","Cancel"]'&&JSON.stringify(pay.form.inputs)==='["number","date"]',pay.form);
+      ck(`${size}: saving a payment as $0 asks "Remove this payment?" (Cancel | Remove); Cancel keeps it unchanged`,
+        pay.zero.title==='Remove this payment?'&&JSON.stringify(pay.zero.actions)==='["Cancel","Remove"]'&&pay.zero.kept,pay.zero);
       ck(`${size}: no page errors`,errors.length===0,errors);
       await context.close();
     }

@@ -41,7 +41,7 @@ function app(record,env={}){
   const sync=new Proxy({},{get:(t,name)=>name==='pendingFinancial'?()=>false:name==='getStatus'?()=>'synced':(...args)=>{spy.sync.push(name);}});
   const c=loadRecordFunctions(['normalizeQuote','updatePaymentBlock','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState',
     'toggleQuotePricingSummary','setQuoteFulfilmentMethod','openRecordPaymentForm','closeBalanceReceivedForm','openPaymentEditor',
-    'removeEditedPayment','newPaymentType','paymentFormValues','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu',
+    'newPaymentType','paymentFormValues','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu',
     'toggleMoreDocumentsMenu','handleMoreDocumentsAction'],{
     $:dom.el,document:dom.document,CSS:{escape:String},removePaymentEntry:(id)=>{spy.removed.push(id);},Store:{get:(k,f)=>f,set:()=>true},
     window:{KLABS_ACCOUNT_ID:'acct',KLABS_BUILD_SYNC:sync,requestAnimationFrame:()=>{},crypto:{randomUUID:()=>'new-payment-id'}},
@@ -82,9 +82,12 @@ test('one Add payment button and one Amount / Date / Save form; no type chooser,
   assert.equal((form.match(/primary-action/g)||[]).length,1,'Save is the one primary action');
 });
 
-test('documents: View and Email, Customer Invoice, then a More documents menu holding Customer Invoice; ••• keeps Payment Statement and Delete',()=>{
+test('documents: the customer document and the Invoice (each opens its preview, where Email or PDF sit), then a More documents menu holding Customer Invoice; ••• keeps Payment Statement and Delete',()=>{
   const docs=section.slice(section.indexOf('workshop-build-actions-docs__grid'),section.indexOf('workshop-build-actions-row--status'));
-  assert.deepEqual([...docs.matchAll(/<button id="([^"]+)"/g)].map((m)=>m[1]),['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn','quoteMoreDocumentsBtn']);
+  // Q33: no separate email button on the build; the email draft is in the document preview.
+  assert.deepEqual([...docs.matchAll(/<button id="([^"]+)"/g)].map((m)=>m[1]),['viewQuoteBtn','viewInvoicePreviewBtn','quoteMoreDocumentsBtn']);
+  assert.match(docs,/id="viewQuoteBtn"[^>]*>Quote</);
+  assert.match(docs,/id="viewInvoicePreviewBtn"[^>]*>Invoice</);
   assert.match(docs,/id="quoteMoreDocumentsBtn"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*>More documents</);
   const more=docs.slice(docs.indexOf('id="quoteMoreDocumentsMenu"'));
   assert.match(more,/^id="quoteMoreDocumentsMenu"[^>]*role="menu"[^>]*hidden>/,'the menu starts closed');
@@ -158,13 +161,12 @@ test('only Courier reveals shipping costs for builds, repairs and Components',()
 // ---------- Payments ----------
 test('Add payment suggests the requested deposit first, and the first payment below the total is a Deposit',()=>{
   const q=app(job({depositEnabled:true,depositType:'percent',depositValue:30}));
-  assert.equal(q.el('quoteRecordPaymentBtn').textContent,'Add deposit');
+  assert.equal(q.el('quoteRecordPaymentLabel').textContent,'Add Deposit');
   q.c.openRecordPaymentForm();
   assert.equal(q.el('quoteBalanceReceivedForm').hidden,false);
   assert.equal(q.el('quoteBalanceReceivedAmount').value,'30.00');
   assert.equal(q.el('quoteBalanceReceivedDate').value,'2026-11-18');
-  assert.equal(q.el('quotePaymentFormTitle').textContent,'New deposit');
-  assert.equal(q.el('quotePaymentRemoveBtn').hidden,true,'nothing to remove on a new payment');
+  assert.equal(q.el('quotePaymentFormTitle').textContent,'New Deposit');
   assert.equal(q.c.newPaymentType(30),'deposit');
   assert.equal(q.c.newPaymentType(100),'balance','paying the whole total at once is a payment');
   noSideEffects(q.spy,'Add payment form');
@@ -172,7 +174,7 @@ test('Add payment suggests the requested deposit first, and the first payment be
 
 test('Add payment otherwise suggests the balance owing; later payments and Components jobs are Payments',()=>{
   const none=app(job());
-  assert.equal(none.el('quoteRecordPaymentBtn').textContent,'Add payment');
+  assert.equal(none.el('quoteRecordPaymentLabel').textContent,'Add Payment');
   none.c.openRecordPaymentForm();
   assert.equal(none.el('quoteBalanceReceivedAmount').value,'100.00');
   const paid=app(job({quoteStatus:'active',depositEnabled:true,depositValue:30,payments:[{id:'p1',type:'deposit',amount:30,date:'2026-11-18'}]}));
@@ -200,8 +202,7 @@ test('tapping a payment edits that payment: same id and type, a fixed reason, ne
   assert.equal(q.el('quoteBalanceReceivedForm').hidden,false);
   assert.equal(q.el('quoteBalanceReceivedAmount').value,'30.00');
   assert.equal(q.el('quoteBalanceReceivedDate').value,'2026-11-17');
-  assert.equal(q.el('quotePaymentFormTitle').textContent,'Edit deposit');
-  assert.equal(q.el('quotePaymentRemoveBtn').hidden,false);
+  assert.equal(q.el('quotePaymentFormTitle').textContent,'Edit Deposit');
   q.el('quoteBalanceReceivedAmount').value='35.00';
   await q.c.saveBalanceReceived();
   assert.deepEqual(q.spy.financial,[{kind:'correct_payment',type:'deposit',amount:35,date:'2026-11-17',id:'p1',reason:'Edited in Studio'}]);
@@ -224,26 +225,45 @@ test('an unchanged edit just closes; an edit above the total is refused in plain
   assert.equal(q.el('quoteBalanceReceivedError').textContent,'Enter an amount, for example 150.00.');
 });
 
-test('tapping the open payment again closes it; Remove hands the id to the confirmed removal',()=>{
+test('tapping the open payment again closes it; saving it as $0 hands the id to the confirmed removal, never a $0 payment',async()=>{
   const q=app(job({quoteStatus:'active',payments:[{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
   q.c.openPaymentEditor('p9');
   q.c.openPaymentEditor('p9');
   assert.equal(q.el('quoteBalanceReceivedForm').hidden,true);
   noSideEffects(q.spy,'open and close a payment');
-  q.c.openPaymentEditor('p9');
-  q.c.removeEditedPayment();
-  assert.deepEqual(q.spy.removed,['p9'],'removePaymentEntry asks for confirmation itself');
-  assert.equal(q.el('quoteBalanceReceivedForm').hidden,true);
+  for(const zero of ['0','0.00','.0']){
+    q.spy.removed.length=0;
+    q.c.openPaymentEditor('p9');
+    q.el('quoteBalanceReceivedAmount').value=zero;
+    await q.c.saveBalanceReceived();
+    assert.deepEqual(q.spy.removed,['p9'],`${zero}: removePaymentEntry asks "Remove this payment?" itself`);
+    assert.deepEqual(q.spy.financial,[],`${zero}: no correct_payment with a zero amount`);
+    assert.equal(q.el('quoteBalanceReceivedError').textContent,'');
+    q.c.closeBalanceReceivedForm();
+  }
+  // A new payment of $0 is simply not valid; nothing is removed or written.
+  q.spy.removed.length=0;
+  q.c.openRecordPaymentForm();
+  q.el('quoteBalanceReceivedAmount').value='0';
+  await q.c.saveBalanceReceived();
+  assert.deepEqual(q.spy.removed,[]);
   assert.deepEqual(q.spy.financial,[]);
+  assert.equal(q.el('quoteBalanceReceivedError').textContent,'Enter an amount, for example 150.00.');
+  // An emptied amount on an edit is an error, not a removal.
+  q.c.openPaymentEditor('p9');
+  q.el('quoteBalanceReceivedAmount').value='';
+  await q.c.saveBalanceReceived();
+  assert.deepEqual(q.spy.removed,[]);
+  assert.equal(q.el('quoteBalanceReceivedError').textContent,'Enter an amount, for example 150.00.');
 });
 
-test('Received and Balance owing appear only once there is a payment, and update from the payments',()=>{
+test('Payments Received and Balance Owing appear only once there is a payment, and update from the payments',()=>{
   const none=app(job());
   assert.equal(none.el('quotePaymentHistoryDetails').hidden,true);
   const some=app(job({quoteStatus:'active',payments:[{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
   assert.match(some.el('quotePaymentTotalReceived').textContent,/40\.00/);
   assert.match(some.el('quotePaymentBalanceOwing').textContent,/60\.00/);
-  assert.equal(some.el('quotePaymentBalanceLabel').textContent,'Balance owing');
+  assert.equal(some.el('quotePaymentBalanceLabel').textContent,'Balance Owing');
   some.c.quote.payments.push({id:'p10',type:'balance',amount:60,date:'2026-11-19'});
   some.render();
   assert.equal(some.el('quotePaymentBalanceOwing').textContent,'Paid in full');

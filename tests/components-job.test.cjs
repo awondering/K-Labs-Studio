@@ -359,8 +359,11 @@ test('every new hiding rule applies only to Components jobs, so rod builds and r
     }
     assert.match(rule,/\{display:none$/);
   }
-  for(const id of ['quoteLabourRateField','quoteAdvancedToggle','quoteAdvancedPricing','quoteEarningsSummary','quoteCostBeforeMarginField','quoteDepositEnabledField','quoteTaxRateField'])
+  for(const id of ['quoteLabourRateField','quoteAdvancedToggle','quoteAdvancedPricing','quoteDepositEnabledField','quoteTaxRateField'])
     assert.match(block,new RegExp(`#${id}\\b`),id);
+  // Q33: one pricing system - a Components job shows Components Cost, Job Price (from the Sell Prices) and Your Return too.
+  for(const id of ['quoteEarningsSummary','quoteCostBeforeMarginField','quoteTotalPriceRow'])
+    assert.doesNotMatch(block,new RegExp(`#${id}\\b`),id);
   for(const id of ['quoteIncludeGstField','quoteGstField','quoteTotalField','quoteFulfilmentGroup','viewQuoteBtn','emailQuoteBtn','quoteRecordPaymentBtn','confirmBuildBtn'])
     assert.doesNotMatch(block,new RegExp(`#${id}\\b`),`${id} stays visible`);
 });
@@ -375,7 +378,8 @@ test('the Pricing section is marked with the job kind, stage and delivery choice
     normalizeFulfilmentMethod:(v)=>v==='shipping'||v==='collection'?v:'',deliveryAmounts:(q)=>({charge:Number(q.freight)||0}),fulfilmentStudioNote:()=>'',
     quoteTaxAvailable:()=>true,activeTaxName:()=>'GST',currencyWithCode:(v)=>`$${Number(v).toFixed(2)} NZD`,pricingSummaryOpen:false,deliveryEditOpen:false};
   vm.createContext(ctx);
-  vm.runInContext(['isComponentsJob','deletionNoun','currentBuildLifecycleStatus','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState'].map(fn).join('\n'),ctx);
+  vm.runInContext('var deliveryPanelOpen=false,deliveryPanelQuote=null;var currency=(v)=>"$"+Number(v).toFixed(2);',ctx);
+  vm.runInContext(['isComponentsJob','deletionNoun','currentBuildLifecycleStatus','updateWorkshopBuildActionsUi','deliverySummaryText','syncFulfilmentSelector','syncPricingLayoutState'].map(fn).join('\n'),ctx);
   const section=()=>el('workshopPricingSection').attrs;
   ctx.quote={jobType:'build',jobKind:'components',quoteStatus:'quote',payments:[]};
   ctx.updateWorkshopBuildActionsUi();ctx.syncFulfilmentSelector();

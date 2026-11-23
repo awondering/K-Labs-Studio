@@ -726,12 +726,12 @@ test('Q18 Phase 3 review: controls are brought into view with the smallest scrol
 });
 
 // Q23 (replaces "pricing is shown both ways - a margin, then the profit you want"): the simple default pricing.
-test('Q23: pricing shows the Components Cost, then the Rod Price is typed in with Your Return, one short caption, about 5-8 s', async () => {
+test('Q23: pricing shows the Components Cost, then the Job Price is typed in with Your Return, one short caption, about 5-8 s', async () => {
   const h = stage();
   const pricing = flatJourney(h).filter(({ chapter }) => chapter === 4).map(({ step }) => step);
   const at = (pred, from = 0) => pricing.findIndex((s, i) => i >= from && pred(s));
   const cost = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteCostBeforeMarginField'));
-  const caption = at((s) => s[0] === 'caption' && /rod price/i.test(s[1]) && /return/i.test(s[1]));
+  const caption = at((s) => s[0] === 'caption' && /job price/i.test(s[1]) && /return/i.test(s[1]));
   const price = at((s) => s[0] === 'type' && s[1] === '#quoteTotal' && /^\d+$/.test(s[2]));
   const shown = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField') && [].concat(s[1]).includes('#quoteEarningsSummary'), price);
   assert.ok(cost >= 0 && cost < caption && caption < price && price < shown, JSON.stringify({ cost, caption, price, shown }));

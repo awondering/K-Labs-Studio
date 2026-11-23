@@ -236,12 +236,12 @@
       const name = !draft && /^[A-Za-z0-9-]+$/.test(file) ? `${file}.pdf` : statement ? 'Payment-Statement.pdf' : draft ? 'Draft-Invoice.pdf' : 'Invoice.pdf';
       prepared = { markup, blob, name, file: typeof File === 'function' ? new File([blob], name, { type: 'application/pdf' }) : null };
       button.disabled = false;
-      button.textContent = 'Print / Save as PDF';
+      button.textContent = 'PDF';
     }).catch((error) => {
       if (serial !== generation) return;
       console.error('[K-Labs Studio] PDF preparation failed:', error);
       button.disabled = false;
-      button.textContent = 'Print / Save as PDF';
+      button.textContent = 'PDF';
       prepared = { markup, error };
     });
   }

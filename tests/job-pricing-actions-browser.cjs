@@ -41,7 +41,9 @@ const REMOVED=['workshopActionsSection','workshopBuildActionsBody','quoteRecordD
   'quoteGstStatus','quoteBalanceRemainingField','quoteBalanceRemainingLabel','quoteBalanceRemaining',
   'quoteDepositReceivedForm','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositCorrectionReasonField',
   'quoteDepositCorrectionReason','quoteDepositReceivedError','quoteDepositReceivedSave','quoteDepositReceivedCancel',
-  'quoteBalanceCorrectionReasonField','quoteBalanceCorrectionReason'];
+  'quoteBalanceCorrectionReasonField','quoteBalanceCorrectionReason',
+  // Q33: no separate email button on the build; Email is in the document preview.
+  'emailQuoteBtn'];
 const open=(page)=>page.evaluate(()=>{
   goScreen('workshopScreen');showStudioWorkflow();
   Object.assign(quote,{customerName:'Synthetic Customer',buildName:'Rod',status:'active',quoteStatus:'active'});
@@ -63,7 +65,7 @@ async function main(){
     ck('no separate Job Actions card',await page.locator('#workshopActionsSection').count()===0);
     // The visible Documents buttons (More documents and its menu items are hidden for this job).
     const docs=await page.locator('.workshop-build-actions-docs__grid button').evaluateAll((b)=>b.filter((x)=>x.getClientRects().length>0).map((x)=>x.id));
-    ck('Documents group shows View, Email and Customer Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','emailQuoteBtn','viewInvoicePreviewBtn']),docs);
+    ck('Documents group shows the customer document and the Invoice',JSON.stringify(docs)===JSON.stringify(['viewQuoteBtn','viewInvoicePreviewBtn']),docs);
     const summary=await page.locator('#workshopBuildPricingSummaryText').textContent();
     // The Rod price is typed excluding GST: $1,250 + 15% = a $1,437.50 total price.
     ck('collapsed summary shows status, price and amount owing',/Active/.test(summary)&&/1,?437\.50/.test(summary)&&/Owing/.test(summary),summary);
@@ -94,8 +96,9 @@ async function main(){
     ck('the entry is readable without expanding anything: type, date and amount',/^Deposit.*2026.*\$200\.00/.test(entry),entry);
     // Tapping the row opens its edit form in place; tapping again closes it. Nothing is written.
     await page.locator('#quotePaymentHistory [data-edit-payment="p1"]').click();
-    ck('tapping a payment opens its edit form with the amount filled in',await page.locator('#quoteBalanceReceivedForm').isVisible()
-      &&await page.locator('#quoteBalanceReceivedAmount').inputValue()==='200.00'&&await page.locator('#quotePaymentRemoveBtn').isVisible());
+    // Q33: Amount, Date, Save and Cancel only - saving $0 asks "Remove this payment?" instead of a separate Remove button.
+    ck('tapping a payment opens its edit form with the amount filled in, and no separate Remove button',await page.locator('#quoteBalanceReceivedForm').isVisible()
+      &&await page.locator('#quoteBalanceReceivedAmount').inputValue()==='200.00'&&await page.locator('#quotePaymentRemoveBtn').count()===0);
     await page.locator('#quotePaymentHistory [data-edit-payment="p1"]').click();
     ck('tapping it again closes the form',await page.locator('#quoteBalanceReceivedForm').isHidden());
     ck('the payment is unchanged',await page.evaluate(()=>JSON.stringify(quote.payments))==='[{"id":"p1","type":"deposit","amount":200,"date":"2026-11-10"}]');

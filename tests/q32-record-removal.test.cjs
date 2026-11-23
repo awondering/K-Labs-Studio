@@ -64,8 +64,10 @@ test('Remove Invoice asks first; Cancel changes nothing; Remove clears only the 
 test('Remove (payment) removes only that entry and saves; the other entry and the invoice are untouched',async()=>{
   const c=harness();
   await c.removePaymentEntry('bal-1');
-  assert.equal(c.dialogs[0].config.title,'Remove Payment');
-  assert.equal(c.dialogs[0].config.message,'Remove the $150.00 NZD payment received on 21/11/2026? Amount received and balance owing are recalculated.');
+  // Q33: one plain question, Cancel | Remove; the same confirmed Q32 removal follows.
+  assert.equal(c.dialogs[0].config.title,'Remove this payment?');
+  assert.equal(c.dialogs[0].config.message,'Payment of $150.00 NZD received on 21/11/2026.');
+  assert.equal(JSON.stringify(c.dialogs[0].config.actions.map((a)=>a.label)),'["Cancel","Remove"]');
   c.dialogs[0].handler('remove');
   await settle();
   assert.deepEqual(plain(c.quote.payments),[deposit]);
@@ -73,7 +75,8 @@ test('Remove (payment) removes only that entry and saves; the other entry and th
   assert.deepEqual(c.flashes,['Payment removed']);
   const d=harness();
   await d.removePaymentEntry('dep-1');
-  assert.equal(d.dialogs[0].config.title,'Remove Deposit');
+  assert.equal(d.dialogs[0].config.title,'Remove this payment?');
+  assert.match(d.dialogs[0].config.message,/^Deposit of /);
   d.dialogs[0].handler('remove');await settle();
   assert.deepEqual(plain(d.quote.payments),[balance]);
   assert.deepEqual(d.flashes,['Deposit removed']);
@@ -106,19 +109,20 @@ test('an unknown payment id or a build without an invoice does nothing',async()=
   assert.equal(c.dialogs.length,0);assert.equal(c.info.length,0);
 });
 
-test('a payment is tapped to edit, and Remove in its form uses the confirmed Q32 removal; the invoice preview offers Remove Invoice',()=>{
+test('a payment is tapped to edit, and saving it as $0 uses the confirmed Q32 removal; the invoice preview offers Remove Invoice',()=>{
   const c=harness();
   // Pricing redesign: one tappable row per payment opens the edit form; Remove lives in that form (no Correct button).
   const markup=c.paymentEntriesMarkup([deposit],{money:c.currencyWithCode,date:(v)=>v,editable:true});
   assert.match(markup,/<button type="button" class="price-flow__payment" data-edit-payment="dep-1"/);
   assert.doesNotMatch(markup,/Correct|data-correct-payment|data-remove-payment/);
   assert.doesNotMatch(c.paymentEntriesMarkup([deposit],{money:c.currencyWithCode,date:(v)=>v}),/data-edit-payment/,'read-only where not editable');
-  assert.match(html,/id="quotePaymentRemoveBtn"[^>]*hidden>/);
-  assert.match(source,/function removeEditedPayment\(\)\{[\s\S]*?removePaymentEntry\(id\);/,'Remove goes through the existing confirmed removal');
+  // Q33: no separate Remove button; Save with $0 asks "Remove this payment?" through the existing confirmed removal.
+  assert.doesNotMatch(html,/quotePaymentRemoveBtn/);
+  assert.match(source,/function saveBalanceReceived\(\)\{[\s\S]*?removePaymentEntry\(editingPaymentId\);\n    return;/,'$0 goes through the existing confirmed removal');
   assert.match(source,/data-invoice-preview-action="remove" hidden>Remove Invoice<\/button>/);
   assert.match(source,/else if\(selected==='remove'\)removeIssuedInvoice\(\);/);
   assert.match(source,/openInfoDialog\('Invoice Already Issued','To issue a corrected invoice, open the invoice and use Remove Invoice first\.'\)/);
-  assert.match(source,/componentsPricing\?'Set by the component Sell Prices - change them in Components\.'/);
+  assert.match(source,/if\(componentsPricing\)parts\.push\('From Sell Prices'\);/);
   assert.doesNotMatch(source,/cannot be deleted/,'no permanent "cannot be deleted" block remains');
   assert.ok(html.includes('id="quotePaymentHistory"'));
 });

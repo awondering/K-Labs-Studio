@@ -49,7 +49,7 @@ function page(search = '?demo', { shieldStyle = { position: 'fixed', pointerEven
   let cookieJar = '';
   // Controls that would leave the app (email drafts, print, external links): present now, or added later by Studio.
   const outputControl = (id) => ({ id, hidden: false, disabled: false, tabIndex: 0, attributes: {}, setAttribute(n, v) { this.attributes[n] = String(v); } });
-  const outputControls = [outputControl('emailQuoteBtn'), outputControl('viewQuoteEmailBtn')];
+  const outputControls = [outputControl('invoicePreviewPrint'), outputControl('viewQuoteEmailBtn')];
   const queried = [];
   const styles = [];
   const observers = [];
@@ -202,7 +202,7 @@ test('Q18 amendment: only the director may change demo data, and only while it i
   assert.deepEqual(p.nativeWrites, [], 'nothing reached device storage');
 });
 
-const OUTPUT_SELECTORS = ['#emailQuoteBtn', '#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
+const OUTPUT_SELECTORS = ['#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
   '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]',
   // 2B: More documents (hidden, not just blocked).
   '#quoteMoreDocumentsWrap'];
@@ -224,7 +224,7 @@ test('Q18 2A: controls that leave the app (email draft, print/PDF, share, extern
   // Studio builds some of these later (the customer quote sheet, the invoice preview): they are caught as they appear.
   assert.equal(p.observers.length, 1);
   // 2B change: the observer also watches the hidden/disabled attributes (was: added elements only), because Studio
-  // shows the invoice's Print / Save as PDF again by itself once an invoice is issued.
+  // shows the invoice's PDF again by itself once an invoice is issued.
   assert.deepEqual(JSON.parse(JSON.stringify(p.observers[0].options)), { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled'] });
   const later = p.outputControl('viewQuoteEmailBtn');
   p.outputControls.splice(0, p.outputControls.length, later);
@@ -260,7 +260,7 @@ test('Q18 amendment: introduction screen explains the demonstration and starts i
 
 // ---- Phase 2B
 
-test('Q18 2B: an outgoing control Studio shows again by itself (the issued invoice\'s Print / Save as PDF) is hidden and disabled again at once', () => {
+test('Q18 2B: an outgoing control Studio shows again by itself (the issued invoice\'s PDF) is hidden and disabled again at once', () => {
   const p = page();
   p.window.KLABS_DEMO.installShield(p.document);
   const print = p.outputControls[0];
@@ -399,8 +399,8 @@ test('Q18 2B: behind the shield, the click guard lets only the director (never a
 test('Q18 2B: everything else stays blocked for the director too - email, print/PDF, statements, More documents, account and sync', () => {
   const g = clickGuard();
   const blocked = {
-    email: [['#emailQuoteBtn', 'button'], surface, 'Open Email Draft'],
-    print: [['[data-invoice-preview-action="print"]', 'button'], ['#invoicePreviewSheet'], 'Print / Save as PDF'],
+    email: [['#viewQuoteEmailBtn', 'button'], ['#viewQuoteSheet'], 'Email Open an email draft'],
+    print: [['[data-invoice-preview-action="print"]', 'button'], ['#invoicePreviewSheet'], 'PDF'],
     statement: [['[data-current-build-action="statement"]', 'button'], ['[data-current-build-action]', '#currentBuildActionsMenu'], 'Payment Statement'],
     moreDocuments: [['#quoteMoreDocumentsBtn', 'button'], surface, 'More documents'],
     moreInvoice: [['[data-more-document="invoice"]', 'button'], ['[data-more-document]', ...surface], 'Customer Invoice'],

@@ -36,7 +36,7 @@ test('the golden snapshot covers labour with Required Profit, Margin %, tax off,
 function pricing(job,settings={}){
   const studioSettings={taxRate:15,taxEnabled:true,taxType:'gst',currency:'NZD',defaultLabourRate:85,...settings};
   const c=loadRecordFunctions(['normalizeQuote','quoteMaths','rodPricingFigures','applyManualRodPrice','rodPriceTaxMultiplier',
-    'applyManualRodPriceExclusive','keepRodPriceExclusive','advancedRodPrice','rodPriceLabel','legacyLabourLineText',
+    'applyManualRodPriceExclusive','keepRodPriceExclusive','advancedRodPrice','rodPriceLabel','jobPriceNote','legacyLabourLineText',
     'paymentTypeLabel','paymentEntriesMarkup'],{
     studioSettings,
     activeTaxEnabled:()=>studioSettings.taxEnabled!==false,
@@ -182,12 +182,17 @@ test('a saved build with labour keeps it in Your return and shows the read-only 
   assert.equal(components.legacyLabourLineText(components.quote),'','never on a Components job');
 });
 
-test('labels: Rod price says excl. tax name; tax off has no tax wording; repairs say Repair price',()=>{
+test('labels: Job Price for every job type; the tax basis is its own quiet line; tax off has no tax wording',()=>{
   const c=pricing(newBuild());
-  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'build'}),'Rod price excl. GST');
-  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'VAT',jobType:'build'}),'Rod price excl. VAT');
-  assert.equal(c.rodPriceLabel({taxActive:false,taxName:'GST',jobType:'build'}),'Rod price');
-  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'repair'}),'Repair price excl. GST');
+  // Q33: one selling-price label for New Build, Refurbishment and Components.
+  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'build'}),'Job Price');
+  assert.equal(c.rodPriceLabel({taxActive:true,taxName:'GST',jobType:'repair'}),'Job Price');
+  assert.equal(c.jobPriceNote({taxActive:true,taxName:'GST'}),'Excl. GST');
+  assert.equal(c.jobPriceNote({taxActive:true,taxName:'VAT'}),'Excl. VAT');
+  assert.equal(c.jobPriceNote({taxActive:false,taxName:'GST'}),'');
+  assert.equal(c.jobPriceNote({taxActive:true,taxName:'GST',componentsPricing:true}),'From Sell Prices · Excl. GST');
+  assert.match(pricingBlock,/<span id="quoteRodPriceLabel">Job Price<\/span><small id="quoteJobPriceNote" hidden><\/small>/);
+  assert.doesNotMatch(html,/>Rod price|>Repair price|Customer price \(/);
 });
 
 test('payment rows: type, date and amount; tappable to edit only when editable; escaped',()=>{
@@ -214,14 +219,16 @@ test('the pricing order: Components cost, Rod price, Your return, then Advanced 
   assert.match(pricingBlock,/id="quoteAdvancedPricing"[^>]*hidden/);
 });
 test('Your return carries the approved note',()=>{
-  assert.match(pricingBlock,/Your return<small>Before overheads and income tax\.<\/small>/);
+  assert.match(pricingBlock,/Your Return<small>Before overheads and income tax\.<\/small>/);
   assert.doesNotMatch(pricingBlock,/Estimated Earnings|Includes labour and profit/);
 });
 test('Advanced pricing has exactly two methods, one value, a proposed price and one Apply',()=>{
   const adv=pricingBlock.slice(pricingBlock.indexOf('id="quoteAdvancedPricing"'));
   assert.equal((adv.match(/data-advanced-method="/g)||[]).length,2);
-  assert.match(adv,/data-advanced-method="return"[^>]*>Return \$</);
-  assert.match(adv,/data-advanced-method="percent"[^>]*>Margin %</);
+  assert.match(adv,/data-advanced-method="return"[^>]*>Target Return</);
+  assert.match(adv,/data-advanced-method="percent"[^>]*>Target Margin</);
+  assert.match(adv,/id="quoteAdvancedTargetLabel">Target Return \(\$\)</,'only the chosen method\'s input, labelled');
+  assert.match(adv,/<span>Job Price<\/span><strong id="quoteAdvancedProposed"><\/strong><button id="quoteAdvancedApply"[^>]*>Apply</,'the proposed Job Price and Apply share one row');
   for(const id of ['quoteAdvancedTarget','quoteAdvancedProposed','quoteAdvancedError','quoteAdvancedApply'])assert.ok(adv.includes(`id="${id}"`),id);
   assert.equal((adv.match(/<button[^>]*id="quoteAdvancedApply"/g)||[]).length,1);
 });
@@ -229,7 +236,10 @@ test('the old modes, targets, build hours and hourly return are gone',()=>{
   for(const id of ['quoteProfit','quoteMarginPercent','quotePricingMethodField','quoteBuildHoursField','quoteEffectiveHourly',
     'quoteTimePricingRow','quoteAdvancedPricingNote','quoteCustomerTotalLine','quoteDeliveryTotal','settingsShowAdvancedPricing'])
     assert.doesNotMatch(html,new RegExp(`id="${id}"`),id);
-  assert.doesNotMatch(html,/data-pricing-view=|data-pricing-method=|Target Return|Target Margin|Required Profit|hourly/i);
+  assert.doesNotMatch(html,/data-pricing-view=|data-pricing-method=|Required Profit|hourly/i);
+  // Q33: "Target Return" / "Target Margin" name the two Advanced Pricing methods only; no target is stored or shown elsewhere.
+  const outsideAdvanced=html.replace(/<div id="quoteAdvancedPricing"[\s\S]*?<\/div>\n            <\/div>/,'');
+  assert.doesNotMatch(outsideAdvanced,/Target Return|Target Margin/);
   const ui=fs.readFileSync(path.join(root,'js','ui.js'),'utf8');
   for(const name of ['applyManualTargetReturn','effectiveHourlyReturn','timePricingAmount','advancedPricingEnabled','setPricingView'])
     assert.doesNotMatch(ui,new RegExp(`function ${name}\\(`),name);
@@ -241,11 +251,16 @@ test('no labour split: Labour Rate and Labour Hours stay hidden',()=>{
 test('Delivery, Total price and Payments follow in that order; freight and packaging only for sending',()=>{
   const at=['quoteFulfilmentGroup','quoteTotalBlock','quotePaymentBlock'].map((id)=>actions.indexOf(`id="${id}"`));
   assert.ok(at.every((p)=>p>=0)&&at[0]<at[1]&&at[1]<at[2],JSON.stringify(at));
-  assert.match(actions,/>Customer collects</);
-  assert.match(actions,/>Send to customer</);
+  // Q33: one Delivery row; tapping it shows Collection | Courier / Shipping, and Freight/Packaging only for shipping.
+  assert.match(actions,/id="quoteDeliveryToggle"[^>]*aria-expanded="false"[^>]*aria-controls="quoteDeliveryPanel"[^>]*><span id="quoteDeliveryHeading">Delivery<\/span><em id="quoteDeliverySummary"><\/em>/);
+  const panel=actions.slice(actions.indexOf('id="quoteDeliveryPanel"'));
+  assert.match(panel,/^id="quoteDeliveryPanel"[^>]*hidden>/);
+  assert.match(panel,/data-fulfilment-method="collection"[^>]*>Collection</);
+  assert.match(panel,/data-fulfilment-method="shipping"[^>]*>Courier \/ Shipping</);
+  assert.doesNotMatch(html,/Customer collects|Send to customer/);
   const fields=actions.slice(actions.indexOf('id="quoteDeliveryFields"'));
   assert.match(fields.slice(0,600),/Freight[\s\S]*Packaging/);
-  assert.match(actions,/id="quoteTotalPriceRow"[\s\S]*?Total price[\s\S]*?id="quoteTotalPrice"/);
+  assert.match(actions,/id="quoteTotalPriceRow"[\s\S]*?Total Price<small id="quoteTotalNote" hidden><\/small>[\s\S]*?id="quoteTotalPrice"/);
 });
 test('one tax row - Include tax, the rate chip, the tax total - with the per-build rate field behind the chip',()=>{
   const row=html.slice(html.indexOf('id="quoteTaxSummaryRow"'),html.indexOf('id="quoteTaxRateField"'));
@@ -255,12 +270,18 @@ test('one tax row - Include tax, the rate chip, the tax total - with the per-bui
   assert.match(html,/<label id="quoteTaxRateField"[^>]*hidden>/);
   assert.doesNotMatch(row,/>GST|15%|15\.0/,'no hard-coded tax name or rate');
 });
-test('Payments: deposit terms, the payment rows, Received/Balance owing, then one Add payment; one form for add and edit',()=>{
+test('Payments: Deposit Required, the payment rows, Payments Received/Balance Owing, then Add Payment; one form for add and edit',()=>{
   const block=html.slice(html.indexOf('id="quotePaymentBlock"'),html.indexOf('class="workshop-build-actions-docs"'));
   const at=(id)=>block.indexOf(`id="${id}"`);
   for(const id of ['quoteDepositTerms','quoteDepositEnabledField','quoteDepositTypeField','quoteDepositValueField','quotePaymentHistory',
     'quotePaymentBalanceOwing','quoteBalanceReceivedForm','quoteBalanceReceivedAmount','quoteBalanceReceivedDate',
-    'quoteBalanceReceivedSave','quotePaymentRemoveBtn','quoteRecordPaymentBtn'])assert.ok(at(id)>0,id);
+    'quoteBalanceReceivedSave','quoteBalanceReceivedCancel','quoteRecordPaymentBtn'])assert.ok(at(id)>0,id);
+  // Q33: no separate Remove button; an edited payment saved as $0 asks "Remove this payment?".
+  assert.doesNotMatch(block,/quotePaymentRemoveBtn|Remove payment/);
+  assert.match(block,/<span>Deposit Required<\/span>/);
+  assert.match(block,/<span>Payments Received<\/span>/);
+  assert.match(block,/id="quotePaymentBalanceLabel">Balance Owing</);
+  assert.match(block,/id="quoteRecordPaymentBtn" class="price-flow__disclosure price-flow__add"[^>]*><span id="quoteRecordPaymentLabel">Add Payment<\/span>/);
   assert.ok(at('quoteDepositTerms')<at('quotePaymentHistory')&&at('quotePaymentHistory')<at('quotePaymentBalanceOwing')&&at('quotePaymentBalanceOwing')<at('quoteRecordPaymentBtn'));
   assert.match(block,/id="quoteBalanceReceivedSave"[^>]*class="[^"]*primary-action/);
   assert.doesNotMatch(block,/Correct|Correction|Reason|quotePaymentTypeField|quoteDepositReceivedForm|quoteBalanceRemaining/);
@@ -272,7 +293,9 @@ test('Components jobs keep their own pricing: rod-only elements are hidden there
   for(const id of ['quoteLegacyLabourLine','quoteAdvancedToggle','quoteAdvancedPricing'])assert.ok(selector.includes(`#${id}`),id);
 });
 test('the build screen uses one section heading style',()=>{
-  for(const label of ['Pricing','Delivery','Payments'])assert.match(html,new RegExp(`build-section-heading[^>]*>${label}<`),label);
+  for(const label of ['Pricing','Payments'])assert.match(html,new RegExp(`build-section-heading[^>]*>${label}<`),label);
+  // Q33: Delivery is a row like Advanced Pricing, not a section heading with permanent buttons.
+  assert.match(html,/class="price-flow__disclosure price-flow__delivery-toggle"[^>]*><span id="quoteDeliveryHeading">Delivery</);
   assert.match(html,/<span class="workshop-build-actions-docs__label build-section-heading">Documents<\/span>/);
   assert.match(css,/#workshopScreen #workshopPricingSection \.build-section-heading\{[^}]*font-size:11px[^}]*\}/);
 });

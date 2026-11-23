@@ -82,7 +82,7 @@ test('Add payment opens with the balance owing and today, and closes without wri
   context.openRecordPaymentForm();
   assert.equal(elements.quoteBalanceReceivedForm.hidden,false);
   assert.equal(elements.quoteBalanceReceivedAmount.value,'1219.25');
-  assert.equal(elements.quotePaymentFormTitle.textContent,'New payment');
+  assert.equal(elements.quotePaymentFormTitle.textContent,'New Payment');
   assert.equal(elements.quoteBalanceReceivedDate.value,'2026-11-15');
   elements.quoteBalanceReceivedAmount.value='10.00';
   context.closeBalanceReceivedForm();
