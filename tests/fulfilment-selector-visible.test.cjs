@@ -36,8 +36,9 @@ test('Q14: selector is outside the collapsible pricing-fields block and immediat
   const firstChild = /<section[^>]*>\s*<div id="([^"]+)"/.exec(surface)[1];
   assert.equal(firstChild, 'quoteFulfilmentGroup', 'first item of the actions area');
   assert.match(html, /<\/div>\s*<section class="workshop-build-actions-surface"[^>]*>\s*<div id="quoteFulfilmentGroup"/);
-  assert.match(block('quoteFulfilmentGroup'), /id="quoteDeliveryFields"[^>]*hidden[\s\S]*Freight[\s\S]*Packaging[\s\S]*Total Shipping/);
-  assert.match(block('quoteDeliveryFields'), /id="quoteDeliveryTotal"[^>]*readonly/);
+  assert.match(block('quoteFulfilmentGroup'), /id="quoteDeliveryFields"[^>]*hidden[\s\S]*Freight[\s\S]*Packaging/);
+  // Pricing redesign: no separate shipping total - the Total price below already includes delivery.
+  assert.doesNotMatch(block('quoteDeliveryFields'), /quoteDeliveryTotal|Total Shipping/);
   assert.ok(surface.indexOf('quoteFulfilmentGroup') < surface.indexOf('aria-label="Documents"'));
   assert.ok(block('workshopQuoteSummaryBody').includes('id="quoteFulfilmentGroup"'), 'still inside Job Pricing & Actions');
   assert.equal((html.match(/id="quoteFulfilmentGroup"/g) || []).length, 1, 'one selector only');

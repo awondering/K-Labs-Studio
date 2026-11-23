@@ -378,7 +378,6 @@ const GUARDED = {
   confirmBuild: [['#confirmBuildBtn', 'button'], surface, 'Confirm Build'],
   confirmSheet: [['[data-confirm-action]', 'button'], ['#confirmSheet'], 'Issue Invoice'],
   recordPayment: [['#quoteRecordPaymentBtn', 'button'], ['#quotePaymentBlock'], 'Record Payment'],
-  paymentType: [['[data-payment-type]', 'button'], ['#quotePaymentTypeField'], 'DEPOSIT'],
   paymentSave: [['#quoteBalanceReceivedSave', 'button'], ['#quoteBalanceReceivedForm'], 'Save'],
   markComplete: [['#toggleCurrentBuildStatusBtn', 'button'], surface, 'Mark Complete'],
   invoice: [['#viewInvoicePreviewBtn', 'button'], surface, 'Customer Invoice'],
@@ -392,6 +391,9 @@ test('Q18 2B: behind the shield, the click guard lets only the director (never a
     assert.equal(g.press(el, false), false, `the director can use ${name}`);
     assert.equal(g.press(el, true), true, `a visitor's tap on ${name} is refused even if it got past the shield`);
   }
+  // Pricing redesign: there is no Deposit | Balance chooser any more, so it is not on the director's list either.
+  const removed = g.control(['[data-payment-type]', 'button'], ['#quotePaymentTypeField', ...surface], 'DEPOSIT');
+  assert.equal(g.press(removed, false), true, 'the removed payment-type control is not a journey control');
 });
 
 test('Q18 2B: everything else stays blocked for the director too - email, print/PDF, statements, More documents, account and sync', () => {

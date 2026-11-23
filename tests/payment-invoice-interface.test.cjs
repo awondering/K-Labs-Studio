@@ -15,17 +15,19 @@ function extract(name){
 }
 function harness(){
   const elements={};
-  for(const id of ['quoteDepositReceivedStatus','quoteRecordPaymentBtn','quoteDepositReceivedForm','quoteDepositReceivedError',
-    'quotePaymentTotalReceived','quotePaymentBalanceOwing','quotePaymentHistory','quotePaymentTypeField',
-    'workshopPricingSection','quotePricingSummaryBtn','quotePricingSummaryValue',
+  for(const id of ['quoteDepositReceivedStatus','quoteRecordPaymentBtn','quotePaymentFormTitle','quotePaymentRemoveBtn',
+    'quotePaymentTotalReceived','quotePaymentBalanceOwing','quotePaymentBalanceLabel','quotePaymentHistory','quotePaymentHistoryDetails',
+    'workshopPricingSection','quotePricingSummaryBtn','quotePricingSummaryValue','quoteBalanceReceivedError',
     'quoteBalanceReceivedForm','quoteBalanceReceivedAmount','quoteBalanceReceivedDate']){
-    elements[id]={hidden:false,value:'',textContent:'',innerHTML:'',setAttribute(name,value){this[name]=value;}};
+    elements[id]={hidden:false,value:'',textContent:'',innerHTML:'',setAttribute(name,value){this[name]=value;},
+      getAttribute(name){return this[name];},contains(){return false;},querySelector(){return null;}};
   }
   const quote={id:'unique-123',buildNumber:'BUILD-902',customerName:'<script>Customer</script>',buildName:'Rod & reel',
     includeGst:true,payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-11-10'},{id:'p2',type:'balance',amount:100,date:'2026-11-12'}]};
   const context=vm.createContext({
     quote,elements,businessProfile:{businessName:'K-Labs',gstNumber:'123'},TextEncoder,
-    window:{KLABS_ACCOUNT_ID:'account-a'},document:{querySelectorAll:()=>[]},currentBuildLifecycleStatus:()=>'active',
+    window:{KLABS_ACCOUNT_ID:'account-a'},document:{querySelector:()=>null,querySelectorAll:()=>[]},currentBuildLifecycleStatus:()=>'active',
+    CSS:{escape:String},currency:value=>`$${Number(value).toFixed(2)}`,rodPricingFigures:()=>({rodExclusive:2173.91}),
     $:id=>elements[id]||null,
     numberOrZero:value=>Number(value)||0,
     currencyWithCode:value=>`$${Number(value).toFixed(2)} NZD`,
@@ -53,9 +55,10 @@ function harness(){
         depositReceivedDate:quote.payments[0]?.date||'',depositEnabled:false,depositOutstanding:false};
     },
   });
-  vm.runInContext("let paymentFormBuildKey='';let balanceCorrectionId='';let pricingSummaryOpen=false;let deliveryEditOpen=false;let recordPaymentType='balance';let recordPaymentPrefill='';",context);
-  for(const name of ['paymentHistoryMarkup','paymentEntriesMarkup','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup','closeDepositReceivedForm',
-    'closeBalanceReceivedForm','openBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','setRecordPaymentChoice','setRecordPaymentType','recordPaymentSuggestedAmount','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
+  vm.runInContext("let paymentFormBuildKey='';let editingPaymentId='';let pricingSummaryOpen=false;",context);
+  for(const name of ['paymentTypeLabel','paymentEntriesMarkup','paymentFormElement','paymentFormHome','placePaymentForm',
+    'newPaymentType','updatePaymentFormTitle','openRecordPaymentForm','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup',
+    'closeBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }
 
@@ -65,19 +68,21 @@ test('payment status displays all received payments and balance without changing
   context.updatePaymentBlock();
   assert.equal(elements.quotePaymentTotalReceived.textContent,'$1280.75 NZD');
   assert.equal(elements.quotePaymentBalanceOwing.textContent,'$1219.25 NZD');
-  // Q23 final correction: one line per payment ("Deposit received / $x — date"), with no repeated heading.
-  assert.match(elements.quotePaymentHistory.innerHTML,/Deposit received<\/span><strong>\$1180\.75 NZD — 2026-11-10/);
-  assert.match(elements.quotePaymentHistory.innerHTML,/Balance received<\/span><strong>\$100\.00 NZD — 2026-11-12/);
+  // Pricing redesign: one tappable row per payment - type, date, amount - with no repeated heading.
+  assert.match(elements.quotePaymentHistory.innerHTML,/data-edit-payment="p1"[^>]*>.*Deposit<\/span><span class="price-flow__payment-date">2026-11-10<\/span><strong>\$1180\.75<\/strong>/);
+  assert.match(elements.quotePaymentHistory.innerHTML,/data-edit-payment="p2"[^>]*>.*Payment<\/span><span class="price-flow__payment-date">2026-11-12<\/span><strong>\$100\.00<\/strong>/);
+  assert.equal(elements.quotePaymentHistoryDetails.hidden,false);
   assert.doesNotMatch(elements.quotePaymentHistory.innerHTML,/Payment history/);
   assert.equal(elements.quoteDepositReceivedStatus.textContent,'','the deposit is not repeated in a sentence');
   assert.equal(JSON.stringify(quote.payments),before);
 });
-test('balance form opens with the outstanding balance and closes without writing',()=>{
+test('Add payment opens with the balance owing and today, and closes without writing',()=>{
   const {context,elements,quote}=harness();
   const before=JSON.stringify(quote);
-  context.openBalanceReceivedForm();
-  assert.equal(elements.quoteBalanceReceivedAmount.max,'1219.25');
+  context.openRecordPaymentForm();
+  assert.equal(elements.quoteBalanceReceivedForm.hidden,false);
   assert.equal(elements.quoteBalanceReceivedAmount.value,'1219.25');
+  assert.equal(elements.quotePaymentFormTitle.textContent,'New payment');
   assert.equal(elements.quoteBalanceReceivedDate.value,'2026-11-15');
   elements.quoteBalanceReceivedAmount.value='10.00';
   context.closeBalanceReceivedForm();
@@ -107,7 +112,8 @@ test('settled builds show paid in full; tax is omitted when not applicable',()=>
   quote.payments.push({id:'p3',type:'balance',amount:1219.25,date:'2026-11-15'});
   quote.includeGst=false;
   context.updatePaymentBlock();
-  assert.match(elements.quotePaymentBalanceOwing.textContent,/PAID IN FULL/);
+  assert.equal(elements.quotePaymentBalanceOwing.textContent,'Paid in full');
+  assert.equal(elements.quotePaymentBalanceLabel.textContent,'Balance');
   const preview=context.customerInvoicePreviewMarkup();
   assert.match(preview,/Paid in full/);
   assert.doesNotMatch(preview,/GST/);
@@ -115,7 +121,7 @@ test('settled builds show paid in full; tax is omitted when not applicable',()=>
 test('switching accounts closes and clears an unsaved balance form',()=>{
   const {context,elements}=harness();
   context.updatePaymentBlock();
-  context.openBalanceReceivedForm();
+  context.openRecordPaymentForm();
   elements.quoteBalanceReceivedAmount.value='12.34';
   context.activeAccountKey=()=>'account-b';
   context.updatePaymentBlock();

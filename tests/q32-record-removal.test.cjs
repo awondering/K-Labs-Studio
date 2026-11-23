@@ -39,7 +39,7 @@ function harness({supported=true,persist=true}={}){
   };
   vm.createContext(c);
   vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','invoiceDisplayNumber','recordRemovalReady',
-    'saveFinancialRemoval','removeIssuedInvoice','removePaymentEntry','paymentEntriesMarkup'].map(functionSource).join('\n'),c);
+    'saveFinancialRemoval','removeIssuedInvoice','removePaymentEntry','paymentTypeLabel','paymentEntriesMarkup'].map(functionSource).join('\n'),c);
   return c;
 }
 
@@ -106,11 +106,15 @@ test('an unknown payment id or a build without an invoice does nothing',async()=
   assert.equal(c.dialogs.length,0);assert.equal(c.info.length,0);
 });
 
-test('payment rows offer Remove beside Correct; the invoice preview offers Remove Invoice; wording points to the routes',()=>{
+test('a payment is tapped to edit, and Remove in its form uses the confirmed Q32 removal; the invoice preview offers Remove Invoice',()=>{
   const c=harness();
-  const markup=c.paymentEntriesMarkup([deposit],{money:c.currencyWithCode,date:(v)=>v,showCorrections:true});
-  assert.match(markup,/<span class="quote-payment__entry-actions"><button type="button" class="ghost-action quote-payment__correct" data-correct-payment="dep-1">Correct<\/button><button type="button" class="ghost-action quote-payment__correct" data-remove-payment="dep-1">Remove<\/button><\/span>/);
-  assert.doesNotMatch(c.paymentEntriesMarkup([deposit],{money:c.currencyWithCode,date:(v)=>v}),/data-remove-payment/,'not offered where corrections are not');
+  // Pricing redesign: one tappable row per payment opens the edit form; Remove lives in that form (no Correct button).
+  const markup=c.paymentEntriesMarkup([deposit],{money:c.currencyWithCode,date:(v)=>v,editable:true});
+  assert.match(markup,/<button type="button" class="price-flow__payment" data-edit-payment="dep-1"/);
+  assert.doesNotMatch(markup,/Correct|data-correct-payment|data-remove-payment/);
+  assert.doesNotMatch(c.paymentEntriesMarkup([deposit],{money:c.currencyWithCode,date:(v)=>v}),/data-edit-payment/,'read-only where not editable');
+  assert.match(html,/id="quotePaymentRemoveBtn"[^>]*hidden>/);
+  assert.match(source,/function removeEditedPayment\(\)\{[\s\S]*?removePaymentEntry\(id\);/,'Remove goes through the existing confirmed removal');
   assert.match(source,/data-invoice-preview-action="remove" hidden>Remove Invoice<\/button>/);
   assert.match(source,/else if\(selected==='remove'\)removeIssuedInvoice\(\);/);
   assert.match(source,/openInfoDialog\('Invoice Already Issued','To issue a corrected invoice, open the invoice and use Remove Invoice first\.'\)/);

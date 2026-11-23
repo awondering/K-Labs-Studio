@@ -312,7 +312,7 @@ test('while pending, invoices, deposits and balance payments are refused with an
   assert.equal(c.blockedByPendingPricing('issuing an invoice'),true);
   assert.equal(calls.info[0].title,'Pricing To Be Confirmed');
   assert.match(calls.info[0].message,/Add a Sell Price to every component, then Confirm Order, before issuing an invoice/);
-  for(const name of ['openDepositReceivedForm','openBalanceReceivedForm','issueCustomerInvoice','openInvoicePreview']){
+  for(const name of ['openRecordPaymentForm','issueCustomerInvoice','openInvoicePreview']){
     const start=source.indexOf(`function ${name}(`);
     const head=source.slice(start,source.indexOf('\n',source.indexOf('\n',start)+1)+200);
     assert.match(head,/blockedByPendingPricing\(/,`${name} checks pending pricing first`);
@@ -339,7 +339,7 @@ test('the financial operation itself refuses a pending job (backstop) and is unc
     return 'no error';
   };
   assert.match(await run(componentsJob(),true),/Pricing to be confirmed/);
-  assert.match(await run(rodBuild(),false),/Connect to record payments/,'a rod build reaches the existing checks as before');
+  assert.match(await run(rodBuild(),false),/Connect to the internet to save payments/,'a rod build reaches the existing checks as before');
 });
 
 // ---------- markup and layout (Components only) ----------
@@ -359,7 +359,7 @@ test('every new hiding rule applies only to Components jobs, so rod builds and r
     }
     assert.match(rule,/\{display:none$/);
   }
-  for(const id of ['quoteLabourRateField','quoteProfitField','quoteMarginPercentField','quoteEarningsSummary','quoteCostBeforeMarginField','quoteDepositEnabledField','quoteTaxRateField'])
+  for(const id of ['quoteLabourRateField','quoteAdvancedToggle','quoteAdvancedPricing','quoteEarningsSummary','quoteCostBeforeMarginField','quoteDepositEnabledField','quoteTaxRateField'])
     assert.match(block,new RegExp(`#${id}\\b`),id);
   for(const id of ['quoteIncludeGstField','quoteGstField','quoteTotalField','quoteFulfilmentGroup','viewQuoteBtn','emailQuoteBtn','quoteRecordPaymentBtn','confirmBuildBtn'])
     assert.doesNotMatch(block,new RegExp(`#${id}\\b`),`${id} stays visible`);

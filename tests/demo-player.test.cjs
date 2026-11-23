@@ -244,13 +244,15 @@ test('Q18 2A: the director works the real Studio controls in workflow order: cus
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'workflow order');
   assert.deepEqual(order.map((i) => flat[i].chapter), [1, 1, 1, 2, 3, 4, 4, 5]);
   assert.ok(!flat.some(({ step }) => [].concat(step[1]).some((t) => /quoteLabour/.test(String(t)))), 'no labour steps');
-  // Q23 final correction: margin and dollar-return targets appear only in the short Advanced Pricing moment of chapter 4,
-  // between switching to Advanced and back to Simple.
-  const advancedOn = at((s) => s[0] === 'tap' && s[1] === '[data-pricing-view="advanced"]');
-  const advancedOff = at((s) => s[0] === 'tap' && s[1] === '[data-pricing-view="simple"]');
-  const targets = flat.map((f, i) => [f, i]).filter(([{ step }]) => [].concat(step[1]).some((t) => /quoteMarginPercent|quoteProfit/.test(String(t))));
-  assert.ok(advancedOn > 0 && advancedOff > advancedOn && flat[advancedOn].chapter === 4 && flat[advancedOff].chapter === 4);
-  assert.ok(targets.length >= 2 && targets.every(([, i]) => i > advancedOn && i < advancedOff), 'targets only inside the Advanced moment');
+  // Pricing redesign: Advanced pricing (Margin %, then Return $) appears only in a short moment of chapter 4 - opened and
+  // closed again without applying, so the Rod price stays as typed.
+  const toggles = flat.map((f, i) => [f, i]).filter(([{ step }]) => step[0] === 'tap' && step[1] === '#quoteAdvancedToggle').map(([, i]) => i);
+  assert.equal(toggles.length, 2, 'opened once, closed once');
+  const [advancedOn, advancedOff] = toggles;
+  const targets = flat.map((f, i) => [f, i]).filter(([{ step }]) => [].concat(step[1]).some((t) => /quoteAdvancedTarget|data-advanced-method/.test(String(t))));
+  assert.ok(flat[advancedOn].chapter === 4 && flat[advancedOff].chapter === 4);
+  assert.ok(targets.length >= 3 && targets.every(([, i]) => i > advancedOn && i < advancedOff), 'methods and targets only inside the Advanced moment');
+  assert.ok(!flat.some(({ step }) => step[0] === 'tap' && step[1] === '#quoteAdvancedApply'), 'the demo never applies a proposal');
   // 2B: every control the later chapters use is checked below too.
   assert.ok(flat.length > 100);
   // Every control exists on the real page (index.html) or is built by Studio's own interface (ui.js).
@@ -406,7 +408,6 @@ test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposi
   marks.confirmed = at(tapOf('#confirmSheet [data-confirm-action="confirm"]'));
   marks.active = at((s) => s[0] === 'untilText' && s[1] === '#workshopBuildLifecycleStatus' && s[2] === 'Active');
   marks.depositForm = at(tapOf('#quoteRecordPaymentBtn'));
-  marks.depositType = at(tapOf('#quotePaymentTypeField [data-payment-type="deposit"]'));
   marks.depositAmount = at((s) => s[0] === 'type' && s[1] === '#quoteBalanceReceivedAmount' && s[2] === '300');
   marks.depositSave = at(tapOf('#quoteBalanceReceivedSave'));
   marks.activeJobs = at(tapOf('[data-studio-action="open-builds"]'));
@@ -424,7 +425,7 @@ test('Q18 2B: steps 6-10 on the real controls in workflow order - accept, deposi
   assert.ok(order.every((i) => i >= 0), JSON.stringify(marks));
   assert.deepEqual([...order].sort((a, b) => a - b), order, `workflow order ${JSON.stringify(marks)}`);
   assert.deepEqual(Object.fromEntries(Object.entries(marks).map(([k, i]) => [k, flat[i].chapter])), {
-    confirm: 6, confirmed: 6, active: 6, depositForm: 7, depositType: 7, depositAmount: 7, depositSave: 7, activeJobs: 8, openJob: 8, notes: 8,
+    confirm: 6, confirmed: 6, active: 6, depositForm: 7, depositAmount: 7, depositSave: 7, activeJobs: 8, openJob: 8, notes: 8,
     balanceForm: 9, balanceSave: 9, complete: 9, completed: 9, invoice: 10, issue: 10, issued: 10, summary: 10 });
   // The final payment is Studio's own figure for the balance owing: the director never types it.
   const typedAmounts = flat.filter(({ step }) => step[0] === 'type' && step[1] === '#quoteBalanceReceivedAmount');
@@ -446,7 +447,9 @@ test('Q18 2B: the whole journey plays from Start to the final invoice and summar
   await settle(h, () => finished(h));
   assert.match(h.get('#demoCaption').textContent, FINISHED, JSON.stringify(h.log.filter((e) => e[0] === 'warn')));
   const clicks = h.log.filter((e) => e[0] === 'click').map((e) => e[1]);
-  for (const selector of ['#confirmBuildBtn', '#confirmSheet [data-confirm-action="confirm"]', '#quotePaymentTypeField [data-payment-type="deposit"]', '#toggleCurrentBuildStatusBtn',
+  // Pricing redesign: no Deposit | Balance tap - the first payment below the total is the deposit.
+  assert.ok(!clicks.some((c) => /data-payment-type/.test(c)), 'no payment-type chooser');
+  for (const selector of ['#confirmBuildBtn', '#confirmSheet [data-confirm-action="confirm"]', '#toggleCurrentBuildStatusBtn',
     '#invoicePreviewSheet [data-invoice-preview-action="issue"]', '#confirmSheet [data-confirm-action="issue"]']) {
     assert.ok(clicks.includes(selector), selector);
   }
@@ -617,14 +620,15 @@ test('Q18 Phase 3: the courier choice is shown and held, then Courier, Freight, 
   const courier = at((s) => s[0] === 'tap' && s[1] === '[data-fulfilment-method="shipping"]');
   const freight = at((s) => s[0] === 'type' && s[1] === '#quoteFreight');
   const packaging = at((s) => s[0] === 'type' && s[1] === '#quotePackaging');
-  const total = at((s) => s[0] === 'show' && s[1] === '#quoteDeliveryTotalField');
+  // Pricing redesign: the Total price (with delivery) replaces the separate delivery total and customer total line.
+  const total = at((s) => s[0] === 'show' && s[1] === '#quoteTotalPriceRow');
   const onTop = at((s) => s[0] === 'caption' && /on top/i.test(s[1]));
-  const profit = at((s) => s[0] === 'show' && Array.isArray(s[1]) && s[1].includes('#quoteCustomerTotalLine') && s[1].includes('#quoteEarningsSummary'));
+  const profit = at((s) => s[0] === 'show' && Array.isArray(s[1]) && s[1].includes('#quoteTotalPriceRow') && s[1].includes('#quoteEarningsSummary'));
   assert.ok(choice >= 0 && choice < courier && courier < freight && freight < packaging && packaging < total && total < onTop && onTop < profit, JSON.stringify({ choice, courier, freight, packaging, total, onTop, profit }));
   assert.ok(pricing[choice][2] >= 800 && pricing[choice][2] <= 2000, 'a brief hold on the Collection / Courier choice');
   // While playing: each of those is highlighted and in view while it is shown.
   const seen = [];
-  const watch = ['#quoteFulfilmentGroup', '#quoteDeliveryTotalField', '#quoteCustomerTotalLine', '#quoteEarningsSummary'];
+  const watch = ['#quoteFulfilmentGroup', '#quoteTotalPriceRow', '#quoteEarningsSummary'];
   for (const key of watch) {
     const el = h.get(key);
     el.setAttribute = (name, value) => { el.attributes[name] = String(value); if (name === 'data-demo-highlight') seen.push([key, el.inView]); };
@@ -705,7 +709,7 @@ test('Q18 Phase 3 review: time spent paused does not count towards the watchdog'
 });
 
 test('Q18 Phase 3 review: controls are brought into view with the smallest scroll (reading order), centred only if that is not enough', async () => {
-  const h = stage({ nearestFails: ['#quoteFreight', '#quoteDeliveryTotalField'] });
+  const h = stage({ nearestFails: ['#quoteFreight', '#quoteCostBeforeMarginField'] });
   player(h).open(h.director);
   h.get('#demoStartBtn').click();
   await settle(h, () => finished(h));
@@ -715,7 +719,7 @@ test('Q18 Phase 3 review: controls are brought into view with the smallest scrol
   for (const e of scrolls) if (!firstOf.has(e[1])) firstOf.set(e[1], e[2]);
   assert.deepEqual([...firstOf].filter(([, block]) => block !== 'nearest'), [], 'the first move is always the smallest one');
   // A field to type in, and a figure that is only shown (highlighted, not used).
-  for (const key of ['#quoteFreight', '#quoteDeliveryTotalField']) {
+  for (const key of ['#quoteFreight', '#quoteCostBeforeMarginField']) {
     assert.deepEqual(scrolls.filter((e) => e[1] === key).map((e) => e[2]), ['nearest', 'center'], `${key} centred when the smallest scroll leaves it out of view`);
   }
   assert.ok(studioActs(h).every((a) => a.highlighted && a.inView));
@@ -731,7 +735,7 @@ test('Q23: pricing shows the Components Cost, then the Rod Price is typed in wit
   const price = at((s) => s[0] === 'type' && s[1] === '#quoteTotal' && /^\d+$/.test(s[2]));
   const shown = at((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField') && [].concat(s[1]).includes('#quoteEarningsSummary'), price);
   assert.ok(cost >= 0 && cost < caption && caption < price && price < shown, JSON.stringify({ cost, caption, price, shown }));
-  assert.match(pricing[caption][1], /GST included/, 'the price is entered including tax');
+  assert.match(pricing[caption][1], /before GST/, 'the price is entered excluding tax');
   assert.equal(pricing.slice(caption + 1, shown).filter((s) => s[0] === 'caption').length, 0, 'one caption');
   // Timed while playing: from that caption to the next one.
   player(h).open(h.director);

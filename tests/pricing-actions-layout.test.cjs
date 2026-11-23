@@ -1,7 +1,7 @@
 // Pricing & Actions iPhone layout (custom builds and repairs). Runs the REAL ui.js functions (tests/helpers/job-record-loader.cjs)
 // against a small fake DOM, with every save, sync and document builder replaced by a counting spy. Synthetic data only.
-// Checks: which controls show at Quote / Active / Complete, the delivery rules under Customer Collection, the single
-// Record Payment form (Deposit | Balance), and that opening or closing any control makes zero saves, syncs or documents.
+// Checks: which controls show at Quote / Active / Complete, the delivery rules under Customer collects, the one payment
+// form (add, or tap a payment to edit it), and that opening or closing any control makes zero saves, syncs or documents.
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
 const fs=require('node:fs');
@@ -29,34 +29,33 @@ function makeDom(){
     setAttribute(k,v){this.attrs[k]=String(v);},getAttribute(k){return this.attrs[k];},removeAttribute(k){delete this.attrs[k];},
     classList:{toggle(){}},focus(){this.focused=true;},contains(node){return node===this||this.children.includes(node);},
     querySelector:()=>null,addEventListener(){}});
-  const typeButtons=['deposit','balance'].map((type)=>({type,attrs:{'data-payment-type':type},getAttribute(k){return this.attrs[k];},setAttribute(k,v){this.attrs[k]=String(v);}}));
-  el('quoteDeliveryFields').children.push(el('quoteFreight'),el('quotePackaging'),el('quoteDeliveryTotal'));
-  const document={querySelector:()=>null,querySelectorAll:(q)=>q.includes('data-payment-type')?typeButtons:[]};
-  return {els,el,document,typeButtons};
+  el('quoteDeliveryFields').children.push(el('quoteFreight'),el('quotePackaging'));
+  const document={querySelector:()=>null,querySelectorAll:()=>[]};
+  return {els,el,document};
 }
 
 function app(record,env={}){
   const dom=makeDom();
-  const spy={saves:0,dirty:0,persist:0,financial:[],documents:[],sync:[],lifecycle:0};
+  const spy={saves:0,dirty:0,persist:0,removed:[],financial:[],documents:[],sync:[],lifecycle:0};
   const doc=(name)=>(...args)=>{spy.documents.push(name);return '';};
   const sync=new Proxy({},{get:(t,name)=>name==='pendingFinancial'?()=>false:name==='getStatus'?()=>'synced':(...args)=>{spy.sync.push(name);}});
   const c=loadRecordFunctions(['normalizeQuote','updatePaymentBlock','updateWorkshopBuildActionsUi','syncFulfilmentSelector','syncPricingLayoutState',
-    'toggleQuotePricingSummary','setQuoteFulfilmentMethod','openRecordPaymentForm','setRecordPaymentType','closeBalanceReceivedForm',
-    'openBalanceCorrection','closeDepositReceivedForm','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu',
+    'toggleQuotePricingSummary','setQuoteFulfilmentMethod','openRecordPaymentForm','closeBalanceReceivedForm','openPaymentEditor',
+    'removeEditedPayment','newPaymentType','paymentFormValues','handleCurrentBuildAction','openCurrentBuildActionsMenu','closeCurrentBuildActionsMenu',
     'toggleMoreDocumentsMenu','handleMoreDocumentsAction'],{
-    $:dom.el,document:dom.document,Store:{get:(k,f)=>f,set:()=>true},
+    $:dom.el,document:dom.document,CSS:{escape:String},removePaymentEntry:(id)=>{spy.removed.push(id);},Store:{get:(k,f)=>f,set:()=>true},
     window:{KLABS_ACCOUNT_ID:'acct',KLABS_BUILD_SYNC:sync,requestAnimationFrame:()=>{},crypto:{randomUUID:()=>'new-payment-id'}},
     activeAccountKey:()=>'acct',activeTaxEnabled:()=>env.tax!==false,formatDateDisplay:(v)=>String(v),localDateInputValue:()=>'2026-11-18',
     businessProfile:{businessName:'Synthetic Rods'},positionAnchoredActionMenu(){},
     updateQuoteSummary:()=>c.syncFulfilmentSelector(),saveQuoteCurrent:()=>{spy.saves++;},markQuoteDirty:()=>{spy.dirty++;},persistCurrentQuoteRecord:async()=>{spy.persist++;return true;},
-    commitFinancialOperation:async(kind,data)=>{spy.financial.push({kind,type:data.type,amount:data.amount,id:data.id});},
+    commitFinancialOperation:async(kind,data)=>{spy.financial.push({kind,type:data.type,amount:data.amount,date:data.date,id:data.id,reason:data.reason});},
     customerQuoteSummaryMarkup:doc('quote'),customerEmailLines:doc('email'),buildInvoiceSnapshot:doc('invoiceSnapshot'),
     invoiceDocumentMarkup:doc('invoiceMarkup'),customerInvoicePreviewMarkup:doc('invoicePreview'),
     openInvoicePreview:()=>spy.documents.push('openInvoicePreview'),openPaymentStatement:()=>spy.documents.push('openPaymentStatement'),
     requestDeleteCurrentBuild:()=>{},toggleCurrentBuildLifecycle:()=>{spy.lifecycle++;},openInfoDialog:()=>{},updateBuildPricingSummary:()=>{},
   });
   // The loader reads plain functions; the two async save steps are loaded from ui.js directly.
-  vm.runInContext(asyncSource('saveFinancialPayment')+'\n'+asyncSource('saveBalanceReceived'),c);
+  vm.runInContext("var financialOperationInFlight=false;var PAYMENT_EDIT_REASON='Edited in Studio';\n"+asyncSource('saveBalanceReceived'),c);
   c.quote=c.normalizeQuote(plain(record));
   const render=()=>{c.updateWorkshopBuildActionsUi();c.updatePaymentBlock();c.syncFulfilmentSelector();};
   render();
@@ -69,15 +68,18 @@ const noSideEffects=(spy,label)=>{
   assert.equal(spy.persist,0,`${label}: no record write`);
   assert.deepEqual(spy.sync,[],`${label}: no sync call`);
   assert.deepEqual(spy.financial,[],`${label}: no payment or invoice operation`);
+  assert.deepEqual(spy.removed,[],`${label}: nothing removed`);
   assert.deepEqual(spy.documents,[],`${label}: no document generated`);
 };
 
 // ---------- markup ----------
-test('one Record Payment button, a Deposit | Balance choice inside the payment form, and no separate deposit/balance buttons',()=>{
+test('one Add payment button and one Amount / Date / Save form; no type chooser, no correction wording',()=>{
   assert.equal((section.match(/id="quoteRecordPaymentBtn"/g)||[]).length,1);
   assert.doesNotMatch(section,/quoteRecordDepositBtn|quoteRecordBalanceBtn|Record Deposit Received|Record Balance Received/);
-  const form=section.slice(section.indexOf('id="quoteBalanceReceivedForm"'),section.indexOf('id="quoteBalanceReceivedAmount"'));
-  assert.match(form,/id="quotePaymentTypeField"[^>]*hidden[\s\S]*data-payment-type="deposit"[^>]*>DEPOSIT<[\s\S]*data-payment-type="balance"[^>]*>BALANCE</);
+  const form=section.slice(section.indexOf('id="quoteBalanceReceivedForm"'),section.indexOf('class="quote-payment__actions"'));
+  assert.match(form,/Amount[\s\S]*id="quoteBalanceReceivedAmount"[\s\S]*Date[\s\S]*id="quoteBalanceReceivedDate"[\s\S]*id="quoteBalanceReceivedSave"[^>]*>Save</);
+  assert.doesNotMatch(form,/data-payment-type|quotePaymentTypeField|>DEPOSIT<|>BALANCE<|Correct|[Rr]eason|[Aa]udit/);
+  assert.equal((form.match(/primary-action/g)||[]).length,1,'Save is the one primary action');
 });
 
 test('documents: View and Email, Customer Invoice, then a More documents menu holding Customer Invoice; ••• keeps Payment Statement and Delete',()=>{
@@ -115,7 +117,7 @@ for(const jobType of ['build','repair']){
     const issued=app(job({jobType,quoteStatus:'active',issuedInvoice:{number:'INV-1',total:100,payments:[]}}));
     assert.equal(issued.attrs()['data-invoice-issued'],'true');
     assert.equal(issued.attrs()['data-pricing-collapsed'],'true');
-    assert.match(issued.el('quotePricingSummaryValue').textContent,/^\$100\.00 [A-Z]{3} incl\. GST$/);
+    assert.match(issued.el('quotePricingSummaryValue').textContent,/^\$\d+\.\d\d$/,'the Rod price excl. tax');
     const done=app(job({jobType,quoteStatus:'complete'}));
     assert.equal(done.attrs()['data-pricing-collapsed'],'true');
     done.c.toggleQuotePricingSummary();
@@ -140,7 +142,7 @@ test('only Courier reveals shipping costs for builds, repairs and Components',()
     assert.equal(q.el('quoteDeliveryFields').hidden,false);
     q.c.setQuoteFulfilmentMethod('collection');
     assert.equal(q.el('quoteDeliveryFields').hidden,true);
-    assert.match(q.el('quoteFulfilmentNote').textContent,/excluded/);
+    assert.match(q.el('quoteFulfilmentNote').textContent,/not charged while the customer collects/);
     assert.deepEqual([q.c.quote.freight,q.c.quote.packaging],[10,2]);
     assert.equal(q.c.depositMaths().total,100);
     q.c.setQuoteFulfilmentMethod('shipping');
@@ -153,56 +155,99 @@ test('only Courier reveals shipping costs for builds, repairs and Components',()
   }
 });
 
-// ---------- Record Payment ----------
-test('Record Payment opens the form directly on Deposit when a deposit is required and none is recorded',()=>{
+// ---------- Payments ----------
+test('Add payment suggests the requested deposit first, and the first payment below the total is a Deposit',()=>{
   const q=app(job({depositEnabled:true,depositType:'percent',depositValue:30}));
+  assert.equal(q.el('quoteRecordPaymentBtn').textContent,'Add deposit');
   q.c.openRecordPaymentForm();
   assert.equal(q.el('quoteBalanceReceivedForm').hidden,false);
-  assert.equal(q.el('quotePaymentTypeField').hidden,false,'Deposit | Balance can be switched');
-  assert.equal(q.c.recordPaymentType,'deposit');
   assert.equal(q.el('quoteBalanceReceivedAmount').value,'30.00');
-  assert.deepEqual(q.dom.typeButtons.map((b)=>b.attrs['aria-pressed']),['true','false']);
-  q.c.setRecordPaymentType('balance');
-  assert.equal(q.el('quoteBalanceReceivedAmount').value,'100.00','switching refills the suggested amount');
-  q.el('quoteBalanceReceivedAmount').value='55.00';
-  q.c.setRecordPaymentType('deposit');
-  assert.equal(q.el('quoteBalanceReceivedAmount').value,'55.00','a typed amount is never overwritten');
-  noSideEffects(q.spy,'Record Payment form');
+  assert.equal(q.el('quoteBalanceReceivedDate').value,'2026-11-18');
+  assert.equal(q.el('quotePaymentFormTitle').textContent,'New deposit');
+  assert.equal(q.el('quotePaymentRemoveBtn').hidden,true,'nothing to remove on a new payment');
+  assert.equal(q.c.newPaymentType(30),'deposit');
+  assert.equal(q.c.newPaymentType(100),'balance','paying the whole total at once is a payment');
+  noSideEffects(q.spy,'Add payment form');
 });
 
-test('Record Payment opens on Balance otherwise: no deposit required, or a deposit already recorded',()=>{
+test('Add payment otherwise suggests the balance owing; later payments and Components jobs are Payments',()=>{
   const none=app(job());
+  assert.equal(none.el('quoteRecordPaymentBtn').textContent,'Add payment');
   none.c.openRecordPaymentForm();
-  assert.equal(none.c.recordPaymentType,'balance');
-  assert.equal(none.el('quoteBalanceReceivedAmount').value,'100.00','the full balance, so paying before confirming is one tap and Save');
-  assert.equal(none.el('quotePaymentTypeField').hidden,false,'a deposit can still be chosen');
+  assert.equal(none.el('quoteBalanceReceivedAmount').value,'100.00');
   const paid=app(job({quoteStatus:'active',depositEnabled:true,depositValue:30,payments:[{id:'p1',type:'deposit',amount:30,date:'2026-11-18'}]}));
   paid.c.openRecordPaymentForm();
-  assert.equal(paid.c.recordPaymentType,'balance');
-  assert.equal(paid.el('quotePaymentTypeField').hidden,true,'one deposit only: no Deposit choice');
   assert.equal(paid.el('quoteBalanceReceivedAmount').value,'70.00');
-  const order=app(job({jobKind:'components'}));
-  order.c.openRecordPaymentForm();
-  assert.equal(order.el('quotePaymentTypeField').hidden,true,'Components jobs take no deposit');
+  assert.equal(paid.c.newPaymentType(20),'balance','one deposit only');
+  assert.equal(app(job({jobKind:'components'})).c.newPaymentType(20),'balance','Components jobs take no deposit');
 });
 
-test('Save records the chosen type through the unchanged payment operation; corrections stay balance corrections',async()=>{
+test('Save adds a payment once through the unchanged operation and closes the form',async()=>{
   const q=app(job({depositEnabled:true,depositValue:30}));
   q.c.openRecordPaymentForm();
   await q.c.saveBalanceReceived();
-  assert.deepEqual(q.spy.financial,[{kind:'add_payment',type:'deposit',amount:30,id:'new-payment-id'}]);
+  assert.deepEqual(q.spy.financial,[{kind:'add_payment',type:'deposit',amount:30,date:'2026-11-18',id:'new-payment-id',reason:undefined}]);
   assert.equal(q.el('quoteBalanceReceivedForm').hidden,true,'closed after saving');
-  assert.equal(q.c.recordPaymentType,'balance','reset for next time');
   const b=app(job());
   b.c.openRecordPaymentForm();
   await b.c.saveBalanceReceived();
-  assert.deepEqual(b.spy.financial,[{kind:'add_payment',type:'balance',amount:100,id:'new-payment-id'}]);
-  const fix=app(job({quoteStatus:'active',payments:[{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
-  fix.c.recordPaymentType='deposit';
-  fix.c.openBalanceCorrection('p9');
-  fix.el('quoteBalanceCorrectionReason').value='Typo';
-  await fix.c.saveBalanceReceived();
-  assert.deepEqual(fix.spy.financial,[{kind:'correct_payment',type:'balance',amount:40,id:'p9'}]);
+  assert.deepEqual(b.spy.financial.map((f)=>[f.kind,f.type,f.amount]),[['add_payment','balance',100]]);
+});
+
+test('tapping a payment edits that payment: same id and type, a fixed reason, never a new payment',async()=>{
+  const q=app(job({quoteStatus:'active',payments:[{id:'p1',type:'deposit',amount:30,date:'2026-11-17'},{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
+  q.c.openPaymentEditor('p1');
+  assert.equal(q.el('quoteBalanceReceivedForm').hidden,false);
+  assert.equal(q.el('quoteBalanceReceivedAmount').value,'30.00');
+  assert.equal(q.el('quoteBalanceReceivedDate').value,'2026-11-17');
+  assert.equal(q.el('quotePaymentFormTitle').textContent,'Edit deposit');
+  assert.equal(q.el('quotePaymentRemoveBtn').hidden,false);
+  q.el('quoteBalanceReceivedAmount').value='35.00';
+  await q.c.saveBalanceReceived();
+  assert.deepEqual(q.spy.financial,[{kind:'correct_payment',type:'deposit',amount:35,date:'2026-11-17',id:'p1',reason:'Edited in Studio'}]);
+  assert.equal(q.el('quoteBalanceReceivedForm').hidden,true);
+});
+
+test('an unchanged edit just closes; an edit above the total is refused in plain words',async()=>{
+  const q=app(job({quoteStatus:'active',payments:[{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
+  q.c.openPaymentEditor('p9');
+  await q.c.saveBalanceReceived();
+  assert.deepEqual(q.spy.financial,[]);
+  assert.equal(q.el('quoteBalanceReceivedForm').hidden,true);
+  q.c.openPaymentEditor('p9');
+  q.el('quoteBalanceReceivedAmount').value='100.01';
+  await q.c.saveBalanceReceived();
+  assert.deepEqual(q.spy.financial,[]);
+  assert.equal(q.el('quoteBalanceReceivedError').textContent,'Payments can’t add up to more than the total price.');
+  q.el('quoteBalanceReceivedAmount').value='abc';
+  await q.c.saveBalanceReceived();
+  assert.equal(q.el('quoteBalanceReceivedError').textContent,'Enter an amount, for example 150.00.');
+});
+
+test('tapping the open payment again closes it; Remove hands the id to the confirmed removal',()=>{
+  const q=app(job({quoteStatus:'active',payments:[{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
+  q.c.openPaymentEditor('p9');
+  q.c.openPaymentEditor('p9');
+  assert.equal(q.el('quoteBalanceReceivedForm').hidden,true);
+  noSideEffects(q.spy,'open and close a payment');
+  q.c.openPaymentEditor('p9');
+  q.c.removeEditedPayment();
+  assert.deepEqual(q.spy.removed,['p9'],'removePaymentEntry asks for confirmation itself');
+  assert.equal(q.el('quoteBalanceReceivedForm').hidden,true);
+  assert.deepEqual(q.spy.financial,[]);
+});
+
+test('Received and Balance owing appear only once there is a payment, and update from the payments',()=>{
+  const none=app(job());
+  assert.equal(none.el('quotePaymentHistoryDetails').hidden,true);
+  const some=app(job({quoteStatus:'active',payments:[{id:'p9',type:'balance',amount:40,date:'2026-11-18'}]}));
+  assert.match(some.el('quotePaymentTotalReceived').textContent,/40\.00/);
+  assert.match(some.el('quotePaymentBalanceOwing').textContent,/60\.00/);
+  assert.equal(some.el('quotePaymentBalanceLabel').textContent,'Balance owing');
+  some.c.quote.payments.push({id:'p10',type:'balance',amount:60,date:'2026-11-19'});
+  some.render();
+  assert.equal(some.el('quotePaymentBalanceOwing').textContent,'Paid in full');
+  assert.equal(some.el('quotePaymentBalanceLabel').textContent,'Balance');
 });
 
 // ---------- ••• menu and documents on tap ----------

@@ -81,9 +81,9 @@ test('settings control exists, persists via saveStudioSettings and resyncs on ac
 test('pricing labels and neutral headings',()=>{
   assert.ok(!/includes delivery/i.test(html));
   assert.ok(!/includes delivery/i.test(source.replace(/Delivery \(included in Total Price\)/g,'')));
-  // Q23: builds and repairs show the Rod Price (label set from the Tax Name); Components jobs keep Customer Price.
-  assert.match(html,/<span>Rod Price<\/span>/);
-  assert.match(source,/`Customer Price \(\$\{activeCurrencyCode\(\)\}\)`/);
+  // Builds and repairs show the Rod price (excl. the Tax Name, set at runtime); Components jobs keep Customer Price.
+  assert.match(html,/<span id="quoteRodPriceLabel">Rod price<\/span>/);
+  assert.match(source,/`Customer price \(\$\{activeCurrencyCode\(\)\}\)`/);
   assert.match(html,/quote-section__toggle-title">Job Pricing &amp; Actions</);
   assert.ok(!/quote-section__toggle-title">Job Actions</.test(html));
   assert.ok(!/>Build Pricing</.test(html));

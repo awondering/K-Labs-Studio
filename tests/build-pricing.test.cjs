@@ -405,11 +405,11 @@ test('Customer document and email render received-payment wording and markup wir
   assert.match(source,/<span>Deposit Still Required<\/span>/);
   assert.match(source,/Deposit received: \$\{currencyWithCode\(math\.amountReceived\)\}/);
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
-  ['quoteRecordPaymentBtn','quoteDepositReceivedAmount','quoteDepositReceivedDate','quoteDepositReceivedSave'].forEach(id=>assert.match(html,new RegExp(`id="${id}"`)));
-  assert.match(html,/>Record Payment</);
-  assert.match(html,/id="quoteBalanceRemainingLabel">Balance After Deposit</);
-  assert.match(source,/paid\?'Balance Owing':'Balance After Deposit'/);
-  assert.match(source,/currency\(paid\?math\.balanceOwing:math\.remainingBalance\)/);
+  // Pricing redesign: Studio has one payment form (Amount, Date, Save) for deposits and payments; customer documents unchanged.
+  ['quoteRecordPaymentBtn','quoteBalanceReceivedAmount','quoteBalanceReceivedDate','quoteBalanceReceivedSave'].forEach(id=>assert.match(html,new RegExp(`id="${id}"`)));
+  assert.match(html,/id="quoteRecordPaymentBtn"[^>]*>Add payment</);
+  assert.match(html,/id="quotePaymentBalanceLabel">Balance owing</);
+  assert.doesNotMatch(html,/quoteDepositReceivedAmount|quoteBalanceRemainingLabel|Balance After Deposit/);
 });
 
 function confirmationHarness(saved){

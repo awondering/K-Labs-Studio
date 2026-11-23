@@ -11,7 +11,7 @@
  * placeholders. EVA Grip 75 mm is a demonstration-only record. */
 window.KLABS_DEMO_DATA = {
  // Phase 3 review: the build of the demonstration files (checked by js/public-entry.js before anything is shown).
- build: "build148-v277",
+ build: "build148-v278",
  anchor: "2026-11-20",
  store: {
  "klabs-workshop-component-taxonomy:": {
