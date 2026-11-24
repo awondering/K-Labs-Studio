@@ -818,7 +818,7 @@ test('Q24: the Components Library journey has the eight agreed chapters, short w
   assert.equal(player(h).journeys.rod, player(h).journey, 'the rod build journey is unchanged and still the default');
 });
 
-test('Q24: every chapter works the library\'s own controls - create, family, Generate Sizes, per-size prices, edit and save, Duplicate Family, picker, Add to Build once', () => {
+test('Q24: every chapter works the library\'s own controls - create, family, Sizes & Prices, per-size prices, edit and save, Duplicate Family, picker, Add to Build once', () => {
   const journey = componentsJourney(stage());
   const steps = (i) => Array.from(journey[i].steps).map((s) => JSON.parse(JSON.stringify(s)));
   const taps = (i) => steps(i).filter((s) => s[0] === 'tap').map((s) => s[1]);
@@ -830,11 +830,11 @@ test('Q24: every chapter works the library\'s own controls - create, family, Gen
   // 2: a new Fuji family from the category's Add Subcategory form.
   assert.ok(typed(1).some(([sel, text]) => sel === '#studioLibrarySubcategoryName' && /Fuji/.test(text)));
   assert.ok(taps(1).some((t) => /subcategory-add/.test(t)));
-  // 3: Generate Sizes with seven sizes and starting prices.
+  // 3: Sizes & Prices with seven sizes and starting prices.
   assert.ok(taps(2).includes('#studioComponentsGenerateSizesBtn') && taps(2).includes('#studioFamilySizeBuild'));
   const sizes = typed(2).find(([sel]) => sel === '#studioFamilySizeList')[1].split(',').map((x) => x.trim());
   assert.equal(new Set(sizes).size, 7, `seven sizes: ${sizes}`);
-  // 4: different Buy and Sell prices typed into individual sizes, then one Create Components.
+  // 4: different Buy and Sell prices typed into individual sizes, then one Save Changes.
   const priced = typed(3).filter(([sel]) => /data-family-size-field/.test(sel));
   assert.ok(priced.some(([sel]) => /"buy"/.test(sel)) && priced.some(([sel]) => /"sell"/.test(sel)));
   assert.ok(new Set(priced.map(([sel]) => /index="(\d+)"/.exec(sel)[1])).size >= 3, 'several sizes priced individually');
@@ -923,7 +923,7 @@ test('Q24: pausing the Components Library holds it and closes the write window; 
   assert.match(h.get('#demoCaption').textContent, COMPONENTS_FINISHED);
 });
 
-test('Q24: the page offers Build a Rod | Components Library, with an eight-chapter row hidden until it plays; Generate Sizes is open to the director only; Fuji is a demo brand', () => {
+test('Q24: the page offers Build a Rod | Components Library, with an eight-chapter row hidden until it plays; Sizes & Prices is open to the director only; Fuji is a demo brand', () => {
   const row = html.slice(html.indexOf('data-demo-tour-chapters="components"') - 60, html.indexOf('</ol>', html.indexOf('data-demo-tour-chapters="components"')));
   assert.match(row, /<ol class="demo-player__chapters" aria-label="Chapters" data-demo-tour-chapters="components" hidden>/);
   assert.equal((row.match(/data-demo-components-chapter="\d"/g) || []).length, 8);

@@ -16,6 +16,7 @@ const FAKE_SUPABASE = `(function(){
     var b={
       select:function(c,o){state.select=c||'*';if(o&&o.count)state.count=o.count;if(!state.op)state.op='select';return b;},
       eq:function(c,v){(state.filters=state.filters||[]).push([c,v]);return b;},
+      in:function(c,v){(state.ins=state.ins||[]).push([c,v]);return b;},
       order:function(c,o){state.order=[c,!(o&&o.ascending===false)];return b;},
       range:function(a,z){state.range=[a,z];return b;}, limit:function(n){state.limit=n;return b;},
       insert:function(r){state.op='insert';state.values=r;return b;}, upsert:function(r){state.op='upsert';state.values=r;return b;},
