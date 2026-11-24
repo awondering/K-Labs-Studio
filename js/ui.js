@@ -5721,7 +5721,7 @@ function openStudioComponentFamilySizes(){
   const category=studioCategoryByName(record.category);
   const family=category&&category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(record.subcategory));
   if(!category || !family){openInfoDialog('Family Missing','This component is not in a family yet.');return;}
-  openFamilySizeGeneratorSheet(category,family);
+  openFamilySizeGeneratorSheet(category,family,record);
 }
 function removeStudioComponentSize(value){
   const key=String(value||'').trim().toLowerCase();
@@ -6836,20 +6836,36 @@ function familySizeGeneratorProblem(baseName,rows,existingRecords){
   }
   return '';
 }
-// The base name the family's sizes share: the words every component name starts with (at least one word, and never a
-// whole name); otherwise the family's own name. A single component drops a final size-like word ("... Tip Top 5.5").
-function familySizeBaseName(names,familyName){
-  const words=(Array.isArray(names)?names:[]).map((name)=>String(name||'').trim().split(/\s+/).filter(Boolean)).filter((list)=>list.length);
-  if(words.length===1){
-    const only=words[0];
-    if(only.length>1 && /\d/.test(only[only.length-1]))return only.slice(0,-1).join(' ');
-    return String(familyName||'').trim();
-  }
-  if(!words.length)return String(familyName||'').trim();
-  const shortest=Math.min(...words.map((list)=>list.length));
-  let common=0;
-  while(common<shortest-1 && words.every((list)=>list[common].toLowerCase()===words[0][common].toLowerCase()))common+=1;
-  return common?words[0].slice(0,common).join(' '):String(familyName||'').trim();
+// Q35 regression fix: a size family is ONE product's sizes, never a whole subcategory (a subcategory such as Fuji
+// Guides holds many distinct products). Components carry no family id, so the only safe signal is the name Sizes &
+// Prices itself writes: "<base> <size>", the size a trailing number with an optional unit ("... CC 6", "... 8 mm").
+function familySizeNameParts(name){
+  const text=String(name||'').replace(/\s+/g,' ').trim();
+  const match=text.match(/^(.*\S)\s+(\d+(?:\.\d+)?(?:\s?(?:mm|cm|in|"))?)$/i);
+  return match?{base:match[1],size:match[2]}:{base:text,size:''};
+}
+// The components that are sizes of the anchor's product: same category and family, each named "<same base> <size>".
+// A component with no trailing size is standalone: it is its own (only) member. Nothing is matched by brand,
+// shared words or category alone.
+function familySizeMembers(familyRecords,anchor){
+  const list=Array.isArray(familyRecords)?familyRecords:[];
+  const own=familySizeNameParts(anchor&&anchor.name);
+  if(!own.size)return list.filter((record)=>record===anchor || (anchor&&anchor.id && record.id===anchor.id));
+  const key=normalizeNameKey(own.base);
+  return list.filter((record)=>{
+    const parts=familySizeNameParts(record&&record.name);
+    return !!parts.size && normalizeNameKey(parts.base)===key;
+  });
+}
+// From the family view (no component chosen): the one product the family holds, when every component in it is a size
+// of the same base; otherwise null (several products, or standalone components) - the editor then opens empty.
+function familySizeSingleProduct(familyRecords){
+  const list=Array.isArray(familyRecords)?familyRecords:[];
+  if(!list.length)return null;
+  const first=familySizeNameParts(list[0].name);
+  if(!first.size)return null;
+  const key=normalizeNameKey(first.base);
+  return list.every((record)=>{const parts=familySizeNameParts(record&&record.name);return !!parts.size && normalizeNameKey(parts.base)===key;})?first.base:null;
 }
 // What the Size column shows for a component: its name after the shared base name, or the whole name.
 function familySizeRowLabel(name,baseName){
@@ -7091,6 +7107,7 @@ function ensureFamilySizeGeneratorSheet(){
         <section class="studio-component-duplicate__placement" aria-label="Family">
           <div><span>Category</span><strong id="studioFamilySizeCategory"></strong></div>
           <div><span>Family</span><strong id="studioFamilySizeFamily"></strong></div>
+          <div hidden><span>Product</span><strong id="studioFamilySizeProduct"></strong></div>
         </section>
         <div id="studioFamilySizeRows" class="studio-family-size__rows" aria-label="Sizes and prices"></div>
         <section class="studio-family-size__add" aria-label="Add sizes">
@@ -7148,19 +7165,40 @@ function ensureFamilySizeGeneratorSheet(){
     }
   });
 }
-// Opens on the family's current sizes and prices; new families open empty, ready to add sizes.
-function openFamilySizeGeneratorSheet(category,family){
-  const records=studioComponentRecordsForSubcategory(componentLibraryRecords(),category.name,family.name);
-  const baseName=familySizeBaseName(records.map((record)=>record.name),family.name);
+// Opens on ONE product's sizes and prices: the chosen component's (from the component editor), or the family's only
+// product. A family holding several products, or none yet, opens empty, ready to add a new product's sizes.
+function openFamilySizeGeneratorSheet(category,family,anchor){
+  const familyRecords=studioComponentRecordsForSubcategory(componentLibraryRecords(),category.name,family.name);
+  let records=[];
+  let baseName=family.name;
+  let note='';
+  if(anchor){
+    records=familySizeMembers(familyRecords,anchor);
+    baseName=familySizeNameParts(anchor.name).base;
+  }else{
+    const product=familySizeSingleProduct(familyRecords);
+    if(product){records=familySizeMembers(familyRecords,{name:`${product} 0`});baseName=product;}
+    else if(familyRecords.length){baseName='';note='This family has several products. To edit one, open it and tap Sizes & Prices. Or add a new product here.';}
+  }
   studioFamilySizeGeneratorState={categoryId:category.id,subcategoryId:family.id,baseName,rows:familySizeExistingRows(records,baseName)};
   ensureFamilySizeGeneratorSheet();
   ['studioFamilySizeList','studioFamilySizeFrom','studioFamilySizeTo','studioFamilySizeStep','studioFamilySizeBuy','studioFamilySizeSell'].forEach((id)=>{if($(id))$(id).value='';});
-  if($('studioFamilySizeBase'))$('studioFamilySizeBase').value=baseName;
+  const baseInput=$('studioFamilySizeBase');
+  if(baseInput){
+    baseInput.value=baseName;
+    // New sizes join the product already listed, so its base name is fixed while it has sizes.
+    baseInput.readOnly=studioFamilySizeGeneratorState.rows.length>0;
+  }
+  const product=$('studioFamilySizeProduct');
+  if(product){
+    product.textContent=studioFamilySizeGeneratorState.rows.length?baseName:'';
+    product.parentElement.hidden=!studioFamilySizeGeneratorState.rows.length;
+  }
   if($('studioFamilySizeCategory'))$('studioFamilySizeCategory').textContent=category.name;
   if($('studioFamilySizeFamily'))$('studioFamilySizeFamily').textContent=family.name;
   const range=document.querySelector('#studioFamilySizeSheet .studio-family-size__range');
   if(range)range.open=false;
-  familySizeGeneratorError('');
+  familySizeGeneratorNote(note);
   renderFamilySizeGeneratorRows();
   $('studioFamilySizeSheet').hidden=false;
   lockModalLayer(document.activeElement);
@@ -19605,7 +19643,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v282';
+window.KLABS_UI_BUILD='build148-v283';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

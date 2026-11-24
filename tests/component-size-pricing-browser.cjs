@@ -21,6 +21,12 @@ const LIB = () => [
     description: `Check ${mm}`, cost: buy, unitCost: buy, unitPrice: sell, stockOnHand: Number(mm) })),
   { id: 'decal-1', name: 'Custom Decal', category: 'Decals', subcategory: 'Rod Decals', cost: 4, unitCost: 4, unitPrice: 12, sizeOptions: ['Small', 'Medium', 'Large'] },
   { id: 'grip-1', name: 'EVA Grip 75 mm', category: 'Grips', subcategory: 'EVA Grips', cost: 9, unitCost: 9, unitPrice: 18 },
+  // Q35 regression: one subcategory holding many distinct products, as on a real library.
+  ...[['cc6', 'Fuji K Series Single Foot CC 6', 4, 9], ['cc8', 'Fuji K Series Single Foot CC 8', 4.2, 9.5], ['cc10', 'Fuji K Series Single Foot CC 10', 4.6, 10],
+    ['ccset', 'Fuji K Series Single Foot CC Guide Set', 60, 120], ['kl6', 'Fuji K Series Single Foot KL 6', 5, 11], ['kt8', 'Fuji K Series Double Foot KT 8', 6, 13],
+    ['tip', 'Fuji Tip Top', 3, 7], ['set', 'Fuji Complete Guide Set Spinning', 80, 160]]
+    .map(([id, name, buy, sell]) => ({ id, name, category: 'Guides', subcategory: 'Fuji Guides', brand: 'Fuji', supplier: 'PacBay', cost: buy, unitCost: buy, unitPrice: sell, stockOnHand: 2,
+      ...(id === 'set' ? { sizeOptions: ['7 piece', '9 piece'] } : {}) })),
 ];
 
 // The account's component library in the cloud (Supabase "components" and "component_taxonomy"), in memory.
@@ -273,6 +279,53 @@ const layout = (p) => p.evaluate(() => {
       const decal = await p.evaluate(() => ({ chips: [...document.querySelectorAll('#studioComponentSizeEditList .studio-size-chip__label')].map((c) => c.textContent), note: document.querySelector('.studio-size-section__note')?.textContent }));
       ck(tag, 'a component with shared-price sizes still lists them (removable), marked One price', JSON.stringify(decal.chips) === JSON.stringify(['Large', 'Medium', 'Small']) && decal.note === 'One price', decal);
       if (shots) await p.screenshot({ path: path.join(shots, `component-editor-${width}.png`) });
+
+      // 12b. Regression: a subcategory of distinct products. A component opens on ITS sizes only; the family view on none.
+      const everything = () => p.evaluate(() => JSON.stringify(componentLibraryRecords()));
+      const untouched = await everything();
+      const openComponent = async (name) => {
+        await openFamily(p, 'Guides', 'Fuji Guides');
+        await p.locator(`#studioComponentsList [data-studio-library-open-component="${name}"]`).click();
+        await p.locator('#studioComponentFamilySizesBtn').click();
+        await e.sheet.waitFor({ state: 'visible' });
+        return { rows: (await e.rows()).map((r) => [r.label, r.buy, r.sell, r.title]), product: await p.evaluate(() => document.getElementById('studioFamilySizeProduct')?.textContent ?? null),
+          baseLocked: await p.locator('#studioFamilySizeBase').evaluate((el) => el.readOnly) };
+      };
+      const closeSheet = () => p.locator('#studioFamilySizeSheet .studio-component-duplicate__actions [data-family-size-action="cancel"]').click();
+      const cc = await openComponent('Fuji K Series Single Foot CC 8');
+      ck(tag, 'regression: Fuji K Series Single Foot CC shows only its own sizes (6, 8, 10) - no sets, other K Series or other guides',
+        JSON.stringify(cc.rows) === JSON.stringify([['6', '4', '9', 'Fuji K Series Single Foot CC 6'], ['8', '4.2', '9.5', 'Fuji K Series Single Foot CC 8'], ['10', '4.6', '10', 'Fuji K Series Single Foot CC 10']])
+        && cc.product === 'Fuji K Series Single Foot CC' && cc.baseLocked, cc);
+      if (shots) await p.screenshot({ path: path.join(shots, `regression-cc-family-${width}.png`) });
+      await closeSheet();
+      await e.sheet.waitFor({ state: 'hidden' });
+      const standalone = await openComponent('Fuji Tip Top');
+      await closeSheet();
+      const legacy = await openComponent('Fuji Complete Guide Set Spinning');
+      await closeSheet();
+      const kl = await openComponent('Fuji K Series Single Foot KL 6');
+      await closeSheet();
+      ck(tag, 'regression: standalone, legacy shared-price and a different K Series product each open on themselves only',
+        JSON.stringify(standalone.rows.map((r) => r[0])) === JSON.stringify(['Fuji Tip Top'])
+        && legacy.rows.length === 1 && /Fuji Complete Guide Set Spinning\s*2 sizes/.test(legacy.rows[0][0])
+        && JSON.stringify(kl.rows.map((r) => r[3])) === JSON.stringify(['Fuji K Series Single Foot KL 6']), { standalone, legacy, kl });
+      await openFamily(p, 'Guides', 'Fuji Guides');
+      await p.locator('#studioComponentsGenerateSizesBtn').click();
+      await e.sheet.waitFor({ state: 'visible' });
+      const famView = { rows: (await e.rows()).length, base: await p.locator('#studioFamilySizeBase').inputValue(), note: await e.status(), productHidden: await p.evaluate(() => { const el = document.getElementById('studioFamilySizeProduct'); return !!el && el.parentElement.hidden; }) };
+      ck(tag, 'regression: the family view of a multi-product family lists no products as sizes and says how to edit one',
+        famView.rows === 0 && famView.base === '' && /several products/.test(famView.note) && famView.productHidden, famView);
+      await closeSheet();
+      ck(tag, 'regression: opening and cancelling changed nothing in the library', (await everything()) === untouched);
+      // Editing one product's sizes changes nothing else.
+      await openComponent('Fuji K Series Single Foot CC 8');
+      await (await e.field('8', 'sell')).fill('9.9');
+      await e.save.click();
+      await e.sheet.waitFor({ state: 'hidden' });
+      const after = JSON.parse(await everything());
+      const before = JSON.parse(untouched);
+      const changed = after.filter((r) => JSON.stringify(r) !== JSON.stringify(before.find((b) => b.id === r.id))).map((r) => [r.id, r.unitPrice]);
+      ck(tag, 'regression: saving CC 8 changes CC 8 only (every other component identical)', JSON.stringify(changed) === JSON.stringify([['cc8', 9.9]]) && after.length === before.length, changed);
 
       // 13. A new family: Add Subcategory, then the same editor - a Fuji guide comma list, priced individually, one save.
       await p.locator('#studioComponentsBackBtn').click();
