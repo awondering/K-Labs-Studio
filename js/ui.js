@@ -16124,6 +16124,9 @@ function customerEmailLines(){
   const balanceDue=isComplete?math.balanceOwing>0:(math.amountReceived<=0||math.depositOutstanding||math.balanceOwing>0);
   // A quote only asks for a deposit when Deposit Required is on and the amount is above zero.
   const depositRequired=math.depositEnabled&&math.depositAmount>0;
+  // A confirmed (active) rod build with every dollar received: the email acknowledges full payment. Unpaid and part-paid
+  // builds, repairs, components orders and completed builds keep their wording (same test in emailCurrentQuote's subject).
+  const paidInFull=docLabels.key==='active'&&docLabels.jobType==='build'&&!pricePending&&math.total>0&&math.amountReceived>0&&math.balanceOwing<=0;
   const lines=[
     `Hi ${customerFirstName},`,
     '',
@@ -16136,6 +16139,8 @@ function customerEmailLines(){
       :docLabels.key==='active'
       ?(isRepair
         ?`Your rod repair${withBusiness} has been confirmed. Below is a summary of the agreed work.`
+        :paidInFull
+        ?`Payment has been received in full. Thank you for your custom rod build order${withBusiness}. Below are the agreed build details.`
         :`Your custom rod build${withBusiness} has been confirmed. Thank you for your order. Below are the agreed build details.`)
       :isComplete
       ?(isRepair
@@ -16160,7 +16165,9 @@ function customerEmailLines(){
     lines.push(`Balance outstanding: ${currencyWithCode(math.balanceOwing)}`);
     if(hasCompletedDate)lines.push(`Completed: ${formatCustomerEmailLongDate(completedDate)}`);
   }else{
-    if(math.amountReceived>0){
+    if(paidInFull){
+      lines.push(`Total received: ${currencyWithCode(math.amountReceived)}`,`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
+    }else if(math.amountReceived>0){
       const shortfall=math.depositEnabled&&math.depositOutstanding;
       const buildConfirmation=docLabels.key==='active'&&docLabels.jobType==='build';
       if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total)))lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`);
@@ -16209,7 +16216,11 @@ function emailCurrentQuote(options){
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
   const lines=customerEmailLines();
-  const subject=`${businessName?businessName+' ':''}${docLabels.subjectName} — ${quoteNumber||docLabels.emailName}`;
+  const math=depositMaths();
+  const paidInFull=docLabels.key==='active'&&docLabels.jobType==='build'&&!quotePricePending()&&math.total>0&&math.amountReceived>0&&math.balanceOwing<=0;
+  const subject=paidInFull
+    ?`${businessName?businessName+' — ':''}Payment Received in Full — ${quoteNumber||docLabels.emailName}`
+    :`${businessName?businessName+' ':''}${docLabels.subjectName} — ${quoteNumber||docLabels.emailName}`;
   const mailto=`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
   window.location.href=mailto;
 }
@@ -19816,7 +19827,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v288';
+window.KLABS_UI_BUILD='build148-v289';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;
