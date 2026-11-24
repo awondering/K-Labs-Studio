@@ -12212,6 +12212,12 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   box-shadow:0 -10px 14px -6px #0a0d0e;
 }
 
+/* Q35 fix: the base name is fixed while a product's sizes are listed (new sizes join that product). */
+#studioFamilySizeBase[readonly]{
+  opacity:.7;
+  cursor:default;
+}
+
 /* Save Changes waits for a change: dimmed until then (same treatment as the pricing actions). */
 #studioFamilySizeConfirm:disabled{
   opacity:.55;

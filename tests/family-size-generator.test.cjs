@@ -17,7 +17,7 @@ const NAMES=[
   'numberOrZero','normalizeNameKey','componentPriceProblem','explicitBrandForSubcategory',
   'familySizeGeneratorLabels','familySizeGeneratorComponentName','familySizeGeneratorProblem','commitFamilySizeGenerator',
   'familySizeExistingProblem','familySizeRowChanged','familySizeEditorDirty','addFamilySizeRows',
-  'familySizeBaseName','familySizeRowLabel','familySizePriceText','familySizeExistingRows',
+  'familySizeNameParts','familySizeMembers','familySizeSingleProduct','familySizeRowLabel','familySizePriceText','familySizeExistingRows',
   'componentRecordBuyPrice','normalizeComponentSizeOptions','compareComponentSizeLabels',
 ];
 
@@ -192,22 +192,67 @@ test('Add Sizes fills every new size with the starting prices and renders an edi
   assert.equal(fields.studioFamilySizeFrom.value,'','entry fields clear for the next batch');
 });
 
-test('opening a family lists its existing sizes, prices filled in, in size order, with the shared base name',()=>{
+// Q35 regression: a realistic subcategory holding many distinct products (as reported on a real library).
+const FUJI_GUIDES=[
+  {id:'cc6',name:'Fuji K Series Single Foot CC 6',cost:4,unitPrice:9},
+  {id:'cc8',name:'Fuji K Series Single Foot CC 8',cost:4.2,unitPrice:9.5},
+  {id:'cc55',name:'Fuji K Series Single Foot CC 5.5',cost:3.9,unitPrice:8.8},
+  {id:'cc10mm',name:'Fuji K Series Single Foot CC 10 mm',cost:4.6,unitPrice:10},
+  {id:'ccset',name:'Fuji K Series Single Foot CC Guide Set',cost:60,unitPrice:120},
+  {id:'kl6',name:'Fuji K Series Single Foot KL 6',cost:5,unitPrice:11},
+  {id:'kt8',name:'Fuji K Series Double Foot KT 8',cost:6,unitPrice:13},
+  {id:'set',name:'Fuji Complete Guide Set Spinning',cost:80,unitPrice:160,sizeOptions:['7 piece','9 piece']},
+  {id:'tip',name:'Fuji Tip Top',cost:3,unitPrice:7},
+  {id:'single',name:'Fuji Alconite Guide',cost:2,unitPrice:5},
+  {id:'brand',name:'Fuji K Series',cost:1,unitPrice:2},
+];
+test('regression: opening a component shows only its own product\'s sizes, never the whole subcategory',()=>{
   const {ctx}=harness();
-  const family=[
-    {id:'w16',name:'Aluminium Winding Check 16 mm',cost:3.5,unitCost:3.5,unitPrice:8},
-    {id:'w8',name:'Aluminium Winding Check 8 mm',cost:2.5,unitCost:2.5,unitPrice:6,sizeOptions:['A','B']},
-    {id:'w10',name:'Aluminium Winding Check 10 mm',unitCost:2.75,unitPrice:6.5},
-  ];
-  const base=ctx.familySizeBaseName(family.map((r)=>r.name),'Grip Winding Checks');
-  assert.equal(base,'Aluminium Winding Check');
-  const rowsOut=plain(ctx.familySizeExistingRows(family,base));
-  assert.deepEqual(rowsOut.map((r)=>[r.id,r.label,r.buy,r.sell,r.sizes]),[['w8','8 mm','2.5','6',2],['w10','10 mm','2.75','6.5',0],['w16','16 mm','3.5','8',0]]);
+  const ids=(anchor)=>plain(ctx.familySizeMembers(FUJI_GUIDES,anchor)).map((r)=>r.id).sort();
+  for(const id of ['cc6','cc8','cc55','cc10mm']){
+    assert.deepEqual(ids(FUJI_GUIDES.find((r)=>r.id===id)),['cc10mm','cc55','cc6','cc8'],id);
+  }
+  assert.deepEqual(ids(FUJI_GUIDES.find((r)=>r.id==='kl6')),['kl6'],'a different K Series product is a different family');
+  assert.deepEqual(ids(FUJI_GUIDES.find((r)=>r.id==='kt8')),['kt8']);
+  for(const id of ['ccset','set','tip','single','brand']){
+    assert.deepEqual(ids(FUJI_GUIDES.find((r)=>r.id===id)),[id],`${id} is standalone: only itself`);
+  }
+  const base=ctx.familySizeNameParts('Fuji K Series Single Foot CC 6').base;
+  assert.equal(base,'Fuji K Series Single Foot CC');
+  const rowsOut=plain(ctx.familySizeExistingRows(ctx.familySizeMembers(FUJI_GUIDES,FUJI_GUIDES[0]),base));
+  assert.deepEqual(rowsOut.map((r)=>[r.id,r.label,r.buy,r.sell]),[['cc55','5.5','3.9','8.8'],['cc6','6','4','9'],['cc8','8','4.2','9.5'],['cc10mm','10 mm','4.6','10']]);
   assert.equal(ctx.familySizeEditorDirty({rows:rowsOut}),false,'nothing to save on opening');
-  assert.equal(ctx.familySizeBaseName(['Fuji KR Guide 30'],'Fuji KR'),'Fuji KR Guide');
-  assert.equal(ctx.familySizeBaseName(['Hex Check','Round Check'],'Checks'),'Checks','no shared words: the family name');
-  assert.equal(ctx.familySizeBaseName([],'New Family'),'New Family');
+  const alone=plain(ctx.familySizeExistingRows(ctx.familySizeMembers(FUJI_GUIDES,FUJI_GUIDES[7]),'Fuji Complete Guide Set Spinning'));
+  assert.deepEqual(alone.map((r)=>[r.id,r.label,r.sizes]),[['set','Fuji Complete Guide Set Spinning',2]],'legacy shared-price component: itself, whole name, its 2 sizes noted');
+});
+
+test('regression: from the family view, a family of several products opens on none of them (no guessing)',()=>{
+  const {ctx}=harness();
+  assert.equal(ctx.familySizeSingleProduct(FUJI_GUIDES),null);
+  assert.equal(ctx.familySizeSingleProduct(FUJI_GUIDES.slice(0,4)),'Fuji K Series Single Foot CC','one product only: its sizes');
+  assert.equal(ctx.familySizeSingleProduct([...FUJI_GUIDES.slice(0,4),FUJI_GUIDES[4]]),null,'one standalone in the family: no single product');
+  assert.equal(ctx.familySizeSingleProduct([]),null);
+  assert.deepEqual(plain(ctx.familySizeNameParts('Aluminium Winding Check 8 mm')),{base:'Aluminium Winding Check',size:'8 mm'});
+  assert.deepEqual(plain(ctx.familySizeNameParts('Rod Decal Large')),{base:'Rod Decal Large',size:''},'non-numeric endings are not sizes');
   assert.equal(ctx.familySizeRowLabel('Odd Name','Aluminium Winding Check'),'Odd Name','a name outside the base shows whole');
+});
+
+test('regression: saving one product\'s sizes cannot change any other component in the subcategory',()=>{
+  const {ctx,store}=harness();
+  const lib=FUJI_GUIDES.map((r)=>({...r,category:'Guides',categoryId:'guides',subcategory:'Alconite',brand:'Fuji',supplier:'PacBay',unitCost:r.cost,stockOnHand:3,sizeOptions:r.sizeOptions||[]}));
+  store.set('records',plain(lib));
+  const base='Fuji K Series Single Foot CC';
+  const rowsIn=ctx.familySizeExistingRows(ctx.familySizeMembers(lib,lib[0]),base);
+  rowsIn.find((r)=>r.id==='cc8').sell='9.9';
+  rowsIn.find((r)=>r.id==='cc55').removed=true;
+  ctx.studioFamilySizeGeneratorState={categoryId:'guides',subcategoryId:'alc',baseName:base,rows:[...rowsIn,{id:'',size:'12',buy:'5',sell:'12',removed:false}]};
+  assert.equal(ctx.commitFamilySizeGenerator(),true);
+  const saved=store.get('records');
+  for(const r of lib.filter((x)=>!['cc8','cc55'].includes(x.id)))assert.deepEqual(saved.find((x)=>x.id===r.id),r,`${r.id} untouched`);
+  assert.equal(saved.find((x)=>x.id==='cc8').unitPrice,9.9);
+  assert.equal(saved.find((x)=>x.id==='cc55'),undefined);
+  assert.deepEqual(saved.filter((x)=>x.name===`${base} 12`).map((x)=>[x.cost,x.unitPrice]),[[5,12]]);
+  assert.equal(saved.length,lib.length);
 });
 
 test('adding sizes never overwrites an existing size or its prices, and skips duplicates already listed',()=>{
@@ -294,6 +339,10 @@ test('the editor keeps the Q24 demo hooks and asks before removing or discarding
     assert.match(sheet,new RegExp(`id="${id}"`),id);
   }
   assert.match(sheet,/<h2>Sizes &amp; Prices<\/h2>/);
+  const open=body('openFamilySizeGeneratorSheet');
+  assert.match(open,/familySizeMembers\(familyRecords,anchor\)/,'scoped to the chosen product');
+  assert.doesNotMatch(open,/rows:familySizeExistingRows\(familyRecords/,'never the whole subcategory');
+  assert.match(open,/readOnly=/,'base name fixed while the product has sizes');
   assert.match(sheet,/<details class="studio-family-size__range">\s*<summary>Or a range<\/summary>/,'the range is the compact secondary method');
   assert.ok(sheet.indexOf('studioFamilySizeList')<sheet.indexOf('studio-family-size__range'),'comma list first');
   assert.match(body('saveFamilySizeEditor'),/openConfirmDialog\([\s\S]*Remove and Save/);
