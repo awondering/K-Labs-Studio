@@ -4046,6 +4046,16 @@ function jobPriceNote({taxActive,taxName,componentsPricing}={}){
   if(taxActive)parts.push(`Excl. ${taxName}`);
   return parts.join(' · ');
 }
+// Q38: component Sell prices include the configured tax when tax is on (a job's total is its Sell prices and the tax is
+// taken out of that total - see quoteMaths). Buy is a cost set against revenue excluding tax, so it is never labelled as
+// including tax. Labels only: no price, calculation, build or document changes.
+function componentSellLabel(base='Sell'){
+  return activeTaxEnabled()?`${base} (incl. ${activeTaxName()})`:base;
+}
+// The same label as markup for narrow columns: "(incl. GST)" on its own line under the label, never split mid-bracket.
+function componentSellLabelMarkup(base='Sell'){
+  return activeTaxEnabled()?`${escapeHtml(base)}<span class="component-tax-note"> (incl. ${escapeHtml(activeTaxName())})</span>`:escapeHtml(base);
+}
 function taxRatePercentText(rate){
   const value=Math.max(0,numberOrZero(rate));
   return `${Number.isInteger(value)?value:Number(value.toFixed(2))}%`;
@@ -6254,7 +6264,7 @@ function renderStudioComponentDetails(record,options){
       <label class="quote-component-field studio-component-details__field--phone-full"><span>Category</span>${studioComponentCategoryOptionsMarkup(category)}</label>
       <label class="quote-component-field studio-component-details__field--phone-full"><span>Subcategory</span><span class="studio-component-details__select-wrap"><select id="studioComponentSubcategory">${studioComponentSubcategoryOptionsMarkup(category,subcategory)}</select></span></label>
       <label class="quote-component-field quote-component-field--cost"><span>Buy Price</span><input id="studioComponentCost" type="number" inputmode="decimal" step="0.01" min="0" value="${record.cost===undefined?'':escapeHtml(String(numberOrZero(record.cost)))}" placeholder="0.00" /></label>
-      <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
+      <label class="quote-component-field quote-component-field--cost"><span>${escapeHtml(componentSellLabel('Sell Price'))}</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>Stock Quantity</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
     </div>
     ${isAddMode?'':studioComponentSizesSectionMarkup(record)}
@@ -7013,9 +7023,11 @@ function renderFamilySizeGeneratorRows(){
   const host=$('studioFamilySizeRows');
   const rows=state?state.rows:[];
   syncFamilySizeSaveButton();
+  const startingSell=$('studioFamilySizeSellLabel');
+  if(startingSell)startingSell.innerHTML=componentSellLabelMarkup('Starting Sell');
   if(!host)return;
   host.innerHTML=rows.length?`
-    <div class="studio-family-size__row studio-family-size__row--head" aria-hidden="true"><span>Size</span><span>Buy</span><span>Sell</span><span></span></div>
+    <div class="studio-family-size__row studio-family-size__row--head" aria-hidden="true"><span>Size</span><span>Buy</span><span>${componentSellLabelMarkup()}</span><span></span></div>
     ${rows.map((row,index)=>{
       const name=row.id?row.name:familySizeGeneratorComponentName(state.baseName,row.size);
       const label=row.id?row.label:row.size;
@@ -7024,7 +7036,7 @@ function renderFamilySizeGeneratorRows(){
       const action=row.removed
         ?`<button class="studio-family-size__remove" type="button" data-family-size-remove="${index}" aria-label="${escapeAttributeValue(`Keep ${name}`)}">&#8634;</button>`
         :`<button class="studio-family-size__remove" type="button" data-family-size-remove="${index}" aria-label="${escapeAttributeValue(`Remove ${name}`)}">&#215;</button>`;
-      return `<div class="studio-family-size__row${row.id?'':' studio-family-size__row--new'}${row.removed?' studio-family-size__row--removed':''}"><strong data-family-size-name="${index}" title="${escapeAttributeValue(name)}">${escapeHtml(label)}${sizes}</strong><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Buy Price ${name}`)}" data-family-size-index="${index}" data-family-size-field="buy" value="${escapeAttributeValue(row.buy)}"${off} /><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Sell Price ${name}`)}" data-family-size-index="${index}" data-family-size-field="sell" value="${escapeAttributeValue(row.sell)}"${off} />${action}</div>`;
+      return `<div class="studio-family-size__row${row.id?'':' studio-family-size__row--new'}${row.removed?' studio-family-size__row--removed':''}"><strong data-family-size-name="${index}" title="${escapeAttributeValue(name)}">${escapeHtml(label)}${sizes}</strong><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Buy Price ${name}`)}" data-family-size-index="${index}" data-family-size-field="buy" value="${escapeAttributeValue(row.buy)}"${off} /><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`${componentSellLabel('Sell Price')} ${name}`)}" data-family-size-index="${index}" data-family-size-field="sell" value="${escapeAttributeValue(row.sell)}"${off} />${action}</div>`;
     }).join('')}`:'';
 }
 // Add Sizes: the comma list, or else the range, with the starting prices, to the same table.
@@ -7219,7 +7231,7 @@ function ensureFamilySizeGeneratorSheet(){
           </details>
           <div class="studio-family-size__fields studio-family-size__fields--prices">
             <label class="quote-component-field"><span>Starting Buy</span><input id="studioFamilySizeBuy" type="number" inputmode="decimal" step="0.01" min="0" /></label>
-            <label class="quote-component-field"><span>Starting Sell</span><input id="studioFamilySizeSell" type="number" inputmode="decimal" step="0.01" min="0" /></label>
+            <label class="quote-component-field"><span id="studioFamilySizeSellLabel">Starting Sell</span><input id="studioFamilySizeSell" type="number" inputmode="decimal" step="0.01" min="0" /></label>
           </div>
           <button id="studioFamilySizeBuild" class="ghost-action studio-family-size__build" type="button">Add Sizes</button>
         </section>
@@ -10651,7 +10663,8 @@ function componentPickerLeafSecondaryText(record){
   if(brand)bits.push(brand);
   const buy=numberOrZero(record.unitCost!==undefined?record.unitCost:record.cost);
   const sell=numberOrZero(record.unitPrice);
-  if(buy>0 || sell>0)bits.push(`Buy ${currency(buy)} · Sell ${currency(sell)}`);
+  // Q38: the Sell label and its price are kept together (non-breaking spaces) so a wrapped line never separates them.
+  if(buy>0 || sell>0)bits.push(`Buy ${currency(buy)} · ${`${componentSellLabel()} ${currency(sell)}`.replace(/ /g,'\u00a0')}`);
   const sizeCount=componentRecordSizeOptions(record).length;
   if(sizeCount)bits.push(`${sizeCount} size${sizeCount===1?'':'s'}`);
   return bits.join(' • ');
@@ -19803,7 +19816,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v286';
+window.KLABS_UI_BUILD='build148-v287';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

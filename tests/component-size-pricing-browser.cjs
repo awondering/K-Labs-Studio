@@ -451,7 +451,9 @@ const layout = (p) => p.evaluate(() => {
       await p.locator('#choicePickerList [data-choice-option="Fuji Guides"]').click();
       await p.locator('#choicePickerList [data-pick-sizes="kccL"]').click();
       const sizeRow = (size) => p.locator(`#choicePickerList .component-sheet__row--pick[data-pick-name="Fuji K Series Single Foot CC"][data-pick-size="${size}"]`);
-      const metas = { 6: await sizeRow('6').locator('.component-sheet__option-meta').textContent(), 7: await sizeRow('7').locator('.component-sheet__option-meta').textContent() };
+      // Q38: tax is on (GST), so Sell reads "Sell (incl. GST)"; its non-breaking spaces are read as plain spaces here.
+      const metaText = async (size) => (await sizeRow(size).locator('.component-sheet__option-meta').textContent()).replace(/ /g, ' ');
+      const metas = { 6: await metaText('6'), 7: await metaText('7') };
       await sizeRow('30').locator('.component-sheet__option').click();
       await sizeRow('30').locator('[data-pick-step="1"]').click();
       await sizeRow('7').locator('.component-sheet__option').click();
@@ -461,7 +463,7 @@ const layout = (p) => p.evaluate(() => {
       const pickedK = await p.evaluate(() => ({ lines: quote.components.filter((r) => !componentRowIsEffectivelyEmpty(r)).map((r) => [r.selectedSize, componentRowQuantity(r), Number(r.cost), Number(r.unitPrice)]), cost: quoteMaths().materialCost }));
       const sharedSell = (await kccRecord()).unitPrice;
       ck(tag, 'Q34 picker: size rows show their own prices; 30 x2 at 7.20 / 15.50 and 7 x1 at the shared price; the old line unchanged; cost adds up',
-        metas[6].includes('Buy $4.30 · Sell $9.80') && metas[7].includes(`Buy $4.00 · Sell $${sharedSell.toFixed(2)}`)
+        metas[6].includes('Buy $4.30 · Sell (incl. GST) $9.80') && metas[7].includes(`Buy $4.00 · Sell (incl. GST) $${sharedSell.toFixed(2)}`)
         && JSON.stringify(pickedK.lines.slice().sort()) === JSON.stringify([['30', 2, 7.2, 15.5], ['6', 2, 4, 9], ['7', 1, 4, sharedSell]].sort())
         && Math.abs(pickedK.cost - (8 + 14.4 + 4)) < 0.001, { metas, pickedK, sharedSell });
       await openFamily(p, 'Guides', 'Fuji Guides');

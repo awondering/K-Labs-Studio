@@ -2928,6 +2928,12 @@ textarea::placeholder{
   text-overflow:ellipsis;
 }
 
+/* Q38: a component's Buy / Sell (incl. tax) line wraps rather than cutting off the price on a narrow screen. */
+.component-sheet__row--pick .component-sheet__option-meta{
+  white-space:normal;
+  text-overflow:clip;
+}
+
 .component-sheet__size-add{
   position:sticky;
   bottom:0;
@@ -12063,6 +12069,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 
 .studio-family-size__fields--prices{
   grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:end; /* Q38: Starting Buy and Starting Sell inputs stay level when Sell names the tax on a second line */
 }
 
 .studio-family-size__fields input{
@@ -12114,6 +12121,11 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 .studio-family-size__row--head span:not(:first-child){
   text-align:right;
 }
+
+/* Q38: "(incl. GST)" sits on its own line under Sell in the narrow column; the other headings align to its bottom. */
+.studio-family-size__row--head{align-items:end}
+.studio-family-size__fields--prices .component-tax-note,
+.studio-family-size__row--head .component-tax-note{display:block}
 
 /* Q35: prices typed, not spun - no spin arrows eating the compact fields. */
 .studio-family-size__row input::-webkit-inner-spin-button,
