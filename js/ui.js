@@ -515,6 +515,22 @@ if(typeof document!=='undefined' && document.addEventListener){
     if(target && target.tagName==='IMG' && target.classList && target.classList.contains('klabs-brand-logo'))target.remove();
   },true);
 }
+// Q37: Safari (Mac and iPhone) keeps a date field's calendar open after a day is picked; letting go of the field's
+// focus closes it. Only after a pick made by tap or click - never while a date is typed or changed with the keys
+// (Chrome reports a change on each typed part), never for a cleared date, and never for a date Studio sets itself.
+if(typeof document!=='undefined' && document.addEventListener){
+  const dateField=(target)=>target && target.tagName==='INPUT' && target.type==='date'?target:null;
+  const pickedByPointer=new WeakSet();
+  document.addEventListener('pointerdown',(event)=>{const field=dateField(event.target);if(field)pickedByPointer.add(field);},true);
+  document.addEventListener('keydown',(event)=>{const field=dateField(event.target);if(field)pickedByPointer.delete(field);},true);
+  document.addEventListener('focusout',(event)=>{const field=dateField(event.target);if(field)pickedByPointer.delete(field);},true);
+  document.addEventListener('change',(event)=>{
+    const field=dateField(event.target);
+    if(!field || !pickedByPointer.has(field) || !field.value || document.activeElement!==field)return;
+    pickedByPointer.delete(field);
+    setTimeout(()=>{if(document.activeElement===field)field.blur();},0); // after Studio's own change handlers
+  });
+}
 function currentBusinessLogo(){
   return businessProfile&&businessLogoApi()?businessLogoApi().sanitise(businessProfile.logo):'';
 }
@@ -19787,7 +19803,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v285';
+window.KLABS_UI_BUILD='build148-v286';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

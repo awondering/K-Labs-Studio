@@ -5295,6 +5295,10 @@ button,
   transition:background-color var(--micro-motion) ease,border-color var(--micro-motion) ease,color var(--micro-motion) ease,box-shadow var(--micro-motion) ease,transform var(--micro-motion) ease,opacity var(--micro-motion) ease;
 }
 
+/* Q37: Studio is dark, so its date fields ask the browser for the dark native calendar and control
+   (Safari on Mac and iPhone, Chrome, Edge). Date fields only; other controls are unchanged. */
+input[type="date"]{color-scheme:dark}
+
 button:focus-visible,
 [role="button"]:focus-visible,
 input:focus-visible,
