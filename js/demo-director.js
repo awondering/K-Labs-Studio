@@ -33,7 +33,7 @@
  * Its Replay and chapters reload ?demo&tour=components&chapter=N, so it starts from the same fresh in-memory data. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v288";
+  const DEMO_BUILD = "build148-v289";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.

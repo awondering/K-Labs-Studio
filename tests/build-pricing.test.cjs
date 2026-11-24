@@ -443,7 +443,9 @@ function confirmationHarness(saved){
   return context;
 }
 
-function confirmationRows(context){
+// paidInFullEmail (Q39): the paid-in-full email always says "Total received" (owner wording) while the unchanged
+// Build Confirmation document may say "Deposit Received"; the amounts must still agree line for line.
+function confirmationRows(context,{paidInFullEmail=false}={}){
   const markup=context.customerQuoteSummaryMarkup();
   const pricing=markup.match(/<div class="view-quote__pricing">([\s\S]*?)<\/div>\s*<div class="view-quote__row">/);
   assert.ok(pricing,'customer pricing is present');
@@ -451,7 +453,8 @@ function confirmationRows(context){
   const email=Array.from(context.customerEmailLines())
     .filter(line=>/^(Total|Deposit required|Deposit received|Total received|Deposit still required|Balance owing|Balance remaining): /.test(line))
     .map(line=>line.toLowerCase().replace(/^total:/,'total price:'));
-  assert.deepEqual(email,preview.map(line=>line.toLowerCase()),'email and preview payment amounts agree');
+  const expected=preview.map(line=>line.toLowerCase()).map(line=>paidInFullEmail?line.replace(/^deposit received:/,'total received:'):line);
+  assert.deepEqual(email,expected,'email and preview payment amounts agree');
   return preview;
 }
 
@@ -474,9 +477,12 @@ test('Build confirmation keeps meaningful partial-deposit amounts and fully paid
   ]);
   const paid=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'percent',depositValue:100,
     payments:[{id:'p1',type:'deposit',amount:2500,date:'2026-10-18'}]});
-  assert.deepEqual(confirmationRows(paid),[
+  // The Build Confirmation document is unchanged; the email acknowledges full payment (Q39).
+  assert.deepEqual(confirmationRows(paid,{paidInFullEmail:true}),[
     'total price: $2500.00 NZD','deposit received: $2500.00 NZD','balance owing: $0.00 NZD',
   ]);
+  assert.ok(paid.customerEmailLines().includes('Total received: $2500.00 NZD'));
+  assert.ok(paid.customerEmailLines().some(line=>line.startsWith('Payment has been received in full.')));
 });
 
 test('Q33: a confirmation with a deposit and a further payment calls the money Total Received and asks for no more deposit once it is covered',()=>{
