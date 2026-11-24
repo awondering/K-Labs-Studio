@@ -24,10 +24,16 @@
  * reading order), and centred only if that is not enough. A watchdog stops the demonstration calmly - "Demonstration
  * paused. Press Replay to watch again." - if one step cannot finish within WATCHDOG_MS of playing time (paused time
  * does not count); the stuck step can do nothing afterwards. DEMO_BUILD is checked against the other demonstration
- * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones. */
+ * files before anything is shown (js/public-entry.js), so an older cached copy is never run with newer ones.
+ *
+ * Q24: a second journey, the Components Library (COMPONENTS_JOURNEY), chosen on the introduction (Build a Rod |
+ * Components Library) and played by the same player and director on the same real screens: a new component, a new Fuji
+ * guide family, seven sizes from Generate Sizes with their own Buy and Sell prices, an edit, Duplicate Family, then the
+ * v280 picker's sizes and quantities and one Add to Build on a Components job, with its Components Cost and Job Price.
+ * Its Replay and chapters reload ?demo&tour=components&chapter=N, so it starts from the same fresh in-memory data. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v280";
+  const DEMO_BUILD = "build148-v281";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -38,6 +44,7 @@
   const RESTING = "Fictional data. Nothing here is saved, sent or synced.";
   const PLAYING = "Demonstration playing. Nothing here is saved, sent or synced.";
   const FINISHED = "That's the job, from enquiry to paid in full. Replay or pick a chapter.";
+  const FINISHED_COMPONENTS = "That's the library, new part to priced job. Replay or pick a chapter.";
   const STOPPED = "Demonstration paused. Press Replay to watch again.";
   const PAUSED = "Paused. Press Play to carry on.";
   const skippingTo = (title, n) => `Skipping ahead to chapter ${n}: ${title}...`;
@@ -47,12 +54,15 @@
     return value;
   };
   const toggle = (bodyId) => `[aria-controls="${bodyId}"]`;
+  const cssString = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   // The journey. Steps: caption(text), tap(selector), type(selector, text), open(section toggle), pick([category,
   // subcategory, component], quantity) from the component library - the quantity is set in the library before Add to
   // Build -, qty(component, quantity) on its line, name(build name) for the
   // new build, date(selector, daysAhead), show(selector or [selectors], ms) - brought into view and
   // highlighted for a moment -, until(selector visible), untilHidden(selector), untilValue(selector, value),
-  // untilText(selector, text), scroll(selector) and hold(ms) on a key moment.
+  // untilText(selector, text), scroll(selector) and hold(ms) on a key moment. Q24 adds select(field, option) for one of
+  // Studio's lists, choose(name) for a category, family or size in the component library, and pickQty(component,
+  // quantity) for a component's quantity there; the picker stays open until Add to Build is tapped.
   const JOURNEY = freeze([
     { title: "Enquiry", steps: [
       ["caption", "New enquiry: Jordan Ellis wants a snapper spin rod."],
@@ -207,9 +217,149 @@
     ] },
   ]);
 
+  // Q24: the Components Library journey. Everything is made on the library's own screens and saved by Studio itself
+  // into the demonstration's in-memory library; the guide set is then picked for a Components job with the v280 picker.
+  const libraryRow = (attribute, name) => `#studioComponentsList [${attribute}=${cssString(name)}]`;
+  const FAMILY = "Fuji KR Spinning Guides";
+  const GUIDE = "Fuji KR Guide";
+  const sizeField = (index, field) => `#studioFamilySizeRows [data-family-size-index="${index}"][data-family-size-field="${field}"]`;
+  const COMPONENTS_JOURNEY = freeze([
+    { title: "Component", steps: [
+      ["caption", "Your Components Library: every part you build with."],
+      ["tap", "[data-nav=\"workshopScreen\"]"],
+      ["tap", "[data-studio-action=\"components\"]"],
+      ["until", "#studioComponentsPanel"],
+      ["caption", "Add a new tip top to your Tip Tops."],
+      ["tap", libraryRow("data-studio-library-open-category", "Tip Tops")],
+      ["tap", libraryRow("data-studio-library-open-subcategory", "Tip Top Guides")],
+      ["tap", "#studioComponentsAddBtn"],
+      ["type", "#studioComponentName", "Fuji KR Tip Top 5.5"],
+      ["select", "Brand / Manufacturer", "Fuji"],
+      ["caption", "Buy Price is what you pay. Sell Price is what you charge."],
+      ["type", "#studioComponentCost", "9"],
+      ["type", "#studioComponentUnitPrice", "16"],
+      ["tap", "#studioComponentSaveBtn"],
+      ["untilText", "#studioComponentsTitle", "FUJI KR TIP TOP 5.5"],
+      ["tap", "#studioComponentsBackBtn"],
+      ["until", libraryRow("data-studio-library-open-component", "Fuji KR Tip Top 5.5")],
+      ["show", libraryRow("data-studio-library-open-component", "Fuji KR Tip Top 5.5"), 1200],
+    ] },
+    { title: "Family", steps: [
+      ["caption", "Now a new family for Fuji spinning guides."],
+      ["tap", "#studioComponentsBackBtn"],
+      ["untilText", "#studioComponentsTitle", "TIP TOPS"],
+      ["tap", "#studioComponentsBackBtn"],
+      ["untilText", "#studioComponentsTitle", "COMPONENTS"],
+      ["tap", libraryRow("data-studio-library-open-category", "Guides")],
+      ["tap", "#studioComponentsAddBtn"],
+      ["type", "#studioLibrarySubcategoryName", FAMILY],
+      ["tap", "#studioComponentDetails [data-studio-library-action=\"subcategory-add\"]"],
+      ["untilText", "#studioComponentsTitle", FAMILY.toUpperCase()],
+      ["show", "#studioComponentsTitle", 900],
+    ] },
+    { title: "Sizes", steps: [
+      ["caption", "Generate Sizes: seven guides in one go."],
+      ["tap", "#studioComponentsGenerateSizesBtn"],
+      ["until", "#studioFamilySizeSheet"],
+      ["type", "#studioFamilySizeBase", GUIDE],
+      ["type", "#studioFamilySizeList", "30, 20, 16, 12, 10, 8, 6"],
+      ["caption", "A starting Buy and Sell price fills every size."],
+      ["type", "#studioFamilySizeBuy", "8"],
+      ["type", "#studioFamilySizeSell", "14"],
+      ["tap", "#studioFamilySizeBuild"],
+      ["until", sizeField(6, "sell")],
+      ["show", "#studioFamilySizeRows", 1200],
+    ] },
+    { title: "Prices", steps: [
+      ["caption", "Bigger guides cost more. Each size has its own prices."],
+      ["type", sizeField(0, "buy"), "15"],
+      ["type", sizeField(0, "sell"), "26"],
+      ["type", sizeField(1, "buy"), "12"],
+      ["type", sizeField(1, "sell"), "21"],
+      ["type", sizeField(2, "buy"), "10"],
+      ["type", sizeField(2, "sell"), "18"],
+      ["caption", "Create all seven, each its own component."],
+      ["tap", "#studioFamilySizeConfirm"],
+      ["untilHidden", "#studioFamilySizeSheet"],
+      ["until", libraryRow("data-studio-library-open-component", `${GUIDE} 6`)],
+      ["show", "#studioComponentsList", 1500],
+    ] },
+    { title: "Edit", steps: [
+      ["caption", "Open a size to edit it. Brand: Fuji."],
+      ["tap", libraryRow("data-studio-library-open-component", `${GUIDE} 6`)],
+      ["select", "Brand / Manufacturer", "Fuji"],
+      ["type", "#studioComponentUnitPrice", "13.5"],
+      ["tap", "#studioComponentSaveBtn"],
+      ["caption", "Saved. Duplicate the family to start a new range."],
+      ["tap", "#studioComponentsBackBtn"],
+      ["until", "#studioComponentsDuplicateFamilyBtn"],
+      ["tap", "#studioComponentsDuplicateFamilyBtn"],
+      ["until", "#studioComponentDuplicateSheet"],
+      ["type", "#studioComponentDuplicateName", "Fuji KR Gold Guides"],
+      ["tap", "#studioComponentDuplicateConfirm"],
+      ["untilHidden", "#studioComponentDuplicateSheet"],
+    ] },
+    { title: "Choose", steps: [
+      ["caption", "Sam wants a guide set. Start a Components job."],
+      ["tap", "[data-nav=\"homeScreen\"]"],
+      ["tap", "#homeComponentsBtn"],
+      ["tap", "#customerFinderAddNewAction"],
+      ["type", "#customerFinderNewCustomerName", "Sam Carter"],
+      ["type", "#customerFinderNewPhone", "021 555 0187"],
+      ["tap", "#customerFinderSubmitNewCustomerBtn"],
+      ["untilHidden", "#customerFinderSheet"],
+      ["until", "#workshopScreen.active"],
+      ["untilValue", "#quoteCustomerName", "Sam Carter"],
+      ["caption", "Pick the family once, then choose sizes and quantities."],
+      ["open", toggle("workshopComponentsBody")],
+      ["tap", "#addComponentBtn"],
+      ["choose", "Guides"],
+      ["choose", FAMILY],
+      ["caption", "Two each of the small running guides."],
+      ["pickQty", `${GUIDE} 6`, 2],
+      ["pickQty", `${GUIDE} 8`, 2],
+      ["caption", "One each of the larger sizes."],
+      ["pickQty", `${GUIDE} 12`, 1],
+      ["pickQty", `${GUIDE} 16`, 1],
+      ["pickQty", `${GUIDE} 20`, 1],
+      ["pickQty", `${GUIDE} 30`, 1],
+    ] },
+    { title: "Guide set", steps: [
+      ["caption", "Back to the library for the matching tip top."],
+      ["tap", "#choicePickerBack"],
+      ["tap", "#choicePickerBack"],
+      ["choose", "Tip Tops"],
+      ["choose", "Tip Top Guides"],
+      ["pickQty", "Fuji KR Tip Top 5.5", 1],
+      ["caption", "Every choice is kept. One Add to Build adds the set."],
+      ["show", "#choicePickerAddToBuild", 900],
+      ["tap", "#choicePickerAddToBuild"],
+      ["untilHidden", "#choicePickerSheet"],
+      // Studio may fold the Components section away after Add to Build; it is opened again to show the new lines.
+      ["open", toggle("workshopComponentsBody")],
+      ["show", "#quoteComponentsList", 1500],
+    ] },
+    { title: "Job price", steps: [
+      ["caption", "Components Cost: what the set costs you."],
+      ["open", toggle("workshopQuoteSummaryBody")],
+      ["show", "#quoteCostBeforeMarginField", 1500],
+      ["caption", "Job Price, from each part's Sell Price, before GST."],
+      ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 2000],
+    ] },
+  ]);
+  const JOURNEYS = freeze({ rod: JOURNEY, components: COMPONENTS_JOURNEY });
+  const CHAPTER_ATTRIBUTE = Object.freeze({ rod: "data-demo-chapter", components: "data-demo-components-chapter" });
+  const FINISHED_FOR = Object.freeze({ rod: FINISHED, components: FINISHED_COMPONENTS });
+  // The journey playing on this page: chosen on the introduction, or by ?tour= on Replay and the chapter controls.
+  let tour = "rod";
+  let journey = JOURNEY;
+  function setTour(name) {
+    tour = JOURNEYS[name] ? name : "rod";
+    journey = JOURNEYS[tour];
+  }
+
   const byId = (id) => document.getElementById(id);
   const visible = (el) => !!el && el.isConnected && !el.hidden && !el.closest("[hidden]") && el.getClientRects().length > 0;
-  const cssString = (text) => `"${String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
   // Playback state. The director only moves while playing; a pause can fall anywhere, even mid-word.
   let paused = false;
@@ -369,14 +519,31 @@
     highlight([el], false);
   }
   // Category and family, then the component (chosen at 1), its + to the quantity, and Add to Build.
+  const pickOption = (name) => `#choicePickerList [data-choice-option=${cssString(name)}]`;
+  const pickRow = (name) => `#choicePickerList .component-sheet__row--pick[data-pick-name=${cssString(name)}]`;
+  // Q24: a component's quantity in the open picker - a tap chooses it at 1, then + up to the quantity.
+  async function setPick(name, qty) {
+    const value = () => Number(document.querySelector(`${pickRow(name)} .component-pick__value`)?.textContent || 0);
+    if (value() === 0) await tap(pickOption(name));
+    for (let n = value(); n < qty; n++) await tap(`${pickRow(name)} [data-pick-step="1"]`);
+    if (value() !== qty) throw new Error(`${name} did not reach Qty ${qty}.`);
+  }
   async function pick(path, qty = 1) {
     await tap("#addComponentBtn");
-    for (const name of path) await tap(`#choicePickerList [data-choice-option=${cssString(name)}]`);
-    const leaf = `#choicePickerList .component-sheet__row--pick[data-pick-name=${cssString(path[path.length - 1])}]`;
-    for (let n = 1; n < qty; n++) await tap(`${leaf} [data-pick-step="1"]`);
-    if (Number(document.querySelector(`${leaf} .component-pick__value`)?.textContent || 0) !== qty) throw new Error(`${path[path.length - 1]} did not reach Qty ${qty}.`);
+    for (const name of path.slice(0, -1)) await tap(pickOption(name));
+    await setPick(path[path.length - 1], qty);
     await tap("#choicePickerAddToBuild");
     await waitFor(() => !visible(byId("choicePickerSheet")), "the component library closing");
+  }
+  // Q24: a choice from one of Studio's lists (a component's Brand), made as a person makes it: tap the list's button,
+  // then the option in Studio's own list sheet; the button then shows the choice.
+  const listButton = (field) => `#studioComponentDetails .studio-custom-select-trigger[aria-label^=${cssString(`${field}:`)}]`;
+  async function select(field, label) {
+    await tap(listButton(field));
+    const option = await waitFor(() => Array.from(document.querySelectorAll("#studioCustomSelectList [data-studio-select-option]"))
+      .find((button) => visible(button) && button.textContent.trim() === label), `${label} in ${field}`);
+    await tap(`#studioCustomSelectList [data-studio-select-option="${option.getAttribute("data-studio-select-option")}"]`);
+    await waitFor(() => document.querySelector(listButton(field))?.getAttribute("aria-label") === `${field}: ${label}`, `${field} showing ${label}`);
   }
   // Sets a component line's quantity by typing it into the line's own Quantity field. The line's +/- steppers stay
   // blocked in Demo Mode (js/supabase-client.js), so they are not used. Then the quantity is shown and the row closed again.
@@ -456,9 +623,10 @@
   function showChapter(index) {
     chapterIndex = index;
     const label = byId("demoChapterLabel");
-    if (label) label.textContent = index >= JOURNEY.length ? "Finished" : index >= 0 ? `${index + 1}/${JOURNEY.length} ${JOURNEY[index].title}` : "";
-    document.querySelectorAll("[data-demo-chapter]").forEach((button) => {
-      const n = Number(button.getAttribute("data-demo-chapter")) - 1;
+    if (label) label.textContent = index >= journey.length ? "Finished" : index >= 0 ? `${index + 1}/${journey.length} ${journey[index].title}` : "";
+    const attribute = CHAPTER_ATTRIBUTE[tour];
+    document.querySelectorAll(`[${attribute}]`).forEach((button) => {
+      const n = Number(button.getAttribute(attribute)) - 1;
       if (n === index) button.setAttribute("aria-current", "step"); else button.removeAttribute("aria-current");
       button.setAttribute("data-done", String(n < index));
       // Keep the chapter playing in view in the chapter row (it scrolls sideways on a phone); the page itself never moves.
@@ -515,6 +683,9 @@
       return tap(a);
     }
     if (kind === "pick") return pick(a, b);
+    if (kind === "choose") return tap(pickOption(a));
+    if (kind === "pickQty") return setPick(a, b);
+    if (kind === "select") return select(a, b);
     if (kind === "qty") return setQuantity(a, b);
     if (kind === "name") {
       const named = window.KLABS_UI?.nameCurrentBuild?.(a);
@@ -551,11 +722,11 @@
   async function play(director, startAt) {
     await director.run(async () => {
       await wait(PACE.beat);
-      for (let i = 0; i < JOURNEY.length; i++) {
+      for (let i = 0; i < journey.length; i++) {
         skipping = i < startAt;
         showChapter(i);
-        if (skipping) setCaption(skippingTo(JOURNEY[startAt].title, startAt + 1));
-        for (const step of JOURNEY[i].steps) await watched(step);
+        if (skipping) setCaption(skippingTo(journey[startAt].title, startAt + 1));
+        for (const step of journey[i].steps) await watched(step);
         skipping = false;
         await wait(PACE.beat);
       }
@@ -563,13 +734,21 @@
       await sleep(1500);
     });
   }
-  function restartAt(chapter) {
-    window.location.replace(`${window.KLABS_DEMO.enterUrl()}&chapter=${chapter}`);
+  function restartAt(chapter, name = tour) {
+    window.location.replace(`${window.KLABS_DEMO.enterUrl()}${name === "components" ? "&tour=components" : ""}&chapter=${chapter}`);
   }
-  function requestedChapter() {
+  const requestedTour = () => (/(?:^|[?&])tour=components(?:&|$)/.test(window.location.search || "") ? "components" : "rod");
+  function requestedChapter(name) {
     const match = /(?:^|[?&])chapter=(\d{1,2})(?:&|$)/.exec(window.location.search || "");
     const n = match ? Number(match[1]) : 0;
-    return n >= 1 && n <= JOURNEY.length ? n : 0;
+    return n >= 1 && n <= JOURNEYS[name].length ? n : 0;
+  }
+  // Q24: the chapter row of the journey playing; the other journey's row stays hidden.
+  function showChapterRow() {
+    const rod = document.querySelector("[data-demo-chapter]")?.closest("ol");
+    const components = document.querySelector("[data-demo-tour-chapters=\"components\"]");
+    if (rod) rod.hidden = tour !== "rod";
+    if (components) components.hidden = tour !== "components";
   }
   function watchDockHeight(dock) {
     const root = document.documentElement;
@@ -599,15 +778,19 @@
     playerExit.addEventListener("click", () => window.KLABS_DEMO.exit());
     playPause.addEventListener("click", () => { if (playerState === "finished") restartAt(1); else togglePause(); });
     replay.addEventListener("click", () => restartAt(1));
-    document.querySelectorAll("[data-demo-chapter]").forEach((button) => {
-      button.addEventListener("click", () => restartAt(Number(button.getAttribute("data-demo-chapter"))));
-    });
+    Object.entries(CHAPTER_ATTRIBUTE).forEach(([name, attribute]) => document.querySelectorAll(`[${attribute}]`).forEach((button) => {
+      button.addEventListener("click", () => restartAt(Number(button.getAttribute(attribute)), name));
+    }));
     watchDockHeight(dock);
     let started = false;
-    const begin = async (chapter) => {
+    const startComponents = byId("demoStartComponentsBtn");
+    const begin = async (chapter, name = "rod") => {
       if (started) return;
       started = true;
+      setTour(name);
+      showChapterRow();
       start.disabled = true;
+      if (startComponents) startComponents.disabled = true;
       intro.hidden = true;
       playerPanel.hidden = false;
       dock.setAttribute("data-player-open", "true");
@@ -616,8 +799,8 @@
       setPlayButton("playing");
       try {
         await play(director, chapter - 1);
-        showChapter(JOURNEY.length);
-        setCaption(FINISHED);
+        showChapter(journey.length);
+        setCaption(FINISHED_FOR[tour]);
       } catch (error) {
         halted = true;
         console.warn("[K-Labs Studio] The demonstration stopped:", error);
@@ -628,12 +811,14 @@
       setMessage(RESTING);
     };
     start.addEventListener("click", () => begin(1));
+    if (startComponents) startComponents.addEventListener("click", () => begin(1, "components"));
     setMessage(RESTING);
-    const chapter = requestedChapter();
+    const requested = requestedTour();
+    const chapter = requestedChapter(requested);
     if (chapter) {
       // Replay or a chapter choice: the visitor asked for it, so it plays without the introduction.
       if (window.history && typeof window.history.replaceState === "function") window.history.replaceState(null, "", window.KLABS_DEMO.enterUrl());
-      begin(chapter);
+      begin(chapter, requested);
       return;
     }
     intro.hidden = false;
@@ -641,6 +826,7 @@
   }
 
   // messages: everything else the caption line can show (the browser test checks none of it is cut off either).
-  const MESSAGES = Object.freeze([PAUSED, FINISHED, STOPPED, ...JOURNEY.map((chapter, i) => skippingTo(chapter.title, i + 1))]);
-  window.KLABS_DEMO_PLAYER = Object.freeze({ open, build: DEMO_BUILD, journey: JOURNEY, pace: PACE, watchdog: WATCHDOG_MS, messages: MESSAGES });
+  const MESSAGES = Object.freeze([PAUSED, FINISHED, FINISHED_COMPONENTS, STOPPED,
+    ...[JOURNEY, COMPONENTS_JOURNEY].flatMap((steps) => steps.map((chapter, i) => skippingTo(chapter.title, i + 1)))]);
+  window.KLABS_DEMO_PLAYER = Object.freeze({ open, build: DEMO_BUILD, journey: JOURNEY, journeys: JOURNEYS, pace: PACE, watchdog: WATCHDOG_MS, messages: MESSAGES });
 })();

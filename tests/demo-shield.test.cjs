@@ -247,7 +247,9 @@ test('Q18 amendment: introduction screen explains the demonstration and starts i
   assert.match(intro, /<h2 id="demoIntroTitle">/);
   assert.match(intro, /fictional/i);
   assert.match(intro, /nothing is saved/i);
-  assert.match(intro, /<button id="demoStartBtn" type="button" class="primary-action[^"]*">START DEMONSTRATION<\/button>/);
+  // Q24: the introduction offers two demonstrations, Build a Rod | Components Library (was one START DEMONSTRATION).
+  assert.match(intro, /<button id="demoStartBtn" type="button" class="primary-action[^"]*">BUILD A ROD<\/button>/);
+  assert.match(intro, /<button id="demoStartComponentsBtn" type="button" class="primary-action[^"]*">COMPONENTS LIBRARY<\/button>/);
   assert.match(intro, /<button id="demoIntroExitBtn" type="button"/);
   // Phase 3 review change: the dock also carries the demonstration files' build (data-demo-build), checked at start-up.
   assert.match(html, /<div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v\d+" hidden>/);

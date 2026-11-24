@@ -21,7 +21,7 @@
   // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
   // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
   // back to the public entry with the usual notice.
-  const DEMO_BUILD = "build148-v280";
+  const DEMO_BUILD = "build148-v281";
   const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
@@ -670,7 +670,6 @@
     window.setInterval(() => {
       if (document.visibilityState === "visible") verifyCurrentAccountBlock();
     }, 15000);
-    const dialog = document.getElementById("publicDiscoverDialog");
     const rod = document.getElementById("homeLivingRod");
     const leds = rod.querySelector(".home-living-rod__leds");
     [8, 18, 30, 43, 57, 71, 84, 94].forEach((x) => {
@@ -681,8 +680,9 @@
       leds.appendChild(led);
     });
     rod.classList.add("is-ready");
-    document.getElementById("publicExploreBtn").addEventListener("click", () => showAuth("workshopScreen"));
-    // Q18: the public entry is exactly as before (Explore Studio opens sign-in); Demo Mode opens only at ?demo.
+    // Q24: Explore Studio opens Demo Mode (?demo), whose introduction offers Build a Rod | Components Library. Sign In
+    // stays the way into an account (and on to creating one).
+    document.getElementById("publicExploreBtn").addEventListener("click", () => window.KLABS_DEMO.enter());
     document.getElementById("demoModeExitBtn").addEventListener("click", () => window.KLABS_DEMO?.exit());
     if (!window.KLABS_DEMO?.active && window.location.hash === DEMO_UNAVAILABLE_HASH) {
       setVisible("publicDemoUnavailable", true);
@@ -690,12 +690,6 @@
     }
     document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));
     document.getElementById("authBackHome").addEventListener("click", showHome);
-    document.getElementById("publicDiscoverBtn").addEventListener("click", () => dialog.showModal());
-    document.getElementById("publicDiscoverClose").addEventListener("click", () => dialog.close());
-    document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
-      dialog.close();
-      showAuth("workshopScreen");
-    });
     document.getElementById("startTrialBtn").addEventListener("click", async (event) => {
       const button = event.currentTarget;
       const errorMessage = document.getElementById("accountAccessError");

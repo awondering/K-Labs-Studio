@@ -21,7 +21,7 @@
      a blank Total Price, old payment buttons). If Studio's code is not this release, clear the cached files and reload
      once; if that does not help, say so plainly instead of showing a half-working screen. */
   (function () {
-    var BUILD = 'build148-v280';
+    var BUILD = 'build148-v281';
     window.KLABS_SHELL_BUILD = BUILD;
     function notice(text) {
       var show = function () {
@@ -255,11 +255,11 @@
           <button id="homeComponentsBtn" class="home-public-entry__secondary" type="button">COMPONENTS</button>
         </div>
         <div class="home-public-entry">
+          <!-- Q24: Explore Studio opens Demo Mode's choice, Build a Rod | Components Library (was: sign-in, with a
+               7-day trial note). It replaces Discover K-Labs Studio, whose only action was the same Explore Studio. -->
           <button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">
             <span class="home-public-entry__primary-label">EXPLORE STUDIO</span>
-            <span class="home-public-entry__trial-note">7-day trial available</span>
           </button>
-          <button id="publicDiscoverBtn" class="home-public-entry__secondary" type="button">DISCOVER K-LABS STUDIO</button>
           <button id="publicSignInBtn" class="home-public-entry__signin" type="button">SIGN IN</button>
           <p id="publicDemoUnavailable" class="home-public-entry__notice" role="status" hidden>The demonstration could not open safely in this browser. Nothing was changed.</p>
         </div>
@@ -1560,21 +1560,6 @@
     <button data-nav="workshopLandingScreen" type="button"><i aria-hidden="true">◫</i><span>Workshop</span></button>
     <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
-  <dialog id="publicDiscoverDialog" class="public-discover-dialog" aria-labelledby="publicDiscoverTitle">
-    <div class="public-discover-dialog__heading">
-      <h2 id="publicDiscoverTitle">K-Labs Studio</h2>
-    </div>
-    <dl class="public-discover-dialog__features">
-      <div><dt>DESIGN &amp; MANAGE</dt><dd>Build specifications, components and pricing.</dd></div>
-      <div><dt>PRESENT WITH CONFIDENCE</dt><dd>Professional quotes and build confirmations.</dd></div>
-      <div><dt>PRECISION WORKSHOP</dt><dd>Purpose-built tools for rod builders.</dd></div>
-    </dl>
-    <p class="public-discover-dialog__note">Discover a more considered approach to custom rod building.</p>
-    <div class="public-discover-dialog__actions">
-      <button id="publicDiscoverExploreBtn" class="public-discover-dialog__explore" type="button">EXPLORE STUDIO</button>
-      <button id="publicDiscoverClose" class="public-discover-dialog__close" type="button">CLOSE</button>
-    </div>
-  </dialog>
   <!-- Q18 Demo Mode: the visitor shield (a second, visible layer; js/demo-mode.js stops the visitor's own actions) and
        the demonstration's introduction screen. Both stay hidden outside Demo Mode. -->
   <div id="demoShield" class="demo-shield" hidden aria-hidden="true"></div>
@@ -1583,14 +1568,16 @@
       <p class="demo-intro__eyebrow">K-LABS STUDIO DEMONSTRATION</p>
       <h2 id="demoIntroTitle">Watch Studio take on a new customer</h2>
       <p>Studio works through a real job on its own screens, as a rod builder would: from a new enquiry, the rod specification, parts, labour and live pricing to the customer quote, the deposit, the workshop, the final payment and the invoice.</p>
+      <p>Or watch the Components Library: a new component, a Fuji guide family in seven sizes with their own prices, then a guide set added to a job.</p>
       <p>You watch while the demonstration does the tapping and typing. Pause, replay or jump to a chapter at any time. The customer and business are fictional, and nothing is saved or sent.</p>
       <div class="demo-intro__actions">
-        <button id="demoStartBtn" type="button" class="primary-action demo-intro__start">START DEMONSTRATION</button>
+        <button id="demoStartBtn" type="button" class="primary-action demo-intro__start">BUILD A ROD</button>
+        <button id="demoStartComponentsBtn" type="button" class="primary-action demo-intro__start">COMPONENTS LIBRARY</button>
         <button id="demoIntroExitBtn" type="button" class="ghost-action demo-intro__exit">Exit demo</button>
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v280" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v281" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>
@@ -1613,6 +1600,17 @@
           <li><button type="button" class="demo-player__chapter" data-demo-chapter="8" aria-label="Chapter 8: Workshop"><b>8</b><span>Workshop</span></button></li>
           <li><button type="button" class="demo-player__chapter" data-demo-chapter="9" aria-label="Chapter 9: Final payment"><b>9</b><span>Final payment</span></button></li>
           <li><button type="button" class="demo-player__chapter" data-demo-chapter="10" aria-label="Chapter 10: Invoice"><b>10</b><span>Invoice</span></button></li>
+        </ol>
+        <!-- Q24: the Components Library demonstration's chapters, shown instead of the rod build's when it plays. -->
+        <ol class="demo-player__chapters" aria-label="Chapters" data-demo-tour-chapters="components" hidden>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="1" aria-label="Chapter 1: Component"><b>1</b><span>Component</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="2" aria-label="Chapter 2: Family"><b>2</b><span>Family</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="3" aria-label="Chapter 3: Sizes"><b>3</b><span>Sizes</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="4" aria-label="Chapter 4: Prices"><b>4</b><span>Prices</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="5" aria-label="Chapter 5: Edit"><b>5</b><span>Edit</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="6" aria-label="Chapter 6: Choose"><b>6</b><span>Choose</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="7" aria-label="Chapter 7: Guide set"><b>7</b><span>Guide set</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="8" aria-label="Chapter 8: Job price"><b>8</b><span>Job price</span></button></li>
         </ol>
         <button id="demoPlayerExitBtn" type="button" class="ghost-action demo-player__exit">Exit demo</button>
       </div>

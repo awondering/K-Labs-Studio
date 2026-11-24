@@ -95,6 +95,22 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
     '#confirmSheet [data-confirm-action="issue"]': () => { show('#confirmSheet', false); get('#invoicePreviewBody .invoice-document[data-invoice-issued="true"]').textContent = 'Invoice INV-1046'; },
     '#invoicePreviewSheet .invoice-preview__actions [data-invoice-preview-action="close"]': () => show('#invoicePreviewSheet', false),
   };
+  // Q24: the Components Library journey - its two sheets open and close, the new customer's name appears on the job,
+  // and Studio's list sheet offers Fuji for the Brand; the library's heading carries each title the journey waits for.
+  const brandButton = '#studioComponentDetails .studio-custom-select-trigger[aria-label^="Brand / Manufacturer:"]';
+  Object.assign(reactions, {
+    '#studioComponentsGenerateSizesBtn': () => show('#studioFamilySizeSheet', true),
+    '#studioFamilySizeConfirm': () => show('#studioFamilySizeSheet', false),
+    '#studioComponentsDuplicateFamilyBtn': () => show('#studioComponentDuplicateSheet', true),
+    '#studioComponentDuplicateConfirm': () => show('#studioComponentDuplicateSheet', false),
+    '#customerFinderSubmitNewCustomerBtn': () => { get('#quoteCustomerName').value = get('#customerFinderNewCustomerName').value || 'Jordan Ellis'; },
+    '#studioCustomSelectList [data-studio-select-option="1"]': () => { get(brandButton).attributes['aria-label'] = 'Brand / Manufacturer: Fuji'; },
+  });
+  get(brandButton).attributes['aria-label'] = 'Brand / Manufacturer: No Brand';
+  const fujiOption = get('fuji-option');
+  fujiOption.textContent = 'Fuji';
+  fujiOption.attributes['data-studio-select-option'] = '1';
+  get('#studioComponentsTitle').textContent = 'COMPONENTS TIP TOPS FUJI KR TIP TOP 5.5 FUJI KR SPINNING GUIDES';
   for (const [key, react] of Object.entries(reactions)) get(key).listeners.click = [react];
   // Q23 owner corrections: the EVA Grip 75 mm line (index 3) opens; its Quantity field starts at 1 (2 is typed in).
   const gripRow = get('#quoteComponentsList [data-component-action="open-row"][aria-label$=" for EVA Grip 75 mm" i]');
@@ -106,14 +122,18 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
   let captionText = '';
   Object.defineProperty(captionEl, 'textContent', { get: () => captionText, set: (v) => { captionText = String(v); log.push(['caption', captionText, clock]); } });
   // As in index.html and ui.js: the introduction, the player and Studio's sheets start hidden.
-  for (const key of ['#demoIntro', '#demoPlayer', '#choicePickerSheet', '#customerFinderSheet', '#viewQuoteSheet', '#confirmSheet', '#quoteBalanceReceivedForm', '#invoicePreviewSheet']) get(key).hidden = true;
+  for (const key of ['#demoIntro', '#demoPlayer', '#choicePickerSheet', '#customerFinderSheet', '#viewQuoteSheet', '#confirmSheet', '#quoteBalanceReceivedForm', '#invoicePreviewSheet',
+    '#studioFamilySizeSheet', '#studioComponentDuplicateSheet']) get(key).hidden = true;
   // The dock across the top of the page (the visible page starts below it).
   get('#demoModeBar').getBoundingClientRect = () => ({ top: 0, bottom: 80, left: 0, right: 1280, width: 1280, height: 80 });
   const chapterButtons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => { const b = get(`chapter-${n}`); b.attributes['data-demo-chapter'] = String(n); return b; });
+  // Q24: the Components Library's chapter row.
+  const componentsChapterButtons = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => { const b = get(`components-chapter-${n}`); b.attributes['data-demo-components-chapter'] = String(n); return b; });
   const document = {
     getElementById: (id) => get(`#${id}`),
     querySelector: (selector) => get(selector),
-    querySelectorAll: (selector) => (selector === '[data-demo-chapter]' ? chapterButtons : []),
+    querySelectorAll: (selector) => (selector === '[data-demo-chapter]' ? chapterButtons : selector === '[data-demo-components-chapter]' ? componentsChapterButtons
+      : selector === '#studioCustomSelectList [data-studio-select-option]' ? [fujiOption] : []),
     documentElement: { style: { setProperty(name, value) { log.push(['style', name, value]); } }, classList: { add() {}, remove() {}, toggle() {} } },
     body: { classList: { contains: () => false } },
   };
@@ -166,7 +186,7 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
   });
   const advance = (ms) => { clock += ms; fireDue(); };
   stall.release = () => { const held = stall.held.splice(0); stall.when = null; held.forEach((fn) => setImmediate(fn)); };
-  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, busy, slow, stall, advance, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
+  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, componentsChapterButtons, busy, slow, stall, advance, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
 }
 const settle = async (h, untilFn, limit = 200000) => { for (let i = 0; i < limit && !untilFn(); i++) await new Promise((r) => setImmediate(r)); };
 const player = (h) => h.window.KLABS_DEMO_PLAYER;
@@ -774,4 +794,143 @@ test('the quantity is typed into the line\'s Quantity field - the +/- steppers s
   assert.match(fnBody, /await type\(field, String\(qty\)\)/);
   assert.doesNotMatch(fnBody, /quantity-increment|component-quantity__step/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'js', 'supabase-client.js'), 'utf8'), /control\.matches\("\.layout-control-card__button, \.component-quantity__step/);
+});
+
+// ---- Q24: the Components Library demonstration.
+
+const COMPONENTS_FINISHED = /new part to priced job/;
+const componentsFinished = (h) => COMPONENTS_FINISHED.test(h.get('#demoCaption').textContent) || STOPPED.test(h.get('#demoCaption').textContent);
+const componentsJourney = (h) => player(h).journeys.components;
+
+test('Q24: the Components Library journey has the eight agreed chapters, short workshop captions, and cannot be changed', () => {
+  const h = stage();
+  const journey = componentsJourney(h);
+  assert.deepEqual(JSON.parse(JSON.stringify(journey.map((c) => c.title))), ['Component', 'Family', 'Sizes', 'Prices', 'Edit', 'Choose', 'Guide set', 'Job price']);
+  for (const chapter of journey) {
+    const captions = chapter.steps.filter((s) => s[0] === 'caption').map((s) => s[1]);
+    assert.ok(captions.length >= 1, `${chapter.title} has captions`);
+    for (const text of captions) {
+      assert.ok(text.length <= 64, `short caption (${text.length}): ${text}`);
+      assert.doesNotMatch(text, /\b(click|DOM|director|script|selector|field id|input event|quoteMaths|API)\b/i, `workshop language: ${text}`);
+    }
+  }
+  assert.ok(Object.isFrozen(journey) && journey.every((c) => Object.isFrozen(c) && Object.isFrozen(c.steps)));
+  assert.equal(player(h).journeys.rod, player(h).journey, 'the rod build journey is unchanged and still the default');
+});
+
+test('Q24: every chapter works the library\'s own controls - create, family, Generate Sizes, per-size prices, edit and save, Duplicate Family, picker, Add to Build once', () => {
+  const journey = componentsJourney(stage());
+  const steps = (i) => Array.from(journey[i].steps).map((s) => JSON.parse(JSON.stringify(s)));
+  const taps = (i) => steps(i).filter((s) => s[0] === 'tap').map((s) => s[1]);
+  const typed = (i) => steps(i).filter((s) => s[0] === 'type').map((s) => [s[1], s[2]]);
+  // 1: a new component with its Brand, Buy and Sell prices, saved with Studio's own button.
+  assert.ok(taps(0).includes('#studioComponentsAddBtn') && taps(0).includes('#studioComponentSaveBtn'));
+  assert.deepEqual(typed(0).map(([sel]) => sel), ['#studioComponentName', '#studioComponentCost', '#studioComponentUnitPrice']);
+  assert.ok(steps(0).some((s) => s[0] === 'select' && s[1] === 'Brand / Manufacturer' && s[2] === 'Fuji'));
+  // 2: a new Fuji family from the category's Add Subcategory form.
+  assert.ok(typed(1).some(([sel, text]) => sel === '#studioLibrarySubcategoryName' && /Fuji/.test(text)));
+  assert.ok(taps(1).some((t) => /subcategory-add/.test(t)));
+  // 3: Generate Sizes with seven sizes and starting prices.
+  assert.ok(taps(2).includes('#studioComponentsGenerateSizesBtn') && taps(2).includes('#studioFamilySizeBuild'));
+  const sizes = typed(2).find(([sel]) => sel === '#studioFamilySizeList')[1].split(',').map((x) => x.trim());
+  assert.equal(new Set(sizes).size, 7, `seven sizes: ${sizes}`);
+  // 4: different Buy and Sell prices typed into individual sizes, then one Create Components.
+  const priced = typed(3).filter(([sel]) => /data-family-size-field/.test(sel));
+  assert.ok(priced.some(([sel]) => /"buy"/.test(sel)) && priced.some(([sel]) => /"sell"/.test(sel)));
+  assert.ok(new Set(priced.map(([sel]) => /index="(\d+)"/.exec(sel)[1])).size >= 3, 'several sizes priced individually');
+  assert.ok(new Set(priced.map(([, v]) => v)).size === priced.length, 'each price is its own');
+  assert.deepEqual(taps(3), ['#studioFamilySizeConfirm']);
+  // 5: edit a size and save it, then Duplicate Family.
+  assert.ok(taps(4).includes('#studioComponentSaveBtn') && taps(4).includes('#studioComponentsDuplicateFamilyBtn') && taps(4).includes('#studioComponentDuplicateConfirm'));
+  // 6-7: the v280 picker - several sizes, a quantity above 1, a second family, then Add to Build exactly once.
+  const picks = [...steps(5), ...steps(6)].filter((s) => s[0] === 'pickQty');
+  assert.ok(picks.length >= 5 && picks.some((s) => s[2] > 1));
+  assert.ok(picks.some((s) => /Tip Top/.test(s[1])) && picks.some((s) => /Guide \d/.test(s[1])));
+  const all = journey.flatMap((c) => Array.from(c.steps));
+  assert.equal(all.filter((s) => s[0] === 'tap' && s[1] === '#choicePickerAddToBuild').length, 1, 'one Add to Build');
+  assert.equal(all.filter((s) => s[0] === 'tap' && s[1] === '#addComponentBtn').length, 1, 'the picker opens once');
+  assert.ok(steps(5).some((s) => s[0] === 'tap' && s[1] === '#homeComponentsBtn'), 'a Components job');
+  // 8: Components Cost and Job Price shown, never worked out by the demonstration.
+  assert.ok(steps(7).some((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteCostBeforeMarginField')));
+  assert.ok(steps(7).some((s) => s[0] === 'show' && [].concat(s[1]).includes('#quoteTotalField')));
+});
+
+test('Q24: Components Library starts from the introduction and plays all eight chapters, typing visibly, in one director step', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  assert.equal(h.get('#demoIntro').hidden, false);
+  h.get('#demoStartComponentsBtn').click();
+  assert.equal(h.get('#demoIntro').hidden, true);
+  await settle(h, () => componentsFinished(h));
+  assert.match(h.get('#demoCaption').textContent, COMPONENTS_FINISHED, JSON.stringify(h.log.filter((e) => e[0] === 'warn')));
+  assert.equal(h.get('#demoChapterLabel').textContent, 'Finished');
+  for (const [, selector, text] of componentsJourney(h).flatMap((c) => Array.from(c.steps)).filter((s) => s[0] === 'type')) {
+    const inputs = h.log.filter((e) => e[0] === 'input' && e[1] === selector && e[3] !== null).map((e) => e[2]);
+    assert.ok(inputs.includes(text) && inputs.includes(text.slice(0, 1)), `${selector} typed as ${text}`);
+  }
+  assert.ok(h.clock() > 90000 && h.clock() < 200000, `about two and a half minutes (${h.clock()} ms)`);
+  assert.deepEqual(h.steps, ['open', 'close']);
+  // The components chapter row is used; the rod build's is not.
+  assert.ok(h.componentsChapterButtons.every((b) => b.attributes['data-done'] === 'true'));
+  assert.ok(h.chapterButtons.every((b) => b.attributes['data-done'] === undefined));
+  // Every tap and typed character landed on a highlighted control in view.
+  assert.deepEqual(h.acts.filter((a) => a.key !== '#demoStartComponentsBtn' && (!a.highlighted || !a.inView)).map((a) => a.key), []);
+});
+
+test('Q24: Replay, Play-after-finish and the chapter row restart the Components Library journey; the rod build keeps its own addresses', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartComponentsBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'click' && e[1] === '#studioComponentsAddBtn'));
+  h.get('#demoReplayBtn').click();
+  h.componentsChapterButtons[3].click();
+  h.chapterButtons[3].click();
+  assert.deepEqual(h.replaced, ['/?demo&tour=components&chapter=1', '/?demo&tour=components&chapter=4', '/?demo&chapter=4']);
+  await settle(h, () => componentsFinished(h));
+  h.get('#demoPlayPauseBtn').click();
+  assert.equal(h.replaced.at(-1), '/?demo&tour=components&chapter=1');
+});
+
+test('Q24: ?tour=components&chapter=N plays that chapter without the introduction, the earlier chapters worked through quickly', async () => {
+  const h = stage({ search: '?demo&tour=components&chapter=6' });
+  player(h).open(h.director);
+  assert.equal(h.get('#demoIntro').hidden, true);
+  await settle(h, () => h.log.some((e) => e[0] === 'caption' && /^Skipping ahead to chapter 6: Choose/.test(e[1])));
+  await settle(h, () => componentsFinished(h));
+  assert.match(h.get('#demoCaption').textContent, COMPONENTS_FINISHED);
+  assert.ok(h.log.some((e) => e[0] === 'click' && e[1] === '#studioComponentsGenerateSizesBtn'), 'chapters 1-5 still ran on the real screens');
+  const rod = stage({ search: '?demo&chapter=9' });
+  player(rod).open(rod.director);
+  await settle(rod, () => rod.log.some((e) => e[0] === 'caption' && /^Skipping ahead to chapter 9: Final payment/.test(e[1])));
+  const tooFar = stage({ search: '?demo&tour=components&chapter=9' });
+  player(tooFar).open(tooFar.director);
+  assert.equal(tooFar.get('#demoIntro').hidden, false, 'there is no ninth Components chapter');
+});
+
+test('Q24: pausing the Components Library holds it and closes the write window; Play carries on', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartComponentsBtn').click();
+  await settle(h, () => h.log.some((e) => e[0] === 'input' && e[1] === '#studioFamilySizeList'));
+  h.get('#demoPlayPauseBtn').click();
+  await settle(h, () => h.steps.includes('suspend'));
+  const before = h.log.filter((e) => e[0] === 'input' || e[0] === 'click').length;
+  await settle(h, () => false, 3000);
+  assert.equal(h.log.filter((e) => e[0] === 'input' || e[0] === 'click').length, before, 'nothing moves while paused');
+  assert.equal(h.writable(), false);
+  h.get('#demoPlayPauseBtn').click();
+  await settle(h, () => componentsFinished(h));
+  assert.match(h.get('#demoCaption').textContent, COMPONENTS_FINISHED);
+});
+
+test('Q24: the page offers Build a Rod | Components Library, with an eight-chapter row hidden until it plays; Generate Sizes is open to the director only; Fuji is a demo brand', () => {
+  const row = html.slice(html.indexOf('data-demo-tour-chapters="components"') - 60, html.indexOf('</ol>', html.indexOf('data-demo-tour-chapters="components"')));
+  assert.match(row, /<ol class="demo-player__chapters" aria-label="Chapters" data-demo-tour-chapters="components" hidden>/);
+  assert.equal((row.match(/data-demo-components-chapter="\d"/g) || []).length, 8);
+  assert.equal((html.match(/data-demo-chapter="\d+"/g) || []).length, 10, 'the rod build row is unchanged');
+  assert.match(html, /id="demoStartComponentsBtn"[^>]*>COMPONENTS LIBRARY</);
+  const client = read('js/supabase-client.js');
+  assert.match(/const DEMO_DIRECTOR_CONTROLS = \[[\s\S]*?\]\.join/.exec(client)[0], /"#studioComponentsGenerateSizesBtn"/);
+  const data = read('js/demo-data.js');
+  assert.match(data, /"brands": \[\s*\{\s*"id": "brand-demo-fuji",\s*"name": "Fuji"\s*\}\s*\]/);
 });
