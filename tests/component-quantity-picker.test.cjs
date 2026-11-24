@@ -22,7 +22,7 @@ function harness(records,components){
   vm.createContext(c);
   vm.runInContext(['specificationValue','normalizeNameKey','shouldMergeDuplicateComponentCategory','componentRowIsEffectivelyEmpty','defaultComponentRow',
     'clampComponentQuantity','componentRowQuantity','componentRowLineCost','applyComponentLibraryRecordFields','componentPickKey','componentPickQuantity',
-    'setComponentPickQuantity','componentPickTotals','componentLineMatchesPick','addComponentPicksToBuild'].map(functionSource).join('\n'),c);
+    'setComponentPickQuantity','componentPickTotals','componentLineMatchesPick','addComponentPicksToBuild','normalizeComponentSizePrices','applyComponentSizePriceToRow'].map(functionSource).join('\n'),c);
   return c;
 }
 const run=(c,code)=>{const v=vm.runInContext(code,c);return v&&typeof v==='object'?JSON.parse(JSON.stringify(v)):v;};

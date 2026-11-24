@@ -5689,17 +5689,15 @@ function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
   return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">&#215;</button></span>`;
 }
-// Q35: sizes and their prices are managed in one place, the family's Sizes & Prices editor (one component per size,
-// each with its own Buy/Sell), opened from here. The old Available Sizes editor (Add Size / Generate Range, labels that
-// all shared this component's one price) is retired; a component that already has such sizes keeps them - shown,
-// removable, and still offered in the build picker (v280).
+// Q35: sizes and their prices are managed in one place, Sizes & Prices, opened from here: a component's own sizes
+// (each with its own Buy/Sell) or its family's sizes (one component per size). The size-button list and its one shared
+// price view are retired; the editor shows only how many sizes the component has.
 function studioComponentSizesSectionMarkup(record){
   const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
   const family=String(record&&record.subcategory||'').trim();
-  const open=family?`<button id="studioComponentFamilySizesBtn" class="ghost-action studio-size-section__open" type="button">Sizes &amp; Prices</button>`:'';
-  const shared=sizes.length?`<div class="studio-size-section__shared"><h3 class="studio-size-section__heading">SIZES <span class="studio-size-section__count">${sizes.length}</span> <span class="studio-size-section__note">One price</span></h3><div class="studio-size-edit-list" id="studioComponentSizeEditList" aria-label="Remove individual sizes">${sizes.map(studioComponentSizeChipMarkup).join('')}</div></div>`:'';
-  if(!open && !shared)return '';
-  return `<section class="studio-size-section" aria-label="Sizes and prices">${open}${shared}</section>`;
+  if(!family && !sizes.length)return '';
+  const count=sizes.length?`<p class="studio-size-section__summary">${sizes.length} size${sizes.length===1?'':'s'}</p>`:'';
+  return `<section class="studio-size-section" aria-label="Sizes and prices"><button id="studioComponentFamilySizesBtn" class="ghost-action studio-size-section__open" type="button">Sizes &amp; Prices</button>${count}</section>`;
 }
 function refreshStudioComponentSizeList(){
   const editList=$('studioComponentSizeEditList');
@@ -5720,6 +5718,11 @@ function openStudioComponentFamilySizes(){
   }
   const category=studioCategoryByName(record.category);
   const family=category&&category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(record.subcategory));
+  // A component's own sizes need no family; a family's sizes do.
+  if(componentRecordSizeOptions(record).length){
+    openFamilySizeGeneratorSheet(category||{id:'',name:String(record.category||'')},family||{id:'',name:String(record.subcategory||'')},record);
+    return;
+  }
   if(!category || !family){openInfoDialog('Family Missing','This component is not in a family yet.');return;}
   openFamilySizeGeneratorSheet(category,family,record);
 }
@@ -6458,6 +6461,8 @@ function commitStudioComponentDetails(){
     unitPrice:payload.unitPrice,
     stockOnHand:activeTrackComponentStock()?payload.stockOnHand:legacy.stockOnHand,
     sizeOptions:normalizeComponentSizeOptions(payload.sizeOptions),
+    // Per-size prices are edited in Sizes & Prices; this save keeps those of the sizes it keeps.
+    ...componentSizePricesProperty({sizePrices:legacy.sizePrices,sizeOptions:payload.sizeOptions}),
     supplier:String(legacy.supplier||''),
     variant:String(legacy.variant||''),
     description:payload.description,
@@ -6889,6 +6894,62 @@ function familySizeExistingRows(records,baseName){
       sizes:normalizeComponentSizeOptions(record.sizeOptions).length,buy,sell,savedBuy:buy,savedSell:sell,removed:false};
   }).sort((a,b)=>compareComponentSizeLabels(a.label,b.label));
 }
+// Q35 per-size prices: the rows for ONE component that holds several sizes - one row per size, each with its own
+// Buy/Sell (its own price, else the component's shared price). Opening changes nothing.
+function familySizeLegacyRows(record){
+  const name=String(record&&record.name||'').trim();
+  return componentRecordSizeOptions(record).map((size)=>{
+    const price=componentSizePriceFields(record,size);
+    const buy=familySizePriceText(price.cost!==undefined?price.cost:price.unitCost);
+    const sell=familySizePriceText(price.unitPrice);
+    return {id:`size:${size}`,size,name:`${name} ${size}`,label:size,sizes:0,buy,sell,savedBuy:buy,savedSell:sell,removed:false};
+  });
+}
+// The component after a Sizes & Prices save of its own sizes: its kept and new sizes, and a price for each size that
+// differs from the shared price. Untouched sizes keep exactly what they had. Id, name, shared price, stock and every
+// other field are unchanged.
+function familySizeLegacyRecord(record,rows){
+  const shared={buy:numberOrZero(componentRecordBuyPrice(record)),sell:numberOrZero(record.unitPrice)};
+  const before=normalizeComponentSizePrices(record.sizePrices,record.sizeOptions);
+  const keptKeys=new Set(rows.filter((row)=>row.id && !row.removed).map((row)=>row.size.toLowerCase()));
+  const sizeOptions=[
+    ...normalizeComponentSizeOptions(record.sizeOptions).filter((label)=>keptKeys.has(label.toLowerCase())),
+    ...rows.filter((row)=>!row.id).map((row)=>row.size),
+  ];
+  const sizePrices={};
+  rows.filter((row)=>!row.removed).forEach((row)=>{
+    if(row.id && !familySizeRowChanged(row)){
+      const label=Object.keys(before).find((key)=>key.toLowerCase()===row.size.toLowerCase());
+      if(label)sizePrices[label]=before[label];
+      return;
+    }
+    const buy=numberOrZero(String(row.buy).trim());
+    const sell=numberOrZero(String(row.sell).trim());
+    if(buy===shared.buy && sell===shared.sell)return;
+    sizePrices[row.size]={cost:buy,unitPrice:sell};
+  });
+  const next={...record,sizeOptions};
+  delete next.sizePrices;
+  if(Object.keys(sizePrices).length)next.sizePrices=sizePrices;
+  return next;
+}
+// First problem with what is about to be saved, or ''. A component's own sizes need only valid prices; new separate
+// components also need new, unique names.
+function familySizeEditorProblem(state,records){
+  const newRows=state.rows.filter((row)=>!row.id);
+  const existing=familySizeExistingProblem(state.rows);
+  if(existing)return existing;
+  if(!newRows.length)return '';
+  if(state.mode!=='sizes')return familySizeGeneratorProblem(state.baseName,newRows,records);
+  if(state.rows.filter((row)=>!row.removed).length>FAMILY_SIZE_GENERATOR_MAX)return `The limit is ${FAMILY_SIZE_GENERATOR_MAX} sizes.`;
+  for(const row of newRows){
+    const buy=componentPriceProblem(row.buy,'Buy Price');
+    if(buy)return `${row.size}: ${buy}`;
+    const sell=componentPriceProblem(row.sell,'Sell Price');
+    if(sell)return `${row.size}: ${sell}`;
+  }
+  return '';
+}
 function familySizeRowChanged(row){
   return !!row.id && !row.removed && (String(row.buy).trim()!==row.savedBuy || String(row.sell).trim()!==row.savedSell);
 }
@@ -6983,12 +7044,21 @@ function toggleFamilySizeRow(index){
 function commitFamilySizeGenerator(){
   const state=studioFamilySizeGeneratorState;
   if(!state)return false;
+  const records=componentLibraryRecords();
+  if(state.mode==='sizes'){
+    const index=records.findIndex((record)=>String(record.id||'')===state.recordId);
+    if(index<0){familySizeGeneratorError('The component was not found.');return false;}
+    const problem=familySizeEditorProblem(state,records);
+    if(problem){familySizeGeneratorError(problem);return false;}
+    const next=records.slice();
+    next[index]=familySizeLegacyRecord(records[index],state.rows);
+    return familySizeSaveLibrary(next,null);
+  }
   const category=studioCategoryById(state.categoryId);
   const family=category&&category.subcategories.find((item)=>item.id===state.subcategoryId);
   if(!category || !family){familySizeGeneratorError('The selected family was not found.');return false;}
-  const records=componentLibraryRecords();
   const newRows=state.rows.filter((row)=>!row.id);
-  const problem=familySizeExistingProblem(state.rows)||(newRows.length?familySizeGeneratorProblem(state.baseName,newRows,records):'');
+  const problem=familySizeEditorProblem(state,records);
   if(problem){familySizeGeneratorError(problem);return false;}
   const byId=new Map(state.rows.filter((row)=>row.id).map((row)=>[row.id,row]));
   const brand=explicitBrandForSubcategory(category.name,family.name);
@@ -7017,13 +7087,18 @@ function commitFamilySizeGenerator(){
     const buy=numberOrZero(String(row.buy).trim());
     kept.push({...record,cost:buy,unitCost:buy,unitPrice:numberOrZero(String(row.sell).trim())});
   }
+  return familySizeSaveLibrary([...created,...kept],{category,family});
+}
+// One atomic library write, restored on failure, with the sync notice sent once after it. Then the sheet closes and the
+// library shows the family (a family save) or stays where it is (a component's own sizes).
+function familySizeSaveLibrary(nextRecords,place){
   const snapshot=Store.get(componentLibraryStorageKey(),[]);
   const sync=window.KLABS_SYNC;
   const notify=sync&&sync.notifyComponentsChanged;
   let changed=false;
   try{
     if(typeof notify==='function')sync.notifyComponentsChanged=()=>{changed=true;};
-    saveComponentLibraryRecords([...created,...kept]);
+    saveComponentLibraryRecords(nextRecords);
   }catch(error){
     const reason=error&&error.message||'Save failed.';
     try{
@@ -7041,9 +7116,11 @@ function commitFamilySizeGenerator(){
     try{notify.call(sync);}
     catch(error){notifyError=error&&error.message||'Sync notification failed.';}
   }
-  studioComponentDraft=null;
-  studioLibraryEditor={type:'',mode:'',targetName:''};
-  studioLibraryPath={level:'subcategory',categoryId:category.name,subcategoryId:family.name};
+  if(place){
+    studioComponentDraft=null;
+    studioLibraryEditor={type:'',mode:'',targetName:''};
+    studioLibraryPath={level:'subcategory',categoryId:place.category.name,subcategoryId:place.family.name};
+  }
   closeFamilySizeGeneratorSheet();
   renderStudioComponentsLibrary();
   if(notifyError)openInfoDialog('Saved Locally',`Saved locally; sync needs retry. ${notifyError}`);
@@ -7060,14 +7137,16 @@ function saveFamilySizeEditor(){
     return;
   }
   const records=componentLibraryRecords();
-  const newRows=state.rows.filter((row)=>!row.id);
-  const problem=familySizeExistingProblem(state.rows)||(newRows.length?familySizeGeneratorProblem(state.baseName,newRows,records):'');
+  const problem=familySizeEditorProblem(state,records);
   if(problem){familySizeGeneratorError(problem);return;}
   const removed=state.rows.filter((row)=>row.id && row.removed);
   if(!removed.length){runExplicitSave(confirm,commitFamilySizeGenerator);return;}
+  const which=state.mode==='sizes'
+    ?`size ${removed.map((row)=>row.size).join(', ')} from ${state.baseName}`
+    :`${removed.map((row)=>row.name).join(', ')} from your library`;
   openConfirmDialog({
     title:removed.length===1?'Remove Size':`Remove ${removed.length} Sizes`,
-    message:`Remove ${removed.map((row)=>row.name).join(', ')} from your library? Builds that already use ${removed.length===1?'it':'them'} keep their recorded prices.`,
+    message:`Remove ${which}? Builds that already use ${removed.length===1?'it':'them'} keep their recorded prices.`,
     actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove and Save',kind:'danger'}]
   },(choice)=>{
     if(choice==='remove')runExplicitSave(confirm,commitFamilySizeGenerator);
@@ -7172,7 +7251,14 @@ function openFamilySizeGeneratorSheet(category,family,anchor){
   let records=[];
   let baseName=family.name;
   let note='';
-  if(anchor){
+  // A component that holds its sizes itself (several sizes, one record): its sizes, each with its own price.
+  const sizedOwner=anchor && componentRecordSizeOptions(anchor).length
+    ?anchor
+    :(!anchor && familyRecords.length===1 && componentRecordSizeOptions(familyRecords[0]).length?familyRecords[0]:null);
+  if(sizedOwner){
+    studioFamilySizeGeneratorState={mode:'sizes',recordId:String(sizedOwner.id||''),categoryId:category.id,subcategoryId:family.id,
+      baseName:String(sizedOwner.name||'').trim(),rows:familySizeLegacyRows(sizedOwner)};
+  }else if(anchor){
     records=familySizeMembers(familyRecords,anchor);
     baseName=familySizeNameParts(anchor.name).base;
   }else{
@@ -7180,19 +7266,24 @@ function openFamilySizeGeneratorSheet(category,family,anchor){
     if(product){records=familySizeMembers(familyRecords,{name:`${product} 0`});baseName=product;}
     else if(familyRecords.length){baseName='';note='This family has several products. To edit one, open it and tap Sizes & Prices. Or add a new product here.';}
   }
-  studioFamilySizeGeneratorState={categoryId:category.id,subcategoryId:family.id,baseName,rows:familySizeExistingRows(records,baseName)};
+  if(!sizedOwner)studioFamilySizeGeneratorState={mode:'family',categoryId:category.id,subcategoryId:family.id,baseName,rows:familySizeExistingRows(records,baseName)};
+  baseName=studioFamilySizeGeneratorState.baseName;
+  const ownSizes=studioFamilySizeGeneratorState.mode==='sizes';
   ensureFamilySizeGeneratorSheet();
   ['studioFamilySizeList','studioFamilySizeFrom','studioFamilySizeTo','studioFamilySizeStep','studioFamilySizeBuy','studioFamilySizeSell'].forEach((id)=>{if($(id))$(id).value='';});
   const baseInput=$('studioFamilySizeBase');
   if(baseInput){
     baseInput.value=baseName;
-    // New sizes join the product already listed, so its base name is fixed while it has sizes.
+    // New sizes join the product already listed, so its base name is fixed while it has sizes; a component's own
+    // sizes are labels on that component, so there is no name to enter at all.
     baseInput.readOnly=studioFamilySizeGeneratorState.rows.length>0;
+    baseInput.closest('label').hidden=ownSizes;
   }
   const product=$('studioFamilySizeProduct');
   if(product){
-    product.textContent=studioFamilySizeGeneratorState.rows.length?baseName:'';
-    product.parentElement.hidden=!studioFamilySizeGeneratorState.rows.length;
+    const shown=ownSizes || studioFamilySizeGeneratorState.rows.length>0;
+    product.textContent=shown?baseName:'';
+    product.parentElement.hidden=!shown;
   }
   if($('studioFamilySizeCategory'))$('studioFamilySizeCategory').textContent=category.name;
   if($('studioFamilySizeFamily'))$('studioFamilySizeFamily').textContent=family.name;
@@ -10953,6 +11044,49 @@ function normalizeComponentSizeOptions(value){
 function compareComponentSizeLabels(left,right){
   return String(left||'').localeCompare(String(right||''),undefined,{sensitivity:'base',numeric:true});
 }
+// Q35 per-size prices: an optional { "<size>": { cost, unitPrice } } on a component with several sizes (cloud column
+// components.size_prices). Only real overrides are kept: keys must be one of the component's sizes and both prices
+// valid; a size without one uses the component's own (shared) price. Nothing is stored when there are none.
+function normalizeComponentSizePrices(value,sizeOptions){
+  if(!value || typeof value!=='object' || Array.isArray(value))return {};
+  const labels=new Map(normalizeComponentSizeOptions(sizeOptions).map((label)=>[label.toLowerCase(),label]));
+  const next={};
+  Object.keys(value).forEach((key)=>{
+    const label=labels.get(String(key).replace(/\s+/g,' ').trim().toLowerCase());
+    const entry=value[key];
+    if(!label || !entry || typeof entry!=='object')return;
+    const cost=Number(entry.cost);
+    const unitPrice=Number(entry.unitPrice);
+    if(entry.cost===null || entry.cost==='' || entry.unitPrice===null || entry.unitPrice==='')return;
+    if(!Number.isFinite(cost) || cost<0 || !Number.isFinite(unitPrice) || unitPrice<0)return;
+    next[label]={cost,unitPrice};
+  });
+  return next;
+}
+// { sizePrices } for a record object literal, or {} - so records without per-size prices keep their exact shape.
+function componentSizePricesProperty(record){
+  const sizePrices=normalizeComponentSizePrices(record&&record.sizePrices,record&&record.sizeOptions);
+  return Object.keys(sizePrices).length?{sizePrices}:{};
+}
+// A size's Buy/Sell: its own price when it has one, else the component's shared price (unchanged).
+function componentSizePriceFields(record,size){
+  const sizePrices=normalizeComponentSizePrices(record&&record.sizePrices,record&&record.sizeOptions);
+  const key=String(size||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const label=Object.keys(sizePrices).find((item)=>item.toLowerCase()===key);
+  if(label)return {cost:sizePrices[label].cost,unitCost:sizePrices[label].cost,unitPrice:sizePrices[label].unitPrice};
+  return {cost:record&&record.cost,unitCost:record&&record.unitCost,unitPrice:record&&record.unitPrice};
+}
+// A new build line for a size takes that size's own price (when it has one). Existing lines are never repriced here.
+function applyComponentSizePriceToRow(row,record,size){
+  if(!row || !record || !String(size||'').trim())return;
+  const sizePrices=normalizeComponentSizePrices(record.sizePrices,record.sizeOptions);
+  const key=String(size).replace(/\s+/g,' ').trim().toLowerCase();
+  const label=Object.keys(sizePrices).find((item)=>item.toLowerCase()===key);
+  if(!label)return;
+  row.cost=numberOrZero(sizePrices[label].cost);
+  row.unitCost=numberOrZero(sizePrices[label].cost);
+  row.unitPrice=numberOrZero(sizePrices[label].unitPrice);
+}
 function componentSizeOptionsForDisplay(value){
   return normalizeComponentSizeOptions(value).sort(compareComponentSizeLabels);
 }
@@ -10984,6 +11118,7 @@ function componentLibraryRecordsFromKey(storageKey){
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
       sizeOptions:normalizeComponentSizeOptions(record.sizeOptions),
+      ...componentSizePricesProperty(record),
     }))
     .filter((record)=>!!normalizeNameKey(record.name));
 }
@@ -11019,6 +11154,7 @@ function saveComponentLibraryRecords(records){
       specifications:String(record.specifications||'').trim(),
       cost:componentLibraryCostValue(record),
       sizeOptions:normalizeComponentSizeOptions(record.sizeOptions),
+      ...componentSizePricesProperty(record),
     }));
   Store.set(componentLibraryStorageKey(),safeRecords);
   window.KLABS_SYNC?.notifyComponentsChanged?.();
@@ -11079,6 +11215,7 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     cost:resolvedCost,
     // undefined = caller supplied no size data at all; [] = caller explicitly cleared every size.
     sizeOptions:item.sizeOptions===undefined?undefined:normalizeComponentSizeOptions(item.sizeOptions),
+    sizePrices:item.sizePrices,
   };
   const records=componentLibraryRecords();
   const existingIndex=records.findIndex((record)=>normalizeNameKey(record.name)===normalizedKey);
@@ -11092,6 +11229,8 @@ function upsertComponentLibraryRecord(name,sourceComponent){
     if(nextRecord.sizeOptions===undefined){
       nextRecord.sizeOptions=normalizeComponentSizeOptions(records[existingIndex].sizeOptions);
     }
+    // Nor wipe the sizes' own prices (Q35).
+    if(nextRecord.sizePrices===undefined)nextRecord.sizePrices=records[existingIndex].sizePrices;
     records[existingIndex]=nextRecord;
   }else{
     if(nextRecord.stockOnHand===undefined && activeTrackComponentStock()){
@@ -11725,6 +11864,10 @@ function applyComponentSizeSelection(index,componentName,size,libraryComponentId
   const targetIndex=resolvedIndex>=0?resolvedIndex:index;
   if(!alreadyBound)applyComponentLibraryRecordToRow(targetIndex,name,libraryId);
   if(quote.components[targetIndex])quote.components[targetIndex].selectedSize=selectedSize;
+  if(!alreadyBound && quote.components[targetIndex]){
+    const sizedRecord=(libraryId && componentLibraryRecords().find((item)=>String(item.id||'').trim()===libraryId)) || findComponentLibraryRecordByName(name);
+    applyComponentSizePriceToRow(quote.components[targetIndex],sizedRecord,selectedSize);
+  }
   saveQuoteCurrent();
   markQuoteDirty();
   if(newDraft && !(options&&options.deferCollapse)){
@@ -11855,6 +11998,7 @@ function addComponentPicksToBuild(draftIndex,picks){
     if(record)applyComponentLibraryRecordFields(row,record);
     else if(id)row.libraryComponentId=id;
     if(specificationValue(pick.size))row.selectedSize=specificationValue(pick.size);
+    if(record && row.selectedSize)applyComponentSizePriceToRow(row,record,row.selectedSize);
     row.quantity=quantity;
     fresh.push(row);
   });
@@ -11890,9 +12034,9 @@ function renderComponentPickQuantityRows(query){
     const record=componentPickSizeRecord();
     const normalized=normalizeNameKey(query);
     const sizes=componentRecordSizeOptions(record).filter((size)=>!normalized || normalizeNameKey(size).includes(normalized));
-    const meta=componentPickerLeafSecondaryText({...record,sizeOptions:[]});
+    const meta=(size)=>componentPickerLeafSecondaryText({...record,...componentSizePriceFields(record,size),sizeOptions:[]});
     list.innerHTML=sizes.length
-      ?sizes.map((size)=>componentPickRowMarkup({id:String(record.id||''),name:record.name,size},size,meta)).join('')
+      ?sizes.map((size)=>componentPickRowMarkup({id:String(record.id||''),name:record.name,size},size,meta(size))).join('')
       :'<div class="component-sheet__empty">No matching sizes</div>';
     return;
   }
@@ -19643,7 +19787,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v283';
+window.KLABS_UI_BUILD='build148-v284';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

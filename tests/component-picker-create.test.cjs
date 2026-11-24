@@ -79,7 +79,7 @@ function harness({failSave=false,records=[],picker}={}){
   };
   c.studioComponentTaxonomyState=c.taxonomy;
   vm.createContext(c);
-  const names=['resolveComponentPickerDestination','startComponentCreateFromPicker','returnToComponentPicker','componentPickerReturnActive','beginStudioComponentAdd','renderComponentPickerCascadeOptions','commitStudioComponentDetails','componentPriceProblem','componentRecordBuyPrice','studioComponentPriceValidation'];
+  const names=['resolveComponentPickerDestination','startComponentCreateFromPicker','returnToComponentPicker','componentPickerReturnActive','beginStudioComponentAdd','renderComponentPickerCascadeOptions','commitStudioComponentDetails','componentPriceProblem','componentRecordBuyPrice','studioComponentPriceValidation','normalizeComponentSizePrices','componentSizePricesProperty'];
   // Top-level `let` bindings are not exposed as context properties, so access them via runInContext.
   vm.runInContext(`var __state={};${names.map(functionSource).join('\n')}`,c);
   return c;

@@ -19,6 +19,9 @@ const NAMES=[
   'familySizeExistingProblem','familySizeRowChanged','familySizeEditorDirty','addFamilySizeRows',
   'familySizeNameParts','familySizeMembers','familySizeSingleProduct','familySizeRowLabel','familySizePriceText','familySizeExistingRows',
   'componentRecordBuyPrice','normalizeComponentSizeOptions','compareComponentSizeLabels',
+  'familySizeEditorProblem','familySizeSaveLibrary','familySizeLegacyRows','familySizeLegacyRecord',
+  'normalizeComponentSizePrices','componentSizePricesProperty','componentSizePriceFields','applyComponentSizePriceToRow',
+  'componentSizeOptionsForDisplay','componentRecordSizeOptions','familySizePriceText',
 ];
 
 function harness({saveThrows=false,notifyThrows=false}={}){
@@ -147,9 +150,11 @@ test('a missing family is refused without writing',()=>{
 
 test('the generator adds no new record fields, storage keys or sync changes',()=>{
   const commit=body('commitFamilySizeGenerator');
-  assert.match(commit,/saveComponentLibraryRecords\(\[\.\.\.created,\.\.\.kept\]\)/);
-  assert.equal((commit.match(/saveComponentLibraryRecords\(/g)||[]).length,1,'one write');
-  assert.doesNotMatch(commit,/sizePrices|localStorage|fetch\(/);
+  assert.match(commit,/familySizeSaveLibrary\(\[\.\.\.created,\.\.\.kept\]/);
+  assert.match(commit,/familySizeSaveLibrary\(next,null\)/);
+  assert.doesNotMatch(commit,/saveComponentLibraryRecords\(/);
+  assert.equal((body('familySizeSaveLibrary').match(/saveComponentLibraryRecords\(/g)||[]).length,1,'one write');
+  assert.doesNotMatch(commit,/localStorage|fetch\(/);
   const sync=fs.readFileSync(path.join(__dirname,'..','js','component-sync.js'),'utf8');
   assert.doesNotMatch(sync,/familySize/);
 });
@@ -357,7 +362,7 @@ test('a read-only account can view sizes and prices but Save Changes writes noth
       studioFamilySizeGeneratorState:{baseName:'A',rows:[{id:'',size:'8',buy:'1',sell:'2',removed:false}]},
       openConfirmDialog:()=>calls.push('confirm'),runExplicitSave:()=>calls.push('save'),commitFamilySizeGenerator(){}};
     vm.createContext(ctx);
-    for(const name of ['normalizeNameKey','numberOrZero','componentPriceProblem','familySizeGeneratorComponentName','familySizeGeneratorProblem','familySizeRowChanged','familySizeEditorDirty','familySizeExistingProblem','familySizeGeneratorError','saveFamilySizeEditor'])vm.runInContext(body(name),ctx);
+    for(const name of ['normalizeNameKey','numberOrZero','componentPriceProblem','familySizeGeneratorComponentName','familySizeGeneratorProblem','familySizeRowChanged','familySizeEditorDirty','familySizeExistingProblem','familySizeEditorProblem','familySizeGeneratorError','saveFamilySizeEditor'])vm.runInContext(body(name),ctx);
     ctx.saveFamilySizeEditor();
     return {calls,status:status.textContent};
   };
@@ -366,4 +371,88 @@ test('a read-only account can view sizes and prices but Save Changes writes noth
   assert.match(blocked.status,/read-only/);
   assert.deepEqual(run({can_write:true,demo:true}).calls,['save']);
   assert.deepEqual(run(null).calls,['save']);
+});
+
+// ---- Q35 per-size prices: one component holding several sizes (legacy shared price), each size its own Buy/Sell ----
+const SIZES=['5.5','6','7','8','10','12','16','20','25','30'];
+const KCC={id:'kcc',name:'Fuji K Series Single Foot CC',category:'Guides',categoryId:'guides',subcategory:'Fuji Guides',brand:'Fuji',supplier:'PacBay',
+  description:'d',cost:4,unitCost:4,unitPrice:9,stockOnHand:7,sizeOptions:SIZES.slice()};
+
+test('per-size prices: only real overrides for the component\'s own sizes are kept; a size without one uses the shared price',()=>{
+  const {ctx}=harness();
+  assert.deepEqual(plain(ctx.normalizeComponentSizePrices({'6':{cost:4.1,unitPrice:9.4},'99':{cost:1,unitPrice:1},'7':{cost:'x',unitPrice:2},'8':{cost:-1,unitPrice:2},'10':{cost:'',unitPrice:3},' 12 ':{cost:'5',unitPrice:'11'},'16':null},SIZES)),
+    {'6':{cost:4.1,unitPrice:9.4},'12':{cost:5,unitPrice:11}});
+  assert.deepEqual(plain(ctx.normalizeComponentSizePrices(['6'],SIZES)),{});
+  assert.deepEqual(plain(ctx.componentSizePricesProperty(KCC)),{},'no per-size prices: the record keeps its exact shape');
+  const priced={...KCC,sizePrices:{'6':{cost:4.1,unitPrice:9.4}}};
+  assert.deepEqual(plain(ctx.componentSizePriceFields(priced,'6')),{cost:4.1,unitCost:4.1,unitPrice:9.4});
+  assert.deepEqual(plain(ctx.componentSizePriceFields(priced,'8')),{cost:4,unitCost:4,unitPrice:9},'shared price');
+  const row={cost:4,unitCost:4,unitPrice:9};
+  ctx.applyComponentSizePriceToRow(row,priced,'6');
+  assert.deepEqual(row,{cost:4.1,unitCost:4.1,unitPrice:9.4});
+  const plainRow={cost:4,unitCost:4,unitPrice:9};
+  ctx.applyComponentSizePriceToRow(plainRow,priced,'30');
+  assert.deepEqual(plainRow,{cost:4,unitCost:4,unitPrice:9},'no override: the line keeps the shared price');
+});
+
+test('per-size prices: K Series CC opens with all ten sizes, each with its price; opening changes nothing',()=>{
+  const {ctx}=harness();
+  const record={...KCC,sizePrices:{'30':{cost:7.2,unitPrice:15.5}}};
+  const rows=plain(ctx.familySizeLegacyRows(record));
+  assert.deepEqual(rows.map((r)=>r.label),SIZES);
+  assert.deepEqual(rows.map((r)=>[r.buy,r.sell]),[...SIZES.slice(0,-1).map(()=>['4','9']),['7.2','15.5']]);
+  assert.equal(rows[1].name,'Fuji K Series Single Foot CC 6');
+  assert.equal(ctx.familySizeEditorDirty({rows}),false);
+  assert.deepEqual(plain(ctx.familySizeLegacyRecord(record,rows)),record,'saving untouched rows reproduces the record exactly');
+});
+
+test('per-size prices: two sizes priced independently; others, id, stock, size list and shared price unchanged',()=>{
+  const {ctx}=harness();
+  const rows=ctx.familySizeLegacyRows(KCC);
+  rows.find((r)=>r.size==='6').buy='4.3'; rows.find((r)=>r.size==='6').sell='9.8';
+  rows.find((r)=>r.size==='30').buy='7.2'; rows.find((r)=>r.size==='30').sell='15.5';
+  rows.find((r)=>r.size==='12').sell='9';
+  const next=plain(ctx.familySizeLegacyRecord(KCC,rows));
+  assert.deepEqual(next.sizePrices,{'6':{cost:4.3,unitPrice:9.8},'30':{cost:7.2,unitPrice:15.5}},'a price equal to the shared price is not stored');
+  assert.deepEqual({...next,sizePrices:undefined},{...KCC,sizePrices:undefined});
+});
+
+test('per-size prices: adding sizes (comma or range) and removing one changes only the size list and its prices',()=>{
+  const {ctx}=harness();
+  const record={...KCC,sizePrices:{'6':{cost:4.3,unitPrice:9.8},'8':{cost:4.4,unitPrice:9.9}}};
+  const rows=ctx.familySizeLegacyRows(record);
+  rows.find((r)=>r.size==='8').removed=true;
+  const state={mode:'sizes',baseName:record.name,rows};
+  const added=ctx.addFamilySizeRows(state,['35','6','40'],'8','17');
+  assert.deepEqual(plain(added),{added:['35','40'],skipped:['6']});
+  const next=plain(ctx.familySizeLegacyRecord(record,state.rows));
+  assert.deepEqual(next.sizeOptions,['5.5','6','7','10','12','16','20','25','30','35','40']);
+  assert.deepEqual(next.sizePrices,{'6':{cost:4.3,unitPrice:9.8},'35':{cost:8,unitPrice:17},'40':{cost:8,unitPrice:17}});
+  for(const key of ['id','name','cost','unitCost','unitPrice','stockOnHand','brand','supplier','description'])assert.deepEqual(next[key],record[key],key);
+  assert.equal(ctx.familySizeEditorProblem(state,[]),'');
+  state.rows.find((r)=>r.size==='40').sell='';
+  assert.match(ctx.familySizeEditorProblem(state,[]),/^40: Sell Price is required/);
+  state.rows.find((r)=>r.size==='40').sell='17';
+  state.rows.find((r)=>r.size==='6').buy='x';
+  assert.match(ctx.familySizeEditorProblem(state,[]),/^Fuji K Series Single Foot CC 6: Buy Price must be a valid amount/);
+});
+
+test('per-size prices: Save Changes writes only that component, once; restored on failure',()=>{
+  const {ctx,store,calls,existing}=harness();
+  const lib=[...existing,KCC,{...KCC,id:'kl',name:'Fuji K Series Single Foot KL',sizeOptions:['6','8']}];
+  store.set('records',plain(lib));
+  const rows=ctx.familySizeLegacyRows(KCC);
+  rows.find((r)=>r.size==='10').sell='10.5';
+  ctx.studioFamilySizeGeneratorState={mode:'sizes',recordId:'kcc',baseName:KCC.name,rows};
+  assert.equal(ctx.commitFamilySizeGenerator(),true);
+  const saved=store.get('records');
+  assert.deepEqual(saved.find((r)=>r.id==='kcc').sizePrices,{'10':{cost:4,unitPrice:10.5}});
+  for(const r of lib.filter((x)=>x.id!=='kcc'))assert.deepEqual(saved.find((x)=>x.id===r.id),plain(r),r.id);
+  assert.deepEqual(calls.filter((c)=>c==='notify'),['notify']);
+  assert.deepEqual(plain(ctx.studioLibraryPath),{level:'category'},'stays where the builder was');
+  const failing=harness({saveThrows:true});
+  failing.store.set('records',plain(lib));
+  failing.ctx.studioFamilySizeGeneratorState={mode:'sizes',recordId:'kcc',baseName:KCC.name,rows:ctx.familySizeLegacyRows(KCC).map((r)=>r.size==='10'?{...r,sell:'11'}:r)};
+  assert.equal(failing.ctx.commitFamilySizeGenerator(),false);
+  assert.deepEqual(failing.store.get('records'),plain(lib));
 });
