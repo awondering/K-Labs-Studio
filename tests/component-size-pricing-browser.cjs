@@ -16,6 +16,8 @@ const FAM = 'Grip Winding Checks';
 const BASE = 'Aluminium Winding Check';
 // Five existing sizes, each with its own prices, brand, supplier and stock.
 const SIZES = { 8: [2.5, 6], 10: [2.75, 6.5], 12: [3, 7], 14: [3.25, 7.5], 16: [3.5, 8] };
+// Q35 per-size prices: a real-library K Series CC - ONE component holding ten sizes at one shared price (4 / 9).
+const KCC_SIZES = ['5.5', '6', '7', '8', '10', '12', '16', '20', '25', '30'];
 const LIB = () => [
   ...Object.entries(SIZES).map(([mm, [buy, sell]]) => ({ id: `wc-${mm}`, name: `${BASE} ${mm} mm`, category: CAT, subcategory: FAM, brand: 'Fuji', supplier: 'PacBay',
     description: `Check ${mm}`, cost: buy, unitCost: buy, unitPrice: sell, stockOnHand: Number(mm) })),
@@ -24,15 +26,18 @@ const LIB = () => [
   // Q35 regression: one subcategory holding many distinct products, as on a real library.
   ...[['cc6', 'Fuji K Series Single Foot CC 6', 4, 9], ['cc8', 'Fuji K Series Single Foot CC 8', 4.2, 9.5], ['cc10', 'Fuji K Series Single Foot CC 10', 4.6, 10],
     ['ccset', 'Fuji K Series Single Foot CC Guide Set', 60, 120], ['kl6', 'Fuji K Series Single Foot KL 6', 5, 11], ['kt8', 'Fuji K Series Double Foot KT 8', 6, 13],
-    ['tip', 'Fuji Tip Top', 3, 7], ['set', 'Fuji Complete Guide Set Spinning', 80, 160]]
+    ['tip', 'Fuji Tip Top', 3, 7], ['set', 'Fuji Complete Guide Set Spinning', 80, 160], ['kccL', 'Fuji K Series Single Foot CC', 4, 9]]
     .map(([id, name, buy, sell]) => ({ id, name, category: 'Guides', subcategory: 'Fuji Guides', brand: 'Fuji', supplier: 'PacBay', cost: buy, unitCost: buy, unitPrice: sell, stockOnHand: 2,
-      ...(id === 'set' ? { sizeOptions: ['7 piece', '9 piece'] } : {}) })),
+      ...(id === 'set' ? { sizeOptions: ['7 piece', '9 piece'] } : {}), ...(id === 'kccL' ? { sizeOptions: KCC_SIZES.slice(), stockOnHand: 40 } : {}) })),
 ];
 
 // The account's component library in the cloud (Supabase "components" and "component_taxonomy"), in memory.
 function withComponentCloud(handler, cloud) {
   return async (raw) => {
     const s = JSON.parse(raw);
+    if (cloud.down && (s.table === 'components' || s.table === 'component_taxonomy')) {
+      return JSON.stringify({ data: null, error: { code: 'NETWORK', message: 'offline (test)' } });
+    }
     if (s.table === 'components') {
       const ins = Object.fromEntries((s.ins || []).map(([c, v]) => [c, new Set(v)]));
       const match = (row) => (s.filters || []).every(([c, v]) => row[c] === v) && Object.entries(ins).every(([c, set]) => set.has(row[c]));
@@ -42,7 +47,9 @@ function withComponentCloud(handler, cloud) {
       }
       if (s.op === 'upsert' || s.op === 'insert') {
         const list = Array.isArray(s.values) ? s.values : [s.values];
-        list.forEach((row) => cloud.rows.set(row.client_id, { ...row, updated_at: new Date().toISOString() }));
+        // As PostgREST's upsert: an existing row changes only in the columns sent (an older app never sends size_prices);
+        // a new row gets the column default size_prices {}.
+        list.forEach((row) => cloud.rows.set(row.client_id, { size_prices: {}, ...(cloud.rows.get(row.client_id) || {}), ...row, updated_at: new Date().toISOString() }));
         cloud.writes += 1;
         return JSON.stringify({ data: list, error: null });
       }
@@ -276,8 +283,9 @@ const layout = (p) => p.evaluate(() => {
       await p.locator('#studioFamilySizeSheet .studio-component-duplicate__actions [data-family-size-action="cancel"]').click();
       await openFamily(p, 'Decals', 'Rod Decals');
       await p.locator('#studioComponentsList [data-studio-library-open-component="Custom Decal"]').click();
-      const decal = await p.evaluate(() => ({ chips: [...document.querySelectorAll('#studioComponentSizeEditList .studio-size-chip__label')].map((c) => c.textContent), note: document.querySelector('.studio-size-section__note')?.textContent }));
-      ck(tag, 'a component with shared-price sizes still lists them (removable), marked One price', JSON.stringify(decal.chips) === JSON.stringify(['Large', 'Medium', 'Small']) && decal.note === 'One price', decal);
+      const decal = await p.evaluate(() => ({ chips: document.querySelectorAll('.studio-size-chip').length, onePrice: /One price/.test(document.getElementById('studioComponentDetails').textContent),
+        button: !!document.getElementById('studioComponentFamilySizesBtn'), count: document.querySelector('.studio-size-section__summary')?.textContent }));
+      ck(tag, 'a component with several sizes: Sizes & Prices and "3 sizes" - no size buttons, no One price view', !decal.chips && !decal.onePrice && decal.button && decal.count === '3 sizes', decal);
       if (shots) await p.screenshot({ path: path.join(shots, `component-editor-${width}.png`) });
 
       // 12b. Regression: a subcategory of distinct products. A component opens on ITS sizes only; the family view on none.
@@ -305,9 +313,9 @@ const layout = (p) => p.evaluate(() => {
       await closeSheet();
       const kl = await openComponent('Fuji K Series Single Foot KL 6');
       await closeSheet();
-      ck(tag, 'regression: standalone, legacy shared-price and a different K Series product each open on themselves only',
+      ck(tag, 'regression: standalone, a component with its own sizes (each size a row) and a different K Series product each open on themselves only',
         JSON.stringify(standalone.rows.map((r) => r[0])) === JSON.stringify(['Fuji Tip Top'])
-        && legacy.rows.length === 1 && /Fuji Complete Guide Set Spinning\s*2 sizes/.test(legacy.rows[0][0])
+        && JSON.stringify(legacy.rows.map((r) => [r[0], r[1], r[2]])) === JSON.stringify([['7 piece', '80', '160'], ['9 piece', '80', '160']]) && legacy.product === 'Fuji Complete Guide Set Spinning'
         && JSON.stringify(kl.rows.map((r) => r[3])) === JSON.stringify(['Fuji K Series Single Foot KL 6']), { standalone, legacy, kl });
       await openFamily(p, 'Guides', 'Fuji Guides');
       await p.locator('#studioComponentsGenerateSizesBtn').click();
@@ -326,6 +334,137 @@ const layout = (p) => p.evaluate(() => {
       const before = JSON.parse(untouched);
       const changed = after.filter((r) => JSON.stringify(r) !== JSON.stringify(before.find((b) => b.id === r.id))).map((r) => [r.id, r.unitPrice]);
       ck(tag, 'regression: saving CC 8 changes CC 8 only (every other component identical)', JSON.stringify(changed) === JSON.stringify([['cc8', 9.9]]) && after.length === before.length, changed);
+
+      // 12c. Q35 per-size prices on a real-library component that holds its sizes itself (K Series CC, ten sizes, 4 / 9).
+      const kccBuild = `KCC ${width}`;
+      await p.evaluate(async ({ kccBuild }) => {
+        clearActiveSavedBuildRef();
+        quote = normalizeQuote({ customerName: kccBuild, buildName: 'Recorded K Series', status: 'quote', quoteStatus: 'quote', gstRate: 15, includeGst: true, jobType: 'build',
+          components: [{ ...defaultComponentRow(), category: 'Fuji K Series Single Foot CC', libraryComponentId: 'kccL', selectedSize: '6', cost: 4, unitPrice: 9, quantity: 2 }] });
+        hasUnsavedQuoteChanges = true; await persistCurrentQuoteRecord(); markQuoteSaved();
+      }, { kccBuild });
+      const kccRecord = () => p.evaluate(() => componentLibraryRecords().find((r) => r.id === 'kccL'));
+      const others = () => p.evaluate(() => JSON.stringify(componentLibraryRecords().filter((r) => r.id !== 'kccL')));
+      const othersBefore = await others();
+      const kccBefore = await kccRecord();
+      const kcc = await openComponent('Fuji K Series Single Foot CC');
+      const kccView = { baseHidden: await p.locator('#studioFamilySizeBase').isHidden(), saveDisabled: await e.save.isDisabled() };
+      ck(tag, 'K Series CC: all ten sizes in one Size | Buy | Sell table at the shared price; product named; nothing to save',
+        JSON.stringify(kcc.rows.map((r) => [r[0], r[1], r[2]])) === JSON.stringify(KCC_SIZES.map((size) => [size, '4', '9'])) && kcc.product === 'Fuji K Series Single Foot CC'
+        && kccView.baseHidden && kccView.saveDisabled, { kcc, kccView });
+      ck(tag, 'K Series CC: opening rewrote nothing', JSON.stringify(await kccRecord()) === JSON.stringify(kccBefore));
+      const kccLook = await layout(p);
+      ck(tag, 'K Series CC table: equal rows, aligned Buy/Sell, nothing sideways', !kccLook.sideways && kccLook.equalHeights && kccLook.buyAligned && kccLook.sellAligned && kccLook.targets >= 36, kccLook);
+      if (shots) await p.screenshot({ path: path.join(shots, `kseries-cc-ten-sizes-${width}.png`) });
+      await (await e.field('6', 'buy')).fill('4.3'); await (await e.field('6', 'sell')).fill('9.8');
+      await (await e.field('30', 'buy')).fill('7.2'); await (await e.field('30', 'sell')).fill('15.5');
+      if (shots) await p.screenshot({ path: path.join(shots, `kseries-cc-edited-${width}.png`) });
+      await e.save.click();
+      await e.sheet.waitFor({ state: 'hidden' });
+      let k = await kccRecord();
+      ck(tag, 'K Series CC: one save prices 6 and 30 independently; same id, stock, size list and shared price',
+        JSON.stringify(k.sizePrices) === JSON.stringify({ 6: { cost: 4.3, unitPrice: 9.8 }, 30: { cost: 7.2, unitPrice: 15.5 } })
+        && JSON.stringify({ ...k, sizePrices: undefined }) === JSON.stringify({ ...kccBefore, sizePrices: undefined }), k);
+      ck(tag, 'K Series CC: every other component (the CC 6/8/10 product, sets, KL, KT, tip top, winding checks) unchanged', (await others()) === othersBefore);
+      const reopened = await openComponent('Fuji K Series Single Foot CC');
+      ck(tag, 'K Series CC: reopened, 6 and 30 show their own prices, the other eight the shared price',
+        JSON.stringify(reopened.rows.map((r) => [r[0], r[1], r[2]])) === JSON.stringify(KCC_SIZES.map((size) => size === '6' ? [size, '4.3', '9.8'] : size === '30' ? [size, '7.2', '15.5'] : [size, '4', '9']))
+        && await e.save.isDisabled(), reopened.rows);
+      // Comma list and From/To/Step add sizes to the same table; one size removed; one save.
+      await p.locator('#studioFamilySizeList').fill('35, 6');
+      await p.locator('#studioFamilySizeBuy').fill('8'); await p.locator('#studioFamilySizeSell').fill('17');
+      await p.locator('#studioFamilySizeBuild').click();
+      const commaStatus = await e.status();
+      await p.locator('#studioFamilySizeSheet .studio-family-size__range > summary').click();
+      await p.locator('#studioFamilySizeFrom').fill('40'); await p.locator('#studioFamilySizeTo').fill('45'); await p.locator('#studioFamilySizeStep').fill('5');
+      await p.locator('#studioFamilySizeBuy').fill('9'); await p.locator('#studioFamilySizeSell').fill('19');
+      await p.locator('#studioFamilySizeBuild').click();
+      await (await e.field('45 mm', 'sell')).fill('20');
+      await e.remove('5.5');
+      const grown = (await e.rows()).map((r) => [r.label, r.buy, r.sell, r.isNew, r.removed]);
+      ck(tag, 'K Series CC: comma list adds 35 (6 already listed, untouched); range adds 40 mm, 45 mm; prices editable; 5.5 marked',
+        /Already listed: 6/.test(commaStatus) && JSON.stringify(grown.filter((r) => r[3]).map((r) => r.slice(0, 3))) === JSON.stringify([['35', '8', '17'], ['40 mm', '9', '19'], ['45 mm', '9', '20']])
+        && grown.find((r) => r[0] === '6')[1] === '4.3' && grown.find((r) => r[0] === '5.5')[4], { commaStatus, grown });
+      if (shots) await p.screenshot({ path: path.join(shots, `kseries-cc-added-${width}.png`) });
+      await e.save.click();
+      await p.locator('#confirmSheet').waitFor({ state: 'visible' });
+      const kccConfirm = await p.locator('#confirmSheetMessage').textContent();
+      await p.locator('#confirmSheet [data-confirm-action="remove"]').click();
+      await e.sheet.waitFor({ state: 'hidden' });
+      k = await kccRecord();
+      ck(tag, 'K Series CC: removal named and confirmed; sizes and per-size prices saved together; id, stock, shared price kept',
+        /Remove size 5\.5 from Fuji K Series Single Foot CC\?/.test(kccConfirm)
+        && JSON.stringify(k.sizeOptions) === JSON.stringify(['6', '7', '8', '10', '12', '16', '20', '25', '30', '35', '40 mm', '45 mm'])
+        && JSON.stringify(k.sizePrices) === JSON.stringify({ 6: { cost: 4.3, unitPrice: 9.8 }, 30: { cost: 7.2, unitPrice: 15.5 }, 35: { cost: 8, unitPrice: 17 }, '40 mm': { cost: 9, unitPrice: 19 }, '45 mm': { cost: 9, unitPrice: 20 } })
+        && k.id === 'kccL' && k.stockOnHand === 40 && k.cost === 4 && k.unitPrice === 9 && (await others()) === othersBefore, { kccConfirm, k });
+      // Cloud: the account gets the sizes and their prices.
+      for (let i = 0; i < 60 && !(cloud.rows.get('kccL')?.size_prices || {})['45 mm']; i++) await p.waitForTimeout(250);
+      const kccRow = cloud.rows.get('kccL');
+      ck(tag, 'sync: the account row carries size_options and size_prices', JSON.stringify(kccRow.size_prices) === JSON.stringify(k.sizePrices) && kccRow.size_options.length === 12, kccRow);
+      // An older app (v283) on another device changes the shared Sell price: its upsert has no size_prices.
+      const { size_prices: _drop, ...olderRow } = kccRow;
+      await handler(JSON.stringify({ table: 'components', op: 'upsert', values: [{ ...olderRow, unit_price: 9.25 }] }));
+      ck(tag, 'older v283 app: its save leaves the per-size prices in the account', JSON.stringify(cloud.rows.get('kccL').size_prices) === JSON.stringify(k.sizePrices) && cloud.rows.get('kccL').unit_price === 9.25);
+      // Offline: a price saved while the account cannot be reached is kept on the device and synced on retry.
+      cloud.down = true;
+      await openComponent('Fuji K Series Single Foot CC');
+      await (await e.field('8', 'sell')).fill('9.6');
+      await e.save.click();
+      await e.sheet.waitFor({ state: 'hidden' });
+      await p.waitForFunction(() => window.KLABS_SYNC.getState().status === 'error', null, { timeout: 15000 }).catch(() => {});
+      const offline = { local: (await kccRecord()).sizePrices['8'], cloud: (cloud.rows.get('kccL').size_prices || {})['8'], status: await p.evaluate(() => window.KLABS_SYNC.getState().status) };
+      cloud.down = false;
+      await p.evaluate(() => window.KLABS_SYNC.retry());
+      for (let i = 0; i < 60 && !(cloud.rows.get('kccL').size_prices || {})['8']; i++) await p.waitForTimeout(250);
+      const online = cloud.rows.get('kccL');
+      // Pre-existing sync rule (not Q35): a component changed on two devices before syncing resolves as a whole record
+      // (the more complete side wins), so the older app's 9.25 is replaced by this device's record; per-size prices survive.
+      ck(tag, 'offline: saved on the device (sync waits), then synced on retry; per-size prices intact',
+        JSON.stringify(offline.local) === JSON.stringify({ cost: 4, unitPrice: 9.6 }) && offline.cloud === undefined && offline.status === 'error'
+        && JSON.stringify(online.size_prices['8']) === JSON.stringify({ cost: 4, unitPrice: 9.6 }) && JSON.stringify(online.size_prices['30']) === JSON.stringify({ cost: 7.2, unitPrice: 15.5 }), { offline, online: online.size_prices, price: online.unit_price });
+      await p.waitForFunction(() => window.KLABS_SYNC.getState().status === 'synced', null, { timeout: 15000 }).catch(() => {});
+      await p.waitForTimeout(1500);
+      // Reload (device storage) and a second device (account).
+      await p.reload(); await p.waitForFunction(() => window.KLABS_UI && window.KLABS_BUILD_SYNC, null, { timeout: 30000 });
+      await p.waitForFunction(() => ['synced', 'local', 'error'].includes(window.KLABS_SYNC.getState().status), null, { timeout: 30000 });
+      const afterReload = await kccRecord();
+      const D2 = await h.openDevice(browser, base, handler, { width, name: `K${width}` });
+      await h.launch(D2, base);
+      await D2.page.waitForFunction(() => (componentLibraryRecords().find((r) => r.id === 'kccL')?.sizePrices || {})['8'], null, { timeout: 15000 }).catch(() => {});
+      const secondK = await D2.page.evaluate(() => componentLibraryRecords().find((r) => r.id === 'kccL'));
+      await D2.context.close();
+      ck(tag, 'reload and a second device: the same ten-plus sizes with their own prices',
+        JSON.stringify(afterReload.sizePrices) === JSON.stringify(online.size_prices) && JSON.stringify(secondK.sizePrices) === JSON.stringify(online.size_prices)
+        && JSON.stringify(secondK.sizeOptions) === JSON.stringify(afterReload.sizeOptions), { afterReload: afterReload.sizePrices, second: secondK && secondK.sizePrices });
+      // The historical build keeps its recorded price; the Q34 picker shows and adds each size at its own price.
+      await p.evaluate(() => window.KLABS_UI.openActiveBuildsList());
+      await p.locator('[data-builds-status-filter="quote"]').click();
+      await p.locator('.saved-build-card__open', { hasText: kccBuild }).first().click();
+      await p.waitForTimeout(400);
+      const historical = await p.evaluate(() => quote.components.filter((r) => !componentRowIsEffectivelyEmpty(r)).map((r) => [r.category, r.selectedSize, Number(r.cost), Number(r.unitPrice), componentRowQuantity(r)]));
+      ck(tag, 'historical build: its K Series CC 6 line keeps the price it recorded (4 / 9), not the new 4.30 / 9.80',
+        JSON.stringify(historical) === JSON.stringify([['Fuji K Series Single Foot CC', '6', 4, 9, 2]]), historical);
+      const headK = p.locator('[aria-controls="workshopComponentsBody"]');
+      if ((await headK.getAttribute('aria-expanded')) !== 'true') await headK.click();
+      await p.locator('#addComponentBtn').click();
+      await p.locator('#choicePickerList [data-choice-option="Guides"]').click();
+      await p.locator('#choicePickerList [data-choice-option="Fuji Guides"]').click();
+      await p.locator('#choicePickerList [data-pick-sizes="kccL"]').click();
+      const sizeRow = (size) => p.locator(`#choicePickerList .component-sheet__row--pick[data-pick-name="Fuji K Series Single Foot CC"][data-pick-size="${size}"]`);
+      const metas = { 6: await sizeRow('6').locator('.component-sheet__option-meta').textContent(), 7: await sizeRow('7').locator('.component-sheet__option-meta').textContent() };
+      await sizeRow('30').locator('.component-sheet__option').click();
+      await sizeRow('30').locator('[data-pick-step="1"]').click();
+      await sizeRow('7').locator('.component-sheet__option').click();
+      if (shots) await p.screenshot({ path: path.join(shots, `picker-kseries-sizes-${width}.png`) });
+      await p.locator('#choicePickerAddToBuild').click();
+      await p.locator('#choicePickerSheet').waitFor({ state: 'hidden' });
+      const pickedK = await p.evaluate(() => ({ lines: quote.components.filter((r) => !componentRowIsEffectivelyEmpty(r)).map((r) => [r.selectedSize, componentRowQuantity(r), Number(r.cost), Number(r.unitPrice)]), cost: quoteMaths().materialCost }));
+      const sharedSell = (await kccRecord()).unitPrice;
+      ck(tag, 'Q34 picker: size rows show their own prices; 30 x2 at 7.20 / 15.50 and 7 x1 at the shared price; the old line unchanged; cost adds up',
+        metas[6].includes('Buy $4.30 · Sell $9.80') && metas[7].includes(`Buy $4.00 · Sell $${sharedSell.toFixed(2)}`)
+        && JSON.stringify(pickedK.lines.slice().sort()) === JSON.stringify([['30', 2, 7.2, 15.5], ['6', 2, 4, 9], ['7', 1, 4, sharedSell]].sort())
+        && Math.abs(pickedK.cost - (8 + 14.4 + 4)) < 0.001, { metas, pickedK, sharedSell });
+      await openFamily(p, 'Guides', 'Fuji Guides');
 
       // 13. A new family: Add Subcategory, then the same editor - a Fuji guide comma list, priced individually, one save.
       await p.locator('#studioComponentsBackBtn').click();
@@ -358,7 +497,9 @@ const layout = (p) => p.evaluate(() => {
       const reopenedNew = await e.rows();
       ck(tag, 'reopened new family: base name recognised; sizes listed by size', (await p.locator('#studioFamilySizeBase').inputValue()) === `Fuji KR Guide ${width}` && reopenedNew.map((r) => r.label).join(',') === '6,8,10,12,16,20,25,30', reopenedNew.map((r) => r.label));
       await p.locator('#studioFamilySizeSheet .studio-component-duplicate__actions [data-family-size-action="cancel"]').click();
-      ck(tag, 'no page errors', A.errors.length === 0, A.errors);
+      // Only the sync errors Studio logs for the simulated outage (marked "offline (test)") are expected.
+      const unexpected = A.errors.filter((message) => !message.includes('offline (test)'));
+      ck(tag, 'no page errors (beyond the logged simulated outage)', unexpected.length === 0 && A.errors.length <= 4, A.errors);
       await A.context.close();
     }
     // Desktop: the same editor at Mac size.
@@ -371,6 +512,15 @@ const layout = (p) => p.evaluate(() => {
     const desk = await layout(D.page);
     ck('desktop', 'desktop: compact aligned table, nothing sideways', !desk.sideways && desk.equalHeights && desk.buyAligned && desk.sellAligned, desk);
     if (shots) await D.page.screenshot({ path: path.join(shots, 'existing-family-desktop.png') });
+    await D.page.locator('#studioFamilySizeSheet .studio-component-duplicate__actions [data-family-size-action="cancel"]').click();
+    await openFamily(D.page, 'Guides', 'Fuji Guides');
+    await D.page.locator('#studioComponentsList [data-studio-library-open-component="Fuji K Series Single Foot CC"]').click();
+    await D.page.locator('#studioComponentFamilySizesBtn').click();
+    await editor(D.page).sheet.waitFor({ state: 'visible' });
+    const deskK = { look: await layout(D.page), rows: (await editor(D.page).rows()).map((r) => r.label) };
+    ck('desktop', 'desktop: K Series CC shows its ten sizes in a compact aligned table',
+      JSON.stringify(deskK.rows) === JSON.stringify(KCC_SIZES) && !deskK.look.sideways && deskK.look.equalHeights && deskK.look.buyAligned && deskK.look.sellAligned, deskK);
+    if (shots) await D.page.screenshot({ path: path.join(shots, 'kseries-cc-ten-sizes-desktop.png') });
     await D.context.close();
   } finally {
     await browser.close();

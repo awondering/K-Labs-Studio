@@ -32,6 +32,8 @@ alter table public.components add column if not exists stock_on_hand numeric;
 alter table public.components add column if not exists specifications text default '';
 alter table public.components add column if not exists notes text default '';
 alter table public.components add column if not exists size_options jsonb not null default '[]'::jsonb;
+-- Q35 per-size prices (fresh installs; existing databases: supabase/migrations/20261125000000_q35_component_size_prices.sql).
+alter table public.components add column if not exists size_prices jsonb not null default '{}'::jsonb;
 alter table public.components add column if not exists created_at timestamptz not null default now();
 alter table public.components add column if not exists updated_at timestamptz not null default now();
 

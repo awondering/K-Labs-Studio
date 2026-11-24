@@ -12234,6 +12234,15 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   -moz-appearance:textfield;
 }
 
+/* Component editor: how many sizes the component has, under Sizes & Prices. */
+.studio-size-section__summary{
+  margin:6px 0 0;
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--ds-text-muted,#9aa096);
+  text-align:center;
+}
+
 /* Component editor: Sizes & Prices opens the family editor; sizes that share this component's one price stay listed. */
 .studio-size-section__open{
   width:100%;

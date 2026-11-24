@@ -128,6 +128,7 @@
     if (record.unitPrice !== undefined) score += 1;
     if (record.stockOnHand !== undefined) score += 1;
     if (Array.isArray(record.sizeOptions) && record.sizeOptions.length) score += 1;
+    if (Object.keys(normalizeSyncSizePrices(record.sizePrices, record.sizeOptions)).length) score += 1;
     return score;
   }
   // Keeps one logical record per duplicate key, preferring whichever side has more real data filled in.
@@ -173,6 +174,7 @@
       specifications: text(r.specifications),
       cost: num(r.cost),
       sizeOptions: normalizeSyncSizeOptions(r.sizeOptions),
+      sizePrices: normalizeSyncSizePrices(r.sizePrices, r.sizeOptions),
     });
   }
   function recordsEqualForSync(a, b) {
@@ -460,6 +462,32 @@
   }
 
   // size_options is a jsonb array of plain size labels; tolerate a JSON string from older/pg driver paths.
+  // Q35 per-size prices: { "<size>": { cost, unitPrice } } for sizes the component has; anything else is dropped.
+  // Sorted by size so the same prices always compare equal. Mirrors normalizeComponentSizePrices in js/ui.js.
+  function normalizeSyncSizePrices(value, sizeOptions) {
+    let map = value;
+    if (typeof map === "string") {
+      try { map = JSON.parse(map); } catch (err) { map = null; }
+    }
+    if (!map || typeof map !== "object" || Array.isArray(map)) return {};
+    const labels = new Map(normalizeSyncSizeOptions(sizeOptions).map((label) => [label.toLowerCase(), label]));
+    const next = {};
+    Object.keys(map).sort().forEach((key) => {
+      const label = labels.get(String(key).replace(/\s+/g, " ").trim().toLowerCase());
+      const entry = map[key];
+      if (!label || !entry || typeof entry !== "object") return;
+      if (entry.cost === null || entry.cost === "" || entry.unitPrice === null || entry.unitPrice === "") return;
+      const cost = Number(entry.cost);
+      const unitPrice = Number(entry.unitPrice);
+      if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(unitPrice) || unitPrice < 0) return;
+      next[label] = { cost, unitPrice };
+    });
+    return next;
+  }
+  function syncSizePricesProperty(value, sizeOptions) {
+    const sizePrices = normalizeSyncSizePrices(value, sizeOptions);
+    return Object.keys(sizePrices).length ? { sizePrices } : {};
+  }
   function normalizeSyncSizeOptions(value) {
     let list = value;
     if (typeof list === "string") {
@@ -506,6 +534,8 @@
       specifications: String(record.specifications || ""),
       notes: String(record.notes || ""),
       size_options: normalizeSyncSizeOptions(record.sizeOptions),
+      // Q35: requires the additive column components.size_prices (migration 20261125000000) before this version runs.
+      size_prices: normalizeSyncSizePrices(record.sizePrices, record.sizeOptions),
       updated_at: new Date().toISOString(),
     };
   }
@@ -529,6 +559,7 @@
       notes: String(row.notes || ""),
       specifications: String(row.specifications || ""),
       sizeOptions: normalizeSyncSizeOptions(row.size_options),
+      ...syncSizePricesProperty(row.size_prices, row.size_options),
       cost: row.cost === null || row.cost === undefined ? undefined : Number(row.cost),
     };
   }

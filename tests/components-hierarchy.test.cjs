@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'..','js','ui.js'),'utf8');
 const plain=value=>JSON.parse(JSON.stringify(value));
 const functions=[
-  'numberOrZero','normalizeComponentSizeOptions','normalizeStudioComponentTaxonomy',
+  'numberOrZero','normalizeComponentSizeOptions','normalizeComponentSizePrices','componentSizePricesProperty','normalizeStudioComponentTaxonomy',
   'normalizeNameKey','compareTaxonomyDisplayNames','sortTaxonomyEntriesForDisplay',
   'sortComponentRecordsByName','explicitBrandForSubcategory','escapeAttributeValue',
   'studioCategoryNamesForLibrary','studioSubcategoryNamesForLibrary',
@@ -303,29 +303,42 @@ test('Unassigned add fixture: virtual bucket clears placement despite a same-nam
   assert.deepEqual(plain(c.records),recordsBefore);
 });
 
-// Q35: sizes and prices are edited in the family's Sizes & Prices editor. The component editor links to it and no longer
-// has its own Add Size / Generate Range; sizes a component already shares at one price stay listed and removable.
-test('sizes section: links to the family Sizes & Prices editor; no second size-entry editor; shared-price sizes listed',()=>{
+// Q35: sizes and prices are edited in Sizes & Prices, opened from the component editor. The component editor has no
+// size-entry controls and no size-button list or "One price" view: just the button and how many sizes there are.
+test('sizes section: one Sizes & Prices button and a size count; no size buttons, One price view or second editor',()=>{
   const {context:c}=harness();
   for(const sizes of [[],['10 mm','2 mm','Large']]){
     c.studioComponentSizeDraft=sizes.slice();
     const before=plain(c.studioComponentSizeDraft);
     const markup=c.studioComponentSizesSectionMarkup({subcategory:'Silver'});
     assert.match(markup,/id="studioComponentFamilySizesBtn"[^>]*>Sizes &amp; Prices<\/button>/);
-    assert.doesNotMatch(markup,/studioComponentSizeInput|data-size-action="add"|data-size-action="generate"|Generate Range|<details/);
-    if(sizes.length){
-      assert.match(markup,/SIZES <span class="studio-size-section__count">3<\/span> <span class="studio-size-section__note">One price<\/span>/);
-      assert.ok(markup.indexOf('>2 mm<')<markup.indexOf('>10 mm<'));
-      assert.equal((markup.match(/data-size-action="remove"/g)||[]).length,3);
-    }else{
-      assert.doesNotMatch(markup,/studioComponentSizeEditList/);
-    }
+    assert.doesNotMatch(markup,/studioComponentSizeInput|data-size-action|Generate Range|<details|One price|studio-size-chip/);
+    if(sizes.length)assert.match(markup,/<p class="studio-size-section__summary">3 sizes<\/p>/);
+    else assert.doesNotMatch(markup,/studio-size-section__summary/);
     assert.deepEqual(plain(c.studioComponentSizeDraft),before);
   }
   c.studioComponentSizeDraft=[];
   assert.equal(c.studioComponentSizesSectionMarkup({subcategory:''}),'');
   c.studioComponentSizeDraft=['Large'];
-  assert.doesNotMatch(c.studioComponentSizesSectionMarkup({subcategory:''}),/studioComponentFamilySizesBtn/);
+  assert.match(c.studioComponentSizesSectionMarkup({subcategory:''}),/studioComponentFamilySizesBtn/,'a component\'s own sizes need no family');
+});
+
+test('component editor save keeps each kept size\'s own price and drops prices of sizes it removes',()=>{
+  const {context:c,element:e,store}=harness({realSave:true});
+  const record=c.records[0];
+  c.records[0]={...record,sizeOptions:['2','10','Large'],sizePrices:{'10':{cost:5,unitPrice:11},Large:{cost:6,unitPrice:12}}};
+  store.set('records',plain(c.records));
+  const original=plain(c.records[0]);
+  c.studioSelectedComponentKey=record.name.toLowerCase();
+  c.studioSelectedComponentRef=c.studioComponentReference(c.records[0],c.records);
+  c.studioLibraryPath={level:'component',categoryId:record.category,subcategoryId:record.subcategory};
+  c.payload={...original,description:'',sizeOptions:['2','10']};
+  e('studioComponentName').value=record.name;
+  assert.equal(c.commitStudioComponentDetails(),true);
+  const saved=c.records.find(row=>row.id===original.id);
+  assert.deepEqual(plain(saved.sizePrices),{'10':{cost:5,unitPrice:11}});
+  assert.deepEqual(plain(saved.sizeOptions),['2','10']);
+  for(const key of ['id','cost','unitPrice','stockOnHand'])assert.deepEqual(plain(saved[key]),original[key]);
 });
 
 test('sizes section: removing a shared-price size keeps the other draft values and saves them; prices untouched',()=>{
