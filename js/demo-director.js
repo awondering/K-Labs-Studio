@@ -28,12 +28,12 @@
  *
  * Q24: a second journey, the Components Library (COMPONENTS_JOURNEY), chosen on the introduction (Build a Rod |
  * Components Library) and played by the same player and director on the same real screens: a new component, a new Fuji
- * guide family, seven sizes from Generate Sizes with their own Buy and Sell prices, an edit, Duplicate Family, then the
+ * guide family, seven sizes from Sizes & Prices with their own Buy and Sell prices, an edit, Duplicate Family, then the
  * v280 picker's sizes and quantities and one Add to Build on a Components job, with its Components Cost and Job Price.
  * Its Replay and chapters reload ?demo&tour=components&chapter=N, so it starts from the same fresh in-memory data. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v281";
+  const DEMO_BUILD = "build148-v282";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -258,7 +258,7 @@
       ["show", "#studioComponentsTitle", 900],
     ] },
     { title: "Sizes", steps: [
-      ["caption", "Generate Sizes: seven guides in one go."],
+      ["caption", "Sizes & Prices: seven guides in one go."],
       ["tap", "#studioComponentsGenerateSizesBtn"],
       ["until", "#studioFamilySizeSheet"],
       ["type", "#studioFamilySizeBase", GUIDE],
@@ -278,7 +278,7 @@
       ["type", sizeField(1, "sell"), "21"],
       ["type", sizeField(2, "buy"), "10"],
       ["type", sizeField(2, "sell"), "18"],
-      ["caption", "Create all seven, each its own component."],
+      ["caption", "Save all seven, each its own component."],
       ["tap", "#studioFamilySizeConfirm"],
       ["untilHidden", "#studioFamilySizeSheet"],
       ["until", libraryRow("data-studio-library-open-component", `${GUIDE} 6`)],

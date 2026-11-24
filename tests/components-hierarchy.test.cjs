@@ -26,7 +26,7 @@ const functions=[
   'renderComponentDuplicateSheet',
   'compareComponentSizeLabels','componentSizeOptionsForDisplay','componentRecordSizeOptions',
   'studioComponentSizeChipMarkup','studioComponentSizeValueMarkup','studioComponentSizesSectionMarkup','refreshStudioComponentSizeList',
-  'addStudioComponentSizeFromInput','generateStudioComponentSizeRange','removeStudioComponentSize',
+  'removeStudioComponentSize','openStudioComponentFamilySizes',
 ];
 
 function harness({realSave=false,realFamilyDialog=false}={}){
@@ -51,8 +51,7 @@ function harness({realSave=false,realFamilyDialog=false}={}){
     'studioComponentDuplicateName','studioComponentName','studioComponentOriginalName',
     'studioComponentDuplicateSheet','studioComponentDuplicateSubcategory',
     'studioComponentDuplicateCategory','studioComponentDuplicateNote',
-    'studioComponentSizeList','studioComponentSizeInput','studioComponentSizeFrom',
-    'studioComponentSizeTo','studioComponentSizeStep',
+    'studioComponentSizeEditList',
     'studioComponentsDuplicateFamilyBtn','studioComponentDuplicateDestinationLabel',
     'studioComponentDuplicateNameLabel','studioComponentDuplicateConfirm','studioComponentsGenerateSizesBtn',
   ].forEach(element);
@@ -304,68 +303,69 @@ test('Unassigned add fixture: virtual bucket clears placement despite a same-nam
   assert.deepEqual(plain(c.records),recordsBefore);
 });
 
-test('sizes editor: chips remain outside a collapsed native disclosure on every entry',()=>{
-  const {context:c,element:e}=harness();
+// Q35: sizes and prices are edited in the family's Sizes & Prices editor. The component editor links to it and no longer
+// has its own Add Size / Generate Range; sizes a component already shares at one price stay listed and removable.
+test('sizes section: links to the family Sizes & Prices editor; no second size-entry editor; shared-price sizes listed',()=>{
+  const {context:c}=harness();
   for(const sizes of [[],['10 mm','2 mm','Large']]){
     c.studioComponentSizeDraft=sizes.slice();
     const before=plain(c.studioComponentSizeDraft);
-    const markup=c.studioComponentSizesSectionMarkup();
-    const disclosure=markup.match(/<details\b[^>]*>/);
-    assert.ok(disclosure);
-    assert.doesNotMatch(disclosure[0],/\bopen\b/);
-    assert.match(markup,/<summary[^>]*>ADD OR EDIT SIZES/);
-    assert.ok(markup.indexOf('id="studioComponentSizeList"')<disclosure.index);
-    assert.doesNotMatch(markup,/Add selectable sizes|without a size step/);
-    assert.match(markup,/<span>From<\/span>[\s\S]*<span>To<\/span>[\s\S]*<span>Step<\/span>[\s\S]*Generate Range/);
+    const markup=c.studioComponentSizesSectionMarkup({subcategory:'Silver'});
+    assert.match(markup,/id="studioComponentFamilySizesBtn"[^>]*>Sizes &amp; Prices<\/button>/);
+    assert.doesNotMatch(markup,/studioComponentSizeInput|data-size-action="add"|data-size-action="generate"|Generate Range|<details/);
+    if(sizes.length){
+      assert.match(markup,/SIZES <span class="studio-size-section__count">3<\/span> <span class="studio-size-section__note">One price<\/span>/);
+      assert.ok(markup.indexOf('>2 mm<')<markup.indexOf('>10 mm<'));
+      assert.equal((markup.match(/data-size-action="remove"/g)||[]).length,3);
+    }else{
+      assert.doesNotMatch(markup,/studioComponentSizeEditList/);
+    }
     assert.deepEqual(plain(c.studioComponentSizeDraft),before);
   }
-  const disclosure={open:false};
-  const count={textContent:''};
-  const section={disclosure,querySelector:()=>count};
-  e('studioComponentSizeList').closest=()=>section;
-  c.studioComponentSizeDraft=['10 mm','2 mm'];
-  disclosure.open=true;
-  c.refreshStudioComponentSizeList();
-  assert.equal(disclosure.open,true);
-  assert.equal(count.textContent,'2');
-  assert.ok(e('studioComponentSizeList').innerHTML.indexOf('>2 mm<')<e('studioComponentSizeList').innerHTML.indexOf('>10 mm<'));
+  c.studioComponentSizeDraft=[];
+  assert.equal(c.studioComponentSizesSectionMarkup({subcategory:''}),'');
+  c.studioComponentSizeDraft=['Large'];
+  assert.doesNotMatch(c.studioComponentSizesSectionMarkup({subcategory:''}),/studioComponentFamilySizesBtn/);
 });
 
-test('sizes editor: add/remove/range retain draft values, validation and saved build size options',()=>{
-  const {context:c,element:e,click,calls}=harness({realSave:true});
+test('sizes section: removing a shared-price size keeps the other draft values and saves them; prices untouched',()=>{
+  const {context:c,element:e,click}=harness({realSave:true});
   const record=c.records[0];
   const original=plain(record);
   c.studioSelectedComponentKey=record.name.toLowerCase();
   c.studioSelectedComponentRef=c.studioComponentReference(record,c.records);
   c.studioLibraryPath={level:'component',categoryId:record.category,subcategoryId:record.subcategory};
-  c.studioComponentSizeDraft=c.componentRecordSizeOptions(record);
-  e('studioComponentSizeInput').value='12 mm, Large, 12 MM';
-  click('studioComponentDetails',{'data-size-action':'add'});
-  assert.deepEqual(plain(c.studioComponentSizeDraft),['2','10','12 mm','Large']);
-  assert.equal(e('studioComponentSizeInput').value,'');
+  c.studioComponentSizeDraft=['2','10','12 mm','Large'];
+  const count={textContent:''};
+  e('studioComponentSizeEditList').closest=()=>({querySelector:()=>count});
   click('studioComponentDetails',{'data-size-action':'remove','data-size-value':'12 MM'});
   assert.deepEqual(plain(c.studioComponentSizeDraft),['2','10','Large']);
-  e('studioComponentSizeFrom').value='9';
-  e('studioComponentSizeTo').value='11';
-  e('studioComponentSizeStep').value='1';
-  click('studioComponentDetails',{'data-size-action':'generate'});
-  assert.deepEqual(plain(c.studioComponentSizeDraft),['2','10','Large','9 mm','10 mm','11 mm']);
-  const valid=plain(c.studioComponentSizeDraft);
-  e('studioComponentSizeStep').value='0';
-  click('studioComponentDetails',{'data-size-action':'generate'});
-  assert.match(calls.at(-1)[2],/Step greater than zero/);
-  assert.deepEqual(plain(c.studioComponentSizeDraft),valid);
+  assert.equal(count.textContent,'3');
   assert.deepEqual(plain(c.records[0]),original);
   c.payload={...original,description:'',sizeOptions:c.studioComponentSizeDraft.slice()};
   e('studioComponentName').value=record.name;
   assert.equal(c.commitStudioComponentDetails(),true);
   const saved=c.records.find(row=>row.id===original.id);
-  assert.deepEqual(plain(saved.sizeOptions),valid);
-  assert.deepEqual(plain(c.componentRecordSizeOptions(saved)),['2','9 mm','10','10 mm','11 mm','Large']);
-  assert.equal(c.studioComponentDetailContext.savedFlash,true);
+  assert.deepEqual(plain(saved.sizeOptions),['2','10','Large']);
   for(const key of ['id','category','subcategory','brand','cost','unitCost','unitPrice','stockOnHand']){
     assert.deepEqual(plain(saved[key]),original[key]);
   }
+});
+
+test('sizes section: Sizes & Prices opens the component\'s own family, only once its edits are saved',()=>{
+  const {context:c,click,calls}=harness();
+  const record=c.records.find(row=>row.subcategory==='Silver');
+  c.studioSelectedComponentKey=record.name.toLowerCase();
+  c.studioSelectedComponentRef=c.studioComponentReference(record,c.records);
+  c.studioLibraryPath={level:'component',categoryId:record.category,subcategoryId:record.subcategory};
+  c.payload={a:1};
+  c.studioComponentDetailContext={isAddMode:false,baseline:c.studioComponentPayloadSignature({a:2}),savedTimer:0,savedFlash:false};
+  click('studioComponentDetails',{id:'studioComponentFamilySizesBtn'});
+  assert.equal(calls.at(-1)[0],'info');
+  assert.equal(calls.at(-1)[1],'Save Changes First');
+  c.studioComponentDetailContext.baseline=c.studioComponentPayloadSignature({a:1});
+  click('studioComponentDetails',{id:'studioComponentFamilySizesBtn'});
+  assert.deepEqual(calls.at(-1),['generate-sizes','winding','silver']);
 });
 
 test('family/component menus and event handlers route by type and identity, not labels',()=>{
@@ -607,7 +607,7 @@ test('blank/invalid categories remain reachable and Back from a direct duplicate
   assert.deepEqual(labels(e('studioComponentsList').innerHTML),['Black Silver','Gunmetal Hexy Duplicate','Hex']);
 });
 
-test('Generate Sizes shows only inside a saved family and opens for that family; Duplicate Family is unchanged',()=>{
+test('Sizes & Prices shows only inside a saved family and opens for that family; Duplicate Family is unchanged',()=>{
   const {context:c,element:e,click,calls}=harness();
   c.renderStudioComponentsLibrary();
   assert.equal(e('studioComponentsGenerateSizesBtn').hidden,true);

@@ -132,7 +132,7 @@ async function run() {
       }));
       ck(`${name}: the eight-chapter Components row replaces the rod build's`, rows.components && !rows.rod, rows);
 
-      // Pause during Generate Sizes: nothing moves and nothing is written; then Play.
+      // Pause during Sizes & Prices: nothing moves and nothing is written; then Play.
       await page.waitForFunction(() => /^3\/8/.test(document.getElementById('demoChapterLabel').textContent), null, { timeout: 120000 });
       const pausedAt = Date.now();
       await page.click('#demoPlayPauseBtn');

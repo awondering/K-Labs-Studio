@@ -5689,86 +5689,39 @@ function studioComponentSizeChipMarkup(size){
   const escaped=escapeAttributeValue(size);
   return `<span class="studio-size-chip"><span class="studio-size-chip__label">${escapeHtml(size)}</span><button class="studio-size-chip__remove" type="button" data-size-action="remove" data-size-value="${escaped}" aria-label="Remove size ${escaped}">&#215;</button></span>`;
 }
-// Saved sizes stay visible; native disclosure keeps editing controls collapsed on entry.
-function studioComponentSizesSectionMarkup(){
+// Q35: sizes and their prices are managed in one place, the family's Sizes & Prices editor (one component per size,
+// each with its own Buy/Sell), opened from here. The old Available Sizes editor (Add Size / Generate Range, labels that
+// all shared this component's one price) is retired; a component that already has such sizes keeps them - shown,
+// removable, and still offered in the build picker (v280).
+function studioComponentSizesSectionMarkup(record){
   const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
-  const chips=sizes.length
-    ? sizes.map(studioComponentSizeValueMarkup).join('')
-    : '<p class="studio-size-list__empty">No sizes added.</p>';
-  return `
-    <section class="studio-size-section" aria-label="Available sizes">
-      <h3 class="studio-size-section__heading">AVAILABLE SIZES <span class="studio-size-section__count">${sizes.length}</span></h3>
-      <div class="studio-size-list" id="studioComponentSizeList">${chips}</div>
-      <details class="studio-size-section__editor">
-      <summary class="studio-size-section__summary">ADD OR EDIT SIZES <span class="studio-size-section__chevron" aria-hidden="true">&#8250;</span></summary>
-      <div class="studio-size-edit-list" id="studioComponentSizeEditList" aria-label="Remove individual sizes">${sizes.map(studioComponentSizeChipMarkup).join('')}</div>
-      <div class="studio-size-entry">
-        <label class="quote-component-field"><span>Add Size</span><input id="studioComponentSizeInput" type="text" placeholder="e.g. 12 mm or Large" /></label>
-        <button class="ghost-action studio-component-details__move studio-size-entry__btn" type="button" data-size-action="add">Add</button>
-      </div>
-      <div class="studio-size-range">
-        <label class="quote-component-field"><span>From</span><input id="studioComponentSizeFrom" type="number" inputmode="decimal" step="any" placeholder="9" /></label>
-        <label class="quote-component-field"><span>To</span><input id="studioComponentSizeTo" type="number" inputmode="decimal" step="any" placeholder="15" /></label>
-        <label class="quote-component-field"><span>Step</span><input id="studioComponentSizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
-        <button class="ghost-action studio-size-range__btn" type="button" data-size-action="generate">Generate Range</button>
-      </div>
-      </details>
-    </section>
-  `;
+  const family=String(record&&record.subcategory||'').trim();
+  const open=family?`<button id="studioComponentFamilySizesBtn" class="ghost-action studio-size-section__open" type="button">Sizes &amp; Prices</button>`:'';
+  const shared=sizes.length?`<div class="studio-size-section__shared"><h3 class="studio-size-section__heading">SIZES <span class="studio-size-section__count">${sizes.length}</span> <span class="studio-size-section__note">One price</span></h3><div class="studio-size-edit-list" id="studioComponentSizeEditList" aria-label="Remove individual sizes">${sizes.map(studioComponentSizeChipMarkup).join('')}</div></div>`:'';
+  if(!open && !shared)return '';
+  return `<section class="studio-size-section" aria-label="Sizes and prices">${open}${shared}</section>`;
 }
 function refreshStudioComponentSizeList(){
-  const list=$('studioComponentSizeList');
-  if(!list)return;
-  const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
   const editList=$('studioComponentSizeEditList');
+  const sizes=componentSizeOptionsForDisplay(studioComponentSizeDraft);
   if(editList)editList.innerHTML=sizes.map(studioComponentSizeChipMarkup).join('');
-  list.innerHTML=sizes.length
-    ? sizes.map(studioComponentSizeValueMarkup).join('')
-    : '<p class="studio-size-list__empty">No sizes added.</p>';
-  const count=list.closest('.studio-size-section')?.querySelector('.studio-size-section__count');
+  const count=editList?.closest('.studio-size-section')?.querySelector('.studio-size-section__count');
   if(count)count.textContent=String(sizes.length);
   syncStudioComponentSaveButtonState();
 }
-function addStudioComponentSizeFromInput(){
-  const input=$('studioComponentSizeInput');
-  if(!input)return;
-  const raw=String(input.value||'');
-  const added=raw.split(',').map((part)=>part.trim()).filter(Boolean);
-  if(!added.length)return;
-  studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft.concat(added));
-  input.value='';
-  refreshStudioComponentSizeList();
-}
-// Builds "9 mm, 10 mm, ... 15 mm" (or "in" in imperial mode) from From/To/Step and active measurement unit.
-// Rejects non-finite or non-terminating ranges rather than emitting NaN or looping forever.
-function generateStudioComponentSizeRange(){
-  const from=Number(String(($('studioComponentSizeFrom')&&$('studioComponentSizeFrom').value)||'').trim());
-  const to=Number(String(($('studioComponentSizeTo')&&$('studioComponentSizeTo').value)||'').trim());
-  const rawStep=String(($('studioComponentSizeStep')&&$('studioComponentSizeStep').value)||'').trim();
-  const step=rawStep===''?1:Number(rawStep);
-  const unit=measurementUnitSuffix();
-  if(!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(step) || step<=0){
-    openInfoDialog('Check Range','Enter a numeric From, To and a Step greater than zero.');
+// Q35: the component's family in Sizes & Prices. Unsaved edits on this component are saved or cancelled first, so the
+// family save never discards them.
+function openStudioComponentFamilySizes(){
+  const record=currentStudioComponentRecord();
+  if(!record)return;
+  if(studioComponentPayloadSignature(studioComponentDetailPayloadFromDom())!==studioComponentDetailContext.baseline){
+    openInfoDialog('Save Changes First','Save or cancel the changes to this component, then open Sizes & Prices.');
     return;
   }
-  const span=Math.abs(to-from);
-  const count=Math.floor(span/step)+1;
-  if(count>200){
-    openInfoDialog('Range Too Large','That range would create more than 200 sizes. Use a larger step or a smaller range.');
-    return;
-  }
-  const direction=to>=from?1:-1;
-  const generated=[];
-  for(let i=0;i<count;i+=1){
-    const value=from+(direction*step*i);
-    // Trim binary float noise (0.30000000000000004) without changing meaningful precision.
-    const rounded=Number(value.toFixed(6));
-    if(!Number.isFinite(rounded))continue;
-    generated.push(unit?`${rounded} ${unit}`:String(rounded));
-  }
-  if(!generated.length)return;
-  studioComponentSizeDraft=normalizeComponentSizeOptions(studioComponentSizeDraft.concat(generated));
-  refreshStudioComponentSizeList();
+  const category=studioCategoryByName(record.category);
+  const family=category&&category.subcategories.find((item)=>normalizeNameKey(item.name)===normalizeNameKey(record.subcategory));
+  if(!category || !family){openInfoDialog('Family Missing','This component is not in a family yet.');return;}
+  openFamilySizeGeneratorSheet(category,family);
 }
 function removeStudioComponentSize(value){
   const key=String(value||'').trim().toLowerCase();
@@ -6285,7 +6238,7 @@ function renderStudioComponentDetails(record,options){
       <label class="quote-component-field quote-component-field--cost"><span>Sell Price</span><input id="studioComponentUnitPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${record.unitPrice===undefined?'':escapeHtml(String(numberOrZero(record.unitPrice)))}" placeholder="0.00" /></label>
       ${trackStock?`<label class="quote-component-field quote-component-field--cost"><span>Stock Quantity</span><input id="studioComponentStockOnHand" type="number" inputmode="decimal" step="0.01" min="0" value="${stockOnHand===undefined?'':escapeHtml(String(numberOrZero(stockOnHand)))}" placeholder="0" /></label>`:''}
     </div>
-    ${studioComponentSizesSectionMarkup()}
+    ${isAddMode?'':studioComponentSizesSectionMarkup(record)}
     <div class="studio-component-details__actions">
       <button id="studioComponentSaveBtn" class="primary-action studio-component-details__save" type="button">${isAddMode?'Add Component':'Save Changes'}</button>
       ${isAddMode?'':`<button id="studioComponentDuplicateBtn" class="ghost-action studio-component-details__move" type="button">Duplicate Component</button>`}
@@ -6819,8 +6772,14 @@ function duplicateStudioSubcategory(categoryName,subcategoryName,name){
   if(notificationErrors.length)openInfoDialog('Saved Locally',`Saved locally; sync needs retry. ${notificationErrors.join('; ')}`);
   return true;
 }
-// Generate Sizes: creates one ordinary component per size inside an existing family, each with its own
-// Buy/Sell price. Sizes go in the component name; no new record fields, so library, build pricing and sync are unchanged.
+// Q35 Sizes & Prices: the one size-and-pricing editor for a component family (was Generate Sizes, which only created
+// new sizes). It opens on every component already in the family - Size | Buy | Sell, one row each, prices filled in -
+// so prices are edited in place without opening each size. New sizes are added from a comma list (irregular sizes) or
+// the compact From/To/Step range (regular steps); both add rows to the same table with the starting prices, and never
+// touch a size that is already listed. A size can be marked for removal (confirmed on save). One Save Changes writes
+// everything at once. Each size stays its own ordinary component (its own id, Buy/Sell, brand, supplier, category,
+// family and other fields), so the library format, build pricing and sync are unchanged; builds keep the prices
+// recorded on their lines.
 const FAMILY_SIZE_GENERATOR_MAX=50;
 let studioFamilySizeGeneratorState=null;
 // Size labels from a comma list (used as typed) or else a From/To/Step range (unit appended). {labels} or {error}.
@@ -6856,7 +6815,7 @@ function familySizeGeneratorLabels(listRaw,fromRaw,toRaw,stepRaw,unit){
 function familySizeGeneratorComponentName(baseName,size){
   return `${String(baseName||'').trim()} ${String(size||'').trim()}`.replace(/\s+/g,' ').trim();
 }
-// First problem with the size rows, or ''. Every name must be new (to the library and the batch) and every price valid.
+// First problem with the new size rows, or ''. Every name must be new (to the library and the batch) and every price valid.
 function familySizeGeneratorProblem(baseName,rows,existingRecords){
   const list=Array.isArray(rows)?rows:[];
   if(!String(baseName||'').trim())return 'Enter a base name for the components.';
@@ -6877,41 +6836,134 @@ function familySizeGeneratorProblem(baseName,rows,existingRecords){
   }
   return '';
 }
+// The base name the family's sizes share: the words every component name starts with (at least one word, and never a
+// whole name); otherwise the family's own name. A single component drops a final size-like word ("... Tip Top 5.5").
+function familySizeBaseName(names,familyName){
+  const words=(Array.isArray(names)?names:[]).map((name)=>String(name||'').trim().split(/\s+/).filter(Boolean)).filter((list)=>list.length);
+  if(words.length===1){
+    const only=words[0];
+    if(only.length>1 && /\d/.test(only[only.length-1]))return only.slice(0,-1).join(' ');
+    return String(familyName||'').trim();
+  }
+  if(!words.length)return String(familyName||'').trim();
+  const shortest=Math.min(...words.map((list)=>list.length));
+  let common=0;
+  while(common<shortest-1 && words.every((list)=>list[common].toLowerCase()===words[0][common].toLowerCase()))common+=1;
+  return common?words[0].slice(0,common).join(' '):String(familyName||'').trim();
+}
+// What the Size column shows for a component: its name after the shared base name, or the whole name.
+function familySizeRowLabel(name,baseName){
+  const full=String(name||'').trim();
+  const base=String(baseName||'').trim();
+  if(base && full.toLowerCase().startsWith(`${base.toLowerCase()} `)){
+    const rest=full.slice(base.length).trim();
+    if(rest)return rest;
+  }
+  return full;
+}
+function familySizePriceText(value){
+  return value===undefined||value===null||value===''?'':String(numberOrZero(value));
+}
+// The editor's rows for a family's existing components, in size order.
+function familySizeExistingRows(records,baseName){
+  return (Array.isArray(records)?records:[]).map((record)=>{
+    const buy=familySizePriceText(componentRecordBuyPrice(record));
+    const sell=familySizePriceText(record&&record.unitPrice);
+    return {id:String(record.id||''),name:String(record.name||'').trim(),label:familySizeRowLabel(record.name,baseName),
+      sizes:normalizeComponentSizeOptions(record.sizeOptions).length,buy,sell,savedBuy:buy,savedSell:sell,removed:false};
+  }).sort((a,b)=>compareComponentSizeLabels(a.label,b.label));
+}
+function familySizeRowChanged(row){
+  return !!row.id && !row.removed && (String(row.buy).trim()!==row.savedBuy || String(row.sell).trim()!==row.savedSell);
+}
+function familySizeEditorDirty(state){
+  return !!state && state.rows.some((row)=>!row.id || row.removed || familySizeRowChanged(row));
+}
+// Adds new sizes to the table. Sizes already listed (existing or new) are left exactly as they are, with their prices.
+function addFamilySizeRows(state,labels,buy,sell){
+  const taken=new Set(state.rows.map((row)=>normalizeNameKey(row.id?row.name:familySizeGeneratorComponentName(state.baseName,row.size))));
+  const added=[];
+  const skipped=[];
+  labels.forEach((size)=>{
+    const key=normalizeNameKey(familySizeGeneratorComponentName(state.baseName,size));
+    if(taken.has(key)){skipped.push(size);return;}
+    taken.add(key);
+    state.rows.push({id:'',size,buy:String(buy||'').trim(),sell:String(sell||'').trim(),removed:false});
+    added.push(size);
+  });
+  return {added,skipped};
+}
+// First problem with the edited prices of existing sizes (only those changed are checked), or ''.
+function familySizeExistingProblem(rows){
+  for(const row of rows.filter(familySizeRowChanged)){
+    const buy=componentPriceProblem(row.buy,'Buy Price');
+    if(buy)return `${row.name}: ${buy}`;
+    const sell=componentPriceProblem(row.sell,'Sell Price');
+    if(sell)return `${row.name}: ${sell}`;
+  }
+  return '';
+}
 function familySizeGeneratorError(message){
   const status=$('studioFamilySizeStatus');
   if(status){status.textContent=String(message||'');status.dataset.state=message?'error':'';}
 }
+function familySizeGeneratorNote(message){
+  const status=$('studioFamilySizeStatus');
+  if(status){status.textContent=String(message||'');status.dataset.state='';}
+}
+function syncFamilySizeSaveButton(){
+  const confirm=$('studioFamilySizeConfirm');
+  if(confirm)confirm.disabled=!familySizeEditorDirty(studioFamilySizeGeneratorState);
+}
 function renderFamilySizeGeneratorRows(){
   const state=studioFamilySizeGeneratorState;
   const host=$('studioFamilySizeRows');
-  const confirm=$('studioFamilySizeConfirm');
   const rows=state?state.rows:[];
-  if(confirm){
-    confirm.textContent=rows.length?`Create ${rows.length} Component${rows.length===1?'':'s'}`:'Create Components';
-    confirm.disabled=!rows.length;
-  }
+  syncFamilySizeSaveButton();
   if(!host)return;
   host.innerHTML=rows.length?`
-    <div class="studio-family-size__row studio-family-size__row--head" aria-hidden="true"><span>Component</span><span>Buy</span><span>Sell</span></div>
+    <div class="studio-family-size__row studio-family-size__row--head" aria-hidden="true"><span>Size</span><span>Buy</span><span>Sell</span><span></span></div>
     ${rows.map((row,index)=>{
-      const name=familySizeGeneratorComponentName(state.baseName,row.size);
-      return `<div class="studio-family-size__row"><strong data-family-size-name="${index}">${escapeHtml(name)}</strong><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Buy Price ${row.size}`)}" data-family-size-index="${index}" data-family-size-field="buy" value="${escapeAttributeValue(row.buy)}" /><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Sell Price ${row.size}`)}" data-family-size-index="${index}" data-family-size-field="sell" value="${escapeAttributeValue(row.sell)}" /></div>`;
+      const name=row.id?row.name:familySizeGeneratorComponentName(state.baseName,row.size);
+      const label=row.id?row.label:row.size;
+      const sizes=row.sizes?` <small>${row.sizes} size${row.sizes===1?'':'s'}</small>`:'';
+      const off=row.removed?' disabled':'';
+      const action=row.removed
+        ?`<button class="studio-family-size__remove" type="button" data-family-size-remove="${index}" aria-label="${escapeAttributeValue(`Keep ${name}`)}">&#8634;</button>`
+        :`<button class="studio-family-size__remove" type="button" data-family-size-remove="${index}" aria-label="${escapeAttributeValue(`Remove ${name}`)}">&#215;</button>`;
+      return `<div class="studio-family-size__row${row.id?'':' studio-family-size__row--new'}${row.removed?' studio-family-size__row--removed':''}"><strong data-family-size-name="${index}" title="${escapeAttributeValue(name)}">${escapeHtml(label)}${sizes}</strong><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Buy Price ${name}`)}" data-family-size-index="${index}" data-family-size-field="buy" value="${escapeAttributeValue(row.buy)}"${off} /><input type="number" inputmode="decimal" step="0.01" min="0" aria-label="${escapeAttributeValue(`Sell Price ${name}`)}" data-family-size-index="${index}" data-family-size-field="sell" value="${escapeAttributeValue(row.sell)}"${off} />${action}</div>`;
     }).join('')}`:'';
 }
+// Add Sizes: the comma list, or else the range, with the starting prices, to the same table.
 function buildFamilySizeGeneratorRows(){
   const state=studioFamilySizeGeneratorState;
   if(!state)return false;
   const value=(id)=>String($(id)&&$(id).value||'');
   const result=familySizeGeneratorLabels(value('studioFamilySizeList'),value('studioFamilySizeFrom'),value('studioFamilySizeTo'),value('studioFamilySizeStep'),measurementUnitSuffix());
   if(result.error){familySizeGeneratorError(result.error);return false;}
-  const buy=value('studioFamilySizeBuy').trim();
-  const sell=value('studioFamilySizeSell').trim();
-  state.rows=result.labels.map((size)=>({size,buy,sell}));
+  if(!String(state.baseName||'').trim()){familySizeGeneratorError('Enter a base name for the new sizes.');return false;}
+  const {added,skipped}=addFamilySizeRows(state,result.labels,value('studioFamilySizeBuy'),value('studioFamilySizeSell'));
+  ['studioFamilySizeList','studioFamilySizeFrom','studioFamilySizeTo','studioFamilySizeStep'].forEach((id)=>{if($(id))$(id).value='';});
+  renderFamilySizeGeneratorRows();
+  if(skipped.length)familySizeGeneratorNote(`${added.length?`Added ${added.length}. `:''}Already listed: ${skipped.join(', ')}.`);
+  else familySizeGeneratorError('');
+  return added.length>0;
+}
+function toggleFamilySizeRow(index){
+  const state=studioFamilySizeGeneratorState;
+  const row=state&&state.rows[index];
+  if(!row)return;
+  if(row.id){
+    row.removed=!row.removed;
+    if(row.removed){row.buy=row.savedBuy;row.sell=row.savedSell;}
+  }else{
+    state.rows.splice(index,1);
+  }
   familySizeGeneratorError('');
   renderFamilySizeGeneratorRows();
-  return true;
 }
-// One atomic library write. On failure the previous records are restored, so no partial family is left behind.
+// One atomic library write: edited prices, new sizes and removals together. On failure the previous records are
+// restored, so nothing is left half-saved. Only Buy/Sell change on an existing size; every other field is kept.
 function commitFamilySizeGenerator(){
   const state=studioFamilySizeGeneratorState;
   if(!state)return false;
@@ -6919,10 +6971,12 @@ function commitFamilySizeGenerator(){
   const family=category&&category.subcategories.find((item)=>item.id===state.subcategoryId);
   if(!category || !family){familySizeGeneratorError('The selected family was not found.');return false;}
   const records=componentLibraryRecords();
-  const problem=familySizeGeneratorProblem(state.baseName,state.rows,records);
+  const newRows=state.rows.filter((row)=>!row.id);
+  const problem=familySizeExistingProblem(state.rows)||(newRows.length?familySizeGeneratorProblem(state.baseName,newRows,records):'');
   if(problem){familySizeGeneratorError(problem);return false;}
+  const byId=new Map(state.rows.filter((row)=>row.id).map((row)=>[row.id,row]));
   const brand=explicitBrandForSubcategory(category.name,family.name);
-  const created=state.rows.map((row)=>{
+  const created=newRows.map((row)=>{
     const buy=numberOrZero(String(row.buy).trim());
     return {
       id:'',
@@ -6938,18 +6992,27 @@ function commitFamilySizeGenerator(){
       sizeOptions:[],
     };
   });
+  const kept=[];
+  for(const record of records){
+    const row=byId.get(String(record.id||''));
+    if(!row){kept.push(record);continue;}
+    if(row.removed)continue;
+    if(!familySizeRowChanged(row)){kept.push(record);continue;}
+    const buy=numberOrZero(String(row.buy).trim());
+    kept.push({...record,cost:buy,unitCost:buy,unitPrice:numberOrZero(String(row.sell).trim())});
+  }
   const snapshot=Store.get(componentLibraryStorageKey(),[]);
   const sync=window.KLABS_SYNC;
   const notify=sync&&sync.notifyComponentsChanged;
   let changed=false;
   try{
     if(typeof notify==='function')sync.notifyComponentsChanged=()=>{changed=true;};
-    saveComponentLibraryRecords([...created,...records]);
+    saveComponentLibraryRecords([...created,...kept]);
   }catch(error){
     const reason=error&&error.message||'Save failed.';
     try{
       Store.set(componentLibraryStorageKey(),snapshot);
-      familySizeGeneratorError(`Save failed: ${reason} No components were created. You can retry.`);
+      familySizeGeneratorError(`Save failed: ${reason} Nothing was changed. You can retry.`);
     }catch(restoreError){
       familySizeGeneratorError(`Save failed: ${reason} Restoring the component library also failed (${restoreError&&restoreError.message||'restore failed'}). Do not retry until this is resolved.`);
     }
@@ -6970,11 +7033,46 @@ function commitFamilySizeGenerator(){
   if(notifyError)openInfoDialog('Saved Locally',`Saved locally; sync needs retry. ${notifyError}`);
   return true;
 }
+// Save Changes: checks first; removals are confirmed by name before anything is written.
+function saveFamilySizeEditor(){
+  const state=studioFamilySizeGeneratorState;
+  const confirm=$('studioFamilySizeConfirm');
+  if(!state || !familySizeEditorDirty(state))return;
+  // The sheet sits outside #app, beyond the read-only click guard, so a read-only account is refused here.
+  if(window.KLABS_ACCESS_STATE && window.KLABS_ACCESS_STATE.can_write===false){
+    familySizeGeneratorError('This account is read-only. Sizes and prices can be viewed but not changed.');
+    return;
+  }
+  const records=componentLibraryRecords();
+  const newRows=state.rows.filter((row)=>!row.id);
+  const problem=familySizeExistingProblem(state.rows)||(newRows.length?familySizeGeneratorProblem(state.baseName,newRows,records):'');
+  if(problem){familySizeGeneratorError(problem);return;}
+  const removed=state.rows.filter((row)=>row.id && row.removed);
+  if(!removed.length){runExplicitSave(confirm,commitFamilySizeGenerator);return;}
+  openConfirmDialog({
+    title:removed.length===1?'Remove Size':`Remove ${removed.length} Sizes`,
+    message:`Remove ${removed.map((row)=>row.name).join(', ')} from your library? Builds that already use ${removed.length===1?'it':'them'} keep their recorded prices.`,
+    actions:[{id:'cancel',label:'Cancel',kind:'ghost'},{id:'remove',label:'Remove and Save',kind:'danger'}]
+  },(choice)=>{
+    if(choice==='remove')runExplicitSave(confirm,commitFamilySizeGenerator);
+  });
+}
 function closeFamilySizeGeneratorSheet(){
   const sheet=$('studioFamilySizeSheet');
   if(sheet)sheet.hidden=true;
   studioFamilySizeGeneratorState=null;
   unlockModalLayer({restoreFocus:true});
+}
+// Cancel or ×: unsaved changes are only discarded once confirmed.
+function cancelFamilySizeEditor(){
+  if(!familySizeEditorDirty(studioFamilySizeGeneratorState)){closeFamilySizeGeneratorSheet();return;}
+  openConfirmDialog({
+    title:'Discard Changes',
+    message:'Discard the unsaved size and price changes?',
+    actions:[{id:'cancel',label:'Keep Editing',kind:'ghost'},{id:'discard',label:'Discard',kind:'danger'}]
+  },(choice)=>{
+    if(choice==='discard')closeFamilySizeGeneratorSheet();
+  });
 }
 function ensureFamilySizeGeneratorSheet(){
   if($('studioFamilySizeSheet'))return;
@@ -6984,45 +7082,50 @@ function ensureFamilySizeGeneratorSheet(){
   sheet.hidden=true;
   sheet.innerHTML=`
     <div class="component-sheet__scrim" data-family-size-action="cancel"></div>
-    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Generate Sizes">
+    <section class="component-sheet__panel" role="dialog" aria-modal="true" aria-label="Sizes and Prices">
       <header class="component-sheet__header">
-        <h2>Generate Sizes</h2>
-        <button class="component-sheet__close" type="button" data-family-size-action="cancel" aria-label="Close size generator">&#215;</button>
+        <h2>Sizes &amp; Prices</h2>
+        <button class="component-sheet__close" type="button" data-family-size-action="cancel" aria-label="Close Sizes and Prices">&#215;</button>
       </header>
       <div class="component-sheet__body">
-        <section class="studio-component-duplicate__placement" aria-label="Generated component placement">
+        <section class="studio-component-duplicate__placement" aria-label="Family">
           <div><span>Category</span><strong id="studioFamilySizeCategory"></strong></div>
           <div><span>Family</span><strong id="studioFamilySizeFamily"></strong></div>
         </section>
-        <label class="component-hierarchy-picker__brand"><span>Base Name</span><input id="studioFamilySizeBase" type="text" autocomplete="off" /></label>
-        <label class="component-hierarchy-picker__brand"><span>Sizes (comma separated)</span><input id="studioFamilySizeList" type="text" autocomplete="off" placeholder="e.g. 5.5, 6, 8, 10 - or use a range below" /></label>
-        <div class="studio-family-size__fields">
-          <label class="quote-component-field"><span>From</span><input id="studioFamilySizeFrom" type="number" inputmode="decimal" step="any" /></label>
-          <label class="quote-component-field"><span>To</span><input id="studioFamilySizeTo" type="number" inputmode="decimal" step="any" /></label>
-          <label class="quote-component-field"><span>Step</span><input id="studioFamilySizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
-        </div>
-        <div class="studio-family-size__fields studio-family-size__fields--prices">
-          <label class="quote-component-field"><span>Starting Buy Price</span><input id="studioFamilySizeBuy" type="number" inputmode="decimal" step="0.01" min="0" /></label>
-          <label class="quote-component-field"><span>Starting Sell Price</span><input id="studioFamilySizeSell" type="number" inputmode="decimal" step="0.01" min="0" /></label>
-        </div>
-        <button id="studioFamilySizeBuild" class="ghost-action studio-family-size__build" type="button">Create Size List</button>
-        <p class="studio-component-duplicate__note">Each size becomes its own component in this family. Starting prices fill every size; edit any size below before saving. Stock starts at 0. Up to ${FAMILY_SIZE_GENERATOR_MAX} at a time.</p>
-        <div id="studioFamilySizeRows" class="studio-family-size__rows" aria-label="Generated sizes and prices"></div>
+        <div id="studioFamilySizeRows" class="studio-family-size__rows" aria-label="Sizes and prices"></div>
+        <section class="studio-family-size__add" aria-label="Add sizes">
+          <h3 class="studio-family-size__heading">Add Sizes</h3>
+          <label class="component-hierarchy-picker__brand"><span>Base Name</span><input id="studioFamilySizeBase" type="text" autocomplete="off" /></label>
+          <label class="component-hierarchy-picker__brand"><span>Sizes (comma separated)</span><input id="studioFamilySizeList" type="text" autocomplete="off" placeholder="e.g. 30, 25, 20, 16" /></label>
+          <details class="studio-family-size__range">
+            <summary>Or a range</summary>
+            <div class="studio-family-size__fields">
+              <label class="quote-component-field"><span>From</span><input id="studioFamilySizeFrom" type="number" inputmode="decimal" step="any" /></label>
+              <label class="quote-component-field"><span>To</span><input id="studioFamilySizeTo" type="number" inputmode="decimal" step="any" /></label>
+              <label class="quote-component-field"><span>Step</span><input id="studioFamilySizeStep" type="number" inputmode="decimal" step="any" min="0" placeholder="1" /></label>
+            </div>
+          </details>
+          <div class="studio-family-size__fields studio-family-size__fields--prices">
+            <label class="quote-component-field"><span>Starting Buy</span><input id="studioFamilySizeBuy" type="number" inputmode="decimal" step="0.01" min="0" /></label>
+            <label class="quote-component-field"><span>Starting Sell</span><input id="studioFamilySizeSell" type="number" inputmode="decimal" step="0.01" min="0" /></label>
+          </div>
+          <button id="studioFamilySizeBuild" class="ghost-action studio-family-size__build" type="button">Add Sizes</button>
+        </section>
         <p id="studioFamilySizeStatus" class="studio-component-duplicate__status" aria-live="polite"></p>
         <div class="studio-component-duplicate__actions">
           <button class="ghost-action" type="button" data-family-size-action="cancel">Cancel</button>
-          <button id="studioFamilySizeConfirm" class="primary-action" type="button" disabled>Create Components</button>
+          <button id="studioFamilySizeConfirm" class="primary-action" type="button" disabled>Save Changes</button>
         </div>
       </div>
     </section>
   `;
   document.body.appendChild(sheet);
   sheet.addEventListener('click',(event)=>{
-    if(event.target.closest('[data-family-size-action]')){closeFamilySizeGeneratorSheet();return;}
+    if(event.target.closest('[data-family-size-action]')){cancelFamilySizeEditor();return;}
     if(event.target.closest('#studioFamilySizeBuild')){buildFamilySizeGeneratorRows();return;}
-    if(event.target.closest('#studioFamilySizeConfirm')){
-      runExplicitSave($('studioFamilySizeConfirm'),commitFamilySizeGenerator);
-    }
+    const remove=event.target.closest('[data-family-size-remove]');
+    if(remove){toggleFamilySizeRow(Number(remove.getAttribute('data-family-size-remove')));return;}
+    if(event.target.closest('#studioFamilySizeConfirm'))saveFamilySizeEditor();
   });
   sheet.addEventListener('input',(event)=>{
     const state=studioFamilySizeGeneratorState;
@@ -7031,23 +7134,32 @@ function ensureFamilySizeGeneratorSheet(){
     if(target.id==='studioFamilySizeBase'){
       state.baseName=String(target.value||'');
       state.rows.forEach((row,index)=>{
+        if(row.id)return;
         const label=sheet.querySelector(`[data-family-size-name="${index}"]`);
-        if(label)label.textContent=familySizeGeneratorComponentName(state.baseName,row.size);
+        if(label)label.title=familySizeGeneratorComponentName(state.baseName,row.size);
       });
       return;
     }
     const index=Number(target.getAttribute&&target.getAttribute('data-family-size-index'));
     const field=target.getAttribute&&target.getAttribute('data-family-size-field');
-    if(Number.isInteger(index) && state.rows[index] && (field==='buy' || field==='sell'))state.rows[index][field]=String(target.value||'');
+    if(Number.isInteger(index) && state.rows[index] && (field==='buy' || field==='sell')){
+      state.rows[index][field]=String(target.value||'');
+      syncFamilySizeSaveButton();
+    }
   });
 }
+// Opens on the family's current sizes and prices; new families open empty, ready to add sizes.
 function openFamilySizeGeneratorSheet(category,family){
-  studioFamilySizeGeneratorState={categoryId:category.id,subcategoryId:family.id,baseName:family.name,rows:[]};
+  const records=studioComponentRecordsForSubcategory(componentLibraryRecords(),category.name,family.name);
+  const baseName=familySizeBaseName(records.map((record)=>record.name),family.name);
+  studioFamilySizeGeneratorState={categoryId:category.id,subcategoryId:family.id,baseName,rows:familySizeExistingRows(records,baseName)};
   ensureFamilySizeGeneratorSheet();
   ['studioFamilySizeList','studioFamilySizeFrom','studioFamilySizeTo','studioFamilySizeStep','studioFamilySizeBuy','studioFamilySizeSell'].forEach((id)=>{if($(id))$(id).value='';});
-  if($('studioFamilySizeBase'))$('studioFamilySizeBase').value=family.name;
+  if($('studioFamilySizeBase'))$('studioFamilySizeBase').value=baseName;
   if($('studioFamilySizeCategory'))$('studioFamilySizeCategory').textContent=category.name;
   if($('studioFamilySizeFamily'))$('studioFamilySizeFamily').textContent=family.name;
+  const range=document.querySelector('#studioFamilySizeSheet .studio-family-size__range');
+  if(range)range.open=false;
   familySizeGeneratorError('');
   renderFamilySizeGeneratorRows();
   $('studioFamilySizeSheet').hidden=false;
@@ -8731,12 +8843,6 @@ function bindStudioComponentsPanel(){
       }
       syncStudioComponentSaveButtonState();
     });
-    details.addEventListener('keydown',(event)=>{
-      if(event.key!=='Enter')return;
-      if(!event.target.closest('#studioComponentSizeInput'))return;
-      event.preventDefault();
-      addStudioComponentSizeFromInput();
-    });
     details.addEventListener('click',(event)=>{
       const parentCategoryButton=event.target.closest('[data-studio-library-parent-category]');
       if(parentCategoryButton){
@@ -8852,10 +8958,12 @@ function bindStudioComponentsPanel(){
       const sizeButton=event.target.closest('[data-size-action]');
       if(sizeButton){
         event.preventDefault();
-        const sizeAction=sizeButton.getAttribute('data-size-action');
-        if(sizeAction==='add')addStudioComponentSizeFromInput();
-        else if(sizeAction==='generate')generateStudioComponentSizeRange();
-        else if(sizeAction==='remove')removeStudioComponentSize(sizeButton.getAttribute('data-size-value'));
+        if(sizeButton.getAttribute('data-size-action')==='remove')removeStudioComponentSize(sizeButton.getAttribute('data-size-value'));
+        return;
+      }
+      if(event.target.closest('#studioComponentFamilySizesBtn')){
+        event.preventDefault();
+        openStudioComponentFamilySizes();
         return;
       }
 
@@ -19497,7 +19605,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v281';
+window.KLABS_UI_BUILD='build148-v282';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

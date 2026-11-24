@@ -12028,7 +12028,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
   color:#e4aeb4;
 }
 
-/* Generate Sizes: compact one-component-per-size price table. */
+/* Q35 Sizes & Prices (was Generate Sizes): one compact Size | Buy | Sell row per component in the family. */
 #studioFamilySizeSheet .component-sheet__body{
   min-height:0;
   overflow:auto;
@@ -12080,7 +12080,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 
 .studio-family-size__row{
   display:grid;
-  grid-template-columns:minmax(0,1fr) 76px 76px;
+  grid-template-columns:minmax(0,1fr) 76px 76px 36px;
   gap:6px;
   align-items:center;
   min-width:0;
@@ -12109,6 +12109,143 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 
 .studio-family-size__row--head span:not(:first-child){
   text-align:right;
+}
+
+/* Q35: prices typed, not spun - no spin arrows eating the compact fields. */
+.studio-family-size__row input::-webkit-inner-spin-button,
+.studio-family-size__row input::-webkit-outer-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+.studio-family-size__row input{
+  -moz-appearance:textfield;
+  appearance:textfield;
+}
+
+.studio-family-size__row strong small{
+  margin-left:4px;
+  font-size:10px;
+  color:var(--ds-text-muted,#9aa096);
+}
+
+/* A size just added (not saved yet) carries a thin red marker; one marked for removal is dimmed and struck through. */
+.studio-family-size__row--new strong{
+  box-shadow:inset 2px 0 0 rgba(207,89,101,.7);
+  padding-left:8px;
+}
+
+.studio-family-size__row--removed strong{
+  text-decoration:line-through;
+  color:var(--ds-text-muted,#9aa096);
+}
+
+.studio-family-size__row--removed input{
+  opacity:.4;
+}
+
+.studio-family-size__remove{
+  width:36px;
+  min-width:0;
+  height:40px;
+  padding:0;
+  border:1px solid rgba(214,210,200,.14);
+  border-radius:6px;
+  background:transparent;
+  color:var(--ds-text-muted,#9aa096);
+  font:inherit;
+  font-size:16px;
+  line-height:1;
+  cursor:pointer;
+  transition:border-color .15s ease,color .15s ease;
+}
+
+.studio-family-size__remove:hover,
+.studio-family-size__remove:focus-visible{
+  border-color:rgba(207,89,101,.55);
+  color:#e4aeb4;
+}
+
+.studio-family-size__add{
+  display:grid;
+  gap:8px;
+  min-width:0;
+  padding-top:10px;
+  border-top:1px solid rgba(214,210,200,.12);
+}
+
+.studio-family-size__heading{
+  margin:0;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--ds-text-muted,#9aa096);
+}
+
+.studio-family-size__range > summary{
+  cursor:pointer;
+  min-height:32px;
+  display:flex;
+  align-items:center;
+  font-size:11px;
+  letter-spacing:.06em;
+  color:var(--ds-text-muted,#9aa096);
+}
+
+.studio-family-size__range[open] > summary{
+  margin-bottom:6px;
+}
+
+/* The price table is dense: an opaque panel so the family list behind never shows through the rows. */
+#studioFamilySizeSheet .component-sheet__panel{
+  background:linear-gradient(180deg,#121618 0%,#0a0d0e 100%);
+}
+
+/* Cancel / Save Changes stay in reach at the foot of the sheet however long the size list is. */
+#studioFamilySizeSheet .studio-component-duplicate__actions{
+  position:sticky;
+  bottom:calc(-12px - env(safe-area-inset-bottom,0px));
+  z-index:1;
+  margin-top:auto;
+  padding:10px 0 calc(12px + env(safe-area-inset-bottom,0px));
+  background:#0a0d0e;
+  box-shadow:0 -10px 14px -6px #0a0d0e;
+}
+
+/* Save Changes waits for a change: dimmed until then (same treatment as the pricing actions). */
+#studioFamilySizeConfirm:disabled{
+  opacity:.55;
+  cursor:default;
+}
+
+.studio-family-size__fields input::-webkit-inner-spin-button,
+.studio-family-size__fields input::-webkit-outer-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+.studio-family-size__fields input{
+  appearance:textfield;
+  -moz-appearance:textfield;
+}
+
+/* Component editor: Sizes & Prices opens the family editor; sizes that share this component's one price stay listed. */
+.studio-size-section__open{
+  width:100%;
+  min-height:44px;
+}
+
+.studio-size-section__shared{
+  display:grid;
+  gap:6px;
+  margin-top:8px;
+}
+
+.studio-size-section__note{
+  margin-left:6px;
+  font-weight:500;
+  letter-spacing:.04em;
+  text-transform:none;
+  color:var(--ds-text-muted,#9aa096);
 }
 
 .studio-custom-select-picker .component-sheet__close{
