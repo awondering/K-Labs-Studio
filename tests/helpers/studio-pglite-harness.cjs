@@ -149,8 +149,9 @@ function serveRoot(getRoot) {
 }
 
 // A device: its own browser context (own storage), signed in to the same account, through Studio's own sign-in path.
-async function openDevice(browser, base, handler, { width = 390, name = 'device' } = {}) {
-  const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+// mobile (default): iPhone-like touch device; mobile: false gives a desktop browser window (mouse, no touch).
+async function openDevice(browser, base, handler, { width = 390, name = 'device', mobile = true, locale } = {}) {
+  const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: mobile ? 3 : 1, isMobile: mobile, hasTouch: mobile, serviceWorkers: 'block', ...(locale ? { locale } : {}) });
   await context.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== base) return route.abort('blockedbyclient');
