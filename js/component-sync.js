@@ -18,6 +18,14 @@
   const KNOWN_IDS_PREFIX = "klabs-component-cloud-known-ids";
   const KNOWN_UPDATED_PREFIX = "klabs-component-cloud-known-updated";
   const KNOWN_TAXONOMY_PREFIX = "klabs-component-cloud-known-taxonomy";
+  // Q36: a durable "this device has component changes not yet pushed" marker. The push runs 0.7 s after a save;
+  // if the app is reloaded or closed first, startup must resume that push (reconcileNow, which lets an edit win
+  // when the cloud row is unchanged since the last sync) instead of the plain merge, which would keep the cloud
+  // copy and bring back deleted components.
+  const PENDING_PUSH_PREFIX = "klabs-component-cloud-pending-push";
+  // Q36: a fingerprint of each component's synced content at the last sync, so a push can tell "this device did
+  // not touch it, another device changed it" (take the cloud copy) from a real two-device conflict.
+  const KNOWN_CONTENT_PREFIX = "klabs-component-cloud-known-content";
   const RECONCILE_DEBOUNCE_MS = 700;
 
   let currentUserId = "";
@@ -80,11 +88,47 @@
   }
   function setKnownUpdatedFromRows(rows) {
     const map = {};
+    const content = {};
     (Array.isArray(rows) ? rows : []).forEach((row) => {
       const id = String(row && row.client_id || "");
-      if (id) map[id] = String(row.updated_at || "");
+      if (!id) return;
+      map[id] = String(row.updated_at || "");
+      content[id] = syncContentFingerprint(rowToRecord(row));
     });
     setKnownUpdated(map);
+    window.Store.set(knownContentKey(), content);
+  }
+  function knownContentKey() {
+    return `${KNOWN_CONTENT_PREFIX}:${currentUserId}`;
+  }
+  function getKnownContent() {
+    const raw = window.Store.get(knownContentKey(), {});
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  }
+  // Two independent 32-bit FNV-1a hashes of the sync-relevant content (plus its length).
+  function syncContentFingerprint(record) {
+    const text = syncComparableJson(record);
+    let a = 0x811c9dc5;
+    let b = 0x01000193 ^ text.length;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      a = Math.imul(a ^ c, 0x01000193) >>> 0;
+      b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
+    }
+    return `${text.length.toString(36)}-${a.toString(36)}-${b.toString(36)}`;
+  }
+  function pendingPushKey() {
+    return `${PENDING_PUSH_PREFIX}:${currentUserId}`;
+  }
+  function getPendingPush() {
+    return String(window.Store.get(pendingPushKey(), "") || "");
+  }
+  // Each save writes a new token, so a push that started before a later save never clears that save's marker.
+  function markPendingPush() {
+    window.Store.set(pendingPushKey(), `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  }
+  function clearPendingPush(token) {
+    if (getPendingPush() === token) window.Store.set(pendingPushKey(), "");
   }
   function knownTaxonomyKey() {
     return `${KNOWN_TAXONOMY_PREFIX}:${currentUserId}`;
@@ -635,10 +679,12 @@
     }
     reconcileInFlight = true;
     setState({ status: "syncing", error: "" });
+    const pendingToken = getPendingPush();
     try {
       const knownIds = getKnownCloudIds();
       const knownUpdated = getKnownUpdated();
       const haveBaseline = Object.keys(knownUpdated).length > 0;
+      const knownContent = getKnownContent();
       const cloudRows = await fetchCloudComponents();
       const cloudById = new Map(cloudRows.map((row) => [String(row.client_id), row]));
       const localRecords = window.componentLibraryRecords().filter((record) => record.id && !isSeedRecord(record));
@@ -657,6 +703,7 @@
         }
         setKnownCloudIds(new Set(allOwnRecords.map((record) => record.id)));
         setKnownUpdatedFromRows(verify.rows);
+        clearPendingPush(pendingToken);
         lastErrorKind = "";
         setState({ status: "synced", error: "", count: allOwnRecords.length });
         return;
@@ -683,8 +730,13 @@
         const cloudRecord = rowToRecord(row);
         if (recordsEqualForSync(record, cloudRecord)) return; // already in sync
         const knownTs = String(knownUpdated[record.id] || "");
+        const knownFingerprint = String(knownContent[record.id] || "");
         if (haveBaseline && knownTs && knownTs === String(row.updated_at || "")) {
           upsertById.set(record.id, record); // cloud untouched since our last sync: this session's edit wins
+        } else if (haveBaseline && knownTs && knownFingerprint && knownFingerprint === syncContentFingerprint(record)) {
+          // Q36: this device has not changed it since the last sync; another device has. Take the cloud copy
+          // instead of pushing this device's older copy over that change.
+          workingById.set(record.id, { ...cloudRecord, id: record.id });
         } else {
           // Genuine race (cloud changed by another session) or no baseline yet: deterministic merge,
           // whichever side carries more real data wins, so neither session's details are silently lost.
@@ -724,6 +776,7 @@
       saveLocalRecordsSilently(finalRecords);
       setKnownCloudIds(finalIds);
       setKnownUpdatedFromRows(verify.rows);
+      clearPendingPush(pendingToken);
       lastErrorKind = "";
       setState({ status: "synced", error: "", count: finalRecords.length });
       window.KLABS_UI?.refreshComponentLibraryViews?.();
@@ -745,6 +798,7 @@
       return;
     }
     if (!canWrite() || !currentUserId || !isLinked()) return;
+    markPendingPush();
     if (reconcileTimer) clearTimeout(reconcileTimer);
     reconcileTimer = setTimeout(() => {
       reconcileTimer = null;
@@ -840,13 +894,22 @@
       return;
     }
 
-    // A previous local edit failed to push (offline/RLS/network). Never let a pull-based merge below
-    // silently discard it - resume the push first instead. Only possible once linked.
-    if (lastErrorKind === "push" && linked) {
+    // A previous local edit failed to push (offline/RLS/network), or (Q36) was saved but not yet pushed when the
+    // app was reloaded or closed. Never let a pull-based merge below silently discard it - resume the push first
+    // instead, then bring the categories up to date as the merge would have. Only possible once linked.
+    const pendingPush = linked && !!getPendingPush();
+    if ((lastErrorKind === "push" || pendingPush) && linked) {
       try {
         await reconcileNow();
       } catch (error) {
         console.error("[K-Labs Studio] Could not resume a pending local component change:", error);
+      }
+      if (pendingPush) {
+        try {
+          await reconcileTaxonomyNow();
+        } catch (error) {
+          console.error("[K-Labs Studio] Component taxonomy cloud sync failed:", error);
+        }
       }
       return;
     }
