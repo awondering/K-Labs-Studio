@@ -8,7 +8,8 @@ const DIAS = [4, 6, 8, 10, 12.5, 16, 20, 25], DETAILS = ['fine', 'standard', 'bo
 ok('F1 every glyph is 7 rows of equal width, only 0/1', Object.entries(T.FONT).every(([k, g]) => g.length === 7 && g.every(r => r.length === g[0].length && /^[01]+$/.test(r))));
 ok('F2 letters and digits are 5 wide', [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'].every(c => T.FONT[c][0].length === 5));
 ok('F3 no two letters/digits share a bitmap', (() => { const s = new Set(); return [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'].every(c => { const k = T.FONT[c].join(); if (s.has(k)) return false; s.add(k); return true; }); })());
-ok('F4 cleanText upper-cases, removes unsupported, trims to 24', T.cleanText(' k-labs é☃ ') === 'K-LABS ' || T.cleanText(' k-labs é☃ ') === 'K-LABS', T.cleanText(' k-labs é☃ '));
+// Q11: é now folds to E; ☃ is still unsupported and removed.
+ok('F4 cleanText upper-cases, folds accents, removes unsupported, trims to 24', T.cleanText(' k-labs é☃ ') === 'K-LABS E ' || T.cleanText(' k-labs é☃ ') === 'K-LABS E', T.cleanText(' k-labs é☃ '));
 ok('F5 bitmap width = glyphs + 1 gap each', T.textBitmap('AB').w === 11 && T.textBitmap('A B').w === 5 + 1 + 3 + 1 + 5);
 
 // 2 text -> grid orientation (reads left to right along the rod, upright, not mirrored)
@@ -24,7 +25,7 @@ ok('F5 bitmap width = glyphs + 1 gap each', T.textBitmap('AB').w === 11 && T.tex
 ok('X4 strokes are at least MIN_RUN cells for all letters at default size', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.&!+\'/'.split('').every(c => { const L = T.layout(T.createDesign('text', { text: c })); return L.minRun >= T.MIN_RUN; }));
 ok('X5 empty text warns and draws nothing', (() => { const L = T.layout(T.createDesign('text', { text: '' })); return L.warnings.some(w => w.id === 'empty') && L.spools.length <= 1; })());
 ok('X6 too-long text flagged truncated', (() => { const L = T.layout(T.createDesign('text', { text: 'ABCDEFGHIJKLMNOPQRSTUVWX', lengthMm: 100 })); return L.truncated && L.warnings.some(w => w.id === 'long'); })());
-ok('X7 unsupported characters reported, not silently dropped', T.layout(T.createDesign('text', { text: 'Café' })).warnings.some(w => w.id === 'chars'));
+ok('X7 unsupported characters reported, not silently dropped (accented letters are woven, not reported)', (() => { const w = T.layout(T.createDesign('text', { text: 'Café ☃' })).warnings.find(w => w.id === 'chars'); return !!w && /☃/.test(w.text) && !/É/.test(w.text); })());
 ok('X8 repeats around a wide rod when copies fit', T.layout(T.createDesign('text', { text: 'AB', diameterMm: 25 })).copies >= 2);
 
 // 3 every design on every rod size / thread / detail

@@ -22,7 +22,8 @@ module.exports = function (ok, near) {
     ok('LT3 "' + m + '": letters are centred round the blank (or repeated evenly when several copies fit) and never touch the edge of a copy', L.text.copies > 1 ? Math.min(...ys) >= 1 && Math.max(...ys) <= 7 * s && L.M === L.text.copies * L.text.period : Math.min(...ys) === L.text.off && Math.max(...ys) === L.text.off + 7 * s - 1 && Math.abs(L.text.off - (L.M - 7 * s - L.text.off)) <= 1);
   }
   ok('LT4 spacing: exactly one blank pixel column between letters, a space is three', (() => { const L = T.layout(mk('A B')), s = L.text.s, spans = L.text.spans; return spans.length === 3 && spans[1].ch === ' ' && spans[1].x1 - spans[1].x0 + 1 === 3 && spans[1].x0 === spans[0].x1 + 2 && spans[2].x0 === spans[1].x1 + 2 && L.text.textRows === (5 + 1 + 3 + 1 + 5) * s; })());
-  ok('LT5 characters: letters, digits and sensible punctuation are all drawn; unsupported ones are reported, not drawn', (() => { const L = T.layout(mk('A-Z 0.9 &!\'/+é☃')); return L.warnings.some(w => w.id === 'chars' && /É/i.test(w.text)) && L.text.spans.every(p => /[A-Z0-9 \-.&!'/+]/.test(p.ch)); })());
+  // Q11: é is now woven as E (accents fold to the base letter); ☃ is still unsupported - reported, not drawn.
+  ok('LT5 characters: letters, digits and sensible punctuation are all drawn; unsupported ones are reported, not drawn', (() => { const L = T.layout(mk('A-Z 0.9 &!\'/+é☃')), w = L.warnings.find(w => w.id === 'chars'); return !!w && /☃/.test(w.text) && !/É/i.test(w.text) && L.text.spans.some(p => p.ch === 'E') && L.text.spans.every(p => /[A-Z0-9 \-.&!'/+]/.test(p.ch)); })());
   ok('LT6 lowercase is capitalised', JSON.stringify(T.layout(mk('kevin')).unit) === JSON.stringify(T.layout(mk('KEVIN')).unit));
   // colour mapping
   (function () {
@@ -69,4 +70,12 @@ module.exports = function (ok, near) {
   ok('LT27 evidence: calculated weave, never claims bench testing', (() => { const L = T.layout(mk('KEVIN')); return L.evidence.bench === 'Not bench tested' && /estimated/.test(L.evidence.label); })());
   ok('LT28 describe-your-design: quoted text becomes woven lettering with lettering/background colours', (() => { const r = T.parse('"K-LABS" in gold on black'); return r.design.pattern === 'wovenletters' && r.design.text === 'K-LABS' && r.design.slots[0] === 'gold' && r.design.slots[1] === 'black' && T.parse('"KEVIN" in red').design.slots[1] === 'black'; })());
   ok('LT29 undo-able settings: the design is plain JSON and round-trips', (() => { const d = mk('JB 2026', { size: 1 }); return JSON.stringify(T.layout(JSON.parse(JSON.stringify(d))).unit) === JSON.stringify(T.layout(d).unit); })());
+  // Q11: accented letters and macrons are woven as their base capital (Tāne -> TANE), never dropped or left as a gap.
+  const folds = [['Tāne Smith', 'TANE SMITH'], ['Ngāti Whātua', 'NGATI WHATUA'], ['Hōne Heke', 'HONE HEKE'], ['Māui', 'MAUI'], ['Te Ūpoko', 'TE UPOKO'], ['Kīngi', 'KINGI'], ['Pēta', 'PETA'], ['Ta\u0304ne', 'TANE']];
+  ok('LT30 Māori macrons (ā ē ī ō ū, typed or combining) weave as the base capital; nothing is reported as left out', folds.every(([s, t]) => T.cleanText(s) === t && T.droppedChars(s).length === 0), folds.map(([s]) => [s, T.cleanText(s), T.droppedChars(s)]));
+  const accents = [['Zoë', 'ZOE'], ['José Peña', 'JOSE PENA'], ['Øyvind', 'OYVIND'], ['Ærø', 'AERO'], ['Straße', 'STRASSE'], ['Œuvre', 'OEUVRE'], ['Łódź', 'LODZ'], ['François Müller', 'FRANCOIS MULLER']];
+  ok('LT31 other accented letters weave as their base letters (é è ë ñ ç ü ø æ œ ß ł)', accents.every(([s, t]) => T.cleanText(s) === t && T.droppedChars(s).length === 0), accents.map(([s]) => [s, T.cleanText(s), T.droppedChars(s)]));
+  ok('LT32 word spacing and letters are exact: "Tāne Smith" is woven identically to "TANE SMITH" (one column between letters, three for the space)', (() => { const a = T.layout(mk('Tāne Smith')), b = T.layout(mk('TANE SMITH')), bm = T.textBitmap('Tāne Smith'); return JSON.stringify(a.unit) === JSON.stringify(b.unit) && bm.text === 'TANE SMITH' && bm.w === pixels('TANE SMITH').length && a.warnings.every(w => w.id !== 'chars'); })());
+  ok('LT33 characters the lettering cannot make are still reported and not drawn (accents never hide them)', (() => { const s = 'Tāne @ #1'; return JSON.stringify(T.droppedChars(s)) === JSON.stringify(['@', '#']) && T.cleanText(s) === 'TANE 1'; })());
+  ok('LT34 the 24-character limit applies to the woven letters', T.cleanText('ā'.repeat(30)) === 'A'.repeat(24));
 };

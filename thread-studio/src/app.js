@@ -7,6 +7,10 @@
   window.__ts = S;
   // Hosted inside K-Labs Studio the host injects window.__TDS_HOST__ = {scope}; storage keys then carry the account scope (same ":<account>" convention as the Studio's builds). Standalone keeps the plain keys.
   const HOST = window.__TDS_HOST__ || null, SCOPE = HOST && HOST.scope ? ':' + HOST.scope : '';
+  // Q11 (launch): Upload Artwork is hidden. The converter (art.js) and the import code below are kept for future
+  // development; designs already converted from an upload still open and keep their conversion controls.
+  const UPLOAD_ARTWORK = false;
+  S.uploadArtwork = UPLOAD_ARTWORK;
   const KEY = 'ktds.design.v1' + SCOPE;
   const store = { get() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }, set(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { } } };
   const hexes = d => d.slots.map(id => T.thread(id).hex);
@@ -65,7 +69,7 @@ ${saved ? `<button class="choice resume" data-act="resume"><b>Continue your desi
 <button class="choice" data-act="gallery"><b>Choose a Design</b><span>Browse beautiful, ready-to-customise patterns.</span></button>
 <button class="choice" data-act="text"><b>Create from Text</b><span>Enter a name, initials or a short message.</span></button>
 <button class="choice" data-act="describe"><b>Describe Your Design</b><span>Explain what you want in ordinary words.</span></button>
-<button class="choice" data-act="custom"><b>Create Your Own Design</b><span>Draw a logo or symbol, or upload artwork.</span></button>${HOST ? `<button class="choice" data-act="taper"><b>Diamond Layout for a Tapered Blank</b><span>Equal-area crossing rows from the butt and tip diameters.</span></button>` : ''}`;
+<button class="choice" data-act="custom"><b>Create Your Own Design</b><span>Draw a logo or symbol${UPLOAD_ARTWORK ? ', or upload artwork' : ''}.</span></button>${HOST ? `<button class="choice" data-act="taper"><b>Diamond Layout for a Tapered Blank</b><span>Equal-area crossing rows from the butt and tip diameters.</span></button>` : ''}`;
     if (saved) thumb($('#rc'), saved, 64);
   }
   const kindOf = id => { const L = T.layout(T.createDesign(id)); return L.family === 'cross' ? (L.evidence.tier === 'experimental' ? 'Experimental arrangement' : 'Documented method') : L.family === 'weave' ? 'Woven · not bench tested' : L.family === 'bands' ? 'Plain wrap' : L.family === 'spiral' ? 'Spiral, no cuts' : 'Experimental'; };
@@ -94,9 +98,9 @@ ${saved ? `<button class="choice resume" data-act="resume"><b>Continue your desi
   const lib = { get() { try { const s = localStorage.getItem(LKEY); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l.filter(r => r && r.design && T.art.valid(r.design.art)) : []; } catch (e) { return []; } }, set(l) { try { localStorage.setItem(LKEY, JSON.stringify(l)); return true; } catch (e) { return false; } } };
   function custom() {
     const saved = lib.get(), tp = [['blank', 'Blank grid', 'Draw your own'], ['symbol', 'Geometric symbol', 'Edit as you like'], ['monogram', 'Monogram', 'A bold initial']];
-    app.innerHTML = `<div class="top"><button class="btn" data-act="home">← Back</button></div><h1>Create Your Own Design</h1><p class="sub">Draw on a grid, or turn simple artwork into a weave pattern. Bold shapes work best.</p>
+    app.innerHTML = `<div class="top"><button class="btn" data-act="home">← Back</button></div><h1>Create Your Own Design</h1><p class="sub">${UPLOAD_ARTWORK ? 'Draw on a grid, or turn simple artwork into a weave pattern.' : 'Draw on a grid, or start from a symbol or monogram.'} Bold shapes work best.</p>
 <div class="tiles">${tp.map(([k, n, sub]) => `<button class="tile" data-tpl="${k}"><canvas data-tp="${k}"></canvas><b>${n}</b><span>${sub}</span></button>`).join('')}
-<label class="tile upl"><input type="file" id="file" accept="image/png,image/jpeg,image/svg+xml,.png,.jpg,.jpeg,.svg"><b>Upload Artwork</b><span>PNG, JPG or SVG</span><em>＋</em></label></div>
+${UPLOAD_ARTWORK ? `<label class="tile upl"><input type="file" id="file" accept="image/png,image/jpeg,image/svg+xml,.png,.jpg,.jpeg,.svg"><b>Upload Artwork</b><span>PNG, JPG or SVG</span><em>＋</em></label>` : ''}</div>
 ${S.upErr ? `<div class="status warn">${esc(S.upErr)}</div>` : ''}
 ${saved.length ? `<h2 style="margin-top:18px">My Designs</h2><div class="tiles">${saved.map(r => `<div class="tilewrap"><button class="tile" data-lib="${esc(r.id)}"><canvas data-lb="${esc(r.id)}"></canvas><b>${esc(r.name)}</b><span>${r.design.art.w} × ${r.design.art.h} grid</span></button><button class="del" data-libdel="${esc(r.id)}" aria-label="Delete ${esc(r.name)}">×</button></div>`).join('')}</div>` : ''}`;
     document.querySelectorAll('canvas[data-tp]').forEach(c => thumb(c, T.createDesign('wovencustom', { art: T.art.templates[c.dataset.tp]() }), 64));

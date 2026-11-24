@@ -48,8 +48,12 @@
   };
   T.FONT = {}; Object.keys(G).forEach(k => { T.FONT[k] = G[k].split(' '); });
   T.FONT[' '] = ['000', '000', '000', '000', '000', '000', '000'];
-  T.cleanText = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9 \-.&!+'/]/g, ' ').replace(/\s+/g, ' ').replace(/^ +/, '').slice(0, 24);
-  T.droppedChars = s => { const c = T.cleanText(s); return Array.from(String(s || '').toUpperCase().replace(/\s+/g, ' ')).filter(ch => !/[A-Z0-9 \-.&!+'/]/.test(ch)); };
+  // Accented letters and macrons are woven as their base capital (Tāne -> TANE, Zoë -> ZOE, Ø -> O, Æ -> AE); the
+  // accent itself is too small to weave. Only characters that still have no letter are left out (and reported).
+  const LIGATURES = { 'Æ': 'AE', 'Œ': 'OE', 'Ø': 'O', 'Ł': 'L', 'Đ': 'D', 'Ð': 'D', 'Þ': 'TH', 'Ħ': 'H', 'Ŧ': 'T', 'Ŋ': 'N' };
+  T.foldText = s => String(s == null ? '' : s).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[ÆŒØŁĐÐÞĦŦŊ]/g, ch => LIGATURES[ch]);
+  T.cleanText = s => T.foldText(s).replace(/[^A-Z0-9 \-.&!+'/]/g, ' ').replace(/\s+/g, ' ').replace(/^ +/, '').slice(0, 24);
+  T.droppedChars = s => Array.from(T.foldText(s).replace(/\s+/g, ' ')).filter(ch => !/[A-Z0-9 \-.&!+'/]/.test(ch));
   T.textBitmap = function (text) {
     const t = T.cleanText(text).replace(/ +$/, ''), cols = [];
     for (let k = 0; k < t.length; k++) { const g = T.FONT[t[k]]; for (let x = 0; x < g[0].length; x++) cols.push(g.map(r => r[x] === '1' ? 1 : 0)); if (k < t.length - 1) cols.push([0, 0, 0, 0, 0, 0, 0]); }
