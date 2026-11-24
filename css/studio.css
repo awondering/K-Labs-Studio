@@ -10570,14 +10570,6 @@ body:not(.klabs-logged-out) .home-public-entry {
   line-height:1.1;
   text-transform:uppercase;
 }
-.home-public-entry__trial-note {
-  color:#d9ceca;
-  font-size:12px;
-  font-weight:500;
-  letter-spacing:.025em;
-  line-height:1.1;
-  text-transform:none;
-}
 .home-public-entry__secondary,
 .home-public-entry__signin {
   width:100%;
@@ -10602,6 +10594,8 @@ body:not(.klabs-logged-out) .home-public-entry {
   background:#1b2022;
 }
 .home-public-entry__signin {
+  /* Q24: with Discover consolidated into Explore Studio, Sign In is the only button under it. */
+  grid-column:1 / -1;
   min-height:44px;
   color:#c2beb5;
   border:1px solid rgba(214,210,200,.14);
@@ -10617,102 +10611,9 @@ body:not(.klabs-logged-out) .home-public-entry {
   outline:2px solid rgba(173,169,157,.65);
   outline-offset:2px;
 }
-.public-discover-dialog {
-  width:min(460px,calc(100% - 32px));
-  max-height:calc(100dvh - 32px);
-  box-sizing:border-box;
-  padding:28px;
-  border:1px solid rgba(214,210,200,.18);
-  border-radius:12px;
-  background:linear-gradient(155deg,#181d1f,#0b0e10 75%);
-  color:#d7d1c5;
-  box-shadow:0 24px 80px rgba(0,0,0,.65);
-}
-.public-discover-dialog::backdrop { background:rgba(0,0,0,.82); }
-.public-discover-dialog h2 {
-  margin:0;
-  color:#e4ded2;
-  font-size:22px;
-  letter-spacing:-.035em;
-}
-.public-discover-dialog__features dd,
-.public-discover-dialog__note {
-  color:#a5a8a2;
-  font-size:13px;
-  line-height:1.5;
-}
-.public-discover-dialog__features {
-  display:grid;
-  gap:0;
-  margin:20px 0 16px;
-  border-top:1px solid rgba(214,210,200,.12);
-}
-.public-discover-dialog__features div {
-  display:grid;
-  grid-template-columns:160px 1fr;
-  gap:12px;
-  padding:13px 0;
-  border-bottom:1px solid rgba(214,210,200,.12);
-}
-.public-discover-dialog__features dt {
-  color:#c6c1b6;
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:.1em;
-}
-.public-discover-dialog__features dd { margin:0; }
-.public-discover-dialog__note { margin:0 0 16px; font-size:12px; }
-.public-discover-dialog__actions {
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-}
-.public-discover-dialog__actions button {
-  width:100%;
-  min-width:0;
-  min-height:46px;
-  border-radius:6px;
-  font:inherit;
-  font-size:11px;
-  font-weight:700;
-  letter-spacing:.14em;
-  cursor:pointer;
-}
-.public-discover-dialog__explore {
-  border:1px solid rgba(207,89,101,.35);
-  background:linear-gradient(180deg,#922333,#661821);
-  color:#f3e8e4;
-}
-.public-discover-dialog__explore:hover {
-  background:linear-gradient(180deg,#a52b3c,#77202a);
-}
-.public-discover-dialog__close {
-  border:1px solid rgba(214,210,200,.2);
-  background:linear-gradient(180deg,#171b1d,#0c0f10);
-  color:#cfcac0;
-}
-.public-discover-dialog__close:hover {
-  border-color:rgba(214,210,200,.38);
-  color:#f1ece3;
-}
-.public-discover-dialog__actions button:focus-visible {
-  outline:2px solid rgba(173,169,157,.65);
-  outline-offset:2px;
-}
 @media (max-width:520px) {
   .home-public-entry,
   .home-signed-in-entry { width:100%; }
-  .public-discover-dialog { padding:24px; }
-  .public-discover-dialog__features div {
-    grid-template-columns:1fr;
-    gap:5px;
-    padding:11px 0;
-  }
-  .public-discover-dialog__actions { grid-template-columns:1fr; }
-}
-@media (max-width:360px) {
-  .public-discover-dialog { padding:20px; }
-  .public-discover-dialog__features div { padding:11px 0; }
 }
 
 .account-access-screen,

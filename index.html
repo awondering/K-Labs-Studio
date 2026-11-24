@@ -255,11 +255,11 @@
           <button id="homeComponentsBtn" class="home-public-entry__secondary" type="button">COMPONENTS</button>
         </div>
         <div class="home-public-entry">
+          <!-- Q24: Explore Studio opens Demo Mode's choice, Build a Rod | Components Library (was: sign-in, with a
+               7-day trial note). It replaces Discover K-Labs Studio, whose only action was the same Explore Studio. -->
           <button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">
             <span class="home-public-entry__primary-label">EXPLORE STUDIO</span>
-            <span class="home-public-entry__trial-note">7-day trial available</span>
           </button>
-          <button id="publicDiscoverBtn" class="home-public-entry__secondary" type="button">DISCOVER K-LABS STUDIO</button>
           <button id="publicSignInBtn" class="home-public-entry__signin" type="button">SIGN IN</button>
           <p id="publicDemoUnavailable" class="home-public-entry__notice" role="status" hidden>The demonstration could not open safely in this browser. Nothing was changed.</p>
         </div>
@@ -1560,21 +1560,6 @@
     <button data-nav="workshopLandingScreen" type="button"><i aria-hidden="true">◫</i><span>Workshop</span></button>
     <button data-nav="settingsScreen" type="button"><i aria-hidden="true">⚙</i><span>Settings</span></button>
   </nav>
-  <dialog id="publicDiscoverDialog" class="public-discover-dialog" aria-labelledby="publicDiscoverTitle">
-    <div class="public-discover-dialog__heading">
-      <h2 id="publicDiscoverTitle">K-Labs Studio</h2>
-    </div>
-    <dl class="public-discover-dialog__features">
-      <div><dt>DESIGN &amp; MANAGE</dt><dd>Build specifications, components and pricing.</dd></div>
-      <div><dt>PRESENT WITH CONFIDENCE</dt><dd>Professional quotes and build confirmations.</dd></div>
-      <div><dt>PRECISION WORKSHOP</dt><dd>Purpose-built tools for rod builders.</dd></div>
-    </dl>
-    <p class="public-discover-dialog__note">Discover a more considered approach to custom rod building.</p>
-    <div class="public-discover-dialog__actions">
-      <button id="publicDiscoverExploreBtn" class="public-discover-dialog__explore" type="button">EXPLORE STUDIO</button>
-      <button id="publicDiscoverClose" class="public-discover-dialog__close" type="button">CLOSE</button>
-    </div>
-  </dialog>
   <!-- Q18 Demo Mode: the visitor shield (a second, visible layer; js/demo-mode.js stops the visitor's own actions) and
        the demonstration's introduction screen. Both stay hidden outside Demo Mode. -->
   <div id="demoShield" class="demo-shield" hidden aria-hidden="true"></div>

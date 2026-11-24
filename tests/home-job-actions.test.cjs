@@ -161,7 +161,8 @@ test('signed-in Home: NEW ROD BUILD full width, then REPAIR / REFURB and COMPONE
     '<button id="homeRepairBtn" class="home-public-entry__secondary" type="button">REPAIR / REFURB</button> '+
     '<button id="homeComponentsBtn" class="home-public-entry__secondary" type="button">COMPONENTS</button> </div>');
   // Visitor Home unchanged.
-  assert.match(home,/<div class="home-public-entry">\s*<button id="publicExploreBtn"[\s\S]*?id="publicDiscoverBtn"[\s\S]*?id="publicSignInBtn"/);
+  // Visitor Home: Explore Studio then Sign In (Q24 consolidated Discover K-Labs Studio into Explore Studio).
+  assert.match(home,/<div class="home-public-entry">[\s\S]*?<button id="publicExploreBtn"[\s\S]*?id="publicSignInBtn"/);
 });
 
 test('signed-in Home reuses the visitor grid and button rules exactly (symmetry by construction)',()=>{

@@ -32,7 +32,7 @@ function harness({storage={}}={}){
   const demoPanels=['overview','customers','builds','quotes','components','workshop'].map(view=>({
     dataset:{demoPanel:view},hidden:false
   }));
-  for(const id of ['authScreen','app','authEmail','authForm','authShowSignUp','authSignUpForm','publicDiscoverDialog','homeLivingRod','publicExploreBtn','publicSignInBtn','authBackHome','publicDiscoverBtn','publicDiscoverExploreBtn','publicDiscoverClose','authMessage','accountAccessScreen','exploreDemoScreen','accountAccessMessage','accountAccessChoices','accountAccessError','startTrialBtn','enterExploreDemoBtn','verifyEmailContinueBtn','accessSignOutBtn','demoSignOutBtn','demoStartTrialBtn','readOnlyAccessNotice']){
+  for(const id of ['authScreen','app','authEmail','authForm','authShowSignUp','authSignUpForm','homeLivingRod','publicExploreBtn','publicSignInBtn','authBackHome','authMessage','accountAccessScreen','exploreDemoScreen','accountAccessMessage','accountAccessChoices','accountAccessError','startTrialBtn','enterExploreDemoBtn','verifyEmailContinueBtn','accessSignOutBtn','demoSignOutBtn','demoStartTrialBtn','readOnlyAccessNotice']){
     elements[id]={style:{display:'',setProperty(){}},listeners:{},classList:{add(){},remove(){}},hidden:false,textContent:'',disabled:false,dataset:{},
       addEventListener(event,fn){this.listeners[event]=fn;},focus(){},showModal(){this.open=true;},close(){this.open=false;},
       querySelector(){return {appendChild(){},textContent:''};},
@@ -84,8 +84,9 @@ function harness({storage={}}={}){
 
 test('public markup does not load private application scripts',()=>{
   assert.match(html,/<script src="js\/public-entry\.js"><\/script>/);
-  assert.match(html,/<button id="publicExploreBtn"[^>]*>[\s\S]*?<span class="home-public-entry__primary-label">EXPLORE STUDIO<\/span>[\s\S]*?<span class="home-public-entry__trial-note">7-day trial available<\/span>[\s\S]*?<\/button>/);
-  assert.doesNotMatch(html,/<p>\s*7-day trial available\s*<\/p>/);
+  // Q24: Explore Studio no longer carries the 7-day trial note (was: EXPLORE STUDIO / 7-day trial available).
+  assert.match(html,/<button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">\s*<span class="home-public-entry__primary-label">EXPLORE STUDIO<\/span>\s*<\/button>/);
+  assert.doesNotMatch(html,/7-day trial available|home-public-entry__trial-note/);
   for(const name of ['storage','ui','navigation','component-sync','build-sync','settings-sync','app']){
     assert.doesNotMatch(html,new RegExp(`<script src="js/${name}\\.js">`));
   }
@@ -106,41 +107,29 @@ test('signed-out entry and public interactions do not initialize private scripts
   await h.window.KLABS_PUBLIC_ENTRY.applySession(null,()=>assert.fail('must not initialize'));
   assert.deepEqual(h.scripts,[]);
   assert.equal(h.elements.app.style.display,'');
-  h.elements.publicDiscoverBtn.listeners.click();
-  assert.equal(h.elements.publicDiscoverDialog.open,true);
-  h.elements.publicDiscoverClose.listeners.click();
-  assert.equal(h.elements.publicDiscoverDialog.open,false);
-  // Q18 Phase 3 correction: restored to origin/main exactly - Explore Studio is shown and opens sign-in, as on main;
-  // it never opens Demo Mode (that opens only at ?demo). (Phase 1-2B: it opened Demo Mode; Phase 3 first cut: hidden.)
+  // Q24: Explore Studio opens Demo Mode (its introduction offers Build a Rod | Components Library), not sign-in.
   assert.notEqual(h.elements.publicExploreBtn.hidden,true);
   h.elements.publicExploreBtn.listeners.click();
-  assert.equal(h.elements.authScreen.style.display,'flex');
-  assert.equal(h.window.KLABS_DEMO.entered,0);
+  assert.equal(h.window.KLABS_DEMO.entered,1);
+  assert.notEqual(h.elements.authScreen.style.display,'flex');
   assert.deepEqual(h.scripts,[]);
+  // Sign In still opens sign-in, and Back returns home.
+  h.elements.publicSignInBtn.listeners.click();
+  assert.equal(h.elements.authScreen.style.display,'flex');
+  assert.equal(h.window.KLABS_DEMO.entered,1);
   h.elements.authBackHome.listeners.click();
   assert.equal(h.elements.authScreen.style.display,'none');
 });
 
-test('Discover sheet presents accurate features and its Explore action opens sign-in',()=>{
-  assert.match(html,/DESIGN &amp; MANAGE/);
-  assert.match(html,/Build specifications, components and pricing\./);
-  assert.match(html,/PRESENT WITH CONFIDENCE/);
-  assert.match(html,/Professional quotes and build confirmations\./);
-  assert.match(html,/PRECISION WORKSHOP/);
-  assert.match(html,/Purpose-built tools for rod builders\./);
-  assert.match(html,/Discover a more considered approach to custom rod building\./);
-  assert.doesNotMatch(html,/planned for a future release|coming soon/i);
-
-  const h=harness();
-  h.elements.publicDiscoverBtn.listeners.click();
-  assert.equal(h.elements.publicDiscoverDialog.open,true);
-  // Q18 Phase 3 correction: as on origin/main - shown; closes the sheet and opens sign-in; never Demo Mode.
-  assert.notEqual(h.elements.publicDiscoverExploreBtn.hidden,true);
-  h.elements.publicDiscoverExploreBtn.listeners.click();
-  assert.equal(h.elements.publicDiscoverDialog.open,false);
-  assert.equal(h.elements.authScreen.style.display,'flex');
-  assert.equal(h.window.KLABS_DEMO.entered,0);
-  assert.deepEqual(h.scripts,[]);
+test('Q24: Discover K-Labs Studio is consolidated into Explore Studio - one Explore entry, then Sign In',()=>{
+  // Discover's only action was a second EXPLORE STUDIO (which opened sign-in, as Sign In does); Explore Studio now shows
+  // Studio itself, so the separate button and its sheet are gone.
+  assert.doesNotMatch(html,/publicDiscover|DISCOVER K-LABS STUDIO|public-discover-dialog/);
+  assert.doesNotMatch(css,/public-discover-dialog/);
+  const entry=html.slice(html.indexOf('<div class="home-public-entry">'),html.indexOf('</div>',html.indexOf('<div class="home-public-entry">')));
+  assert.equal((entry.match(/<button /g)||[]).length,2,'Explore Studio and Sign In');
+  assert.equal((html.match(/EXPLORE STUDIO/g)||[]).length,1,'one Explore entry');
+  assert.match(css,/\.home-public-entry__signin \{[^}]*grid-column:1 \/ -1;/,'Sign In spans the row under Explore Studio');
 });
 
 test('private scripts load only after a session and auth state applies after session recheck',async()=>{
@@ -651,26 +640,17 @@ test('Q17: a valid sign-in is unaffected - normal start-up still verifies access
   assert.ok(!h.classes.has('klabs-offline-session'));
 });
 
-test('Q18 Phase 3 correction: the public entry is exactly origin/main\'s - Explore Studio, its trial note and the Discover Explore button are shown and open sign-in; Demo Mode opens only at ?demo', () => {
-  // The markup is main's, byte for byte (no hidden attribute).
+test('Q24: the public entry is Explore Studio (opens Demo Mode) and Sign In; Demo Mode still also opens at ?demo', () => {
+  // Was (Q18 Phase 3 correction): Explore Studio with its trial note, Discover K-Labs Studio and Sign In, both Explore
+  // buttons opening sign-in.
   assert.ok(html.includes(`          <button id="publicExploreBtn" class="home-enter-rod-button primary-action" type="button">
             <span class="home-public-entry__primary-label">EXPLORE STUDIO</span>
-            <span class="home-public-entry__trial-note">7-day trial available</span>
           </button>
-          <button id="publicDiscoverBtn" class="home-public-entry__secondary" type="button">DISCOVER K-LABS STUDIO</button>
           <button id="publicSignInBtn" class="home-public-entry__signin" type="button">SIGN IN</button>`));
-  assert.ok(html.includes('<button id="publicDiscoverExploreBtn" class="public-discover-dialog__explore" type="button">EXPLORE STUDIO</button>'));
-  // Nothing hides them: no style rule, no visibility switch in the script.
   const css = fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
   const js = fs.readFileSync(path.join(__dirname,'..','js','public-entry.js'),'utf8');
-  assert.doesNotMatch(css, /#publicExploreBtn|#publicDiscoverExploreBtn/);
-  assert.doesNotMatch(js, /DEMO_PUBLIC_ENTRY|setVisible\("public(Discover)?ExploreBtn"/);
-  // Both behave as on main: they open sign-in (main's own listener lines, unchanged).
-  assert.ok(js.includes('document.getElementById("publicExploreBtn").addEventListener("click", () => showAuth("workshopScreen"));'));
-  assert.ok(js.includes(`document.getElementById("publicDiscoverExploreBtn").addEventListener("click", () => {
-      dialog.close();
-      showAuth("workshopScreen");
-    });`));
-  // The ?demo route itself is unchanged: Demo Mode still starts from the address.
+  assert.doesNotMatch(css, /#publicExploreBtn/);
+  assert.ok(js.includes('document.getElementById("publicExploreBtn").addEventListener("click", () => window.KLABS_DEMO.enter());'));
+  assert.ok(js.includes('document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));'));
   assert.match(fs.readFileSync(path.join(__dirname,'..','js','demo-mode.js'),'utf8'), /function enterUrl\(\)/);
 });
