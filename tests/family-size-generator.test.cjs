@@ -22,6 +22,7 @@ const NAMES=[
   'familySizeEditorProblem','familySizeSaveLibrary','familySizeLegacyRows','familySizeLegacyRecord',
   'normalizeComponentSizePrices','componentSizePricesProperty','componentSizePriceFields','applyComponentSizePriceToRow',
   'componentSizeOptionsForDisplay','componentRecordSizeOptions','familySizePriceText',
+  'componentSellLabel','activeTaxEnabled','activeTaxName','activeTaxType','normalizeTaxType','normalizeTaxName','taxTypeInfo',
 ];
 
 function harness({saveThrows=false,notifyThrows=false}={}){
@@ -35,6 +36,7 @@ function harness({saveThrows=false,notifyThrows=false}={}){
   store.set('records',plain(existing));
   const ctx={
     FAMILY_SIZE_GENERATOR_MAX:50,
+    studioSettings:{taxEnabled:true,taxType:'gst'},
     studioFamilySizeGeneratorState:null,
     studioComponentDraft:{},studioLibraryEditor:{type:'component'},studioLibraryPath:{level:'category'},
     studioComponentTaxonomyState:{categories:[{id:'guides',name:'Guides',subcategories:[{id:'alc',name:'Alconite'}]},{id:'seats',name:'Reel Seats',subcategories:[{id:'fuji',name:'Fuji'}]}]},
@@ -166,16 +168,16 @@ test('Sizes & Prices sits beside Duplicate Family and Duplicate Family is not re
   assert.doesNotMatch(body('commitStudioComponentDuplicate'),/familySize/);
 });
 
-function tableHarness(state,values={}){
-  const fields={studioFamilySizeList:{value:''},studioFamilySizeFrom:{value:''},studioFamilySizeTo:{value:''},studioFamilySizeStep:{value:''},
+function tableHarness(state,values={},settings={taxEnabled:true,taxType:'gst'}){
+  const fields={studioFamilySizeSellLabel:{innerHTML:'Starting Sell'},studioFamilySizeList:{value:''},studioFamilySizeFrom:{value:''},studioFamilySizeTo:{value:''},studioFamilySizeStep:{value:''},
     studioFamilySizeBuy:{value:''},studioFamilySizeSell:{value:''},studioFamilySizeRows:{innerHTML:''},studioFamilySizeConfirm:{disabled:true},
     studioFamilySizeStatus:{textContent:'',dataset:{}}};
   Object.entries(values).forEach(([id,value])=>{fields[id].value=value;});
   const ctx={FAMILY_SIZE_GENERATOR_MAX:50,$:(id)=>fields[id]||null,measurementUnitSuffix:()=> 'mm',
     escapeHtml:(v)=>String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),escapeAttributeValue:(v)=>String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'),
-    studioFamilySizeGeneratorState:state};
+    studioFamilySizeGeneratorState:state,studioSettings:settings};
   vm.createContext(ctx);
-  for(const name of ['normalizeNameKey','familySizeGeneratorLabels','familySizeGeneratorComponentName','familySizeRowChanged','familySizeEditorDirty','addFamilySizeRows',
+  for(const name of ['componentSellLabel','componentSellLabelMarkup','activeTaxEnabled','activeTaxName','activeTaxType','normalizeTaxType','normalizeTaxName','taxTypeInfo','normalizeNameKey','familySizeGeneratorLabels','familySizeGeneratorComponentName','familySizeRowChanged','familySizeEditorDirty','addFamilySizeRows',
     'familySizeGeneratorError','familySizeGeneratorNote','syncFamilySizeSaveButton','renderFamilySizeGeneratorRows','buildFamilySizeGeneratorRows','toggleFamilySizeRow'])vm.runInContext(body(name),ctx);
   return {ctx,fields};
 }
@@ -187,7 +189,10 @@ test('Add Sizes fills every new size with the starting prices and renders an edi
   assert.equal(ctx.buildFamilySizeGeneratorRows(),true);
   assert.deepEqual(plain(ctx.studioFamilySizeGeneratorState.rows),[{id:'',size:'8 mm',buy:'2.5',sell:'6',removed:false},{id:'',size:'10 mm',buy:'2.5',sell:'6',removed:false},{id:'',size:'12 mm',buy:'2.5',sell:'6',removed:false}]);
   const markup=fields.studioFamilySizeRows.innerHTML;
-  assert.match(markup,/<span>Size<\/span><span>Buy<\/span><span>Sell<\/span>/);
+  assert.match(markup,/<span>Size<\/span><span>Buy<\/span><span>Sell<span class="component-tax-note"> \(incl\. GST\)<\/span><\/span>/);
+  assert.equal(fields.studioFamilySizeSellLabel.innerHTML,'Starting Sell<span class="component-tax-note"> (incl. GST)</span>');
+  assert.match(markup,/aria-label="Sell Price \(incl\. GST\) Fuji &lt;KW> 10 mm"/);
+  assert.match(markup,/aria-label="Buy Price Fuji &lt;KW> 10 mm"/,'Buy is never labelled as including tax');
   assert.equal((markup.match(/data-family-size-field="buy"/g)||[]).length,3);
   assert.equal((markup.match(/data-family-size-field="sell"/g)||[]).length,3);
   assert.equal((markup.match(/data-family-size-remove=/g)||[]).length,3);
@@ -455,4 +460,25 @@ test('per-size prices: Save Changes writes only that component, once; restored o
   failing.ctx.studioFamilySizeGeneratorState={mode:'sizes',recordId:'kcc',baseName:KCC.name,rows:ctx.familySizeLegacyRows(KCC).map((r)=>r.size==='10'?{...r,sell:'11'}:r)};
   assert.equal(failing.ctx.commitFamilySizeGenerator(),false);
   assert.deepEqual(failing.store.get('records'),plain(lib));
+});
+
+// Q38: Sell includes the configured tax when tax is on (named as configured); with tax off the labels stay plain.
+test('Sizes & Prices labels: Sell names the configured tax when tax is on; plain Buy / Sell when it is off',()=>{
+  const row=existingRow('k6','Fuji KL 6','6','4','9');
+  const run=(settings)=>{
+    const {ctx,fields}=tableHarness({mode:'sizes',baseName:'Fuji KL',rows:[{...row}]},{},settings);
+    ctx.renderFamilySizeGeneratorRows();
+    const text=(html)=>html.replace(/<[^>]+>/g,'');
+    return {head:text(fields.studioFamilySizeRows.innerHTML.match(/<span>Size<\/span><span>Buy<\/span><span>(.*?)<\/span><span><\/span><\/div>/)[1]),starting:text(fields.studioFamilySizeSellLabel.innerHTML),html:fields.studioFamilySizeRows.innerHTML};
+  };
+  const vat=run({taxEnabled:true,taxType:'vat'});
+  assert.equal(vat.head,'Sell (incl. VAT)');
+  assert.equal(vat.starting,'Starting Sell (incl. VAT)');
+  assert.equal(run({taxEnabled:true,taxType:'other',taxName:'HST'}).head,'Sell (incl. HST)');
+  const off=run({taxEnabled:false,taxType:'gst'});
+  assert.equal(off.head,'Sell');
+  assert.equal(off.starting,'Starting Sell');
+  assert.match(off.html,/aria-label="Sell Price Fuji KL 6"/);
+  assert.doesNotMatch(off.html,/incl\./);
+  assert.doesNotMatch(vat.html,/Buy[^"<]*incl\./,'Buy never says it includes tax');
 });
