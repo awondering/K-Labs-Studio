@@ -512,6 +512,15 @@ const layout = (p) => p.evaluate(() => {
     const desk = await layout(D.page);
     ck('desktop', 'desktop: compact aligned table, nothing sideways', !desk.sideways && desk.equalHeights && desk.buyAligned && desk.sellAligned, desk);
     if (shots) await D.page.screenshot({ path: path.join(shots, 'existing-family-desktop.png') });
+    await D.page.locator('#studioFamilySizeSheet .studio-component-duplicate__actions [data-family-size-action="cancel"]').click();
+    await openFamily(D.page, 'Guides', 'Fuji Guides');
+    await D.page.locator('#studioComponentsList [data-studio-library-open-component="Fuji K Series Single Foot CC"]').click();
+    await D.page.locator('#studioComponentFamilySizesBtn').click();
+    await editor(D.page).sheet.waitFor({ state: 'visible' });
+    const deskK = { look: await layout(D.page), rows: (await editor(D.page).rows()).map((r) => r.label) };
+    ck('desktop', 'desktop: K Series CC shows its ten sizes in a compact aligned table',
+      JSON.stringify(deskK.rows) === JSON.stringify(KCC_SIZES) && !deskK.look.sideways && deskK.look.equalHeights && deskK.look.buyAligned && deskK.look.sellAligned, deskK);
+    if (shots) await D.page.screenshot({ path: path.join(shots, 'kseries-cc-ten-sizes-desktop.png') });
     await D.context.close();
   } finally {
     await browser.close();
