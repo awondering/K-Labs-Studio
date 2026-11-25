@@ -20,6 +20,7 @@ function draft({status='active',jobType='build',quote={},p=profile}={}){
   const q={customerName:'Bren Pine',email:'bren@example.test',quoteNumber:'Q-1001',buildName:'Rod',estimatedCompletionDate:'2026-12-01',components:[],payments:[],depositEnabled:false,jobType,...quote};
   const total=q.total??1000;
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote:q,businessProfile:p,studioSettings:{},window:{location:{href:''}},
     currentBuildLifecycleStatus:()=>status,
     runWithFulfilmentCheck:(f)=>f(),
@@ -39,7 +40,7 @@ function draft({status='active',jobType='build',quote={},p=profile}={}){
     formatCustomerEmailLongDate:(d)=>`D:${new Date(d).toISOString().slice(0,10)}`,
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerEmailLines','emailCurrentQuote'].map(fn).join('\n'),c);
   c.emailCurrentQuote();
   const href=c.window.location.href;
   const params=new URLSearchParams(href.slice(href.indexOf('?')+1));
@@ -51,7 +52,7 @@ test('fully paid confirmed build: payment subject, statement, Total / Total rece
   const m=draft({quote:{depositEnabled:true,payments:[{amount:200},{amount:800}]}});
   assert.equal(m.subject,'K-Labs — Payment Received in Full — Q-1001');
   assert.ok(m.body.includes(FULL));
-  assert.match(m.body,/Total: A\$1000\.00 AUD\nTotal received: A\$1000\.00 AUD\nBalance owing: A\$0\.00 AUD/);
+  assert.match(m.body,/Total: A\$1000\.00 AUD\nTotal received: A\$1000\.00 AUD\nPaid in full: A\$0\.00 AUD/);
   // Build reference and customer details stay.
   assert.match(m.body,/^Hi Bren,/);
   assert.match(m.body,/Custom Rod Build — Q-1001/);
@@ -64,7 +65,7 @@ test('fully paid confirmed build: payment subject, statement, Total / Total rece
 test('one single full payment (no deposit) is also acknowledged',()=>{
   const m=draft({quote:{payments:[{amount:1000}]}});
   assert.equal(m.subject,'K-Labs — Payment Received in Full — Q-1001');
-  assert.match(m.body,/Total received: A\$1000\.00 AUD\nBalance owing: A\$0\.00 AUD/);
+  assert.match(m.body,/Total received: A\$1000\.00 AUD\nPaid in full: A\$0\.00 AUD/);
 });
 
 test('unpaid confirmed build is unchanged: Build Confirmation',()=>{
@@ -89,7 +90,7 @@ test('quote, completed build, repair and components emails are unchanged when fu
   assert.equal(draft({status:'quote',quote:paid}).subject,'K-Labs Custom Rod Build Quote — Q-1001');
   const done=draft({status:'complete',quote:paid});
   assert.equal(done.subject,'K-Labs Build Summary — Q-1001');
-  assert.match(done.body,/Balance outstanding: A\$0\.00 AUD/);
+  assert.match(done.body,/Paid in full: A\$0\.00 AUD/);
   assert.equal(draft({jobType:'repair',quote:paid}).subject,'K-Labs Repair Confirmation — Q-1001');
   assert.equal(draft({quote:{...paid,jobKind:'components'}}).subject,'K-Labs Components Order Confirmation — Q-1001');
   for(const m of [done,draft({status:'quote',quote:paid}),draft({jobType:'repair',quote:paid}),draft({quote:{...paid,jobKind:'components'}})])assert.ok(!m.body.includes(FULL));

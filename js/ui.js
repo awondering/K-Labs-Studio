@@ -4511,11 +4511,15 @@ function humanizeComponentCode(value){
 function componentRowSizeLabel(item){
   return specificationValue(item&&item.selectedSize);
 }
+// Measurement units stay as written in lower case ("10 mm", "9 ft 5 wt"), never "Mm" / "Ft" / "Wt" (Q41: the same
+// component names now also appear on the invoice).
+const COMPONENT_UNIT_WORDS=new Set(['mm','cm','m','ft','in','wt','kg','g','lb','lbs','oz']);
 function componentIdentityTitle(value){
   const text=specificationValue(value);
   if(!text)return '';
   return text.replace(/\s+/g,' ').trim().split(' ').map((token)=>{
     if(/[A-Z]{2,}|[0-9#/'\-]/.test(token))return token;
+    if(COMPONENT_UNIT_WORDS.has(token))return token;
     return token.charAt(0).toUpperCase()+token.slice(1).toLowerCase();
   }).join(' ');
 }
@@ -4765,6 +4769,7 @@ function customerIncludedParts(){
 }
 function customerIncludedPartsMarkup(parts){
   const safeParts=(Array.isArray(parts)?parts:[]).map(customerSafeText).filter((value)=>specificationValue(value));
+  if(!safeParts.length&&customerDocumentLabels().jobType!=='build')return '';
   const listItems=safeParts.length
     ? safeParts.map((value)=>`<li>${escapeHtml(value)}</li>`).join('')
     : '<li>Your final component list will be confirmed before build start.</li>';
@@ -4777,7 +4782,8 @@ function customerBuildNotesText(){
 }
 function customerBuildNotesMarkup(){
   const notesText=customerBuildNotesText();
-  const heading=customerDocumentLabels().jobType==='repair'?'Repair Description':'Build Notes';
+  const jobType=customerDocumentLabels().jobType;
+  const heading=jobType==='repair'?'Repair Description':jobType==='components'?'Order Notes':'Build Notes';
   return notesText?`<div class="view-quote__notes"><span>${heading}</span><p>${escapeHtml(notesText)}</p></div>`:'';
 }
 function workshopSpecificationRows(){
@@ -9905,6 +9911,34 @@ function depositMaths(){
   const depositOutstanding=enabled&&!(depositReceivedAmount>0&&depositReceivedAmount+0.005>=depositAmount);
   const depositStillRequired=depositOutstanding?Math.max(0,Math.round((depositAmount-depositReceivedAmount)*100)/100):0;
   return{...math,total,depositEnabled:enabled,depositType:type,depositValue:rawValue,depositAmount,remainingBalance,depositPayment,depositReceivedAmount,depositReceivedDate:depositPayment?String(depositPayment.date||''):'',amountReceived,balanceOwing,depositOutstanding,depositStillRequired};
+}
+// Q41: ONE set of customer-facing payment rules for the Build Summary/Confirmation, the customer invoice and the customer
+// emails, so their labels can never disagree. Paid in full: a priced job whose payments cover the whole total.
+function customerPaymentLabels({total,received,owing,depositOnly}){
+  const paidInFull=roundMoney(numberOrZero(total))>0&&roundMoney(numberOrZero(received))>0&&roundMoney(numberOrZero(owing))<=0;
+  return{
+    paidInFull,
+    paymentDue:roundMoney(numberOrZero(owing))>0,
+    // "Deposit received" only while the deposit is the only money received; otherwise every payment is the total received.
+    receivedLabel:paidInFull||!depositOnly?'Total received':'Deposit received',
+    balanceLabel:paidInFull?'Paid in full':'Balance owing',
+  };
+}
+function customerPaymentStatus(math=depositMaths()){
+  // As before Q41: money received is called a deposit only while it is exactly the recorded deposit payment.
+  const depositOnly=math.amountReceived>0&&Math.abs(math.amountReceived-numberOrZero(math.depositReceivedAmount))<0.005;
+  return customerPaymentLabels({total:math.total,received:math.amountReceived,owing:math.balanceOwing,depositOnly});
+}
+// The tax named on customer documents: the issued invoice's own tax once issued (it is fixed), otherwise the job's
+// configured tax. '' when no tax applies - GST is never assumed.
+function customerTaxName(){
+  const issued=quote&&quote.issuedInvoice;
+  if(issued&&typeof issued==='object')return issued.tax&&issued.tax.name?String(issued.tax.name):'';
+  return quoteTaxAvailable()&&quote.includeGst!==false?activeTaxName():'';
+}
+function customerTotalLabel(base='Total'){
+  const taxName=customerTaxName();
+  return taxName?`${base} including ${taxName}`:base;
 }
 function depositValueValidationMessage(value,type,total){
   if((typeof value!=='number' && typeof value!=='string') || String(value).trim()==='' || !Number.isFinite(Number(value))){
@@ -15399,7 +15433,7 @@ function customerQuoteDeliveryMarkup(){
   if(section&&section.collection)return `<div class="view-quote__delivery"><span>${section.heading}</span><p>${escapeHtml(section.lines[0])}</p></div>`;
   const methodRow=methodText?`<div><span>Method</span><strong>${escapeHtml(methodText)}</strong></div>`:'';
   const charge=section?section.charge:0;
-  const deliveryRow=charge>0?`<div><span>Delivery (included in Total Price)</span><strong>${currencyWithCode(charge)}</strong></div>`:'';
+  const deliveryRow=charge>0?`<div><span>Delivery (included in total)</span><strong>${currencyWithCode(charge)}</strong></div>`:'';
   const addressLines=section?section.lines:[];
   const addressBlock=addressLines.length?`<p>${addressLines.map((line)=>escapeHtml(line)).join('<br />')}</p>`:'';
   return `<div class="view-quote__delivery"><span>Delivery</span>${methodRow}${deliveryRow}${addressBlock}</div>`;
@@ -15414,7 +15448,7 @@ function customerDocumentLabels(status,jobType){
     :key==='active'
     ?{key,title:'Build Confirmation',viewLabel:'View Build Confirmation',numberLabel:'Quote Reference',emailName:'Build Confirmation',subjectName:'Build Confirmation',ariaLabel:'Build confirmation',closeLabel:'Close build confirmation'}
     :{key:'quote',title:'Customer Quote',viewLabel:'View Quote',numberLabel:'Quote Number',emailName:'Quote',subjectName:'Custom Rod Build Quote',ariaLabel:'Customer quote',closeLabel:'Close customer quote'};
-  const common={jobType:repair?'repair':'build',jobNoun:'Custom Rod Build',partsHeading:'Components Included',previewPartsHeading:'What your rod includes',defaultRodName:'Custom Rod Build'};
+  const common={jobType:repair?'repair':'build',jobNoun:'Custom Rod Build',partsHeading:'Components',previewPartsHeading:'Components',defaultRodName:'Custom Rod Build'};
   if(!repair && !jobType && isComponentsJob(typeof quote!=='undefined'?quote:null)){
     const componentNames=base.key==='complete'
       ?{title:'Order Summary',viewLabel:'View Order Summary',emailName:'Order Summary',subjectName:'Components Order Summary',ariaLabel:'Order summary',closeLabel:'Close order summary'}
@@ -15431,7 +15465,7 @@ function customerDocumentLabels(status,jobType){
     :base.key==='active'
     ?{title:'Repair Confirmation',viewLabel:'View Repair Confirmation',emailName:'Repair Confirmation',subjectName:'Repair Confirmation',ariaLabel:'Repair confirmation',closeLabel:'Close repair confirmation'}
     :{title:'Repair Quote',viewLabel:'View Repair Quote',emailName:'Repair Quote',subjectName:'Rod Repair Quote',ariaLabel:'Repair quote',closeLabel:'Close repair quote'};
-  return{...base,...common,...repairNames,jobNoun:'Rod Repair',partsHeading:'Work Included',previewPartsHeading:'Work Included',defaultRodName:'Rod Repair'};
+  return{...base,...common,...repairNames,jobNoun:'Rod Repair',defaultRodName:'Rod Repair'};
 }
 function customerDocumentConfirmationText(depositEnabled,status){
   const labels=customerDocumentLabels(status);
@@ -15470,23 +15504,27 @@ function customerQuoteSummaryMarkup(){
   const deliveryBlock=customerQuoteDeliveryMarkup();
   const confirmationText=customerDocumentConfirmationText(math.depositOutstanding);
   const pricePending=quotePricePending();
-  const totalRow=`<div><span>Total Price</span><strong>${pricePending?'To be confirmed':currencyWithCode(math.total)}</strong></div>`;
+  const totalRow=`<div><span>${escapeHtml(pricePending?'Total Price':customerTotalLabel('Total Price'))}</span><strong>${pricePending?'To be confirmed':currencyWithCode(math.total)}</strong></div>`;
   const shortfall=math.depositEnabled&&math.amountReceived>0&&math.depositOutstanding;
   const labels=customerDocumentLabels();
-  const buildSummary=labels.key==='complete'&&labels.jobType==='build';
-  const paidInFull=buildSummary&&math.total>0&&math.balanceOwing===0;
-  // Q33 verification: money beyond the deposit payment is never called a deposit, on any document.
-  const receivedLabel=(buildSummary&&paidInFull)||math.amountReceived!==math.depositReceivedAmount?'Total Received':'Deposit Received';
-  const balanceLabel=paidInFull?'Paid in full':'Balance Owing';
+  // Q41: the same payment labels as the invoice and the emails (customerPaymentStatus). Q33: money beyond the deposit
+  // payment is never called a deposit, on any document.
+  const payment=customerPaymentStatus(math);
+  // The document keeps its title-case row labels (shown in capitals); the words are the shared ones.
+  const documentCase=(label)=>label==='Paid in full'?label:label.replace(/\b[a-z]/g,(letter)=>letter.toUpperCase());
+  const receivedLabel=documentCase(payment.receivedLabel);
+  const balanceLabel=documentCase(payment.balanceLabel);
   const buildConfirmation=labels.key==='active'&&labels.jobType==='build';
   const showDepositRequired=shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total));
   // Once the customer has paid at least the deposit in total, no further deposit is asked for on a document.
   const depositCoveredByPayments=math.amountReceived+0.005>=math.depositAmount;
   const showDepositStillRequired=shortfall&&!depositCoveredByPayments&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing));
   const pricingRows=pricePending
-    ?`${totalRow}${math.amountReceived>0?`<div><span>Deposit Received</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>`:''}`
+    ?`${totalRow}${math.amountReceived>0?`<div><span>${receivedLabel}</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>`:''}`
     :math.amountReceived>0
     ?`${totalRow}${showDepositRequired?`<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div>`:''}<div><span>${receivedLabel}</span><strong>${currencyWithCode(math.amountReceived)}</strong></div>${showDepositStillRequired?`<div><span>Deposit Still Required</span><strong>${currencyWithCode(math.depositStillRequired)}</strong></div>`:''}<div><span>${balanceLabel}</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
+    :labels.key==='complete'
+    ?`${totalRow}<div><span>${balanceLabel}</span><strong>${currencyWithCode(math.balanceOwing)}</strong></div>`
     :math.depositEnabled
     ?`${totalRow}<div><span>Deposit Required</span><strong>${currencyWithCode(math.depositAmount)}</strong></div><div><span>Balance Remaining</span><strong>${currencyWithCode(math.remainingBalance)}</strong></div>`
     :totalRow;
@@ -15498,7 +15536,8 @@ function customerQuoteSummaryMarkup(){
   const businessBlock=(businessName||businessLines.length||businessLogo)
     ?`<div class="view-quote__business">${businessLogo?`<img class="klabs-brand-logo view-quote__logo" src="${businessLogo}" alt="${escapeHtml(businessName||'Business logo')}">`:''}${businessName?`<strong>${escapeHtml(businessName)}</strong>`:''}${businessLines.map((line)=>`<span>${escapeHtml(line)}</span>`).join('')}</div>`
     :'';
-  const paymentBlock=!pricePending&&businessProfileHasPaymentDetails()
+  // Bank details only while money is owed: a fully paid job never asks for payment.
+  const paymentBlock=!pricePending&&payment.paymentDue&&businessProfileHasPaymentDetails()
     ?`<div class="view-quote__payment"><span>Payment Details</span><div><span>Account name</span><strong>${escapeHtml(businessProfile.paymentAccountName)}</strong></div><div><span>Bank account</span><strong>${escapeHtml(businessProfile.paymentAccountNumber)}</strong></div>${quoteNumber?`<div><span>Reference</span><strong>${escapeHtml(quoteNumber)}</strong></div>`:''}</div>`
     :'';
   return `
@@ -15559,7 +15598,7 @@ function issuedInvoiceRecordsForReadableNumber(){
     return null;
   }
 }
-function invoiceRodDescription(){
+function invoiceRodDescription({listsComponents=false}={}){
   const clean=(value)=>{
     const text=customerSafeText(value);
     return /(?:[$€£]|\b(?:nzd|usd|aud|eur|cost|price|profit|margin|markup|labou?r|supplier)\b)/i.test(text)?'':text;
@@ -15593,7 +15632,7 @@ function invoiceRodDescription(){
   if(line)measures.push(`Line ${line}`);
   if(lure)measures.push(`Lure ${lure}`);
   const fitted=[];
-  for(const [name,pattern] of [['Guides',/\bguide/],['Reel seat',/\breel\s*seat/],['Grip',/\bgrip/]]){
+  for(const [name,pattern] of (listsComponents?[]:[['Guides',/\bguide/],['Reel seat',/\breel\s*seat/],['Grip',/\bgrip/]])){
     const item=components.find((row)=>row&&!pendingComponentDraftRows.has(row)&&!customerComponentExcludedFromCopy(row)&&
       pattern.test(normalizeNameKey(componentRowLibraryCategoryName(row))));
     if(item){
@@ -15620,8 +15659,12 @@ function invoiceRodDescription(){
       .map(([label,value])=>`${label} ${String(value).trim()}`);
     if(gripParts.length)fitted.push(`Grip: ${gripParts.join(', ')}`);
   }
-  const details=[blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
+  const details=[!listsComponents&&blankIdentity&&normalizeNameKey(title)!==normalizeNameKey(blankIdentity)?`Blank: ${blankIdentity}`:'',
     measures.join(' · '),fitted.join(' · ')].filter(Boolean);
+  if(isComponentsJob(quote)){
+    const name=normalizeNameKey(candidate)==='components'?'':title;
+    return {title:name||'Components Order',details:[]};
+  }
   // Repair: the saved customer-facing Repair Description (as shown on the quote) describes the work; its first line is the
   // title and any further lines follow. The rod's name, if entered, stays as a detail. Without a description: "Fishing Rod Repair".
   if(normalizeJobType(quote.jobType)==='repair'){
@@ -15635,7 +15678,8 @@ function buildInvoiceSnapshot(preview=false){
   const taxEnabled=quoteTaxAvailable() && quote.includeGst!==false;
   const registration=specificationValue(businessProfile.gstNumber);
   const businessLines=customerQuoteBusinessLines().filter((line)=>!registration || line!==`${activeTaxRegistrationLabel()}: ${registration}`);
-  const description=invoiceRodDescription();
+  const components=customerIncludedParts().map(customerSafeText).filter((value)=>specificationValue(value));
+  const description=invoiceRodDescription({listsComponents:components.length>0});
   const displayNumber=preview?'':readableInvoiceNumberForJob(quote,issuedInvoiceRecordsForReadableNumber());
   return {
     number:preview?'':invoiceNumberForBuild(window.KLABS_ACCOUNT_ID,quote.id),
@@ -15648,16 +15692,41 @@ function buildInvoiceSnapshot(preview=false){
     buildId:preview?specificationValue(quote.id):String(quote.id),buildReference:specificationValue(quote.buildNumber),
     rod:description.title,
     rodDetails:description.details,
+    components,
     currency:activeCurrencyCode(),total:roundMoney(math.total),
+    delivery:roundMoney(numberOrZero(math.deliveryCharge)),
     tax:taxEnabled?{name:activeTaxName(),rate:math.taxRate,amount:roundMoney(math.gst),
       registration:registration?`${activeTaxRegistrationLabel()}: ${registration}`:''}:null,
     payments:JSON.parse(JSON.stringify(Array.isArray(quote.payments)?quote.payments:[])),
   };
 }
+// An issued invoice as the customer sees it (Q41 live fix, BUILD-902). What was ISSUED stays fixed: the invoice number,
+// issue date and the amount invoiced (total and tax; the server refuses any change to the stored invoice, and a price
+// change still goes through Remove Invoice and a new invoice). Everything else is the job's CURRENT state - payments
+// received, balance, components, delivery, customer details - the same data the Build Summary and the email use.
+// The stored snapshot is never rewritten. Invoices issued by any earlier release are shown the same way.
+function issuedInvoiceForDisplay(issued=quote&&quote.issuedInvoice){
+  if(!issued||typeof issued!=='object')return issued;
+  const current=buildInvoiceSnapshot(true);
+  // depositMaths() already follows the issued total; compare the issued amount with the build's own current price.
+  const samePrice=Math.abs(numberOrZero(issued.total)-roundMoney(numberOrZero(quoteMaths().total)))<0.005;
+  return {...current,
+    number:issued.number,...(issued.displayNumber?{displayNumber:issued.displayNumber}:{}),issuedDate:issued.issuedDate,
+    buildId:issued.buildId,businessName:issued.businessName,brand:issued.brand,
+    currency:issued.currency||current.currency,total:issued.total,
+    tax:samePrice?current.tax:issued.tax,
+    delivery:samePrice?current.delivery:roundMoney(numberOrZero(issued.delivery)),
+    payments:JSON.parse(JSON.stringify(Array.isArray(quote.payments)?quote.payments:[]))};
+}
 function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
   const money=(value)=>`${Number(value||0).toFixed(2)} ${invoice.currency}`;
   const amount=roundMoney(payments.reduce((sum,payment)=>sum+numberOrZero(payment.amount),0));
   const balance=roundMoney(Math.max(0,numberOrZero(invoice.total)-amount));
+  const depositOnly=payments.length>0&&payments.every((payment)=>payment&&payment.type==='deposit');
+  const status=customerPaymentLabels({total:invoice.total,received:amount,owing:balance,depositOnly});
+  const components=Array.isArray(invoice.components)?invoice.components.filter((item)=>specificationValue(item)):[];
+  // Invoices issued before Q41 carry no delivery figure and are shown exactly as issued.
+  const delivery=roundMoney(numberOrZero(invoice.delivery));
   const line=(label,value,extra='')=>`<div class="invoice-document__amount-row ${extra}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(money(value))}</dd></div>`;
   const reference=invoice.buildReference||invoice.buildId;
   const brand=typeof invoiceBrand==='function'?invoiceBrand(invoice):{logo:'',legacy:false};
@@ -15682,12 +15751,12 @@ function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
         ${reference?`<div><dt>Build reference</dt><dd>${escapeHtml(reference)}</dd></div>`:''}
       </dl>
     </section>
-    ${invoice.rod||(Array.isArray(invoice.rodDetails)&&invoice.rodDetails.length)?`<section class="invoice-document__description"><h4 class="invoice-document__label">Description</h4>${invoice.rod?`<p>${escapeHtml(invoice.rod)}</p>`:''}${(Array.isArray(invoice.rodDetails)?invoice.rodDetails:[]).map((detail)=>`<p class="invoice-document__detail">${escapeHtml(detail)}</p>`).join('')}</section>`:''}
+    ${invoice.rod||(Array.isArray(invoice.rodDetails)&&invoice.rodDetails.length)||components.length?`<section class="invoice-document__description"><h4 class="invoice-document__label">Description</h4>${invoice.rod?`<p>${escapeHtml(invoice.rod)}</p>`:''}${(Array.isArray(invoice.rodDetails)?invoice.rodDetails:[]).map((detail)=>`<p class="invoice-document__detail">${escapeHtml(detail)}</p>`).join('')}${components.length?`<p class="invoice-document__detail invoice-document__components">Components: ${escapeHtml(components.join('; '))}</p>`:''}</section>`:''}
     <section class="invoice-document__financial">
       <h4 class="invoice-document__label">Summary</h4>
-      <dl class="invoice-document__amounts">${tax}${line(invoice.tax?`Total including ${invoice.tax.name}`:'Total',invoice.total,'invoice-document__total')}
-        ${line('Total received',amount)}
-        ${line(invoice.total>0&&balance===0?'Paid in full':'Balance owing',balance,'invoice-document__balance')}
+      <dl class="invoice-document__amounts">${delivery>0?line('Delivery (included in total)',delivery):''}${tax}${line(invoice.tax?`Total including ${invoice.tax.name}`:'Total',invoice.total,'invoice-document__total')}
+        ${line(status.receivedLabel,amount)}
+        ${line(status.balanceLabel,balance,'invoice-document__balance')}
       </dl>
     </section>
     <section class="invoice-document__payments"><h4 class="invoice-document__label">Payments received</h4>
@@ -15803,7 +15872,7 @@ function openInvoicePreview(){
     if(window.ResizeObserver)new ResizeObserver(updateInvoicePreview).observe(sheet.querySelector('.invoice-preview__viewport'));
   }
   $('invoicePreviewBody').innerHTML=quote.issuedInvoice
-    ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
+    ?invoiceDocumentMarkup(issuedInvoiceForDisplay(),quote.payments||[],false):customerInvoicePreviewMarkup();
   const issue=sheet.querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=!!quote.issuedInvoice;
   const remove=sheet.querySelector('[data-invoice-preview-action="remove"]');
@@ -15816,7 +15885,7 @@ function openInvoicePreview(){
 function openPaymentStatement(){
   if(!quote.issuedInvoice){openInfoDialog('Payment Statement','Issue an invoice before opening its payment statement.');return;}
   openInvoicePreview();
-  $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.payments||[],true);
+  $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(issuedInvoiceForDisplay(),quote.payments||[],true);
   refreshInvoicePreview();
   const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=true;
@@ -15888,7 +15957,7 @@ async function issueCustomerInvoice(){
       if(quote!==invoiceQuote || window.KLABS_ACCOUNT_ID!==account)throw new Error('The account or build changed. Review the invoice again.');
       await commitFinancialOperation('issue_invoice',{invoice:buildInvoiceSnapshot()},false,'Invoice issued');
       if(quote.issuedInvoice && $('invoicePreviewBody')){
-        $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false);
+        $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(issuedInvoiceForDisplay(),quote.payments||[],false);
         refreshInvoicePreview();
         const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
         if(issue)issue.hidden=true;
@@ -16121,12 +16190,14 @@ function customerEmailLines(){
   const completedRaw=specificationValue(quote.completedAt);
   const completedDate=new Date(completedRaw);
   const hasCompletedDate=isComplete&&!!completedRaw&&!Number.isNaN(completedDate.getTime());
-  const balanceDue=isComplete?math.balanceOwing>0:(math.amountReceived<=0||math.depositOutstanding||math.balanceOwing>0);
+  const payment=customerPaymentStatus(math);
+  // Bank details only while money is owed (the same rule as the Build Summary / Confirmation).
+  const balanceDue=payment.paymentDue;
   // A quote only asks for a deposit when Deposit Required is on and the amount is above zero.
   const depositRequired=math.depositEnabled&&math.depositAmount>0;
   // A confirmed (active) rod build with every dollar received: the email acknowledges full payment. Unpaid and part-paid
   // builds, repairs, components orders and completed builds keep their wording (same test in emailCurrentQuote's subject).
-  const paidInFull=docLabels.key==='active'&&docLabels.jobType==='build'&&!pricePending&&math.total>0&&math.amountReceived>0&&math.balanceOwing<=0;
+  const paidInFull=paidInFullAcknowledgement(docLabels,math);
   const lines=[
     `Hi ${customerFirstName},`,
     '',
@@ -16152,28 +16223,28 @@ function customerEmailLines(){
     '',
     `${docLabels.jobNoun} — ${reference}`,
     '',
-    `Total: ${pricePending?'To be confirmed':currencyWithCode(math.total)}`,
+    `${pricePending?'Total':customerTotalLabel()}: ${pricePending?'To be confirmed':currencyWithCode(math.total)}`,
   ];
   if(pricePending){
-    if(math.amountReceived>0)lines.push(`Deposit received: ${currencyWithCode(math.amountReceived)}`);
+    if(math.amountReceived>0)lines.push(`${payment.receivedLabel}: ${currencyWithCode(math.amountReceived)}`);
     if(!isComplete){
       const dueRaw=specificationValue(quote.estimatedCompletionDate);
       lines.push(`Estimated completion: ${dueRaw?formatCustomerEmailLongDate(dueRaw):'To be confirmed'}`);
     }
   }else if(isComplete){
-    if(math.amountReceived>0)lines.push(`Payments received: ${currencyWithCode(math.amountReceived)}`);
-    lines.push(`Balance outstanding: ${currencyWithCode(math.balanceOwing)}`);
+    if(math.amountReceived>0)lines.push(`${payment.receivedLabel}: ${currencyWithCode(math.amountReceived)}`);
+    lines.push(`${payment.balanceLabel}: ${currencyWithCode(math.balanceOwing)}`);
     if(hasCompletedDate)lines.push(`Completed: ${formatCustomerEmailLongDate(completedDate)}`);
   }else{
     if(paidInFull){
-      lines.push(`Total received: ${currencyWithCode(math.amountReceived)}`,`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
+      lines.push(`${payment.receivedLabel}: ${currencyWithCode(math.amountReceived)}`,`${payment.balanceLabel}: ${currencyWithCode(math.balanceOwing)}`);
     }else if(math.amountReceived>0){
       const shortfall=math.depositEnabled&&math.depositOutstanding;
       const buildConfirmation=docLabels.key==='active'&&docLabels.jobType==='build';
       if(shortfall&&(!buildConfirmation||currencyWithCode(math.depositAmount)!==currencyWithCode(math.total)))lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`);
-      lines.push(`${math.amountReceived!==math.depositReceivedAmount?'Total received':'Deposit received'}: ${currencyWithCode(math.amountReceived)}`);
+      lines.push(`${payment.receivedLabel}: ${currencyWithCode(math.amountReceived)}`);
       if(shortfall&&math.amountReceived+0.005<math.depositAmount&&(!buildConfirmation||currencyWithCode(math.depositStillRequired)!==currencyWithCode(math.balanceOwing)))lines.push(`Deposit still required: ${currencyWithCode(math.depositStillRequired)}`);
-      lines.push(`Balance owing: ${currencyWithCode(math.balanceOwing)}`);
+      lines.push(`${payment.balanceLabel}: ${currencyWithCode(math.balanceOwing)}`);
     }else if(!isComponents&&(docLabels.key!=='active'||isRepair||math.depositEnabled)&&(docLabels.key!=='quote'||depositRequired)){
       lines.push(`Deposit required: ${currencyWithCode(math.depositAmount)}`,`Balance remaining: ${currencyWithCode(math.remainingBalance)}`);
     }
@@ -16188,7 +16259,7 @@ function customerEmailLines(){
   const fulfilment=customerFulfilmentSection();
   if(fulfilment){
     lines.push('', fulfilment.heading);
-    if(fulfilment.charge>0)lines.push(`Delivery (included in Total Price): ${currencyWithCode(fulfilment.charge)}`);
+    if(fulfilment.charge>0)lines.push(`Delivery (included in total): ${currencyWithCode(fulfilment.charge)}`);
     lines.push(...fulfilment.lines);
   }
   if(balanceDue && !pricePending && businessProfileHasPaymentDetails()){
@@ -16209,6 +16280,11 @@ function customerEmailLines(){
   if(signature.length)lines.push('', 'Kind regards,', ...signature);
   return lines;
 }
+// Q39: a confirmed (active) rod build with every dollar received is emailed as a payment acknowledgement. Other jobs keep
+// their document's own subject and opening; their figures still say "Paid in full" (customerPaymentStatus).
+function paidInFullAcknowledgement(docLabels,math){
+  return docLabels.key==='active'&&docLabels.jobType==='build'&&!quotePricePending()&&customerPaymentStatus(math).paidInFull;
+}
 function emailCurrentQuote(options){
   if(!(options&&options.fromPreview)){runWithFulfilmentCheck(()=>emailCurrentQuote({fromPreview:true}));return;}
   const email=specificationValue(quote.email);
@@ -16216,8 +16292,7 @@ function emailCurrentQuote(options){
   const quoteNumber=specificationValue(quote.quoteNumber);
   const docLabels=customerDocumentLabels();
   const lines=customerEmailLines();
-  const math=depositMaths();
-  const paidInFull=docLabels.key==='active'&&docLabels.jobType==='build'&&!quotePricePending()&&math.total>0&&math.amountReceived>0&&math.balanceOwing<=0;
+  const paidInFull=paidInFullAcknowledgement(docLabels,depositMaths());
   const subject=paidInFull
     ?`${businessName?businessName+' — ':''}Payment Received in Full — ${quoteNumber||docLabels.emailName}`
     :`${businessName?businessName+' ':''}${docLabels.subjectName} — ${quoteNumber||docLabels.emailName}`;
@@ -19827,7 +19902,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v290';
+window.KLABS_UI_BUILD='build148-v292';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

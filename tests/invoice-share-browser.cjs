@@ -12,7 +12,7 @@ function extract(name) {
   assert.ok(start >= 0 && end > start, name);
   return source.slice(start, end);
 }
-const functions = ['invoiceDocumentMarkup', 'invoiceDisplayNumber', 'readableInvoiceNumberForJob', 'issuedInvoiceRecordsForReadableNumber', 'refreshInvoicePreview', 'updateInvoicePreview',
+const functions = ['customerPaymentLabels', 'invoiceDocumentMarkup', 'invoiceDisplayNumber', 'readableInvoiceNumberForJob', 'issuedInvoiceRecordsForReadableNumber', 'refreshInvoicePreview', 'updateInvoicePreview',
   'openInvoicePreview', 'openPaymentStatement', 'printInvoicePreview'].map(extract).join('\n');
 const invoice = {
   number: `INV-${'a'.repeat(32)}-${Buffer.from('12345678-1234-1234-1234-123456789012').toString('hex')}`,

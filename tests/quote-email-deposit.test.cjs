@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 const {loadRecordFunctions}=require('./helpers/job-record-loader.cjs');
 
 const el=()=>({value:'',checked:false,hidden:false,textContent:'',classList:{contains:()=>false,toggle(){}},setAttribute(){},getAttribute:()=>null});
-const c=loadRecordFunctions(['normalizeQuote','customerEmailLines'],{
+const c=loadRecordFunctions(['normalizeQuote','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerEmailLines'],{
   $:el,document:{querySelector:()=>null,querySelectorAll:()=>[],getElementById:el},Store:{get:(k,f)=>f,set:()=>true},
   window:{KLABS_ACCOUNT_ID:'acct'},activeAccountKey:()=>'acct',formatDateDisplay:(v)=>String(v),formatCustomerEmailLongDate:(d)=>String(d),
   businessProfile:{businessName:'Synthetic Rods',contactName:'Sam Test',phone:'000 000',email:'shop@example.invalid',
@@ -23,7 +23,7 @@ const DEPOSIT_ON={depositEnabled:true,depositType:'percent',depositValue:30};
 for(const [jobType,work] of [['repair','repair'],['build','build']]){
   test(`${jobType} quote email, Deposit Required off: no deposit line, asks the customer to confirm`,()=>{
     const text=email(job(jobType));
-    assert.match(text,/^Total: \$385\.00 NZD\nEstimated completion: /m);
+    assert.match(text,/^Total including GST: \$385\.00 NZD\nEstimated completion: /m);
     assert.doesNotMatch(text,/Deposit required|Balance remaining|\$0\.00/);
     assert.doesNotMatch(text,/deposit has been received/i);
     assert.match(text,new RegExp(`\\n\\nPlease reply to confirm you would like to proceed with your ${work}\\.\\n\\nKind regards,`));
@@ -32,7 +32,7 @@ for(const [jobType,work] of [['repair','repair'],['build','build']]){
 
   test(`${jobType} quote email, deposit required: existing wording unchanged`,()=>{
     const text=email(job(jobType,DEPOSIT_ON));
-    assert.match(text,/^Total: \$385\.00 NZD\nDeposit required: \$115\.50 NZD\nBalance remaining: \$269\.50 NZD\nEstimated completion: /m);
+    assert.match(text,/^Total including GST: \$385\.00 NZD\nDeposit required: \$115\.50 NZD\nBalance remaining: \$269\.50 NZD\nEstimated completion: /m);
     assert.match(text,new RegExp(`\\n\\nOnce the deposit has been received, your ${work} will be confirmed\\.\\n\\nKind regards,`));
     assert.doesNotMatch(text,/Please reply to confirm/);
   });

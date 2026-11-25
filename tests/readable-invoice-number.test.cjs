@@ -18,7 +18,7 @@ function harness({ quoteNumber = 'Q-1042', id = 'build-1', saved = [], quoteReco
   const quote = { id, quoteNumber, buildNumber: 'BUILD-901', customerName: 'Customer', buildName: 'Rod', includeGst: true,
     payments: [{ id: 'deposit', type: 'deposit', amount: 25, date: '2026-11-10' }] };
   const fail = () => { throw new Error('storage unavailable'); };
-  const context = vm.createContext({ TextEncoder, quote, console: { warn() {} }, window: { KLABS_ACCOUNT_ID: ACCOUNT },
+  const context = vm.createContext({ customerIncludedParts:()=>[],customerSafeText:(v)=>String(v==null?'':v),TextEncoder, quote, console: { warn() {} }, window: { KLABS_ACCOUNT_ID: ACCOUNT },
     savedBuildRecords: listsFail ? fail : () => saved, savedQuoteRecords: listsFail ? fail : () => quoteRecords,
     businessProfile: { businessName: 'Test business', gstNumber: '' },
     depositMaths: () => ({ total: 115, gst: 15, taxRate: 15 }), quoteTaxAvailable: () => true, activeTaxName: () => 'GST',
@@ -29,8 +29,8 @@ function harness({ quoteNumber = 'Q-1042', id = 'build-1', saved = [], quoteReco
     localDateInputValue: () => '2026-11-19', activeCurrencyCode: () => 'NZD', roundMoney: (v) => Math.round(v * 100) / 100,
     numberOrZero: (v) => Number(v) || 0, escapeHtml: (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
   });
-  for (const name of ['normalizeJobType', 'invoiceNumberForBuild', 'invoiceRodDescription', 'readableInvoiceNumberForJob',
-    'invoiceDisplayNumber', 'issuedInvoiceRecordsForReadableNumber', 'buildInvoiceSnapshot', 'invoiceDocumentMarkup']) {
+  for (const name of ['normalizeJobType', 'normalizeJobKind', 'isComponentsJob', 'invoiceNumberForBuild', 'invoiceRodDescription', 'readableInvoiceNumberForJob',
+    'invoiceDisplayNumber', 'issuedInvoiceRecordsForReadableNumber', 'buildInvoiceSnapshot', 'roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','invoiceDocumentMarkup']) {
     vm.runInContext(extract(name), context);
   }
   return { context, quote };

@@ -18,6 +18,7 @@ const profile={businessName:'Woof Rods',contactName:'Kevin',phone:'027 000 0000'
 
 function emailCtx(studioSettings){
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote:{customerName:'Bren Pine',quoteNumber:'Q-1',jobType:'build',payments:[],fulfilmentMethod:'collection'},
     businessProfile:profile,studioSettings,
     currentBuildLifecycleStatus:()=>'quote',
@@ -32,7 +33,7 @@ function emailCtx(studioSettings){
     formatCustomerEmailLongDate:()=>'1 December 2026',
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','activeEmailIncludeSignature','customerDocumentLabels','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','activeEmailIncludeSignature','customerDocumentLabels','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerEmailLines'].map(fn).join('\n'),c);
   return c;
 }
 

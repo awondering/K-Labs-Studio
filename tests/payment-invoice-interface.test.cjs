@@ -25,6 +25,7 @@ function harness(){
   const quote={id:'unique-123',buildNumber:'BUILD-902',customerName:'<script>Customer</script>',buildName:'Rod & reel',
     includeGst:true,payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-11-10'},{id:'p2',type:'balance',amount:100,date:'2026-11-12'}]};
   const context=vm.createContext({
+    customerIncludedParts:()=>[],customerSafeText:(v)=>String(v==null?'':v),
     quote,elements,businessProfile:{businessName:'K-Labs',gstNumber:'123'},TextEncoder,
     window:{KLABS_ACCOUNT_ID:'account-a'},document:{querySelector:()=>null,querySelectorAll:()=>[]},currentBuildLifecycleStatus:()=>'active',
     CSS:{escape:String},currency:value=>`$${Number(value).toFixed(2)}`,rodPricingFigures:()=>({rodExclusive:2173.91}),
@@ -55,9 +56,10 @@ function harness(){
         depositReceivedDate:quote.payments[0]?.date||'',depositEnabled:false,depositOutstanding:false};
     },
   });
+  context.quoteMaths=()=>context.depositMaths();
   vm.runInContext("let paymentFormBuildKey='';let editingPaymentId='';let pricingSummaryOpen=false;",context);
   for(const name of ['paymentTypeLabel','paymentEntriesMarkup','paymentFormElement','paymentFormHome','placePaymentForm',
-    'newPaymentType','updatePaymentFormTitle','openRecordPaymentForm','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup',
+    'newPaymentType','updatePaymentFormTitle','openRecordPaymentForm','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','issuedInvoiceForDisplay','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup',
     'closeBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }
@@ -256,4 +258,34 @@ test('printing stops with an explicit error if the document stylesheet or logo f
   assert.equal(title,'Print Unavailable');
   assert.equal(frame.removed,true);
   assert.equal(printed,false);
+});
+// Q41 live regression (BUILD-902): an invoice issued before a payment is recorded shows the job's current payments when
+// reopened. What was issued (number, date, amount invoiced) stays fixed; the stored invoice is never rewritten.
+test('an issued invoice shows payments recorded after it was issued; its number, date and amount stay as issued',()=>{
+  const {context,quote}=harness();
+  const paid=quote.payments;
+  quote.payments=[];
+  quote.issuedInvoice=Object.freeze({...context.buildInvoiceSnapshot(),number:'INV-ISSUED',issuedDate:'2026-11-20'});
+  const stored=JSON.stringify(quote.issuedInvoice);
+  quote.payments=[{id:'full',type:'balance',amount:2500,date:'2026-11-26'}];
+  const shown=context.issuedInvoiceForDisplay();
+  assert.equal(shown.number,'INV-ISSUED');
+  assert.equal(shown.issuedDate,'2026-11-20');
+  assert.equal(shown.total,2500);
+  assert.deepEqual(JSON.parse(JSON.stringify(shown.payments)),[{id:'full',type:'balance',amount:2500,date:'2026-11-26'}]);
+  const html=context.invoiceDocumentMarkup(shown,quote.payments,false);
+  assert.match(html,/Paid in full/);
+  assert.doesNotMatch(html,/Balance owing|No payments recorded/);
+  assert.equal(JSON.stringify(quote.issuedInvoice),stored,'the stored invoice is unchanged');
+  quote.payments=paid;
+});
+test('after a price change the issued invoice keeps the amount invoiced (and its tax); payments still update',()=>{
+  const {context,quote}=harness();
+  quote.issuedInvoice={...context.buildInvoiceSnapshot(),number:'INV-ISSUED',issuedDate:'2026-11-20',total:2000,
+    tax:{name:'GST',rate:15,amount:260.87,registration:''},delivery:0};
+  context.quoteMaths=()=>({total:2500});
+  const shown=context.issuedInvoiceForDisplay();
+  assert.equal(shown.total,2000);
+  assert.equal(shown.tax.amount,260.87);
+  assert.equal(shown.payments.length,quote.payments.length);
 });

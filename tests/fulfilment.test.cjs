@@ -20,6 +20,7 @@ function ctx(over={},status='quote'){
   const quote={customerName:'Bren Pine',quoteNumber:'Q-1',jobType:'build',payments:[],components:[],country:'New Zealand',freightCharge:0,...over};
   const dialogs=[];
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote,businessProfile:profile,studioSettings:{},dialogs,
     currentBuildLifecycleStatus:()=>status,
     depositMaths:()=>({total:500,depositEnabled:false,depositAmount:0,remainingBalance:500,amountReceived:0,balanceOwing:500,depositOutstanding:false,depositStillRequired:0}),
@@ -48,7 +49,7 @@ function ctx(over={},status='quote'){
   };
   vm.createContext(c);
   vm.runInContext('var deliveryPanelOpen=false,deliveryPanelQuote=null;',c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','revealFulfilmentSelector','fulfilmentStudioNote','deliverySummaryText','setDeliveryPanelOpen','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','deliveryAddressIncomplete','customerFulfilmentSection','customerFulfilmentCheck','runWithFulfilmentCheck','revealFulfilmentSelector','fulfilmentStudioNote','deliverySummaryText','setDeliveryPanelOpen','syncFulfilmentSelector','setQuoteFulfilmentMethod','jobTypeLabel','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerEmailLines','customerQuoteDeliveryMarkup'].map(fn).join('\n'),c);
   return c;
 }
 const full={addressLine1:'5 River Rd',cityTown:'Taupo',postcode:'3330'};

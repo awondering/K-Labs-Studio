@@ -19,7 +19,9 @@ context.businessProfile = { businessName: 'K-Labs' };
 context.normalizeNameKey = v => String(v || '').trim().toLowerCase();
 context.businessLogoApi = () => require('../js/business-logo.js');
 const brandStart = source.indexOf('function invoiceBrand(');
-vm.runInNewContext(source.slice(brandStart, source.indexOf('\n}', brandStart) + 2) + source.slice(start, end), context);
+// Q41: the invoice takes its received / balance labels from the shared customerPaymentLabels.
+const labelsStart = source.indexOf('function customerPaymentLabels(');
+vm.runInNewContext(source.slice(brandStart, source.indexOf('\n}', brandStart) + 2) + source.slice(labelsStart, source.indexOf('\nfunction ', labelsStart + 1)) + source.slice(start, end), context);
 const invoice = { number: 'INV-synthetic-only', issuedDate: '2026-11-11', businessName: 'K-Labs',
   businessLines: ['Synthetic address', 'hello@example.test'], customerLines: ['Synthetic customer', 'Example Street'],
   buildReference: 'TEST-001', rod: 'Custom graphite rod',

@@ -19,6 +19,7 @@ const profile={businessName:'K-Labs',contactName:'Kevin',phone:'027 000 0000',em
 function ctx(status,jobType){
   const quote={customerName:'Bren Pine',quoteNumber:'Q-1001',jobType,estimatedCompletionDate:'2026-12-01',payments:[],components:[{category:'Guide',quantity:2,cost:9}]};
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote,businessProfile:profile,studioSettings:{},
     currentBuildLifecycleStatus:()=>status,
     depositMaths:()=>({total:500,depositEnabled:true,depositAmount:100,remainingBalance:400,amountReceived:0,balanceOwing:500,depositOutstanding:true,depositStillRequired:100}),
@@ -42,7 +43,7 @@ function ctx(status,jobType){
     updateBuildSpecSummary:()=>{},
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','deletionNoun','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerFulfilmentCheck','deliveryAddressIncomplete','runWithFulfilmentCheck','jobTypeLabel','customerDocumentLabels','customerDocumentConfirmationText','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerEmailLines','emailCurrentQuote','customerIncludedPartsMarkup','syncJobTypeSelector','scrollWorkshopWindowTo','holdWorkshopScrollAnchor','workshopVisibleAnchor','runWithWorkshopScrollAnchor','setQuoteJobType','applyCustomerFieldsToQuoteFromRecord'].map(fn).join('\n'),c);
   return c;
 }
 
@@ -106,12 +107,13 @@ test('repair emails use repair wording, headings and subjects; builds unchanged'
   for(const s of ['quote','active','complete']){
     const r=body(s,'repair');
     assert.match(r,/Rod Repair — Q-1001/);
-    assert.match(r,/Work Included\n- 2 × Guide wrap/);
-    assert.doesNotMatch(r,/Components Included|Custom Rod Build/);
+    // Q41: one "Components" heading for charged parts on every job type.
+    assert.match(r,/\nComponents\n- 2 × Guide wrap/);
+    assert.doesNotMatch(r,/Work Included|Components Included|Custom Rod Build/);
     const b=body(s,undefined);
     assert.match(b,/Custom Rod Build — Q-1001/);
-    assert.match(b,/Components Included\n- 2 × Guide wrap/);
-    assert.doesNotMatch(b,/Work Included|Rod Repair/);
+    assert.match(b,/\nComponents\n- 2 × Guide wrap/);
+    assert.doesNotMatch(b,/Work Included|Components Included|Rod Repair/);
   }
   assert.match(body('quote','repair'),/your repair will be confirmed/);
   assert.match(body('quote','build'),/your build will be confirmed/);
@@ -134,8 +136,11 @@ test('email subjects',()=>{
 });
 
 test('preview heading and confirmation text follow job type; email and preview share parts',()=>{
-  assert.match(ctx('quote','repair').customerIncludedPartsMarkup(['1 × Guide']),/<span>Work Included<\/span>/);
-  assert.match(ctx('quote','build').customerIncludedPartsMarkup(['1 × Guide']),/<span>What your rod includes<\/span>/);
+  assert.match(ctx('quote','repair').customerIncludedPartsMarkup(['1 × Guide']),/<span>Components<\/span>/);
+  assert.match(ctx('quote','build').customerIncludedPartsMarkup(['1 × Guide']),/<span>Components<\/span>/);
+  // A repair without parts shows no components block; a new build keeps "confirmed before build start".
+  assert.equal(ctx('quote','repair').customerIncludedPartsMarkup([]),'');
+  assert.match(ctx('quote','build').customerIncludedPartsMarkup([]),/confirmed before build start/);
   assert.match(ctx('complete','repair').customerDocumentConfirmationText(false),/rod repair is complete/);
   assert.match(ctx('active','repair').customerDocumentConfirmationText(false),/rod repair is now proceeding/);
   assert.equal(ctx('quote','build').customerDocumentConfirmationText(false),'quote text');

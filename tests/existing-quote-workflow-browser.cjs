@@ -155,8 +155,9 @@ const dbRow = async (db) => (await db.query(`select payload, to_json(updated_at)
     await p.waitForTimeout(500);
     const preview = await p.evaluate(() => ({ open: !document.getElementById('viewQuoteSheet').hidden, text: document.getElementById('viewQuoteBody').innerText,
       info: !document.getElementById('confirmSheet')?.hidden ? document.getElementById('confirmSheet')?.innerText : '' }));
+    // Q41: delivery reads "included in total" and the total names the configured tax, on every document and email.
     ck(7, 'the Quote preview opens (no "choose delivery" block) and shows delivery $34.50, Total Price $948.75 NZD, Deposit Received $300.00 NZD',
-      preview.open && /DELIVERY \(INCLUDED IN TOTAL PRICE\)\n\$34\.50 NZD/.test(preview.text) && /TOTAL PRICE\n\$948\.75 NZD/.test(preview.text) && /\$300\.00 NZD/.test(preview.text), preview);
+      preview.open && /DELIVERY \(INCLUDED IN TOTAL\)\n\$34\.50 NZD/.test(preview.text) && /TOTAL PRICE INCLUDING GST\n\$948\.75 NZD/.test(preview.text) && /\$300\.00 NZD/.test(preview.text), preview);
     if (shots && preview.open) await p.locator('#viewQuoteSheet .component-sheet__panel').screenshot({ path: path.join(shots, `${label}-7-quote-preview.png`) });
     // 8. The existing email draft. WebKit reports no event for a mailto: navigation, so record what Studio hands the mail
     // app: wrap Studio's own emailCurrentQuote and capture the draft it builds at that moment (the navigation still runs).
@@ -165,8 +166,8 @@ const dbRow = async (db) => (await db.query(`select payload, to_json(updated_at)
     await p.locator('#viewQuoteEmailBtn').click().catch(() => {});
     await p.waitForTimeout(800);
     const mail = (await p.evaluate(() => window.__mail[0] || '')) || '';
-    ck(8, 'Email opens the mail draft (mailto: to jordan@example.test) with Total: $948.75 NZD; nothing is "sent"',
-      mail.startsWith('mailto:jordan@example.test?subject=') && /Total: \$948\.75 NZD/.test(mail), mail.slice(0, 400) || 'no mail draft');
+    ck(8, 'Email opens the mail draft (mailto: to jordan@example.test) with Total including GST: $948.75 NZD; nothing is "sent"',
+      mail.startsWith('mailto:jordan@example.test?subject=') && /Total including GST: \$948\.75 NZD/.test(mail), mail.slice(0, 400) || 'no mail draft');
     if (!(await p.evaluate(() => document.getElementById('viewQuoteSheet').hidden))) await p.evaluate(() => closeViewQuote());
     await p.waitForTimeout(300);
 
@@ -258,7 +259,7 @@ const dbRow = async (db) => (await db.query(`select payload, to_json(updated_at)
     await B.page.locator('#quoteMoreDocumentsBtn').click().catch(() => {});
     const inv = await B.page.evaluate(async () => { const b = [...document.querySelectorAll('button')].find((x) => /^Invoice/.test(x.textContent.trim()) && x.getClientRects().length && x.id !== 'quoteMoreDocumentsBtn'); b?.click(); await new Promise((r) => setTimeout(r, 1500)); return document.getElementById('invoicePreviewBody')?.innerText.replace(/\s+/g, ' ') || ''; });
     ck(14, 'device B documents agree: quote total $948.75, invoice subtotal 825.00, GST 123.75, total 948.75, received 300.00, balance 648.75',
-      /TOTAL PRICE\n\$948\.75 NZD/.test(qb) && /Subtotal excluding GST ?825\.00/.test(inv) && /GST \(15%\) ?123\.75/.test(inv) && /Total including GST ?948\.75/.test(inv) && /Balance owing ?648\.75/.test(inv),
+      /TOTAL PRICE INCLUDING GST\n\$948\.75 NZD/.test(qb) && /Subtotal excluding GST ?825\.00/.test(inv) && /GST \(15%\) ?123\.75/.test(inv) && /Total including GST ?948\.75/.test(inv) && /Balance owing ?648\.75/.test(inv),
       { quote: qb.slice(qb.indexOf('TOTAL'), qb.indexOf('TOTAL') + 120), invoice: inv.slice(inv.indexOf('Summary'), inv.indexOf('Summary') + 260) });
     ck(14, 'no page errors on either device', A.errors.length === 0 && B.errors.length === 0, { A: A.errors.slice(0, 5), B: B.errors.slice(0, 5) });
   } catch (e) {

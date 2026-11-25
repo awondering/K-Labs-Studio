@@ -195,6 +195,7 @@ function documentHarness(jobType,{notes='Replace the tip-top and re-wrap the gui
     buildSpecifications:{builderNotes:PRIVATE,rodIdentification:'',...specs}};
   const rows=[];
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote:q,businessProfile:{businessName:'K-Labs'},studioSettings:{},
     currentBuildLifecycleStatus:()=>'quote',
     depositMaths:()=>({total:300,depositEnabled:false,depositAmount:0,remainingBalance:300,amountReceived:0,balanceOwing:300,depositOutstanding:false,depositStillRequired:0}),
@@ -211,7 +212,7 @@ function documentHarness(jobType,{notes='Replace the tip-top and re-wrap the gui
   vm.createContext(c);
   vm.runInContext(`${specFields}\n`+['specificationValue','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerSafeText','customerRequestText','appendCustomerSpecRow','buildSpecMeasurementMm',
     'normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDocumentLabels','customerQuoteConfirmationText','customerDocumentConfirmationText','customerIncludedPartsMarkup',
-    'customerBuildNotesText','customerBuildNotesMarkup','customerSpecificationRows','businessProfileHasPaymentDetails','customerQuoteSummaryMarkup','customerEmailLines'].map((name)=>{
+    'customerBuildNotesText','customerBuildNotesMarkup','customerSpecificationRows','businessProfileHasPaymentDetails','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerQuoteSummaryMarkup','customerEmailLines'].map((name)=>{
     try{return fn(name);}catch(error){return '';}
   }).join('\n'),c);
   c.rows=rows;
@@ -223,7 +224,9 @@ test('a repair quote shows the repair description under its own heading; a new b
   const html=repair.customerQuoteSummaryMarkup();
   assert.ok(html.includes('<span>Repair Description</span><p>Replace the tip-top and re-wrap the guides.</p>'));
   assert.ok(!html.includes('Build Notes'));
-  assert.ok(html.includes('Work Included'),'repair wording is unchanged elsewhere');
+  // Q41: charged parts are listed under "Components" on every job type (repairs included).
+  assert.ok(html.includes('<span>Components</span>'),'repair parts are listed under Components');
+  assert.ok(!html.includes('Work Included'));
   const build=documentHarness('build').customerQuoteSummaryMarkup();
   assert.ok(build.includes('<span>Build Notes</span>'));
   assert.ok(!build.includes('Repair Description'));
