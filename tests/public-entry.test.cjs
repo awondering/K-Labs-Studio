@@ -32,7 +32,7 @@ function harness({storage={}}={}){
   const demoPanels=['overview','customers','builds','quotes','components','workshop'].map(view=>({
     dataset:{demoPanel:view},hidden:false
   }));
-  for(const id of ['authScreen','app','authEmail','authForm','authShowSignUp','authSignUpForm','homeLivingRod','publicExploreBtn','publicSignInBtn','authBackHome','authMessage','accountAccessScreen','exploreDemoScreen','accountAccessMessage','accountAccessChoices','accountAccessError','startTrialBtn','enterExploreDemoBtn','verifyEmailContinueBtn','accessSignOutBtn','demoSignOutBtn','demoStartTrialBtn','readOnlyAccessNotice']){
+  for(const id of ['authScreen','app','authEmail','authForm','authShowSignUp','authSignUpForm','homeLivingRod','publicExploreBtn','publicSignInBtn','authBackHome','authMessage','accountAccessScreen','exploreDemoScreen','accountAccessMessage','accountAccessChoices','accountAccessError','accessBillingPanel','enterExploreDemoBtn','verifyEmailContinueBtn','accessSignOutBtn','demoSignOutBtn','demoSubscribeBtn','readOnlyAccessNotice','renewalCheckOverlay','settingsBillingPanel']){
     elements[id]={style:{display:'',setProperty(){}},listeners:{},classList:{add(){},remove(){}},hidden:false,textContent:'',disabled:false,dataset:{},
       addEventListener(event,fn){this.listeners[event]=fn;},focus(){},showModal(){this.open=true;},close(){this.open=false;},
       querySelector(){return {appendChild(){},textContent:''};},
@@ -203,33 +203,50 @@ test('Explore sign-out clears the session through Supabase and returns to public
   assert.equal(h.reloads(),1);
 });
 
-test('explicit trial action calls the one-time RPC, then loads Studio with the returned access state',async()=>{
+test('Q40: the free trial is retired - no trial button or RPC call; a new account is offered a subscription',async()=>{
+  assert.doesNotMatch(html,/startTrialBtn|START MY 7-DAY TRIAL|demoStartTrialBtn/);
+  assert.doesNotMatch(source,/start_account_trial/);
   const h=harness();
   const session={user:{id:'eligible-b'}};
   h.setSession(session);
-  h.setEntitlement({access_state:'trial_eligible',can_write:false,trial_available:true,email_verified:true});
-  h.window.KLABS_APPLY_AUTH_STATE=()=>{};
-  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('trial is not started implicitly'));
-  await h.elements.startTrialBtn.listeners.click({currentTarget:h.elements.startTrialBtn});
-  assert.equal(h.trialStarts(),1);
-  assert.ok(h.scripts.includes('js/app.js'));
-  assert.equal(h.window.KLABS_ACCESS_STATE.access_state,'trial');
+  h.setEntitlement({access_state:'trial_eligible',can_write:false,trial_available:false,email_verified:true});
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('Studio must not open without access'));
+  assert.equal(h.elements.accountAccessScreen.hidden,false);
+  assert.match(h.elements.accountAccessMessage.textContent,/Subscribe to start working in Studio/);
+  assert.deepEqual(h.scripts,[]);
+  assert.equal(h.trialStarts(),0);
 });
 
-test('expired entitlement opens Studio with read-only state and does not permit the demo path',async()=>{
+test('Q40: an ended account (expired) stops at the subscription screen; Studio, its records and sync are not loaded',async()=>{
   const h=harness();
   const session={user:{id:'expired-a'}};
   h.setSession(session);
   h.setEntitlement({access_state:'expired',can_write:false,trial_available:false,email_verified:true});
-  let applied;
-  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{applied=true;});
-  assert.equal(applied,true);
-  assert.equal(h.window.KLABS_ACCESS_STATE.can_write,false);
-  assert.ok(h.scripts.includes('js/app.js'));
-  assert.equal(h.elements.accountAccessScreen.hidden,true);
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('Studio must not open for an ended account'));
+  assert.deepEqual(h.scripts,[]);
+  assert.ok(!h.window.KLABS_ACCESS_STATE,'no access state: nothing in Studio can run');
+  assert.equal(h.elements.accountAccessScreen.hidden,false);
+  assert.match(h.elements.accountAccessMessage.textContent,/records are kept safely/);
+  // Explore Mode stays available.
+  h.elements.enterExploreDemoBtn.listeners.click();
+  assert.equal(h.elements.exploreDemoScreen.hidden,false);
 });
 
-test('verified cached entitlement preserves offline startup and local expiry becomes read-only',async()=>{
+test('Q40: returning from Checkout waits for the SERVER to confirm access; the browser result alone opens nothing',async()=>{
+  const h=harness();
+  const session={user:{id:'checkout-a'}};
+  h.setSession(session);
+  h.setEntitlement({access_state:'trial_eligible',can_write:false,trial_available:false,email_verified:true});
+  // The return parameter is read once, at load; simulate it through the billing hook the entry uses.
+  let polls=0;
+  h.window.KLABS_BILLING={loadSubscription:async()=>null,render(){},hasLiveSubscription:()=>false,
+    waitForAccess:async(fetch)=>{polls++;const a=await fetch();return a.can_write?a:null;}};
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('not before the server confirms'));
+  assert.equal(polls,0,'no checkout return: no waiting');
+  assert.deepEqual(h.scripts,[]);
+});
+
+test('verified cached entitlement preserves offline startup; an ended saved access does not open Studio (Q40)',async()=>{
   const now=Date.now();
   const h=harness();
   const session={user:{id:'offline-a'}};
@@ -243,11 +260,10 @@ test('verified cached entitlement preserves offline startup and local expiry bec
     entitlement:{access_state:'trial',can_write:true,trial_available:false,email_verified:true,
       trial_started_at:serverTime,trial_expires_at:new Date(now-24*60*60*1000).toISOString(),server_time:serverTime}
   });
-  let applied;
-  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{applied=h.window.KLABS_ACCESS_STATE;});
-  assert.equal(applied.access_state,'expired');
-  assert.equal(applied.can_write,false);
-  assert.ok(h.scripts.includes('js/app.js'));
+  // Q40: an access record that has ended (here, offline) no longer opens Studio, not even view-only.
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('an ended account must not open'));
+  assert.equal(h.elements.accountAccessScreen.hidden,false);
+  assert.equal(h.scripts.includes('js/app.js'),false);
 });
 
 test('a valid cached login without a cached entitlement opens local Studio view-only while offline',async()=>{
@@ -263,7 +279,7 @@ test('a valid cached login without a cached entitlement opens local Studio view-
   assert.ok(h.scripts.includes('js/app.js'));
 });
 
-test('active trial becomes read-only at the server-calculated expiry deadline',async()=>{
+test('Q40: an active trial or owner grant closes Studio at its exact end (no wait, no grace)',async()=>{
   const h=harness();
   const session={user:{id:'timed-trial'}};
   h.setSession(session);
@@ -272,14 +288,68 @@ test('active trial becomes read-only at the server-calculated expiry deadline',a
     access_state:'trial',can_write:true,trial_available:false,email_verified:true,
     trial_started_at:serverTime,trial_expires_at:new Date(Date.now()+60_000).toISOString(),server_time:serverTime
   });
-  let appliedState;
-  h.window.KLABS_APPLY_AUTH_STATE=()=>{appliedState=h.window.KLABS_ACCESS_STATE;};
+  h.window.KLABS_APPLY_AUTH_STATE=()=>{};
   await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{});
   assert.equal(h.window.KLABS_CAN_WRITE(),true);
   assert.equal(typeof h.window.KLABS_ACCESS_STATE.local_expires_at,'number');
   h.window.expiryCallback();
-  assert.equal(appliedState.access_state,'expired');
-  assert.equal(h.window.KLABS_CAN_WRITE(),false);
+  assert.equal(h.window.KLABS_ACCESS_STATE.access_state,'expired');
+  assert.equal(h.window.KLABS_CAN_WRITE(),false,'no change can be saved from the exact end');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.reloads(),1,'Studio closes to the subscription screen');
+});
+
+test('Q40: at the paid-through time Studio covers the records, waits for a confirmed renewal and continues without reloading',async()=>{
+  const h=harness();
+  const session={user:{id:'renewing'}};
+  h.setSession(session);
+  const serverTime=new Date().toISOString();
+  const endsAt=new Date(Date.now()+60_000).toISOString();
+  h.setEntitlement({access_state:'paid',can_write:true,trial_available:false,email_verified:true,access_expires_at:endsAt,server_time:serverTime});
+  h.window.KLABS_APPLY_AUTH_STATE=()=>{};
+  let checks=0;
+  h.window.KLABS_BILLING={render(){},loadSubscription:async()=>({status:'active',cancel_at_period_end:false,renewal_state:'pending'}),
+    hasLiveSubscription:(sub)=>!!sub&&['active','past_due','trialing'].includes(sub.status),
+    waitForAccess:async(fetch)=>{
+      checks++;
+      assert.equal(h.elements.renewalCheckOverlay.hidden,false,'records are covered while waiting');
+      assert.equal(h.window.KLABS_CAN_WRITE(),false,'nothing can be saved while waiting');
+      h.setEntitlement({access_state:'paid',can_write:true,trial_available:false,email_verified:true,
+        access_expires_at:new Date(Date.now()+30*24*3600_000).toISOString(),server_time:new Date().toISOString()});
+      return fetch();
+    }};
+  await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{});
+  h.window.expiryCallback();
+  for(let i=0;i<5;i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(checks,1);
+  assert.equal(h.reloads(),0,'no reload: the builder continues where they were');
+  assert.equal(h.elements.renewalCheckOverlay.hidden,true);
+  assert.equal(h.window.KLABS_CAN_WRITE(),true);
+  assert.ok(Date.parse(h.window.KLABS_ACCESS_STATE.access_expires_at)>Date.now()+29*24*3600_000);
+});
+
+test('Q40: at the paid-through time without a confirmed payment (failed, cancelled or no answer) Studio closes',async()=>{
+  for(const [name,sub,expectWait] of [['failed renewal',{status:'past_due',cancel_at_period_end:false,renewal_state:'failed'},false],
+    ['bank confirmation needed',{status:'active',cancel_at_period_end:false,renewal_state:'action_required'},false],
+    ['cancelled',{status:'active',cancel_at_period_end:true},false],['ended',{status:'canceled'},false],
+    ['no confirmation within the wait',{status:'active',cancel_at_period_end:false,renewal_state:'pending'},true]]){
+    const h=harness();
+    const session={user:{id:'ending-'+name}};
+    h.setSession(session);
+    const serverTime=new Date().toISOString();
+    h.setEntitlement({access_state:'paid',can_write:true,trial_available:false,email_verified:true,access_expires_at:new Date(Date.now()+60_000).toISOString(),server_time:serverTime});
+    h.window.KLABS_APPLY_AUTH_STATE=()=>{};
+    let waited=false;
+    h.window.KLABS_BILLING={render(){},loadSubscription:async()=>sub,
+      hasLiveSubscription:(s)=>!!s&&['active','past_due','trialing'].includes(s.status),
+      waitForAccess:async()=>{waited=true;return null;}};
+    await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{});
+    h.window.expiryCallback();
+    for(let i=0;i<5;i++)await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(h.window.KLABS_CAN_WRITE(),false,name);
+    assert.equal(h.reloads(),1,name);
+    assert.equal(waited,expectWait,name+': only a live, uncancelled renewal still being charged is waited for');
+  }
 });
 
 test('a session changed during initialization does not reveal the private application',async()=>{
@@ -483,20 +553,19 @@ test('Q16 unresponsive connection: after 3 s the launch opens with the saved acc
   assert.equal(t.h.window.localStorage.getItem('klabs-account-entitlement:q16-dead'),before,'saved access unchanged');
 });
 
-test('Q16 fallback keeps trial/subscription expiry: an expired saved trial or subscription opens read-only',async()=>{
+test('Q16 fallback keeps trial/subscription expiry: an expired saved trial or subscription does not open Studio (Q40)',async()=>{
   for(const [kind,extra] of [['trial',{trial_expires_at:new Date(Date.now()-60000).toISOString()}],['paid',{access_expires_at:new Date(Date.now()-60000).toISOString()}]]){
     const id='q16-expired-'+kind;
     const t=q16Harness(id);
     const serverTime=new Date(Date.now()-3600000).toISOString();
     t.h.cache('klabs-account-entitlement:'+id,{user_id:id,saved_at:serverTime,
       entitlement:{access_state:kind,can_write:true,trial_available:false,email_verified:true,server_time:serverTime,...extra}});
-    let state;
-    const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>{state=t.h.window.KLABS_ACCESS_STATE;});
+    const startup=t.h.window.KLABS_PUBLIC_ENTRY.applySession(t.session,()=>assert.fail('an ended account must not open'));
     await tick();
     t.timers.find(x=>x.ms===3000).fn();
     await startup;
-    assert.equal(state.access_state,'expired',kind);
-    assert.equal(state.can_write,false,kind);
+    assert.equal(t.h.elements.accountAccessScreen.hidden,false,kind);
+    assert.equal(t.h.scripts.includes('js/app.js'),false,kind);
   }
 });
 
@@ -562,14 +631,12 @@ test('Q17: an account-matched saved access record opens Studio strictly view-onl
   assert.equal(t.sessionReads(),0,'does not wait on the stalled renewal again');
 });
 
-test('Q17: trial and subscription expiry still apply to the saved access record',async()=>{
+test('Q17: trial and subscription expiry still apply to the saved access record (an ended record opens nothing, Q40)',async()=>{
   for(const [kind,extra] of [['trial',{trial_expires_at:new Date(Date.now()-60000).toISOString()}],['paid',{access_expires_at:new Date(Date.now()-60000).toISOString()}]]){
     const serverTime=new Date(Date.now()-3600000).toISOString();
     const t=q17Harness({entitlement:{access_state:kind,can_write:true,email_verified:true,server_time:serverTime,...extra}});
-    let state;
-    await t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,()=>{state=t.h.window.KLABS_ACCESS_STATE;},new Promise(()=>{}));
-    assert.equal(state.access_state,'expired',kind);
-    assert.equal(state.can_write,false,kind);
+    await assert.rejects(t.h.window.KLABS_PUBLIC_ENTRY.applyOfflineSession(t.stored,()=>assert.fail('must not open'),new Promise(()=>{})),/Could not restore your session/);
+    assert.equal(t.h.scripts.includes('js/app.js'),false,kind);
   }
 });
 
@@ -653,4 +720,25 @@ test('Q24: the public entry is Explore Studio (opens Demo Mode) and Sign In; Dem
   assert.ok(js.includes('document.getElementById("publicExploreBtn").addEventListener("click", () => window.KLABS_DEMO.enter());'));
   assert.ok(js.includes('document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));'));
   assert.match(fs.readFileSync(path.join(__dirname,'..','js','demo-mode.js'),'utf8'), /function enterUrl\(\)/);
+});
+
+test('Q40: a monthly or annual subscription never ends early - long expiry waits are armed in steps no longer than a day',async()=>{
+  for(const days of [31,366]){
+    const h=harness();
+    const session={user:{id:'long-'+days}};
+    h.setSession(session);
+    const delays=[];
+    h.window.setTimeout=(fn,ms)=>{delays.push(ms);h.window.expiryCallback=fn;return delays.length;};
+    h.setEntitlement({access_state:'paid',can_write:true,trial_available:false,email_verified:true,
+      access_expires_at:new Date(Date.now()+days*24*3600_000).toISOString(),server_time:new Date().toISOString()});
+    h.window.KLABS_APPLY_AUTH_STATE=()=>{};
+    await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>{});
+    const expiryDelays=delays.filter((ms)=>ms>=60_000);
+    assert.ok(expiryDelays.length>=1,days);
+    assert.ok(expiryDelays.every((ms)=>ms<=24*3600_000),`${days} days: ${expiryDelays}`);
+    // The first step only re-arms the wait: access is unchanged.
+    h.window.expiryCallback();
+    assert.equal(h.window.KLABS_CAN_WRITE(),true,days);
+    assert.equal(h.window.KLABS_ACCESS_STATE.access_state,'paid',days);
+  }
 });

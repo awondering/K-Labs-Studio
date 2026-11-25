@@ -1,83 +1,69 @@
-# Q40 Stage A — Stripe subscriptions (server side), TEST MODE
+# Q40 — Stripe subscriptions, TEST MODE (Stage A server side + Stage B app and access controls)
 
-Status: implemented and tested locally only. Nothing is deployed, no database (production or other) has been changed, and no Stripe object exists yet. **No real payment can be taken by anything in this stage.**
+Status: implemented and tested locally. **Nothing is deployed to production, no production data is changed, and no real
+payment can be taken** (Stripe sandbox only). Stage A and Stage B must reach production together, in one approved release.
 
-## What Stage A contains
+## What it contains
 | File | Purpose |
 |---|---|
-| `supabase/migrations/20261126000000_q40_stripe_subscriptions.sql` | Additive. It creates two tables and one function, described below. Existing accounts, the trial, the read and write guards and every record are unchanged. |
-| `supabase/functions/_shared/billing-core.mjs` | Testable core: Stripe signature check (HMAC-SHA256, 5-minute tolerance), a minimal Stripe REST client (pinned API version `2024-06-20`), and the three request handlers. |
-| `supabase/functions/stripe-webhook/index.ts` | Receives Stripe events. **Deploy with JWT verification OFF.** Stripe signs each request, and the signature is checked. |
-| `supabase/functions/billing-checkout/index.ts` | Signed-in, verified user to a Checkout Session for `monthly`/`annual` × `nzd`/`usd`. Deploy with JWT verification ON. |
-| `supabase/functions/billing-portal/index.ts` | Signed-in user to the Stripe Customer Portal. Deploy with JWT verification ON. |
+| `supabase/migrations/20261126000000_q40_stripe_subscriptions.sql` | Stage A. `billing_subscriptions` (each account reads only its own row; only the server writes), `stripe_events` (each event applied once, outcome logged) and `klabs_apply_stripe_subscription` (service role only). |
+| `supabase/migrations/20261127000000_q40_stage_b_access.sql` | Stage B. **Read lock**: an account without access cannot read its builds, components, taxonomy, settings or quote counter (records are hidden, never deleted or changed). **Trial retired**: no new trial can start; running trials keep their end date. |
+| `supabase/functions/_shared/billing-core.mjs` | Testable core: Stripe signature check, minimal Stripe client (API `2024-06-20`), webhook, checkout, portal, immediate renewal charge. |
+| `supabase/functions/stripe-webhook/index.ts` | Receives Stripe events; the Stripe signature is checked. |
+| `supabase/functions/billing-checkout/index.ts` | Signed-in, verified user to a **card-only** Checkout Session (`monthly`/`annual` × `nzd`/`usd`). |
+| `supabase/functions/billing-portal/index.ts` | Signed-in user to the Stripe Customer Portal. |
+| `js/billing.js`, `js/public-entry.js`, `index.html`, `css/studio.css` | Stage B app: subscription screen, Settings → Account → Subscription, checkout return, renewal cover. |
 
-**The migration's tables and function:**
-- `billing_subscriptions`: each account sees only its own row; only the server writes to it.
-- `stripe_events`: each event is applied once, with an outcome log.
-- `klabs_apply_stripe_subscription`: only `service_role` may call it.
+All three functions verify the caller in code (Stripe signature, or `auth.getUser` for the signed-in user), so they are
+deployed with the gateway JWT check off. They read the new publishable/secret keys and fall back to the legacy ones.
 
-**Security properties (tested):**
-- **Access is granted only by a verified webhook,** after the subscription is re-read from Stripe. The browser's "payment successful" page is never trusted.
-- **Only an exact approved Price can grant access:** NZD 34.00/month, NZD 299.00/year, USD 19.00/month or USD 169.00/year. Checkout refuses any configured price whose amount, currency, interval, mode or active flag differs.
-- **No secret is in the repository.** Keys, the webhook secret and price IDs come only from Edge Function secrets.
-- **One Stripe customer per account,** and no second live subscription.
-- **Test-mode keys accept only test-mode events,** and live keys only live events.
-
-**Access rules — NO GRACE PERIOD (owner decision 26 Nov 2026):**
+## Access rules — NO GRACE PERIOD (owner decision 26 Nov 2026)
 - **Access ends exactly when the verified paid-through period ends,** unless Stripe confirms a new paid period.
-- **Paid-through:** the period end when the subscription's latest invoice is **paid**. Otherwise it is the period start, which is the end of the last paid period.
-- **Renewals:** Stripe moves a subscription into its new period about an hour before charging it. Access is therefore not extended until `invoice.paid` confirms payment, and a renewing customer can be locked out briefly at each renewal.
-- **Active / cancelled at period end:** access to exactly the paid period end.
-- **past_due (failed renewal):** locked from the last paid period end. A successful retry restores access automatically.
-- **Trialing:** grants nothing (Studio has no free trial).
-- **canceled / unpaid / paused / incomplete_expired:** locked.
+- **Paid-through:** the period end when the subscription's latest invoice is **paid**; otherwise the period start
+  (the end of the last paid period).
+- **Renewal continuity (option D):** Stripe drafts the renewal invoice at the period end and would wait about an hour
+  before charging. On a verified `invoice.created` that is exactly a Studio renewal (subscription cycle, approved
+  price and amount, draft, automatic collection, same customer, matching mode), the server finalises and charges it at
+  once, with idempotency keys. Access still comes only from the **paid** invoice. Anything unexpected, or any failure,
+  leaves Stripe's own attempt in place.
+- **Cancelled at period end:** access to exactly the period end, then locked.
+- **Failed renewal (past_due):** locked from the last paid period end; a successful payment restores access.
+- **Trialing:** grants nothing. **canceled / unpaid / paused / incomplete_expired:** locked.
 - **Owner grants** (complimentary, grandfathered) that last longer are never shortened.
-- **Records are never deleted.**
+- **Records are never deleted.** While locked they are hidden; they return unchanged when payment is confirmed.
+- `renewal_state` (pending / action_required / failed) chooses the customer's message only; it never grants access.
 
-Not in Stage A (Stage B, together with the app):
-- the subscribe, renew and manage-billing screens;
-- retiring the trial;
-- the server-side **read** lock at expiry;
-- closing the app at expiry before reads are refused.
+## In the app
+- **No access** (new account, or ended): Studio does not open (nothing shown, nothing synced). The subscription screen
+  offers NZD or USD, monthly or annual, Manage billing (once a Stripe customer exists), Explore Mode and Sign Out.
+- **Subscribe** asks the server for Checkout and only follows a `https://checkout.stripe.com` address (the portal only
+  `https://billing.stripe.com`).
+- **Back from Checkout:** "Confirming your payment with Stripe…" until the **server** confirms access, then Studio opens.
+- **Settings → Account → Subscription:** plan, renewal or end date, payment problems, Manage billing.
+- **At the paid-through moment while Studio is open:** nothing can be saved from that instant; the records are covered by
+  "Confirming your renewal…"; once the server confirms the renewal (seconds, with option D) Studio continues where the
+  builder was. A cancelled, failed or unconfirmed (2 minutes) renewal closes Studio to the subscription screen.
+- Also fixed: expiry timers longer than ~24.8 days fired immediately in browsers; long waits are now armed daily.
 
-The read lock must not ship before the app changes, or open devices could misread "no rows" as deletions.
+## Tests (local)
+- `tests/billing-core.test.cjs`: 23 unit tests (signatures, client, webhook, checkout, portal, immediate renewal charge
+  and its refusals, renewal state, keys).
+- `tests/q40-stripe-subscriptions-isolated.cjs`: 36 database checks on the real production schema (PGlite), including the
+  exact expiry boundary, renewals awaiting payment, failed renewals, the read lock, trial retirement and records kept.
+- `tests/q40-subscription-browser.cjs`: 52 checks in WebKit (iPhone 13 and Mac) on the real Studio page.
+- `tests/public-entry.test.cjs`: entry rules (no access → no Studio; renewal wait; long timers).
 
-## Tests
-- `tests/billing-core.test.cjs`: 16 unit tests (signatures, Stripe client, webhook, checkout, portal, no secrets committed).
-- `tests/q40-stripe-subscriptions-isolated.cjs`: 29 checks, including the exact expiry boundary, renewals awaiting payment and failed renewals. It runs the real production schema plus this migration in PGlite, then the real webhook core end to end with signed synthetic events.
+## Test project (separate FREE Supabase project) — owner steps
+1. **Create** a free Supabase project, e.g. `klabs-studio-test` (Supabase → New project). Keep its database password in
+   your password manager; it is not needed here.
+2. **Create a scoped access token** (Supabase → Account → Access Tokens → new **scoped** token) limited to **that test
+   project only**, with: Database (Read-write), Edge Functions (Read-write), Edge Function Secrets (Read-write),
+   API Keys (Read), API Key Secrets (Read). Set a short expiry.
+3. **Run** `node ~/K-Labs-Stripe-Test/q40-test-setup.mjs` in Terminal. It asks (hidden) for the test project reference,
+   the token and the Stripe sandbox secret key; refuses the live project and live keys; asks you to type the project
+   name; applies the schema; deploys the three functions; creates the sandbox webhook (8 events) and stores its secret
+   directly; sets the function secrets; stores the sandbox key and the test project's secret key in your Keychain.
+4. **End-to-end test:** `node ~/K-Labs-Stripe-Test/q40-e2e.mjs` (Stripe test clocks; synthetic accounts and test cards).
 
-## What the owner must do next (nothing here costs money)
-**1. Stripe test mode** (Dashboard, test mode / sandbox; no live activation needed):
-- Product "K-Labs Studio" with four **recurring** Prices, using these exact amounts:
-  - NZD 34.00 monthly;
-  - NZD 299.00 yearly;
-  - USD 19.00 monthly;
-  - USD 169.00 yearly.
-- **Settings → Adaptive Pricing: OFF.** Customers then see and pay the fixed price.
-- **Customer Portal:**
-  - on: update payment method, invoice history, cancel subscriptions **at end of billing period**;
-  - off: plan switching and pausing.
-- **Subscriptions → manage failed payments:**
-  - Smart Retries on (default);
-  - **after all retries fail: cancel the subscription**;
-  - customer emails on for failed payments and receipts.
-- Send Claude the four **price IDs** (`price_…`). They are not secret. **Never send the secret key (`sk_test_…`) or webhook secret (`whsec_…`) in chat.**
-
-**2. Where to run the test-mode functions** (decision needed). Deploying to the production Supabase project would change production, which is out of scope. The options are:
-- **(Recommended)** a separate **free** Supabase project, e.g. "klabs-studio-test" (the Free plan allows two projects), used only for test mode;
-- or local Supabase, which needs Docker, the Supabase CLI and more set-up.
-
-**3. Tools** (free; install approval needed):
-- the Supabase CLI, to deploy functions and apply migrations to the test project;
-- the Stripe CLI (optional), for test clocks that simulate renewals and failed payments quickly.
-
-**4. Secrets, entered by the owner** in the TEST project → Edge Functions → Secrets:
-- `STRIPE_SECRET_KEY` (sk_test_…);
-- `STRIPE_WEBHOOK_SECRET` (whsec_…, from step 5);
-- `STRIPE_PRICE_NZD_MONTHLY`, `STRIPE_PRICE_NZD_ANNUAL`, `STRIPE_PRICE_USD_MONTHLY`, `STRIPE_PRICE_USD_ANNUAL`;
-- `PUBLIC_APP_URL`;
-
-**5. Stripe test webhook:** an endpoint at the test project's `…/functions/v1/stripe-webhook` with these events:
-- `checkout.session.completed`;
-- `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`;
-- `invoice.paid`, `invoice.payment_failed`.
+Webhook events: `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.created`,
+`invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`.

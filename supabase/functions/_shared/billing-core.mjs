@@ -17,8 +17,10 @@ const HANDLED_EVENTS = new Set([
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
+  "invoice.created",
   "invoice.paid",
-  "invoice.payment_failed"
+  "invoice.payment_failed",
+  "invoice.payment_action_required"
 ]);
 // Pinned so the subscription shape (current_period_start/end on the subscription) cannot change underneath us.
 export const STRIPE_API_VERSION = "2024-06-20";
@@ -89,8 +91,11 @@ export function createStripeApi({ secretKey, fetchImpl = fetch, apiVersion = STR
   };
   return {
     testMode: secretKey.includes("_test_"),
-    // The latest invoice is expanded: only a PAID invoice confirms the current period (no grace).
-    getSubscription: (id) => call("GET", `/subscriptions/${encodeURIComponent(id)}?expand%5B%5D=latest_invoice`),
+    // The latest invoice (and its payment) is expanded: only a PAID invoice confirms the current period (no grace).
+    getSubscription: (id) => call("GET", `/subscriptions/${encodeURIComponent(id)}?expand%5B%5D=latest_invoice.payment_intent`),
+    getInvoice: (id) => call("GET", `/invoices/${encodeURIComponent(id)}`),
+    finalizeInvoice: (id) => call("POST", `/invoices/${encodeURIComponent(id)}/finalize`, { auto_advance: true }, `klabs-finalize-${id}`),
+    payInvoice: (id) => call("POST", `/invoices/${encodeURIComponent(id)}/pay`, {}, `klabs-pay-${id}`),
     getPrice: (id) => call("GET", `/prices/${encodeURIComponent(id)}`),
     createCustomer: (params, idempotencyKey) => call("POST", "/customers", params, idempotencyKey),
     createCheckoutSession: (params) => call("POST", "/checkout/sessions", params),
@@ -119,8 +124,20 @@ export function subscriptionFacts(subscription) {
     cancelAtPeriodEnd: subscription?.cancel_at_period_end === true,
     // Unexpanded (a bare id) or anything but "paid" counts as not paid.
     latestInvoicePaid: subscription?.latest_invoice?.status === "paid",
+    renewalState: renewalState(subscription?.latest_invoice),
     itemCount: subscription?.items?.data?.length || 0
   };
+}
+// For the customer's message only (never for access): is an unpaid invoice still being charged, waiting for the
+// customer to authenticate with their bank, or has the charge failed?
+export function renewalState(invoice) {
+  if (!invoice || typeof invoice !== "object" || invoice.status === "paid" || invoice.status === "void") return null;
+  if (invoice.status === "draft") return "pending";
+  if (invoice.status !== "open") return "failed";
+  const intent = invoice.payment_intent && typeof invoice.payment_intent === "object" ? invoice.payment_intent : null;
+  if (intent?.status === "requires_action") return "action_required";
+  if (intent?.status === "requires_payment_method" || (invoice.attempt_count || 0) > 0) return "failed";
+  return "pending";
 }
 function subscriptionIdOf(event) {
   const o = event?.data?.object || {};
@@ -128,6 +145,23 @@ function subscriptionIdOf(event) {
   if (event.type.startsWith("customer.subscription.")) return o.id || "";
   if (event.type.startsWith("invoice.")) return o.subscription || o.parent?.subscription_details?.subscription || "";
   return "";
+}
+
+// Supabase keys injected into Edge Functions. New projects use publishable/secret keys (SUPABASE_PUBLISHABLE_KEYS /
+// SUPABASE_SECRET_KEYS, JSON objects keyed by name); the legacy anon/service_role keys are retired by the end of 2026.
+// Prefer the new keys, fall back to the legacy ones.
+export function supabaseKeys(env) {
+  const named = (name) => {
+    try {
+      const keys = JSON.parse(env(name) || "{}");
+      return typeof keys?.default === "string" ? keys.default : "";
+    } catch { return ""; }
+  };
+  return {
+    url: env("SUPABASE_URL"),
+    publicKey: named("SUPABASE_PUBLISHABLE_KEYS") || env("SUPABASE_ANON_KEY"),
+    serverKey: named("SUPABASE_SECRET_KEYS") || env("SUPABASE_SERVICE_ROLE_KEY")
+  };
 }
 
 // Price ids configured in secrets: { nzd: { monthly, annual }, usd: { monthly, annual } }.
@@ -150,6 +184,38 @@ function knownPrice(prices, priceId) {
 
 // ---------- stripe-webhook ----------
 export function createStripeWebhookHandler({ serviceClient, stripe, webhookSecret, prices, now = () => new Date(), log = console }) {
+  // Renewal continuity (owner-approved option D): Stripe drafts a renewal invoice at the period end and would wait
+  // about an hour before charging it. A verified, fully matching Studio renewal is finalised and charged straight
+  // away instead, so a paying customer is locked for seconds, not an hour. Access still comes only from the paid
+  // invoice (invoice.paid). Anything unexpected, or any failure here, leaves Stripe's own attempt in place.
+  async function payRenewalNow(invoiceId, facts, known) {
+    if (!invoiceId) return "skipped";
+    try {
+      const invoice = await stripe.getInvoice(invoiceId);
+      const matches = invoice?.status === "draft"
+        && invoice.billing_reason === "subscription_cycle"
+        && invoice.collection_method === "charge_automatically"
+        && invoice.livemode === !stripe.testMode
+        && (invoice.subscription || invoice.parent?.subscription_details?.subscription) === facts.subscriptionId
+        && invoice.customer === facts.customerId
+        && String(invoice.currency || "").toLowerCase() === known.currency
+        && invoice.amount_due === PLAN_AMOUNTS[known.currency][known.plan];
+      if (!matches) return "skipped";
+      await stripe.finalizeInvoice(invoiceId);
+      try {
+        await stripe.payInvoice(invoiceId);
+        return "charged";
+      } catch (error) {
+        // A declined card or required authentication is reported by Stripe's own invoice events.
+        log.warn("[stripe-webhook] Immediate renewal charge was not completed:", invoiceId, error.message);
+        return "charge_not_completed";
+      }
+    } catch (error) {
+      log.warn("[stripe-webhook] Renewal left to Stripe's normal schedule:", invoiceId, error.message);
+      return "left_to_stripe";
+    }
+  }
+
   return async function handleStripeWebhook(request) {
     if (request.method !== "POST") return response(405, { error: "Method not allowed." });
     const payload = await request.text();
@@ -205,10 +271,13 @@ export function createStripeWebhookHandler({ serviceClient, stripe, webhookSecre
         p_period_start: facts.periodStart,
         p_period_end: facts.periodEnd,
         p_cancel_at_period_end: facts.cancelAtPeriodEnd,
-        p_latest_invoice_paid: facts.latestInvoicePaid
+        p_latest_invoice_paid: facts.latestInvoicePaid,
+        p_renewal_state: facts.renewalState
       });
       if (error) throw new Error(error.message || "Access could not be updated.");
-      return response(200, { received: true, result: data?.result || "applied" });
+      const body = { received: true, result: data?.result || "applied" };
+      if (event.type === "invoice.created") body.renewal = await payRenewalNow(event.data.object?.id, facts, known);
+      return response(200, body);
     } catch (error) {
       // 5xx: Stripe retries the event automatically.
       log.error("[stripe-webhook] Event could not be applied:", event.id, error.message);
@@ -282,6 +351,8 @@ export function createCheckoutHandler({ createUserClient, serviceClient, stripe,
         customer: customerId,
         client_reference_id: user.id,
         line_items: [{ price: price.id, quantity: 1 }],
+        // Cards only (Apple Pay and Google Pay are cards): they settle in seconds, so renewals are not held for days.
+        payment_method_types: ["card"],
         subscription_data: { metadata: { user_id: user.id } },
         metadata: { user_id: user.id },
         success_url: `${origin}/?checkout=success`,

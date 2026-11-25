@@ -1,12 +1,10 @@
-// Q40: billing-portal for the signed-in Studio user (deploy with JWT verification ON).
+// Q40: billing-portal for the signed-in Studio user (deployed with the gateway JWT check off: the sign-in is verified in code, auth.getUser).
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { createPortalHandler, createStripeApi } from "../_shared/billing-core.mjs";
+import { supabaseKeys, createPortalHandler, createStripeApi } from "../_shared/billing-core.mjs";
 
 const env = (name: string) => Deno.env.get(name) || "";
-const supabaseUrl = env("SUPABASE_URL");
-const anonKey = env("SUPABASE_ANON_KEY");
-const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY");
-if (!supabaseUrl || !anonKey || !serviceRoleKey) throw new Error("SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are required.");
+const { url: supabaseUrl, publicKey: anonKey, serverKey: serviceRoleKey } = supabaseKeys(env);
+if (!supabaseUrl || !anonKey || !serviceRoleKey) throw new Error("SUPABASE_URL and the project's publishable and secret keys are required.");
 
 const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 

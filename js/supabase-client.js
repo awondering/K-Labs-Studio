@@ -149,7 +149,7 @@ function klabsApplyAuthState(session) {
           ? "You are offline and your sign-in could not be renewed. Your saved records are view-only until you reconnect."
           : window.KLABS_ACCESS_STATE?.offline
           ? "You are offline and account access could not be verified. Your saved records are view-only until you reconnect."
-          : "Your trial has ended. Your records remain available, but changes cannot be saved.";
+          : "Changes cannot be saved right now.";
       }
     }
     klabsApplyReadOnlyControls();

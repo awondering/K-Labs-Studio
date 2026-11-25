@@ -21,7 +21,7 @@
      a blank Total Price, old payment buttons). If Studio's code is not this release, clear the cached files and reload
      once; if that does not help, say so plainly instead of showing a half-working screen. */
   (function () {
-    var BUILD = 'build148-v289';
+    var BUILD = 'build148-v290';
     window.KLABS_SHELL_BUILD = BUILD;
     function notice(text) {
       var show = function () {
@@ -117,10 +117,7 @@
       <h1 id="accountAccessTitle">Your Studio, your way.</h1>
       <p id="accountAccessMessage" class="account-access-copy" aria-live="polite"></p>
       <div id="accountAccessChoices" class="account-access-choices">
-        <button id="startTrialBtn" class="account-access-primary" type="button">
-          START MY 7-DAY TRIAL
-        </button>
-        <p class="account-access-detail">The seven days begin when you confirm. Registration alone does not start the trial.</p>
+        <div id="accessBillingPanel" class="billing-panel"></div>
         <button id="enterExploreDemoBtn" class="account-access-secondary" type="button">EXPLORE WITH DEMONSTRATION DATA</button>
         <p class="account-access-detail">Explore uses fictional examples only. Changes and customer documents are not saved or generated.</p>
       </div>
@@ -180,10 +177,17 @@
       <p class="explore-demo-readonly-note">Calculators are described here, not run against saved account data in Explore Mode.</p>
     </section>
     <footer class="explore-demo-footer">
-      <p>This demonstration is separate from your records. Start your trial only when you choose to begin working in Studio.</p>
-      <button id="demoStartTrialBtn" class="account-access-primary" type="button">START MY 7-DAY TRIAL</button>
+      <p>This demonstration is separate from your records. Subscribe only when you choose to begin working in Studio.</p>
+      <button id="demoSubscribeBtn" class="account-access-primary" type="button">SUBSCRIBE TO STUDIO</button>
     </footer>
   </section>
+  <div id="renewalCheckOverlay" class="renewal-check-overlay" role="alertdialog" aria-modal="true" aria-labelledby="renewalCheckTitle" hidden>
+    <div class="account-access-card">
+      <p class="account-access-eyebrow">K-LABS STUDIO</p>
+      <h1 id="renewalCheckTitle">Confirming your renewal…</h1>
+      <p id="renewalCheckMessage" class="account-access-copy" aria-live="polite">Your paid period has just ended. Studio is waiting for Stripe to confirm your renewal payment and will continue automatically.</p>
+    </div>
+  </div>
   <div class="carbon-field"></div>
   <main class="app-shell" id="app">
     <header class="topbar">
@@ -197,7 +201,7 @@
     </header>
     <div id="readOnlyAccessNotice" class="readonly-access-notice" role="status" hidden>
       <strong>READ-ONLY ACCESS</strong>
-      <span>Your trial has ended. Your records remain available, but changes cannot be saved.</span>
+      <span>Changes cannot be saved right now.</span>
     </div>
     <div id="buildSyncNotice" class="readonly-access-notice build-sync-notice" role="status" hidden>
       <strong>NOT SYNCED — REVIEW REQUIRED</strong>
@@ -1362,6 +1366,10 @@
           </span>
           <b class="settings-disclosure__chevron" aria-hidden="true">▾</b>
         </summary>
+        <div class="settings-account-card__row settings-billing" hidden>
+          <strong class="settings-billing__title">Subscription</strong>
+          <div id="settingsBillingPanel" class="billing-panel"></div>
+        </div>
         <div class="settings-account-card__row">
         <p id="componentSyncStatusLine" class="settings-field-note" role="status" aria-live="polite" hidden></p>
         <div class="settings-account-card__actions">
@@ -1397,7 +1405,7 @@
       <form id="adminInviteForm" class="admin-invite-form">
         <div>
           <strong>Invite builder</strong>
-          <p>Invitations create trial-eligible accounts. Trial time starts only after the builder confirms activation.</p>
+          <p>Invitations create accounts without access. The builder subscribes, or you grant complimentary access below.</p>
         </div>
         <label>
           Builder email
@@ -1577,7 +1585,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v289" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v290" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>
@@ -1618,6 +1626,7 @@
   </div><!-- /demoModeBar -->
   <script src="js/demo-mode.js"></script>
   <script src="js/build-tab-lock.js"></script>
+  <script src="js/billing.js"></script>
   <script src="js/public-entry.js"></script>
   <script src="js/vendor/supabase-2.119.0.js"></script>
  <script src="js/supabase-config.js"></script>

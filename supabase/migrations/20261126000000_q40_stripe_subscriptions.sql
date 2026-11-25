@@ -39,12 +39,17 @@ create table if not exists public.billing_subscriptions (
   current_period_start timestamptz,
   current_period_end timestamptz,
   paid_through timestamptz,
+  renewal_state text check (renewal_state is null or renewal_state in ('pending', 'action_required', 'failed')),
   cancel_at_period_end boolean not null default false,
   last_event_id text,
   last_event_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.billing_subscriptions add column if not exists paid_through timestamptz;
+alter table public.billing_subscriptions add column if not exists renewal_state text
+  check (renewal_state is null or renewal_state in ('pending', 'action_required', 'failed'));
 
 alter table public.billing_subscriptions enable row level security;
 alter table public.billing_subscriptions force row level security;
@@ -83,7 +88,8 @@ create or replace function public.klabs_apply_stripe_subscription(
   p_period_start timestamptz,
   p_period_end timestamptz,
   p_cancel_at_period_end boolean,
-  p_latest_invoice_paid boolean
+  p_latest_invoice_paid boolean,
+  p_renewal_state text default null
 )
 returns jsonb
 language plpgsql
@@ -106,6 +112,9 @@ begin
   end if;
   if p_latest_invoice_paid is null then
     raise exception 'Whether the latest invoice is paid is required';
+  end if;
+  if p_renewal_state is not null and p_renewal_state not in ('pending', 'action_required', 'failed') then
+    raise exception 'Unsupported renewal state: %', p_renewal_state;
   end if;
 
   -- Each Stripe event is applied at most once.
@@ -152,10 +161,12 @@ begin
 
   insert into public.billing_subscriptions as b (
     user_id, stripe_customer_id, stripe_subscription_id, status, plan, currency,
-    current_period_start, current_period_end, paid_through, cancel_at_period_end, last_event_id, last_event_at, updated_at
+    current_period_start, current_period_end, paid_through, renewal_state, cancel_at_period_end, last_event_id, last_event_at, updated_at
   ) values (
     p_user_id, p_customer_id, p_subscription_id, p_status, p_plan, lower(p_currency),
-    p_period_start, p_period_end, new_expiry, coalesce(p_cancel_at_period_end, false), p_event_id, now(), now()
+    p_period_start, p_period_end, new_expiry,
+    case when p_status in ('active', 'past_due') and not p_latest_invoice_paid then p_renewal_state end,
+    coalesce(p_cancel_at_period_end, false), p_event_id, now(), now()
   )
   on conflict (user_id) do update set
     stripe_subscription_id = excluded.stripe_subscription_id,
@@ -165,6 +176,7 @@ begin
     current_period_start = excluded.current_period_start,
     current_period_end = excluded.current_period_end,
     paid_through = excluded.paid_through,
+    renewal_state = excluded.renewal_state,
     cancel_at_period_end = excluded.cancel_at_period_end,
     last_event_id = excluded.last_event_id,
     last_event_at = excluded.last_event_at,
@@ -203,9 +215,9 @@ begin
 end;
 $$;
 
-revoke all on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, boolean)
+revoke all on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, boolean, text)
   from public, anon, authenticated;
-grant execute on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, boolean)
+grant execute on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, boolean, text)
   to service_role;
 
 commit;

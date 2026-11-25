@@ -44,10 +44,10 @@ async function main() {
   const apply = async (o) => {
     await asService();
     try {
-    const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as r`, [
+    const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) as r`, [
       o.event ?? `evt_${++n}`, o.type || 'customer.subscription.updated', o.user, o.customer || `cus_${o.user.slice(0, 1)}`, o.sub || `sub_${o.user.slice(0, 1)}`,
       o.status || 'active', o.plan || 'monthly', o.currency || 'nzd', o.start ?? new Date(Date.now() - H), o.end ?? new Date(Date.now() + 30 * 24 * H),
-      o.cancel ?? false, 'paid' in o ? o.paid : true]);
+      o.cancel ?? false, 'paid' in o ? o.paid : true, o.renewal ?? null]);
     return r.rows[0].r;
     } finally { await reset(); }
   };
@@ -259,6 +259,96 @@ async function main() {
     for (const k of ['access_granted', 'access_ended', 'owner_grant_kept', 'no_access', 'customer_mismatch', 'unknown_user', 'ignored_other_subscription']) assert.ok(by[k] > 0, k);
   });
 
+  // ---- Stage B access controls (20261127000000_q40_stage_b_access.sql) ----
+  const hidden = async (user) => {
+    await as(user);
+    try {
+      const out = {};
+      for (const t of ['builds', 'components', 'component_taxonomy', 'studio_settings', 'quote_number_counters']) out[t] = (await db.query(`select count(*)::int c from public.${t}`)).rows[0].c;
+      return out;
+    } finally { await reset(); }
+  };
+  const stored = async (user) => (await db.query(`select client_id, payload from public.builds where user_id=$1 order by client_id`, [user])).rows;
+
+  await ck('Stage B: while paid, the builder reads their own records', async () => {
+    await apply({ user: U.A, sub: 'sub_A2', status: 'active', paid: true });
+    assert.deepEqual(await readBuilds(U.A), ['a-1', 'a-3']);
+  });
+
+  await ck('Stage B: at expiry the records are hidden from the builder (read lock), never deleted or changed', async () => {
+    const before = await stored(U.A);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'canceled' })).result, 'access_ended');
+    const seen = await hidden(U.A);
+    assert.deepEqual(seen, { builds: 0, components: 0, component_taxonomy: 0, studio_settings: 0, quote_number_counters: 0 });
+    assert.deepEqual(await stored(U.A), before, 'every record is still stored, unchanged');
+    assert.notEqual(await writeBuild(U.A, 'a-locked'), true);
+    // Payment management stays available: the builder can still read their own subscription row.
+    await as(U.A);
+    const own = (await db.query('select status from public.billing_subscriptions')).rows;
+    await reset();
+    assert.deepEqual(own, [{ status: 'canceled' }]);
+  });
+
+  await ck('Stage B: a confirmed new paid period shows the same records again, unchanged', async () => {
+    const before = await stored(U.A);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A3', status: 'active', paid: true, type: 'invoice.paid' })).result, 'access_granted');
+    assert.deepEqual(await readBuilds(U.A), ['a-1', 'a-3']);
+    assert.deepEqual(await stored(U.A), before);
+  });
+
+  await ck('Stage B: the read lock follows the exact paid-through instant', async () => {
+    await db.exec('begin');
+    try {
+      await db.exec(`update public.account_entitlements set access_expires_at = now() + interval '1 second' where user_id='${U.A}'`);
+      await db.exec(`set local role authenticated; set local request.jwt.claim.sub='${U.A}'`);
+      const before = (await db.query('select count(*)::int c from public.builds')).rows[0].c;
+      await db.exec('reset role');
+      await db.exec(`update public.account_entitlements set access_expires_at = now() where user_id='${U.A}'`);
+      await db.exec(`set local role authenticated; set local request.jwt.claim.sub='${U.A}'`);
+      const at = (await db.query('select count(*)::int c from public.builds')).rows[0].c;
+      assert.deepEqual([before, at], [2, 0]);
+    } finally { await db.exec('rollback'); await reset(); }
+  });
+
+  await ck('Stage B: owner grants keep reading; another account never sees these records', async () => {
+    assert.equal((await access(U.G)).can_write, true);
+    await as(U.G);
+    const g = (await db.query('select count(*)::int c from public.builds')).rows[0].c;
+    await reset();
+    assert.equal(g, 0, 'grandfathered account reads only its own (none here)');
+    assert.equal(await writeBuild(U.G, 'g-1'), true);
+    assert.deepEqual(await readBuilds(U.G), ['g-1']);
+  });
+
+  await ck('Stage B: the free trial is retired; a trial already running keeps its original end', async () => {
+    const T = 'abababab-0000-4000-8000-0000000000ab';
+    await db.exec(`insert into auth.users(id, email, email_confirmed_at) values ('${T}', 't@example.test', now())`);
+    await as(T);
+    await assert.rejects(db.query('select public.start_account_trial()'), /no longer offers a free trial/);
+    const a = (await db.query('select * from public.klabs_account_access($1)', [T])).rows[0];
+    await reset();
+    assert.deepEqual([a.access_state, a.can_write, a.trial_available], ['trial_eligible', false, false]);
+    // An existing trial (started before the retirement) continues to its own end date.
+    await db.exec(`update public.account_entitlements set access_state='trial', trial_started_at=now(), trial_expires_at=now()+interval '3 days' where user_id='${T}'`);
+    assert.equal((await access(T)).can_write, true);
+    assert.equal(await writeBuild(T, 't-1'), true);
+    assert.deepEqual(await readBuilds(T), ['t-1']);
+  });
+
+  await ck('Stage B: the renewal state is recorded for messages only and never grants access', async () => {
+    const past = new Date(Date.now() - 60 * 1000);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A3', status: 'past_due', start: past, paid: false, renewal: 'failed' })).result, 'access_ended');
+    const row = async () => (await db.query(`select renewal_state from public.billing_subscriptions where user_id=$1`, [U.A])).rows[0].renewal_state;
+    assert.equal(await row(), 'failed');
+    assert.equal((await access(U.A)).can_write, false);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A3', status: 'active', start: past, paid: false, renewal: 'action_required' })).result, 'no_access');
+    assert.equal(await row(), 'action_required');
+    assert.equal((await access(U.A)).can_write, false);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A3', status: 'active', paid: true, renewal: 'pending' })).result, 'access_granted');
+    assert.equal(await row(), null, 'a paid invoice clears it');
+    await assert.rejects(apply({ user: U.A, sub: 'sub_A3', renewal: 'grace' }), /Unsupported renewal state/);
+  });
+
   // ---- The real webhook core end to end: signed events -> Stripe re-read (synthetic) -> this database ----
   const core = await import(path.join(root, 'supabase/functions/_shared/billing-core.mjs'));
   const SECRET = 'whsec_isolated_test_only';
@@ -270,9 +360,9 @@ async function main() {
       assert.equal(name, 'klabs_apply_stripe_subscription');
       try {
         await asService();
-        const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as r`, [
+        const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) as r`, [
           args.p_event_id, args.p_event_type, args.p_user_id, args.p_customer_id, args.p_subscription_id, args.p_status, args.p_plan, args.p_currency,
-          args.p_period_start, args.p_period_end, args.p_cancel_at_period_end, args.p_latest_invoice_paid]);
+          args.p_period_start, args.p_period_end, args.p_cancel_at_period_end, args.p_latest_invoice_paid, args.p_renewal_state ?? null]);
         return { data: r.rows[0].r, error: null };
       } catch (e) { return { data: null, error: { message: e.message } }; } finally { await reset(); }
     },

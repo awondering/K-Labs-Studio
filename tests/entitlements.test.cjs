@@ -36,7 +36,8 @@ test('demo path has no private app bootstrap or persistent-store access',()=>{
   const demoEnd=entry.indexOf('async function signOutFromEntry',demoStart);
   assert.ok(demoStart>=0&&demoEnd>demoStart);
   assert.doesNotMatch(entry.slice(demoStart,demoEnd),/loadPrivateApp|Store\.|localStorage|KLABS_UI/);
-  assert.match(entry,/if \(entitlement\.access_state === "trial_eligible"\) \{\s*window\.KLABS_BUILD_TAB_LOCK\?\.release\(\);\s*showAccessChoice\(entitlement\);\s*return;/);
+  // Q40: an account without access (never subscribed, or ended) stops at the subscription screen before Studio loads.
+  assert.match(entry,/if \(entitlement\.access_state === "trial_eligible" \|\| entitlement\.access_state === "expired"\) \{\s*window\.KLABS_BUILD_TAB_LOCK\?\.release\(\);[\s\S]*?showAccessChoice\(entitlement, [^;]*\);\s*return;\s*\}/);
 });
 
 test('expired sync paths pull without cloud writes and local Store writes are blocked',()=>{

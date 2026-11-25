@@ -145,7 +145,7 @@ test('webhook: a verified event re-reads the subscription (with its latest invoi
   assert.equal(name, 'klabs_apply_stripe_subscription');
   assert.deepEqual(args, { p_event_id: 'evt_2', p_event_type: 'customer.subscription.updated', p_user_id: USER, p_customer_id: 'cus_1', p_subscription_id: 'sub_1',
     p_status: 'active', p_plan: 'monthly', p_currency: 'nzd', p_period_start: '2026-12-01T00:00:00.000Z', p_period_end: '2027-01-01T00:00:00.000Z',
-    p_cancel_at_period_end: false, p_latest_invoice_paid: true });
+    p_cancel_at_period_end: false, p_latest_invoice_paid: true, p_renewal_state: null });
 });
 
 test('webhook: checkout, invoices (old and new shape), ignored types, user lookup by customer', async () => {
@@ -234,7 +234,7 @@ test('checkout: new customer (idempotent) and fixed-currency session tied to the
   assert.deepEqual(stripe.calls.find((c) => c[0] === 'createCustomer'), ['createCustomer', { email: 'builder@example.test', metadata: { user_id: USER } }, `klabs-customer-${USER}`]);
   assert.deepEqual(svc.calls.find((c) => c[0] === 'upsert'), ['upsert', 'billing_subscriptions', { user_id: USER, stripe_customer_id: 'cus_new' }, { onConflict: 'user_id', ignoreDuplicates: true }]);
   assert.deepEqual(stripe.calls.find((c) => c[0] === 'createCheckoutSession')[1], {
-    mode: 'subscription', customer: 'cus_new', client_reference_id: USER, line_items: [{ price: 'price_usdA', quantity: 1 }],
+    mode: 'subscription', customer: 'cus_new', client_reference_id: USER, line_items: [{ price: 'price_usdA', quantity: 1 }], payment_method_types: ['card'],
     subscription_data: { metadata: { user_id: USER } }, metadata: { user_id: USER },
     success_url: 'https://studio.klabs.co.nz/?checkout=success', cancel_url: 'https://studio.klabs.co.nz/?checkout=cancelled',
   });
@@ -285,10 +285,122 @@ test('no grace: only a PAID latest invoice confirms the current period', async (
   assert.ok(!('p_grace' in svc.calls.find((c) => c[0] === 'rpc')[2]));
 });
 
-test('the subscription is fetched from Stripe with its latest invoice expanded', async () => {
+test('the subscription is fetched from Stripe with its latest invoice and payment expanded', async () => {
   const core = await load();
   const seen = [];
   const api = core.createStripeApi({ secretKey: 'sk_test_x', fetchImpl: async (url) => { seen.push(url); return { ok: true, status: 200, json: async () => ({ id: 'sub_1' }) }; } });
   await api.getSubscription('sub_1');
-  assert.equal(seen[0], 'https://api.stripe.com/v1/subscriptions/sub_1?expand%5B%5D=latest_invoice');
+  assert.equal(seen[0], 'https://api.stripe.com/v1/subscriptions/sub_1?expand%5B%5D=latest_invoice.payment_intent');
+});
+
+// ---------- Renewal continuity (option D) ----------
+function renewalInvoice(over = {}) {
+  return { id: 'in_r', status: 'draft', billing_reason: 'subscription_cycle', collection_method: 'charge_automatically', livemode: false,
+    subscription: 'sub_1', customer: 'cus_1', currency: 'nzd', amount_due: 3400, ...over };
+}
+function renewalStripe({ invoice = renewalInvoice(), payError = null, getInvoiceError = null } = {}) {
+  const stripe = fakeStripe({ subscription: subscription({ latest_invoice: { id: 'in_r', status: 'draft' } }) });
+  stripe.getInvoice = async (id) => { stripe.calls.push(['getInvoice', id]); if (getInvoiceError) throw getInvoiceError; return invoice; };
+  stripe.finalizeInvoice = async (id) => { stripe.calls.push(['finalizeInvoice', id]); return { ...invoice, status: 'open' }; };
+  stripe.payInvoice = async (id) => { stripe.calls.push(['payInvoice', id]); if (payError) throw payError; return { ...invoice, status: 'paid' }; };
+  return stripe;
+}
+const createdEvent = (id = 'evt_c1') => ({ id, type: 'invoice.created', livemode: false, data: { object: { id: 'in_r', subscription: 'sub_1' } } });
+
+test('renewal: a verified Studio renewal invoice is finalised and charged at once, and access is still not granted until it is paid', async () => {
+  const core = await load();
+  const stripe = renewalStripe(); const svc = fakeService({ rpcResult: { result: 'access_ended' } });
+  const handler = core.createStripeWebhookHandler({ serviceClient: svc, stripe, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+  const res = await handler(await signed(core, createdEvent()));
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.renewal, 'charged');
+  assert.deepEqual(stripe.calls.filter((c) => /Invoice/.test(c[0])).map((c) => c[0]), ['getInvoice', 'finalizeInvoice', 'payInvoice']);
+  // The access update for this event still says "latest invoice not paid" (the period is not extended by invoice.created).
+  const args = svc.calls.find((c) => c[0] === 'rpc')[2];
+  assert.equal(args.p_latest_invoice_paid, false);
+  assert.equal(args.p_renewal_state, 'pending');
+});
+
+test('renewal: anything that is not exactly a Studio renewal is left to Stripe (no early charge)', async () => {
+  const core = await load();
+  const cases = {
+    'first invoice': { billing_reason: 'subscription_create' }, 'manual invoice': { billing_reason: 'manual' },
+    'already finalised': { status: 'open' }, 'already paid': { status: 'paid' }, 'send_invoice': { collection_method: 'send_invoice' },
+    'live invoice in test mode': { livemode: true }, 'other subscription': { subscription: 'sub_other' }, 'other customer': { customer: 'cus_other' },
+    'wrong currency': { currency: 'usd' }, 'wrong amount': { amount_due: 3399 }, 'zero amount': { amount_due: 0 },
+  };
+  for (const [name, over] of Object.entries(cases)) {
+    const stripe = renewalStripe({ invoice: renewalInvoice(over) });
+    const handler = core.createStripeWebhookHandler({ serviceClient: fakeService(), stripe, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+    const body = await (await handler(await signed(core, createdEvent(`evt_${name}`)))).json();
+    assert.equal(body.renewal, 'skipped', name);
+    assert.equal(stripe.calls.some((c) => c[0] === 'finalizeInvoice' || c[0] === 'payInvoice'), false, name);
+  }
+  // Other event types never charge.
+  const stripe = renewalStripe();
+  const handler = core.createStripeWebhookHandler({ serviceClient: fakeService(), stripe, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+  await handler(await signed(core, { id: 'evt_u', type: 'customer.subscription.updated', livemode: false, data: { object: { id: 'sub_1' } } }));
+  assert.equal(stripe.calls.some((c) => /Invoice/.test(c[0])), false);
+});
+
+test('renewal: a declined card or a Stripe error is reported, returns 200, and leaves access and Stripe retries untouched', async () => {
+  const core = await load();
+  const declined = renewalStripe({ payError: new Error('Stripe POST /invoices/in_r/pay failed (402): Your card was declined.') });
+  const h1 = core.createStripeWebhookHandler({ serviceClient: fakeService(), stripe: declined, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+  const r1 = await h1(await signed(core, createdEvent('evt_d')));
+  assert.equal(r1.status, 200);
+  assert.equal((await r1.json()).renewal, 'charge_not_completed');
+  const down = renewalStripe({ getInvoiceError: new Error('Stripe GET /invoices failed (500)') });
+  const h2 = core.createStripeWebhookHandler({ serviceClient: fakeService(), stripe: down, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+  const r2 = await h2(await signed(core, createdEvent('evt_e')));
+  assert.equal(r2.status, 200);
+  assert.equal((await r2.json()).renewal, 'left_to_stripe');
+  assert.equal(down.calls.some((c) => c[0] === 'payInvoice'), false);
+});
+
+test('renewal: if access cannot be recorded, nothing is charged and Stripe retries the event', async () => {
+  const core = await load();
+  const stripe = renewalStripe();
+  const handler = core.createStripeWebhookHandler({ serviceClient: fakeService({ rpcError: { message: 'db down' } }), stripe, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+  const res = await handler(await signed(core, createdEvent('evt_f')));
+  assert.equal(res.status, 500);
+  assert.equal(stripe.calls.some((c) => c[0] === 'payInvoice'), false);
+});
+
+test('renewal state (for messages only): pending, waiting for the bank, or failed', async () => {
+  const core = await load();
+  const s = core.renewalState;
+  assert.equal(s({ status: 'paid' }), null);
+  assert.equal(s({ status: 'void' }), null);
+  assert.equal(s(null), null);
+  assert.equal(s('in_unexpanded'), null);
+  assert.equal(s({ status: 'draft' }), 'pending');
+  assert.equal(s({ status: 'open', attempt_count: 0, payment_intent: { status: 'processing' } }), 'pending');
+  assert.equal(s({ status: 'open', attempt_count: 0 }), 'pending');
+  assert.equal(s({ status: 'open', attempt_count: 1, payment_intent: { status: 'requires_action' } }), 'action_required');
+  assert.equal(s({ status: 'open', attempt_count: 1, payment_intent: { status: 'requires_payment_method' } }), 'failed');
+  assert.equal(s({ status: 'open', attempt_count: 2 }), 'failed');
+  assert.equal(s({ status: 'uncollectible' }), 'failed');
+});
+
+test('renewal: Stripe calls use idempotency keys so a repeated event cannot charge twice', async () => {
+  const core = await load();
+  const seen = [];
+  const api = core.createStripeApi({ secretKey: 'sk_test_x', fetchImpl: async (url, init) => { seen.push([url, init.method, init.headers['Idempotency-Key']]); return { ok: true, status: 200, json: async () => ({}) }; } });
+  await api.finalizeInvoice('in_9');
+  await api.payInvoice('in_9');
+  assert.deepEqual(seen, [
+    ['https://api.stripe.com/v1/invoices/in_9/finalize', 'POST', 'klabs-finalize-in_9'],
+    ['https://api.stripe.com/v1/invoices/in_9/pay', 'POST', 'klabs-pay-in_9'],
+  ]);
+});
+
+test('Edge Functions read the new publishable/secret keys first and fall back to the legacy keys', async () => {
+  const core = await load();
+  const env = (o) => (name) => o[name] || '';
+  assert.deepEqual(core.supabaseKeys(env({ SUPABASE_URL: 'u', SUPABASE_PUBLISHABLE_KEYS: '{"default":"sb_publishable_x"}', SUPABASE_SECRET_KEYS: '{"default":"sb_secret_y"}', SUPABASE_ANON_KEY: 'legacy_a', SUPABASE_SERVICE_ROLE_KEY: 'legacy_s' })),
+    { url: 'u', publicKey: 'sb_publishable_x', serverKey: 'sb_secret_y' });
+  assert.deepEqual(core.supabaseKeys(env({ SUPABASE_URL: 'u', SUPABASE_ANON_KEY: 'legacy_a', SUPABASE_SERVICE_ROLE_KEY: 'legacy_s' })), { url: 'u', publicKey: 'legacy_a', serverKey: 'legacy_s' });
+  assert.deepEqual(core.supabaseKeys(env({ SUPABASE_URL: 'u', SUPABASE_SECRET_KEYS: 'not json' })), { url: 'u', publicKey: '', serverKey: '' });
 });
