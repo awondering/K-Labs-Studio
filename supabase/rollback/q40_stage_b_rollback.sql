@@ -1,12 +1,22 @@
--- Q40 ROLLBACK (Stage B database behaviour) — NOT a migration; run only if the v290 release is withdrawn.
+-- Q40 ROLLBACK (Stage B + owner access database behaviour) — NOT a migration; run only if the Q40 release (v292) is withdrawn.
 -- Restores exactly the pre-Q40 behaviour that the v289 app expects:
 --   * removes the read lock (records become readable again, read-only, for accounts without access);
 --   * restores klabs_account_access and start_account_trial verbatim from 20261110000002_owner_administration.sql.
 -- Deliberately KEPT: billing_subscriptions, stripe_events and klabs_apply_stripe_subscription (Stage A). v289 never
 -- reads them; keeping them preserves every subscription and payment record and the access already granted to
--- paying customers in account_entitlements. No row in any table is changed or deleted by this script.
+-- paying customers in account_entitlements. No row is deleted. The ONE row it may change is the owner's own
+-- entitlement (step 0): the restored pre-Q40 access function has no owner rule, so the owner must hold permanent
+-- grandfathered access again before it runs.
 -- Before running: switch the live Stripe webhook endpoint off (Stripe Dashboard) if Stripe billing is also withdrawn.
 begin;
+
+-- 0. Owner safety (20261128000000_q40_owner_access.sql): the owner keeps permanent access after the rollback.
+insert into public.account_entitlements (user_id, access_state)
+select a.user_id, 'grandfathered' from public.klabs_access_admins a where a.role = 'owner'
+on conflict (user_id) do update
+  set access_state = 'grandfathered', access_expires_at = null, updated_at = now()
+  where public.account_entitlements.access_state is distinct from 'grandfathered'
+     or public.account_entitlements.access_expires_at is not null;
 
 do $$
 declare

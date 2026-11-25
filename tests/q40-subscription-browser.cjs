@@ -242,11 +242,15 @@ async function run() {
       }
 
       // 6. Paid: Settings → Account shows the plan and renewal date; a cancelled plan shows its end; Manage billing.
-      for (const [label, sub, expect] of [
+      for (const [label, sub, expect, entitlementFor, wantManage = true] of [
         ['active', { status: 'active', plan: 'annual', currency: 'nzd', paid_through: '2027-11-26T03:00:00Z', cancel_at_period_end: false, renewal_state: null, stripe_customer_id: 'cus_synthetic' }, /^NZ\$299 per year\. Renews automatically on 26 November 2027\.$/],
         ['cancelled', { status: 'active', plan: 'monthly', currency: 'usd', paid_through: '2026-12-26T03:00:00Z', cancel_at_period_end: true, renewal_state: null, stripe_customer_id: 'cus_synthetic' }, /^US\$19 per month\. Cancelled — access continues until 26 December 2026, then ends\.$/],
+        // The OWNER (server access_state 'owner', no expiry): Studio opens and Settings says so, with no plans - even with
+        // no subscription, or with a failed one left over from a test.
+        ['owner', null, /^Owner account — permanent access\. No subscription needed\.$/, { access_state: 'owner', can_write: true }, false],
+        ['owner with a failed subscription', { status: 'past_due', plan: 'monthly', currency: 'nzd', paid_through: '2026-10-26T03:00:00Z', cancel_at_period_end: false, renewal_state: 'failed', stripe_customer_id: 'cus_synthetic' }, /^Owner account — permanent access\. No subscription needed\.$/, { access_state: 'owner', can_write: true }, true],
       ]) {
-        const t = await open({ entitlement: { access_state: 'paid', can_write: true, access_expires_in: 30 * DAY }, sub });
+        const t = await open({ entitlement: entitlementFor || { access_state: 'paid', can_write: true, access_expires_in: 30 * DAY }, sub });
         await studioOpen(t.page);
         // Open Settings as a customer does (tap the Settings tab) and wait until it is really on screen and stays there.
         const settingsShown = () => t.page.evaluate(() => {
@@ -275,7 +279,7 @@ async function run() {
           sideways: document.documentElement.scrollWidth > window.innerWidth + 1 }));
         await shot(t.page, `6-settings-${label}`);
         ck(`${size}: Settings shows the ${label} subscription`, !view.hidden && expect.test(view.status), view.status);
-        ck(`${size}: ${label}: Manage billing, no second subscription offered`, view.manage && view.plans === 0, view);
+        ck(`${size}: ${label}: ${wantManage ? 'Manage billing, ' : ''}no subscription offered`, view.manage === wantManage && view.plans === 0, view);
         ck(`${size}: ${label}: Settings fits the width`, !view.sideways);
         await t.context.close();
       }

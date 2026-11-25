@@ -742,3 +742,14 @@ test('Q40: a monthly or annual subscription never ends early - long expiry waits
     assert.equal(h.window.KLABS_ACCESS_STATE.access_state,'paid',days);
   }
 });
+
+// Q40 owner access: the server's "owner" state (20261128000000_q40_owner_access.sql) must be accepted by the app, online
+// and when restoring offline - otherwise the owner would be locked out of Studio by the app itself.
+test('the app accepts the server owner state online and offline', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'public-entry.js'), 'utf8');
+  const list = (name) => JSON.parse(source.match(new RegExp(`const ${name} = (\\[[^\\]]*\\]);`))[1]);
+  assert.ok(list('allowedStates').includes('owner'));
+  assert.ok(list('openable').includes('owner'));
+  const migration = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'supabase', 'migrations', '20261128000000_q40_owner_access.sql'), 'utf8');
+  assert.match(migration, /select 'owner'::text, true, false, null::timestamptz, null::timestamptz, null::timestamptz/);
+});

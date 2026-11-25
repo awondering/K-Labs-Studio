@@ -46,6 +46,8 @@
   // Customer-facing description. Access itself is decided only by the server.
   function describe(sub, access) {
     const state = access?.access_state;
+    // The owner's access is permanent and decided by the server, whatever any subscription says.
+    if (state === "owner") return "Owner account — permanent access. No subscription needed.";
     if (hasLiveSubscription(sub)) {
       const plan = planLabel(sub);
       if (sub.renewal_state === "failed") {
@@ -118,7 +120,7 @@
     container.replaceChildren();
     container.classList.add("billing-panel");
     const status = el("p", { className: "billing-status", "data-billing-status": "" }, describe(sub, access));
-    if (quiet && !hasLiveSubscription(sub) && !["trial", "grandfathered", "complimentary"].includes(access?.access_state)) status.hidden = true;
+    if (quiet && !hasLiveSubscription(sub) && !["owner", "trial", "grandfathered", "complimentary"].includes(access?.access_state)) status.hidden = true;
     container.appendChild(status);
     const error = el("p", { className: "billing-error", role: "alert", "aria-live": "polite" });
     const run = async (button, action) => {
@@ -138,7 +140,7 @@
         busy = false;
       }
     };
-    const ownerGrant = ["grandfathered"].includes(access?.access_state) || (access?.access_state === "complimentary" && !access.access_expires_at);
+    const ownerGrant = ["owner", "grandfathered"].includes(access?.access_state) || (access?.access_state === "complimentary" && !access.access_expires_at);
     if (showPlans && !hasLiveSubscription(sub) && !ownerGrant) {
       const plans = el("div", { className: "billing-plans" });
       const toggle = el("div", { className: "billing-currency", role: "group", "aria-label": "Currency" });

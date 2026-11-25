@@ -491,7 +491,8 @@
       }
       currentSession = sessionData.session;
       currentEntitlement = entitlement;
-      const allowedStates = ["trial_eligible", "trial", "expired", "grandfathered", "complimentary", "paid", "offline_readonly"];
+      // "owner": the single owner account's permanent access, decided by the server (20261128000000_q40_owner_access.sql).
+      const allowedStates = ["owner", "trial_eligible", "trial", "expired", "grandfathered", "complimentary", "paid", "offline_readonly"];
       if (!allowedStates.includes(entitlement.access_state)
         || typeof entitlement.can_write !== "boolean"
         || typeof entitlement.email_verified !== "boolean"
@@ -730,7 +731,7 @@
     const userId = stored?.user?.id;
     const access = typeof userId === "string" && userId ? cachedEntitlementFor(userId) : null;
     // Q40: an ended account's records are not viewable, offline included.
-    const openable = ["trial", "grandfathered", "complimentary", "paid"];
+    const openable = ["owner", "trial", "grandfathered", "complimentary", "paid"];
     if (!access || !openable.includes(access.access_state) || typeof access.email_verified !== "boolean"
       || (access.access_state === "trial" && !access.trial_expires_at)) {
       watchRenewal(renewal, true);

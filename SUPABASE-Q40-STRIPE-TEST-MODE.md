@@ -33,6 +33,17 @@ deployed with the gateway JWT check off. They read the new publishable/secret ke
 - **Records are never deleted.** While locked they are hidden; they return unchanged when payment is confirmed.
 - `renewal_state` (pending / action_required / failed) chooses the customer's message only; it never grants access.
 
+## Owner access — permanent, independent of Stripe (owner requirement 26 Nov 2026)
+- `supabase/migrations/20261128000000_q40_owner_access.sql`: the single account in `klabs_access_admins` (role
+  `owner`) always gets `access_state = 'owner'`, `can_write = true`, no expiry, before any entitlement, trial,
+  subscription, payment or expiry rule. Every server guard (write policies, Stage B read lock) uses this function.
+  It refuses to run before Stage B. The owner table is closed to anon, authenticated AND the service role.
+- `supabase/manual/q40_owner_seed.sql`: run in the SQL editor with the verified Auth user ID; refuses a different
+  existing owner or an unknown ID. No e-mail matching; the app only displays the server's answer.
+- Rollback restores the owner's permanent grandfathered entitlement before restoring the pre-Q40 rules.
+- Tests: `tests/q40-owner-access-isolated.cjs` (22 checks: before/after the Q40 migrations, failed and expired
+  subscriptions, missing entitlement row, rollback, customers and the server key cannot become the owner).
+
 ## In the app
 - **No access** (new account, or ended): Studio does not open (nothing shown, nothing synced). The subscription screen
   offers NZD or USD, monthly or annual, Manage billing (once a Stripe customer exists), Explore Mode and Sign Out.

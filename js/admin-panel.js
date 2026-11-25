@@ -51,6 +51,7 @@
       trial_eligible: "Trial eligible",
       trial: "Active trial",
       expired: "Expired",
+      owner: "Owner",
       grandfathered: "Grandfathered",
       complimentary: "Complimentary",
       paid: "Paid access",
