@@ -133,6 +133,8 @@ async function run() {
         await page.goto(base + query);
         return { context, page, outside, scripts };
       };
+      // Optional: Q40_SHOTS=<folder> saves screenshots of each customer screen for visual review (checks unchanged).
+      const shot = async (page, name) => { if (process.env.Q40_SHOTS) await page.screenshot({ path: path.join(process.env.Q40_SHOTS, `${size.replace(/ /g, '')}-${name}.png`) }); };
       const accessScreen = (page) => page.waitForFunction(() => {
         const s = document.getElementById('accountAccessScreen');
         return s && !s.hidden && document.querySelector('#accessBillingPanel .billing-status');
@@ -156,15 +158,19 @@ async function run() {
           text: document.body.innerText,
           sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
           manage: !!document.querySelector('#accessBillingPanel [data-billing-manage]'),
+          statusHidden: document.querySelector('#accessBillingPanel .billing-status').hidden,
         }));
         ck(`${size}: a new account is offered a subscription`, /Subscribe to start working in Studio/.test(view.message), view.message);
+        ck(`${size}: the offer is said once (no repeated subscription line under the heading)`, view.statusHidden === true);
         ck(`${size}: NZD plans shown by default`, view.pressed === 'true' && view.plans[0] === 'SUBSCRIBE · NZ$34 / MONTH' && view.plans[1] === 'SUBSCRIBE · NZ$299 / YEAR', view.plans);
         ck(`${size}: no trial wording anywhere`, !/7-day|seven-day|START MY.*TRIAL/i.test(view.text));
         ck(`${size}: no Manage billing before any billing account exists`, !view.manage);
         ck(`${size}: subscription screen fits the width`, !view.sideways);
+        await shot(t.page, '1-subscribe-nzd');
         await t.page.click('[data-billing-currency="usd"]');
         const usd = await t.page.evaluate(() => [...document.querySelectorAll('#accessBillingPanel [data-billing-plan]')].map((b) => b.textContent.trim()));
         ck(`${size}: USD plans`, usd[0] === 'SUBSCRIBE · US$19 / MONTH' && usd[1] === 'SUBSCRIBE · US$169 / YEAR', usd);
+        await shot(t.page, '1b-subscribe-usd');
         await t.page.click('[data-billing-plan="annual"]');
         await t.page.waitForFunction(() => window.__q40calls.some((c) => c.fn === 'billing-checkout'));
         await t.page.waitForTimeout(300);
@@ -195,6 +201,7 @@ async function run() {
           sub: { status: 'active', plan: 'monthly', currency: 'nzd', paid_through: iso(30 * DAY), cancel_at_period_end: false, renewal_state: null, stripe_customer_id: 'cus_synthetic' } }, '?checkout=success');
         await t.page.waitForFunction(() => /Confirming your payment with Stripe/.test(document.getElementById('accountAccessMessage').textContent), null, { timeout: 20000 });
         const waiting = await t.page.evaluate(() => ({ app: document.getElementById('app').style.display, query: location.search }));
+        await shot(t.page, '3-confirming-payment');
         ck(`${size}: after Checkout Studio waits for the server (the address no longer claims success)`, waiting.app === 'none' && waiting.query === '', waiting);
         await studioOpen(t.page);
         ck(`${size}: Studio opens once the server confirms the payment`, true);
@@ -206,6 +213,7 @@ async function run() {
         const t = await open({ entitlement: { access_state: 'trial_eligible', can_write: false }, sub: null }, '?checkout=cancelled');
         await accessScreen(t.page);
         const message = await t.page.evaluate(() => document.getElementById('accountAccessMessage').textContent);
+        await shot(t.page, '4-checkout-cancelled');
         ck(`${size}: cancelled checkout says no payment was taken`, message === 'Checkout was cancelled. No payment was taken.', message);
         await t.context.close();
       }
@@ -217,13 +225,16 @@ async function run() {
         await accessScreen(t.page);
         const view = await t.page.evaluate(() => ({ message: document.getElementById('accountAccessMessage').textContent,
           status: document.querySelector('#accessBillingPanel .billing-status').textContent,
+          statusHidden: document.querySelector('#accessBillingPanel .billing-status').hidden,
           plans: document.querySelectorAll('#accessBillingPanel [data-billing-plan]').length, manage: !!document.querySelector('#accessBillingPanel [data-billing-manage]'),
           app: document.getElementById('app').style.display }));
         ck(`${size}: an ended account is locked with its records kept`, /access has ended/.test(view.message) && /records are kept safely/.test(view.message) && view.app === 'none', view);
-        ck(`${size}: an ended account can subscribe again or manage billing`, view.plans === 2 && view.manage && /Subscribe again/.test(view.status), view);
+        ck(`${size}: an ended account can subscribe again or manage billing`, view.plans === 2 && view.manage, view);
+        ck(`${size}: the ended message is said once (no repeated subscription line under the heading)`, view.statusHidden === true, view);
         const locked = await t.page.evaluate(() => ({ ui: typeof window.KLABS_UI, sync: typeof window.KLABS_BUILD_SYNC,
           reads: window.__q40calls.filter((c) => ['builds', 'components', 'component_taxonomy', 'studio_settings', 'quote_number_counters'].includes(c.table)).length }));
         ck(`${size}: no records or sync requested for an ended account`, locked.ui === 'undefined' && locked.sync === 'undefined' && locked.reads === 0, locked);
+        await shot(t.page, '5-ended-locked');
         await t.page.click('#accessBillingPanel [data-billing-manage]');
         await t.page.waitForTimeout(400);
         ck(`${size}: Manage billing opens the Stripe Customer Portal`, t.outside.some((u) => u.startsWith('https://billing.stripe.com/p/session/')), t.outside);
@@ -237,13 +248,32 @@ async function run() {
       ]) {
         const t = await open({ entitlement: { access_state: 'paid', can_write: true, access_expires_in: 30 * DAY }, sub });
         await studioOpen(t.page);
-        await t.page.evaluate(() => { document.querySelector('[data-nav="settingsScreen"]').click(); document.getElementById('settingsAccountCard').open = true; });
+        // Open Settings as a customer does (tap the Settings tab) and wait until it is really on screen and stays there.
+        const settingsShown = () => t.page.evaluate(() => {
+          const screen = document.getElementById('settingsScreen');
+          return !!screen && screen.classList.contains('active') && getComputedStyle(screen).display !== 'none' && Number(getComputedStyle(screen).opacity) === 1;
+        });
+        for (let i = 0; i < 10; i += 1) {
+          await t.page.click('.bottom-nav [data-nav="settingsScreen"]');
+          await t.page.waitForTimeout(700);
+          if (await settingsShown()) { await t.page.waitForTimeout(700); if (await settingsShown()) break; }
+        }
+        await t.page.evaluate(() => { document.getElementById('settingsAccountCard').open = true; });
         await t.page.waitForFunction(() => document.querySelector('#settingsBillingPanel .billing-status'), null, { timeout: 10000 });
+        await t.page.evaluate(() => document.querySelector('.settings-billing').scrollIntoView({ block: 'center' }));
+        await t.page.waitForTimeout(400);
+        const visible = await t.page.evaluate(() => {
+          const r = document.querySelector('#settingsBillingPanel .billing-status').getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight && !!hit && !!hit.closest('#settingsBillingPanel');
+        });
+        ck(`${size}: ${label}: Settings is on screen with the subscription visible to the customer`, (await settingsShown()) && visible);
         const view = await t.page.evaluate(() => ({ hidden: document.querySelector('.settings-billing').hidden,
           status: document.querySelector('#settingsBillingPanel .billing-status').textContent,
           plans: document.querySelectorAll('#settingsBillingPanel [data-billing-plan]').length,
           manage: !!document.querySelector('#settingsBillingPanel [data-billing-manage]'),
           sideways: document.documentElement.scrollWidth > window.innerWidth + 1 }));
+        await shot(t.page, `6-settings-${label}`);
         ck(`${size}: Settings shows the ${label} subscription`, !view.hidden && expect.test(view.status), view.status);
         ck(`${size}: ${label}: Manage billing, no second subscription offered`, view.manage && view.plans === 0, view);
         ck(`${size}: ${label}: Settings fits the width`, !view.sideways);
@@ -258,6 +288,7 @@ async function run() {
         await t.page.waitForFunction(() => !document.getElementById('renewalCheckOverlay').hidden, null, { timeout: 15000 });
         const during = await t.page.evaluate(() => ({ canWrite: window.KLABS_CAN_WRITE(), text: document.getElementById('renewalCheckTitle').textContent,
           covered: (() => { const r = document.getElementById('renewalCheckOverlay').getBoundingClientRect(); return r.width >= window.innerWidth && r.height >= window.innerHeight; })() }));
+        await shot(t.page, '7-renewal-check');
         ck(`${size}: at the paid-through time nothing can be saved and the records are covered`, during.canWrite === false && during.covered && during.text === 'Confirming your renewal…', during);
         await t.page.waitForFunction(() => document.getElementById('renewalCheckOverlay').hidden, null, { timeout: 15000 });
         const after = await t.page.evaluate(() => ({ canWrite: window.KLABS_CAN_WRITE(), reloaded: window.__q40reloaded, app: document.getElementById('app').style.display,
@@ -273,6 +304,7 @@ async function run() {
         await t.page.waitForFunction(() => !document.getElementById('renewalCheckOverlay').hidden || document.body.classList.contains('klabs-entry-choice'), null, { timeout: 15000 });
         await t.page.waitForFunction(() => { const s = document.getElementById('accountAccessScreen'); return s && !s.hidden && document.querySelector('#accessBillingPanel .billing-status'); }, null, { timeout: 20000 });
         const view = await t.page.evaluate(() => ({ status: document.querySelector('#accessBillingPanel .billing-status').textContent, manage: !!document.querySelector('#accessBillingPanel [data-billing-manage]'), app: document.getElementById('app').style.display }));
+        await shot(t.page, '8-renewal-failed');
         ck(`${size}: a failed renewal closes Studio and asks for a card update`, view.app === 'none' && /renewal payment did not go through/.test(view.status) && view.manage, view);
         await t.context.close();
       }

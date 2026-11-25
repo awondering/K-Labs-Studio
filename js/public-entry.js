@@ -150,7 +150,7 @@
     setVisible("accountAccessChoices", verified);
     setVisible("verifyEmailContinueBtn", !verified);
     document.getElementById("accountAccessError").textContent = "";
-    if (verified && entitlement.offline !== true) renderBilling(document.getElementById("accessBillingPanel"), entitlement);
+    if (verified && entitlement.offline !== true) renderBilling(document.getElementById("accessBillingPanel"), entitlement, { quiet: true });
   }
 
   // Draws the subscription panel (status, plans, Manage billing) from the account's own subscription row.

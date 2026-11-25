@@ -111,11 +111,15 @@
 
   // Draws the subscription panel into `container`: status, plan choice (NZD/USD, monthly/annual) when there is no
   // live subscription, and Manage billing once the account has a Stripe customer.
-  function render(container, { sub, access, showPlans = true } = {}) {
+  // `quiet`: on the access screen the heading already says "subscribe" / "access has ended", so the status line is
+  // shown there only when it adds something (a live subscription's payment state, a trial or an owner grant).
+  function render(container, { sub, access, showPlans = true, quiet = false } = {}) {
     if (!container) return;
     container.replaceChildren();
     container.classList.add("billing-panel");
-    container.appendChild(el("p", { className: "billing-status", "data-billing-status": "" }, describe(sub, access)));
+    const status = el("p", { className: "billing-status", "data-billing-status": "" }, describe(sub, access));
+    if (quiet && !hasLiveSubscription(sub) && !["trial", "grandfathered", "complimentary"].includes(access?.access_state)) status.hidden = true;
+    container.appendChild(status);
     const error = el("p", { className: "billing-error", role: "alert", "aria-live": "polite" });
     const run = async (button, action) => {
       if (busy) return;

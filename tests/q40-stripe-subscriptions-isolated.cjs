@@ -423,6 +423,47 @@ async function main() {
     assert.equal((await access(U.B)).can_write, false);
   });
 
+  // ---- Release safety: the Stage B rollback script (supabase/rollback/q40_stage_b_rollback.sql) ----
+  await ck('rollback: restores the pre-Q40 (v289) behaviour, keeps every record, subscription and paid access; Stage B re-applies cleanly', async () => {
+    const P = 'cdcdcdcd-0000-4000-8000-0000000000c1';
+    const X = 'cdcdcdcd-0000-4000-8000-0000000000c2';
+    const E = 'cdcdcdcd-0000-4000-8000-0000000000c3';
+    for (const id of [P, X, E]) await db.exec(`insert into auth.users(id, email, email_confirmed_at) values ('${id}', '${id.slice(-2)}@example.test', now())`);
+    await apply({ user: P, customer: 'cus_RP', sub: 'sub_RP', status: 'active', paid: true });
+    await apply({ user: X, customer: 'cus_RX', sub: 'sub_RX', status: 'active', paid: true });
+    assert.equal(await writeBuild(P, 'p-1'), true);
+    assert.equal(await writeBuild(X, 'x-1'), true);
+    assert.equal((await apply({ user: X, customer: 'cus_RX', sub: 'sub_RX', status: 'canceled' })).result, 'access_ended');
+    assert.deepEqual(await readBuilds(X), [], 'Stage B hides the ended account');
+    const snapshot = async () => ({
+      builds: (await db.query('select user_id, client_id, payload from public.builds order by user_id, client_id')).rows,
+      subs: (await db.query('select * from public.billing_subscriptions order by user_id')).rows,
+      events: (await db.query('select count(*)::int c from public.stripe_events')).rows[0].c,
+      ents: (await db.query('select user_id, access_state, access_expires_at from public.account_entitlements order by user_id')).rows,
+    });
+    const before = await snapshot();
+
+    await db.exec(sql('supabase/rollback/q40_stage_b_rollback.sql'));
+    assert.deepEqual(await snapshot(), before, 'the rollback changes no row in any table');
+    assert.deepEqual(await readBuilds(X), ['x-1'], 'v289 behaviour: an ended account can read its records again');
+    assert.notEqual(await writeBuild(X, 'x-2'), true, 'v289 behaviour: but still cannot write');
+    assert.deepEqual([(await access(P)).access_state, (await access(P)).can_write], ['paid', true], 'paying customers keep their paid access');
+    assert.deepEqual(await readBuilds(P), ['p-1']);
+    assert.equal((await access(E)).trial_available, true, 'v289 behaviour: the trial is offered again');
+    await as(E);
+    await db.query('select public.start_account_trial()');
+    await reset();
+    assert.equal((await access(E)).access_state, 'trial');
+
+    // Roll forward again (the migration is idempotent): the lock and trial retirement return; nothing is lost.
+    const beforeForward = await snapshot();
+    await db.exec(sql('supabase/migrations/20261127000000_q40_stage_b_access.sql'));
+    assert.deepEqual(await snapshot(), beforeForward);
+    assert.deepEqual(await readBuilds(X), []);
+    assert.equal((await access(E)).can_write, true, 'a trial started during the rollback keeps its end date');
+    assert.equal((await access(P)).can_write, true);
+  });
+
   console.log(`q40 stripe subscriptions isolated: ${passed} checks passed`);
 }
 
