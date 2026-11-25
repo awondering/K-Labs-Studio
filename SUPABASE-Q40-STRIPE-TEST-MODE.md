@@ -57,7 +57,7 @@ deployed with the gateway JWT check off. They read the new publishable/secret ke
 1. **Create** a free Supabase project, e.g. `klabs-studio-test` (Supabase → New project). Keep its database password in
    your password manager; it is not needed here.
 2. **Create a scoped access token** (Supabase → Account → Access Tokens → new **scoped** token) limited to **that test
-   project only**, with: Database (Read-write), Edge Functions (Read-write), Edge Function Secrets (Read-write),
+   project only**, with: Project Settings (Read), Database (Read-write), Edge Functions (Read-write), Edge Function Secrets (Read-write),
    API Keys (Read), API Key Secrets (Read). Set a short expiry.
 3. **Run** `node ~/K-Labs-Stripe-Test/q40-test-setup.mjs` in Terminal. It asks (hidden) for the test project reference,
    the token and the Stripe sandbox secret key; refuses the live project and live keys; asks you to type the project
