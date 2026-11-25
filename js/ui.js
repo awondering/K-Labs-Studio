@@ -15700,6 +15700,24 @@ function buildInvoiceSnapshot(preview=false){
     payments:JSON.parse(JSON.stringify(Array.isArray(quote.payments)?quote.payments:[])),
   };
 }
+// An issued invoice as the customer sees it (Q41 live fix, BUILD-902). What was ISSUED stays fixed: the invoice number,
+// issue date and the amount invoiced (total and tax; the server refuses any change to the stored invoice, and a price
+// change still goes through Remove Invoice and a new invoice). Everything else is the job's CURRENT state - payments
+// received, balance, components, delivery, customer details - the same data the Build Summary and the email use.
+// The stored snapshot is never rewritten. Invoices issued by any earlier release are shown the same way.
+function issuedInvoiceForDisplay(issued=quote&&quote.issuedInvoice){
+  if(!issued||typeof issued!=='object')return issued;
+  const current=buildInvoiceSnapshot(true);
+  // depositMaths() already follows the issued total; compare the issued amount with the build's own current price.
+  const samePrice=Math.abs(numberOrZero(issued.total)-roundMoney(numberOrZero(quoteMaths().total)))<0.005;
+  return {...current,
+    number:issued.number,...(issued.displayNumber?{displayNumber:issued.displayNumber}:{}),issuedDate:issued.issuedDate,
+    buildId:issued.buildId,businessName:issued.businessName,brand:issued.brand,
+    currency:issued.currency||current.currency,total:issued.total,
+    tax:samePrice?current.tax:issued.tax,
+    delivery:samePrice?current.delivery:roundMoney(numberOrZero(issued.delivery)),
+    payments:JSON.parse(JSON.stringify(Array.isArray(quote.payments)?quote.payments:[]))};
+}
 function invoiceDocumentMarkup(invoice,payments,statement,preview=false){
   const money=(value)=>`${Number(value||0).toFixed(2)} ${invoice.currency}`;
   const amount=roundMoney(payments.reduce((sum,payment)=>sum+numberOrZero(payment.amount),0));
@@ -15854,7 +15872,7 @@ function openInvoicePreview(){
     if(window.ResizeObserver)new ResizeObserver(updateInvoicePreview).observe(sheet.querySelector('.invoice-preview__viewport'));
   }
   $('invoicePreviewBody').innerHTML=quote.issuedInvoice
-    ?invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false):customerInvoicePreviewMarkup();
+    ?invoiceDocumentMarkup(issuedInvoiceForDisplay(),quote.payments||[],false):customerInvoicePreviewMarkup();
   const issue=sheet.querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=!!quote.issuedInvoice;
   const remove=sheet.querySelector('[data-invoice-preview-action="remove"]');
@@ -15867,7 +15885,7 @@ function openInvoicePreview(){
 function openPaymentStatement(){
   if(!quote.issuedInvoice){openInfoDialog('Payment Statement','Issue an invoice before opening its payment statement.');return;}
   openInvoicePreview();
-  $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.payments||[],true);
+  $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(issuedInvoiceForDisplay(),quote.payments||[],true);
   refreshInvoicePreview();
   const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
   if(issue)issue.hidden=true;
@@ -15939,7 +15957,7 @@ async function issueCustomerInvoice(){
       if(quote!==invoiceQuote || window.KLABS_ACCOUNT_ID!==account)throw new Error('The account or build changed. Review the invoice again.');
       await commitFinancialOperation('issue_invoice',{invoice:buildInvoiceSnapshot()},false,'Invoice issued');
       if(quote.issuedInvoice && $('invoicePreviewBody')){
-        $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(quote.issuedInvoice,quote.issuedInvoice.payments,false);
+        $('invoicePreviewBody').innerHTML=invoiceDocumentMarkup(issuedInvoiceForDisplay(),quote.payments||[],false);
         refreshInvoicePreview();
         const issue=$('invoicePreviewSheet').querySelector('[data-invoice-preview-action="issue"]');
         if(issue)issue.hidden=true;
@@ -19884,7 +19902,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v290';
+window.KLABS_UI_BUILD='build148-v291';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;
