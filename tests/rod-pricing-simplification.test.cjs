@@ -18,11 +18,18 @@ const golden=JSON.parse(fs.readFileSync(path.join(root,'tests','fixtures','q23-p
 
 // ---------- 1. Saved jobs are byte-identical ----------
 const current=snapshotFixtures(loadFixtures());
+// Q41 (Email and Document Consistency) intentionally changed the customer wording (one "Components" heading, delivery
+// shown on the invoice, "Paid in full", the tax named on the total). The FIGURES stay pinned to v271; the documents
+// and emails are pinned to the reviewed Q41 snapshot.
+const documentsGolden=JSON.parse(fs.readFileSync(path.join(root,'tests','fixtures','q41-documents-golden.json'),'utf8')).jobs;
 for(const name of Object.keys(golden)){
-  test(`saved job "${name}": figures, deposit, quote/Build Summary, invoice and email are identical to v271`,()=>{
+  test(`saved job "${name}": figures, deposit and saved record are identical to v271; documents match the Q41 snapshot`,()=>{
     assert.ok(current[name],'job is still snapshotted');
-    for(const key of ['maths','deposit','quoteDocument','invoicePreview','email','savedQuote']){
+    for(const key of ['maths','deposit','savedQuote']){
       assert.deepEqual(current[name][key],golden[name][key],`${name}.${key}`);
+    }
+    for(const key of ['quoteDocument','invoicePreview','email']){
+      assert.deepEqual(current[name][key],documentsGolden[name][key],`${name}.${key}`);
     }
   });
 }

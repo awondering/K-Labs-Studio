@@ -25,6 +25,7 @@ function harness(){
   const quote={id:'unique-123',buildNumber:'BUILD-902',customerName:'<script>Customer</script>',buildName:'Rod & reel',
     includeGst:true,payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-11-10'},{id:'p2',type:'balance',amount:100,date:'2026-11-12'}]};
   const context=vm.createContext({
+    customerIncludedParts:()=>[],customerSafeText:(v)=>String(v==null?'':v),
     quote,elements,businessProfile:{businessName:'K-Labs',gstNumber:'123'},TextEncoder,
     window:{KLABS_ACCOUNT_ID:'account-a'},document:{querySelector:()=>null,querySelectorAll:()=>[]},currentBuildLifecycleStatus:()=>'active',
     CSS:{escape:String},currency:value=>`$${Number(value).toFixed(2)}`,rodPricingFigures:()=>({rodExclusive:2173.91}),
@@ -57,7 +58,7 @@ function harness(){
   });
   vm.runInContext("let paymentFormBuildKey='';let editingPaymentId='';let pricingSummaryOpen=false;",context);
   for(const name of ['paymentTypeLabel','paymentEntriesMarkup','paymentFormElement','paymentFormHome','placePaymentForm',
-    'newPaymentType','updatePaymentFormTitle','openRecordPaymentForm','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup',
+    'newPaymentType','updatePaymentFormTitle','openRecordPaymentForm','invoiceNumberForBuild','invoiceRodDescription','buildInvoiceSnapshot','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','customerInvoicePreviewMarkup',
     'closeBalanceReceivedForm','updatePaymentBlock','syncPricingLayoutState','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','blockedByPendingPricing'])vm.runInContext(extract(name),context);
   return {context,elements,quote};
 }

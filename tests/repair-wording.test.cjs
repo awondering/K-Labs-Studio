@@ -17,7 +17,7 @@ const job=(extra={})=>({id:'build-synthetic-repair',quoteNumber:'Q-3001',quoteSt
 
 function app(){
   const calls={confirm:[],lifecycle:[]};
-  const c=loadRecordFunctions(['normalizeQuote','buildInvoiceSnapshot','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','depositMaths','customerDocumentLabels','zeroPricedComponentLabels','currency'],{
+  const c=loadRecordFunctions(['normalizeQuote','buildInvoiceSnapshot','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','invoiceDocumentMarkup','readableInvoiceNumberForJob','invoiceDisplayNumber','issuedInvoiceRecordsForReadableNumber','depositMaths','customerDocumentLabels','zeroPricedComponentLabels','currency'],{
     Store:{get:(k,f)=>f,set:()=>true},window:{KLABS_ACCOUNT_ID:ACCOUNT},TextEncoder,
     businessProfile:{businessName:'Synthetic Rods'},currentBuildLifecycleStatus:()=>c.quote.quoteStatus||'quote',currentBusinessLogo:()=>'',
     localDateInputValue:()=>'2026-11-18',
@@ -35,7 +35,9 @@ test('repair draft invoice: the saved Repair Description is the description, nev
   open(job({notes:'Rewrap all guides\nReplace tip top',buildName:'Shimano Spin 7ft'}));
   const draft=c.buildInvoiceSnapshot(true);
   assert.equal(draft.rod,'Rewrap all guides');
-  assert.deepEqual(plain(draft.rodDetails),['Replace tip top','Rod: Shimano Spin 7ft','Guides: Fuji ring'],'then the existing fitted-parts line');
+  // Q41: the fitted parts are listed once, under Components (as on the Repair Confirmation and in the email).
+  assert.deepEqual(plain(draft.rodDetails),['Replace tip top','Rod: Shimano Spin 7ft'],'then the rod');
+  assert.ok(draft.components.length>0&&draft.components.every((item)=>/×/.test(item)),'components listed with quantities');
   const markup=c.invoiceDocumentMarkup(draft,draft.payments,false,true);
   assert.match(markup,/DRAFT — NOT ISSUED/);
   assert.match(markup,/<h4 class="invoice-document__label">Description<\/h4><p>Rewrap all guides<\/p><p class="invoice-document__detail">Replace tip top<\/p>/);
@@ -51,7 +53,7 @@ test('repair with no description: "Fishing Rod Repair"',()=>{
   open(job({buildName:'Synthetic Customer'}));
   const snap=c.buildInvoiceSnapshot(true);
   assert.equal(snap.rod,'Fishing Rod Repair');
-  assert.deepEqual(plain(snap.rodDetails),['Guides: Fuji ring'],'a rod name equal to the customer name is still ignored');
+  assert.deepEqual(plain(snap.rodDetails),[],'a rod name equal to the customer name is still ignored');
 });
 
 test('issued repair invoice and its print/PDF document: same wording, numbering and totals (test data, nothing issued)',()=>{

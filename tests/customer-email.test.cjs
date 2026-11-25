@@ -19,6 +19,7 @@ function build({status='quote',quote={},profile:p=profile}={}){
   const q={customerName:'Bren Pine',quoteNumber:'Q-1001',buildName:'Rod',estimatedCompletionDate:'2026-12-01',components:[],payments:[],depositEnabled:false,...quote};
   const total=q.total??1000;
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote:q,businessProfile:p,studioSettings:{},
     currentBuildLifecycleStatus:()=>status,
     depositMaths:()=>{
@@ -36,7 +37,7 @@ function build({status='quote',quote={},profile:p=profile}={}){
     formatCustomerEmailLongDate:(d)=>`D:${new Date(d).toISOString().slice(0,10)}`,
   };
   vm.createContext(c);
-  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','customerEmailLines'].map(fn).join('\n'),c);
+  vm.runInContext(['normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDeliveryAddressLines','customerFulfilmentSection','customerDocumentLabels','activeEmailIncludeSignature','customerEmailSignatureLines','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerRequestText','customerBuildNotesText','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerEmailLines'].map(fn).join('\n'),c);
   return c.customerEmailLines().join('\n');
 }
 
@@ -76,16 +77,19 @@ test('completed summary: no estimate, no zero deposit, recorded payments only',(
   const body=build({status:'complete',quote:{payments:[{amount:400}],completedAt:'2026-11-05T00:00:00Z'}});
   assert.match(body,/complete\. Below is a summary of your finished build\./);
   assert.doesNotMatch(body,/Estimated completion|Deposit required/);
-  assert.match(body,/Total: \$1000\.00\nPayments received: \$400\.00\nBalance outstanding: \$600\.00\nCompleted: D:2026-11-05/);
+  // Q41: the same received / balance labels as the Build Summary and the invoice (this harness's payment is the deposit).
+  assert.match(body,/Total: \$1000\.00\nDeposit received: \$400\.00\nBalance owing: \$600\.00\nCompleted: D:2026-11-05/);
   assert.match(body,/Bank account/);
 });
 
 test('completed with no date or payments, and fully paid',()=>{
   const none=build({status:'complete'});
-  assert.doesNotMatch(none,/Completed:|Payments received|Estimated/);
-  assert.match(none,/Balance outstanding: \$1000\.00/);
+  assert.doesNotMatch(none,/Completed:|Payments received|Total received|Deposit received|Estimated/);
+  assert.match(none,/Balance owing: \$1000\.00/);
   const paid=build({status:'complete',quote:{payments:[{amount:1000}]}});
-  assert.match(paid,/Balance outstanding: \$0\.00/);
+  // A fully paid job never suggests money is owed: "Paid in full", as on the documents.
+  assert.match(paid,/Total received: \$1000\.00\nPaid in full: \$0\.00/);
+  assert.doesNotMatch(paid,/Balance (owing|outstanding)/);
   assert.doesNotMatch(paid,/Payment Details|Bank account/);
 });
 

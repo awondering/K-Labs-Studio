@@ -126,7 +126,7 @@ async function pay(page, amount) {
         // Document
         await p.locator('#viewQuoteBtn').click(); await p.waitForTimeout(500);
         const doc = await p.evaluate(() => ({ open: !document.getElementById('viewQuoteSheet').hidden, title: document.getElementById('viewQuoteTitle')?.textContent || '', text: document.getElementById('viewQuoteBody').innerText }));
-        ck(tag, `${priced.docLabel} preview opens with Total Price ${priced.total}`, doc.open && doc.text.includes(`TOTAL PRICE\n${priced.total}`), { label: priced.docLabel, open: doc.open, text: doc.text.slice(doc.text.indexOf('TOTAL'), doc.text.indexOf('TOTAL') + 80) });
+        ck(tag, `${priced.docLabel} preview opens with Total Price ${priced.total}`, doc.open && doc.text.includes(`TOTAL PRICE INCLUDING GST\n${priced.total}`) /* Q41: the total names the configured tax */, { label: priced.docLabel, open: doc.open, text: doc.text.slice(doc.text.indexOf('TOTAL'), doc.text.indexOf('TOTAL') + 80) });
         await p.evaluate(() => closeViewQuote()); await p.waitForTimeout(200);
         // Payment: add, edit, zero-remove
         await pay(p, 100);
