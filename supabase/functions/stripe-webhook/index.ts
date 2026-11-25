@@ -13,6 +13,5 @@ Deno.serve(createStripeWebhookHandler({
   serviceClient,
   stripe: createStripeApi({ secretKey: env("STRIPE_SECRET_KEY") }),
   webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
-  prices: readPriceConfig(env),
-  graceHours: Number(env("BILLING_GRACE_HOURS") || "24")
+  prices: readPriceConfig(env)
 }));

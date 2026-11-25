@@ -24,7 +24,7 @@ function subscription(over = {}) {
   return {
     id: 'sub_1', customer: 'cus_1', status: 'active', metadata: { user_id: USER }, cancel_at_period_end: false,
     current_period_start: Date.parse('2026-12-01T00:00:00Z') / 1000, current_period_end: Date.parse('2027-01-01T00:00:00Z') / 1000,
-    items: { data: [{ price: { id: 'price_nzdM', currency: 'nzd', recurring: { interval: 'month' } } }] }, ...over,
+    items: { data: [{ price: { id: 'price_nzdM', currency: 'nzd', recurring: { interval: 'month' } } }] }, latest_invoice: { id: 'in_1', status: 'paid' }, ...over,
   };
 }
 function fakeStripe(over = {}) {
@@ -133,7 +133,7 @@ test('webhook: unsigned or mis-signed requests change nothing', async () => {
   assert.deepEqual([stripe.calls, svc.calls], [[], []]);
 });
 
-test('webhook: a verified event re-reads the subscription from Stripe and applies it with the 24 h grace', async () => {
+test('webhook: a verified event re-reads the subscription (with its latest invoice) from Stripe and applies it, no grace', async () => {
   const core = await load();
   const stripe = fakeStripe(); const svc = fakeService();
   const handler = core.createStripeWebhookHandler({ serviceClient: svc, stripe, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
@@ -145,7 +145,7 @@ test('webhook: a verified event re-reads the subscription from Stripe and applie
   assert.equal(name, 'klabs_apply_stripe_subscription');
   assert.deepEqual(args, { p_event_id: 'evt_2', p_event_type: 'customer.subscription.updated', p_user_id: USER, p_customer_id: 'cus_1', p_subscription_id: 'sub_1',
     p_status: 'active', p_plan: 'monthly', p_currency: 'nzd', p_period_start: '2026-12-01T00:00:00.000Z', p_period_end: '2027-01-01T00:00:00.000Z',
-    p_cancel_at_period_end: false, p_grace: '24 hours' });
+    p_cancel_at_period_end: false, p_latest_invoice_paid: true });
 });
 
 test('webhook: checkout, invoices (old and new shape), ignored types, user lookup by customer', async () => {
@@ -269,4 +269,26 @@ test('no Stripe secrets or price ids are committed; the browser app does not cal
   }
   const app = fs.readdirSync(path.join(root, 'js')).filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(root, 'js', f), 'utf8')).join('\n');
   assert.doesNotMatch(app, /api\.stripe\.com|sk_(test|live)_/);
+});
+
+test('no grace: only a PAID latest invoice confirms the current period', async () => {
+  const core = await load();
+  assert.equal(core.subscriptionFacts(subscription()).latestInvoicePaid, true);
+  for (const latest of [{ status: 'draft' }, { status: 'open' }, { status: 'void' }, { status: 'uncollectible' }, 'in_unexpanded', null, undefined]) {
+    assert.equal(core.subscriptionFacts(subscription({ latest_invoice: latest })).latestInvoicePaid, false, JSON.stringify(latest));
+  }
+  // The webhook passes it through, so a renewal waiting for payment does not extend access.
+  const stripe = fakeStripe({ subscription: subscription({ latest_invoice: { status: 'open' } }) }); const svc = fakeService();
+  const handler = core.createStripeWebhookHandler({ serviceClient: svc, stripe, webhookSecret: SECRET, prices: PRICES, now: () => NOW, log: quiet });
+  await handler(await signed(core, { id: 'evt_r', type: 'invoice.payment_failed', livemode: false, data: { object: { subscription: 'sub_1' } } }));
+  assert.equal(svc.calls.find((c) => c[0] === 'rpc')[2].p_latest_invoice_paid, false);
+  assert.ok(!('p_grace' in svc.calls.find((c) => c[0] === 'rpc')[2]));
+});
+
+test('the subscription is fetched from Stripe with its latest invoice expanded', async () => {
+  const core = await load();
+  const seen = [];
+  const api = core.createStripeApi({ secretKey: 'sk_test_x', fetchImpl: async (url) => { seen.push(url); return { ok: true, status: 200, json: async () => ({ id: 'sub_1' }) }; } });
+  await api.getSubscription('sub_1');
+  assert.equal(seen[0], 'https://api.stripe.com/v1/subscriptions/sub_1?expand%5B%5D=latest_invoice');
 });

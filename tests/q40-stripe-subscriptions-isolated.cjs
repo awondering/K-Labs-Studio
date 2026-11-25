@@ -44,10 +44,10 @@ async function main() {
   const apply = async (o) => {
     await asService();
     try {
-    const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::interval) as r`, [
+    const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as r`, [
       o.event ?? `evt_${++n}`, o.type || 'customer.subscription.updated', o.user, o.customer || `cus_${o.user.slice(0, 1)}`, o.sub || `sub_${o.user.slice(0, 1)}`,
       o.status || 'active', o.plan || 'monthly', o.currency || 'nzd', o.start ?? new Date(Date.now() - H), o.end ?? new Date(Date.now() + 30 * 24 * H),
-      o.cancel ?? false, o.grace || '24 hours']);
+      o.cancel ?? false, 'paid' in o ? o.paid : true]);
     return r.rows[0].r;
     } finally { await reset(); }
   };
@@ -68,13 +68,13 @@ async function main() {
 
   await ck('a signed-in builder cannot grant themselves access, write billing rows or read the event log', async () => {
     await as(U.A);
-    await assert.rejects(db.query(`select public.klabs_apply_stripe_subscription('evt_self','x','${U.A}','cus_A','sub_A','active','monthly','nzd',now(),now()+interval '30 days',false)`), /permission denied/);
+    await assert.rejects(db.query(`select public.klabs_apply_stripe_subscription('evt_self','x','${U.A}','cus_A','sub_A','active','monthly','nzd',now(),now()+interval '30 days',false,true)`), /permission denied/);
     await assert.rejects(db.query(`insert into public.billing_subscriptions(user_id, stripe_customer_id) values ('${U.A}','cus_self')`), /permission denied/);
     await assert.rejects(db.query(`update public.account_entitlements set access_state='paid' where user_id='${U.A}'`), /permission denied/);
     await assert.rejects(db.query('select * from public.stripe_events'), /permission denied/);
     await reset();
     await db.exec(`set role anon`);
-    await assert.rejects(db.query(`select public.klabs_apply_stripe_subscription('evt_anon','x','${U.A}','cus_A','sub_A','active','monthly','nzd',now(),now()+interval '30 days',false)`), /permission denied/);
+    await assert.rejects(db.query(`select public.klabs_apply_stripe_subscription('evt_anon','x','${U.A}','cus_A','sub_A','active','monthly','nzd',now(),now()+interval '30 days',false,true)`), /permission denied/);
     await reset();
     assert.equal((await ent(U.A)).access_state, 'trial_eligible');
   });
@@ -86,13 +86,14 @@ async function main() {
     assert.notEqual(await writeBuild(U.A, 'a-early'), true);
   });
 
-  await ck('an active subscription grants paid access until the period end + 24 h; the builder can work', async () => {
+  await ck('a paid subscription grants access exactly to the paid period end (no grace); the builder can work', async () => {
     const end = new Date(Date.now() + 30 * 24 * H);
     const r = await apply({ user: U.A, end });
     assert.equal(r.result, 'access_granted');
     const e = await ent(U.A);
     assert.equal(e.access_state, 'paid');
-    assert.equal(new Date(e.access_expires_at).getTime(), end.getTime() + 24 * H);
+    assert.equal(new Date(e.access_expires_at).getTime(), end.getTime());
+    assert.equal(new Date((await db.query(`select paid_through from public.billing_subscriptions where user_id=$1`, [U.A])).rows[0].paid_through).getTime(), end.getTime());
     assert.equal((await access(U.A)).can_write, true);
     assert.equal(await writeBuild(U.A, 'a-1'), true);
     assert.deepEqual(await readBuilds(U.A), ['a-1']);
@@ -142,16 +143,62 @@ async function main() {
     assert.equal((await access(U.A)).can_write, true);
   });
 
-  await ck('failed renewal (past_due): access only until the previous period end + 24 h, then locked; paid retry restores it', async () => {
-    // Renewal failed 2 h ago: still inside the grace.
-    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'past_due', start: new Date(Date.now() - 2 * H) })).result, 'access_granted');
-    const e = await ent(U.A);
-    assert.ok(Math.abs(new Date(e.access_expires_at).getTime() - (Date.now() + 22 * H)) < 60000);
-    // Renewal failed 30 h ago: grace over (never a free new period).
-    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'past_due', start: new Date(Date.now() - 30 * H) })).result, 'access_ended');
+  await ck('renewal waiting for payment (period advanced, invoice not yet paid): access ends at the last paid period end, not later', async () => {
+    // Stripe moved the subscription into the new period 1 minute ago and keeps it "active" while the invoice is unpaid.
+    const boundary = new Date(Date.now() - 60 * 1000);
+    const r = await apply({ user: U.A, sub: 'sub_A2', status: 'active', start: boundary, end: new Date(Date.now() + 30 * 24 * H), paid: false });
+    assert.equal(r.result, 'access_ended');
     assert.equal((await access(U.A)).can_write, false);
-    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'active' })).result, 'access_granted');
+    assert.notEqual(await writeBuild(U.A, 'a-during-renewal'), true);
+    // A renewal due in the future, invoice not yet issued as paid: access to exactly the current period end.
+    const future = new Date(Date.now() + 2 * H);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'active', start: future, end: new Date(Date.now() + 40 * 24 * H), paid: false })).result, 'access_granted');
+    assert.equal(new Date((await ent(U.A)).access_expires_at).getTime(), future.getTime());
+  });
+
+  await ck('renewal payment confirmed by Stripe restores access automatically to the new paid period end, records intact', async () => {
+    const end = new Date(Date.now() + 30 * 24 * H);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'active', start: new Date(Date.now() - 60 * 1000), end, paid: true, type: 'invoice.paid' })).result, 'access_granted');
+    assert.equal(new Date((await ent(U.A)).access_expires_at).getTime(), end.getTime());
     assert.equal((await access(U.A)).can_write, true);
+    assert.deepEqual(await readBuilds(U.A), ['a-1', 'a-3']);
+  });
+
+  await ck('failed renewal (past_due): locked from the last paid period end with no grace; a successful retry restores access', async () => {
+    // Renewal failed 2 minutes after the paid period ended: already locked (Stage A previously allowed 24 h).
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'past_due', start: new Date(Date.now() - 2 * 60 * 1000), paid: false })).result, 'access_ended');
+    assert.equal((await access(U.A)).can_write, false);
+    // Even if the latest invoice reads as paid while past_due, access never runs beyond a period end already passed.
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'past_due', start: new Date(Date.now() - 30 * 24 * H), end: new Date(Date.now() - 60 * 1000), paid: true })).result, 'no_access');
+    assert.equal((await access(U.A)).can_write, false);
+    const end = new Date(Date.now() + 30 * 24 * H);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'active', end, paid: true, type: 'invoice.paid' })).result, 'access_granted');
+    assert.equal((await access(U.A)).can_write, true);
+  });
+
+  await ck('expiry boundary: refused at the exact paid-through instant, allowed one second before', async () => {
+    await db.exec('begin');
+    try {
+      // now() is fixed inside a transaction, so the boundary is exact.
+      await db.exec(`update public.account_entitlements set access_expires_at = now() + interval '1 second' where user_id='${U.A}'`);
+      await db.exec(`set local role authenticated; set local request.jwt.claim.sub='${U.A}'`);
+      const before = (await db.query('select * from public.klabs_account_access($1)', [U.A])).rows[0];
+      await db.exec('reset role');
+      await db.exec(`update public.account_entitlements set access_expires_at = now() where user_id='${U.A}'`);
+      await db.exec(`set local role authenticated; set local request.jwt.claim.sub='${U.A}'`);
+      const at = (await db.query('select * from public.klabs_account_access($1)', [U.A])).rows[0];
+      assert.deepEqual([before.access_state, before.can_write], ['paid', true]);
+      assert.deepEqual([at.access_state, at.can_write], ['expired', false]);
+    } finally { await db.exec('rollback'); await reset(); }
+    // A paid-through time already reached grants nothing.
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', end: new Date(Date.now() - 1), paid: true })).result, 'access_ended');
+    await apply({ user: U.A, sub: 'sub_A2', status: 'active', paid: true });
+  });
+
+  await ck('trialing grants nothing (Studio has no free trial)', async () => {
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'trialing', paid: true })).result, 'access_ended');
+    assert.equal((await access(U.A)).can_write, false);
+    assert.equal((await apply({ user: U.A, sub: 'sub_A2', status: 'active', paid: true })).result, 'access_granted');
   });
 
   await ck('retries exhausted (unpaid / canceled / paused / incomplete_expired) lock access', async () => {
@@ -202,7 +249,7 @@ async function main() {
 
   await ck('bad input is refused', async () => {
     await assert.rejects(apply({ user: U.B, status: 'bogus' }), /Unsupported Stripe subscription status/);
-    await assert.rejects(apply({ user: U.B, grace: '8 days' }), /Grace/);
+    await assert.rejects(apply({ user: U.B, paid: null }), /latest invoice is paid/);
     await assert.rejects(apply({ user: U.B, event: '' }), /event id/);
   });
 
@@ -223,9 +270,9 @@ async function main() {
       assert.equal(name, 'klabs_apply_stripe_subscription');
       try {
         await asService();
-        const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::interval) as r`, [
+        const r = await db.query(`select public.klabs_apply_stripe_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as r`, [
           args.p_event_id, args.p_event_type, args.p_user_id, args.p_customer_id, args.p_subscription_id, args.p_status, args.p_plan, args.p_currency,
-          args.p_period_start, args.p_period_end, args.p_cancel_at_period_end, args.p_grace]);
+          args.p_period_start, args.p_period_end, args.p_cancel_at_period_end, args.p_latest_invoice_paid]);
         return { data: r.rows[0].r, error: null };
       } catch (e) { return { data: null, error: { message: e.message } }; } finally { await reset(); }
     },
@@ -240,7 +287,7 @@ async function main() {
   };
   const sub = (status, over = {}) => ({ id: 'sub_B9', customer: 'cus_B9', status, metadata: { user_id: U.B }, cancel_at_period_end: false,
     current_period_start: Math.floor(Date.now() / 1000) - 3600, current_period_end: Math.floor(Date.now() / 1000) + 365 * 86400,
-    items: { data: [{ price: { id: 'price_usdA', currency: 'usd', recurring: { interval: 'year' } } }] }, ...over });
+    items: { data: [{ price: { id: 'price_usdA', currency: 'usd', recurring: { interval: 'year' } } }] }, latest_invoice: { id: 'in_B9', status: 'paid' }, ...over });
 
   await ck('end to end: a forged event is rejected and changes nothing', async () => {
     await db.exec(`delete from public.billing_subscriptions where user_id='${U.B}'; update public.account_entitlements set access_state='trial_eligible', access_expires_at=null where user_id='${U.B}'`);
@@ -267,6 +314,17 @@ async function main() {
     stripeState = sub('canceled', { cancel_at_period_end: true });
     assert.equal((await send({ id: 'evt_e2e_3', type: 'customer.subscription.deleted', data: { object: { id: 'sub_B9' } } })).body.result, 'access_ended');
     assert.equal((await access(U.B)).can_write, false);
+  });
+
+  await ck('end to end: a renewal whose invoice is not yet paid grants nothing; invoice.paid then restores access', async () => {
+    stripeState = sub('active', { id: 'sub_B11', latest_invoice: { id: 'in_B11', status: 'open' } });
+    assert.equal((await send({ id: 'evt_e2e_5', type: 'customer.subscription.updated', data: { object: { id: 'sub_B11' } } })).body.result, 'no_access');
+    assert.equal((await access(U.B)).can_write, false);
+    stripeState = sub('active', { id: 'sub_B11', latest_invoice: { id: 'in_B11', status: 'paid' } });
+    assert.equal((await send({ id: 'evt_e2e_6', type: 'invoice.paid', data: { object: { subscription: 'sub_B11' } } })).body.result, 'access_granted');
+    assert.equal((await access(U.B)).can_write, true);
+    stripeState = sub('canceled', { id: 'sub_B11' });
+    assert.equal((await send({ id: 'evt_e2e_7', type: 'customer.subscription.deleted', data: { object: { id: 'sub_B11' } } })).body.result, 'access_ended');
   });
 
   await ck('end to end: a subscription for a price that is not a Studio plan grants nothing', async () => {

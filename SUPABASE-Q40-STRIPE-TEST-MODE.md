@@ -23,10 +23,13 @@ Status: implemented and tested locally only. Nothing is deployed, no database (p
 - **One Stripe customer per account,** and no second live subscription.
 - **Test-mode keys accept only test-mode events,** and live keys only live events.
 
-**Access rules:**
-- **Active:** paid until the period end + 24 h. The grace allows for the renewal payment to arrive.
-- **Cancelled at period end:** paid until exactly the period end.
-- **past_due:** paid only until the previous period end + 24 h. A failed renewal never gives a free new period.
+**Access rules — NO GRACE PERIOD (owner decision 26 Nov 2026):**
+- **Access ends exactly when the verified paid-through period ends,** unless Stripe confirms a new paid period.
+- **Paid-through:** the period end when the subscription's latest invoice is **paid**. Otherwise it is the period start, which is the end of the last paid period.
+- **Renewals:** Stripe moves a subscription into its new period about an hour before charging it. Access is therefore not extended until `invoice.paid` confirms payment, and a renewing customer can be locked out briefly at each renewal.
+- **Active / cancelled at period end:** access to exactly the paid period end.
+- **past_due (failed renewal):** locked from the last paid period end. A successful retry restores access automatically.
+- **Trialing:** grants nothing (Studio has no free trial).
 - **canceled / unpaid / paused / incomplete_expired:** locked.
 - **Owner grants** (complimentary, grandfathered) that last longer are never shortened.
 - **Records are never deleted.**
@@ -40,8 +43,8 @@ Not in Stage A (Stage B, together with the app):
 The read lock must not ship before the app changes, or open devices could misread "no rows" as deletions.
 
 ## Tests
-- `tests/billing-core.test.cjs`: 14 unit tests (signatures, Stripe client, webhook, checkout, portal, no secrets committed).
-- `tests/q40-stripe-subscriptions-isolated.cjs`: 24 checks. It runs the real production schema plus this migration in PGlite, then the real webhook core end to end with signed synthetic events.
+- `tests/billing-core.test.cjs`: 16 unit tests (signatures, Stripe client, webhook, checkout, portal, no secrets committed).
+- `tests/q40-stripe-subscriptions-isolated.cjs`: 29 checks, including the exact expiry boundary, renewals awaiting payment and failed renewals. It runs the real production schema plus this migration in PGlite, then the real webhook core end to end with signed synthetic events.
 
 ## What the owner must do next (nothing here costs money)
 **1. Stripe test mode** (Dashboard, test mode / sandbox; no live activation needed):
@@ -73,7 +76,6 @@ The read lock must not ship before the app changes, or open devices could misrea
 - `STRIPE_WEBHOOK_SECRET` (whsec_…, from step 5);
 - `STRIPE_PRICE_NZD_MONTHLY`, `STRIPE_PRICE_NZD_ANNUAL`, `STRIPE_PRICE_USD_MONTHLY`, `STRIPE_PRICE_USD_ANNUAL`;
 - `PUBLIC_APP_URL`;
-- optional `BILLING_GRACE_HOURS` (default 24).
 
 **5. Stripe test webhook:** an endpoint at the test project's `…/functions/v1/stripe-webhook` with these events:
 - `checkout.session.completed`;

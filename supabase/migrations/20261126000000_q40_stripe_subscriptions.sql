@@ -7,12 +7,15 @@
 -- Nothing here changes existing accounts, the trial, the read/write guards or any record. The read lock on expiry and
 -- the retirement of the trial ship later, together with the Studio app changes (they must not be applied alone).
 --
--- Access rules (owner-approved model, 25-26 Nov 2026):
---   active / trialing  -> 'paid' until the paid period ends (+ grace for the renewal payment to arrive;
---                         no grace once the customer has cancelled at period end)
---   past_due           -> 'paid' only until the PREVIOUS paid period ended (+ grace); Stripe has already advanced the
---                         period to the unpaid one, so current_period_start is that boundary
---   anything else      -> no access ('expired' if the account had Stripe access); records are never touched
+-- Access rules (owner decision 26 Nov 2026: NO GRACE PERIOD). Access ends exactly when the verified paid-through
+-- period ends, unless Stripe confirms a new paid period:
+--   paid-through = current_period_end   when the subscription's latest invoice is PAID (Stripe confirmed the period)
+--                = current_period_start when it is not (a renewal is waiting or failed: Stripe has already advanced
+--                                       the period, so its start is the end of the last PAID period)
+--   active / past_due  -> 'paid' until the paid-through time, if that is still in the future; otherwise locked
+--   trialing           -> no access (Studio has no free trial; a trial configured in Stripe grants nothing)
+--   anything else      -> no access ('expired' if the account had access); records are never touched
+--   A later verified payment (invoice paid) restores access automatically to the new paid-through time.
 --   Owner grants (complimentary, grandfathered) that last longer are never shortened by Stripe.
 begin;
 
@@ -35,6 +38,7 @@ create table if not exists public.billing_subscriptions (
   currency text check (currency is null or currency in ('nzd', 'usd')),
   current_period_start timestamptz,
   current_period_end timestamptz,
+  paid_through timestamptz,
   cancel_at_period_end boolean not null default false,
   last_event_id text,
   last_event_at timestamptz,
@@ -79,7 +83,7 @@ create or replace function public.klabs_apply_stripe_subscription(
   p_period_start timestamptz,
   p_period_end timestamptz,
   p_cancel_at_period_end boolean,
-  p_grace interval default interval '24 hours'
+  p_latest_invoice_paid boolean
 )
 returns jsonb
 language plpgsql
@@ -100,8 +104,8 @@ begin
   ) then
     raise exception 'Unsupported Stripe subscription status: %', p_status;
   end if;
-  if p_grace is null or p_grace < interval '0' or p_grace > interval '7 days' then
-    raise exception 'Grace must be between 0 and 7 days';
+  if p_latest_invoice_paid is null then
+    raise exception 'Whether the latest invoice is paid is required';
   end if;
 
   -- Each Stripe event is applied at most once.
@@ -133,18 +137,25 @@ begin
   end if;
   if found and stored.stripe_subscription_id is not null and stored.stripe_subscription_id <> p_subscription_id
     and stored.status in ('active', 'trialing', 'past_due')
-    and p_status not in ('active', 'trialing') then
+    and p_status <> 'active' then
     -- An older or abandoned subscription must not override the account's current live one.
     update public.stripe_events set result = 'ignored_other_subscription' where event_id = p_event_id;
     return jsonb_build_object('result', 'ignored_other_subscription');
   end if;
 
+  -- No grace: access runs exactly to the end of the last period Stripe confirmed as paid.
+  new_expiry := case
+    when p_status in ('active', 'past_due') then
+      case when p_latest_invoice_paid then p_period_end else p_period_start end
+    else null
+  end;
+
   insert into public.billing_subscriptions as b (
     user_id, stripe_customer_id, stripe_subscription_id, status, plan, currency,
-    current_period_start, current_period_end, cancel_at_period_end, last_event_id, last_event_at, updated_at
+    current_period_start, current_period_end, paid_through, cancel_at_period_end, last_event_id, last_event_at, updated_at
   ) values (
     p_user_id, p_customer_id, p_subscription_id, p_status, p_plan, lower(p_currency),
-    p_period_start, p_period_end, coalesce(p_cancel_at_period_end, false), p_event_id, now(), now()
+    p_period_start, p_period_end, new_expiry, coalesce(p_cancel_at_period_end, false), p_event_id, now(), now()
   )
   on conflict (user_id) do update set
     stripe_subscription_id = excluded.stripe_subscription_id,
@@ -153,17 +164,12 @@ begin
     currency = excluded.currency,
     current_period_start = excluded.current_period_start,
     current_period_end = excluded.current_period_end,
+    paid_through = excluded.paid_through,
     cancel_at_period_end = excluded.cancel_at_period_end,
     last_event_id = excluded.last_event_id,
     last_event_at = excluded.last_event_at,
     updated_at = excluded.updated_at;
 
-  new_expiry := case
-    when p_status in ('active', 'trialing') and p_period_end is not null then
-      p_period_end + case when coalesce(p_cancel_at_period_end, false) then interval '0' else p_grace end
-    when p_status = 'past_due' and p_period_start is not null then p_period_start + p_grace
-    else null
-  end;
 
   select * into current_access from public.account_entitlements where user_id = p_user_id for update;
   if not found then
@@ -197,9 +203,9 @@ begin
 end;
 $$;
 
-revoke all on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, interval)
+revoke all on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, boolean)
   from public, anon, authenticated;
-grant execute on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, interval)
+grant execute on function public.klabs_apply_stripe_subscription(text, text, uuid, text, text, text, text, text, timestamptz, timestamptz, boolean, boolean)
   to service_role;
 
 commit;

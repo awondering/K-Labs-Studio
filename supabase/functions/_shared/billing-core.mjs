@@ -89,7 +89,8 @@ export function createStripeApi({ secretKey, fetchImpl = fetch, apiVersion = STR
   };
   return {
     testMode: secretKey.includes("_test_"),
-    getSubscription: (id) => call("GET", `/subscriptions/${encodeURIComponent(id)}`),
+    // The latest invoice is expanded: only a PAID invoice confirms the current period (no grace).
+    getSubscription: (id) => call("GET", `/subscriptions/${encodeURIComponent(id)}?expand%5B%5D=latest_invoice`),
     getPrice: (id) => call("GET", `/prices/${encodeURIComponent(id)}`),
     createCustomer: (params, idempotencyKey) => call("POST", "/customers", params, idempotencyKey),
     createCheckoutSession: (params) => call("POST", "/checkout/sessions", params),
@@ -116,6 +117,8 @@ export function subscriptionFacts(subscription) {
     periodStart: toIso(periodStart),
     periodEnd: toIso(periodEnd),
     cancelAtPeriodEnd: subscription?.cancel_at_period_end === true,
+    // Unexpanded (a bare id) or anything but "paid" counts as not paid.
+    latestInvoicePaid: subscription?.latest_invoice?.status === "paid",
     itemCount: subscription?.items?.data?.length || 0
   };
 }
@@ -146,8 +149,7 @@ function knownPrice(prices, priceId) {
 }
 
 // ---------- stripe-webhook ----------
-export function createStripeWebhookHandler({ serviceClient, stripe, webhookSecret, prices, graceHours = 24, now = () => new Date(), log = console }) {
-  if (!(graceHours >= 0 && graceHours <= 168)) throw new Error("Grace must be between 0 and 168 hours.");
+export function createStripeWebhookHandler({ serviceClient, stripe, webhookSecret, prices, now = () => new Date(), log = console }) {
   return async function handleStripeWebhook(request) {
     if (request.method !== "POST") return response(405, { error: "Method not allowed." });
     const payload = await request.text();
@@ -203,7 +205,7 @@ export function createStripeWebhookHandler({ serviceClient, stripe, webhookSecre
         p_period_start: facts.periodStart,
         p_period_end: facts.periodEnd,
         p_cancel_at_period_end: facts.cancelAtPeriodEnd,
-        p_grace: `${graceHours} hours`
+        p_latest_invoice_paid: facts.latestInvoicePaid
       });
       if (error) throw new Error(error.message || "Access could not be updated.");
       return response(200, { received: true, result: data?.result || "applied" });
