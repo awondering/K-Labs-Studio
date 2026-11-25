@@ -375,7 +375,8 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: the quote carries the DEMO watermark and banner`, quoteDoc.watermark === '"DEMO"' && /DEMONSTRATION QUOTE/.test(quoteDoc.banner || ''), [quoteDoc.watermark, quoteDoc.banner]);
   ck(`${label}: the customer quote shows Estimated Completion`,
     quoteDoc.rows.find(([name]) => name === 'Estimated Completion')?.[1] === expectedCompletion.display, quoteDoc.rows);
-  const total = quoteDoc.rows.find((r) => r[0] === 'Total Price');
+  // Q41: with tax on, the total names it ("Total Price including GST").
+  const total = quoteDoc.rows.find((r) => /^Total Price( including \S+)?$/.test(r[0]));
   ck(`${label}: the quote's Total Price = quoteMaths() total`, total && near(money(total[1]), priced.maths.total), total);
   const deliveryRow = quoteDoc.rows.find((r) => /^Delivery/.test(r[0] || '') && /\d/.test(r[1] || ''));
   ck(`${label}: the quote shows the delivery charge = quoteMaths()`, deliveryRow && near(money(deliveryRow[1]), priced.maths.deliveryCharge), deliveryRow);
@@ -483,7 +484,7 @@ async function fullPlayback(browser, base, label, contextOptions, touch, shots) 
   ck(`${label}: the build summary carries the DEMO watermark and banner`, summary.watermark === '"DEMO"' && /DEMONSTRATION BUILD SUMMARY/.test(summary.banner || ''), [summary.watermark, summary.banner]);
   ck(`${label}: the Build Summary retains the original estimated completion date`,
     summary.rows.find(([name]) => name === 'Estimated Completion')?.[1] === expectedCompletion.display, summary.rows);
-  const summaryAmount = (label) => money(summary.rows.find(([name]) => name === label)?.[1]);
+  const summaryAmount = (label) => money(summary.rows.find(([name]) => name === label || (label === 'Total Price' && /^Total Price including \S+$/.test(name)))?.[1]);
   ck(`${label}: Build Summary shows the full price, total received and Paid in full with zero owing`,
     near(summaryAmount('Total Price'), priced.maths.total)
     && near(summaryAmount('Total Received'), priced.maths.total)

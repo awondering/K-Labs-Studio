@@ -123,8 +123,9 @@ async function run(browser, { width, mobile }) {
     writeDraft(tag, 'paid-in-full', full);
     ck(tag, 'paid in full: subject "K-Labs — Payment Received in Full — <reference>"', full.subject === `K-Labs — Payment Received in Full — ${ref}`, full.subject);
     ck(tag, 'paid in full: the body states "Payment has been received in full."', full.body.includes('Payment has been received in full.'), full.body);
-    ck(tag, 'paid in full: Total, Total received and Balance owing $0.00 in AUD',
-      /Total: \$1150\.00 AUD\nTotal received: \$1150\.00 AUD\nBalance owing: \$0\.00 AUD/.test(full.body), full.body);
+    // Q41: the email shares the documents' labels - the total names the configured tax and a settled job says "Paid in full".
+    ck(tag, 'paid in full: Total including GST, Total received and Paid in full $0.00 in AUD',
+      /Total including GST: \$1150\.00 AUD\nTotal received: \$1150\.00 AUD\nPaid in full: \$0\.00 AUD/.test(full.body), full.body);
     ck(tag, 'paid in full: build reference and customer details kept; no deposit lines or bank details',
       full.to === 'jordan@example.test' && /^Hi Jordan,/.test(full.body) && full.body.includes(`Custom Rod Build — ${ref}`)
       && /9 ft 5 wt graphite blank/i.test(full.body) && full.body.includes('5 River Rd')

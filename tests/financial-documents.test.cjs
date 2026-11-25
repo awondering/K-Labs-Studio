@@ -17,7 +17,7 @@ function harness(tax = true) {
   const quote = { id: 'build-😀', buildNumber: 'BUILD-901', customerName: '<Customer>',
     buildName: 'Test & rod', includeGst: tax, gstRate: 15,
     payments: [{ id: 'deposit', type: 'deposit', amount: 25, date: '2026-11-10' }] };
-  const context = vm.createContext({ TextEncoder, quote, window: { KLABS_ACCOUNT_ID: 'aaaaaaaa-0000-0000-0000-000000000001' },
+  const context = vm.createContext({ customerIncludedParts:()=>[],customerSafeText:(v)=>String(v==null?'':v),TextEncoder, quote, window: { KLABS_ACCOUNT_ID: 'aaaaaaaa-0000-0000-0000-000000000001' },
     businessProfile: { businessName: 'Test business', gstNumber: 'REG-1' },
     depositMaths: () => ({ total: 115, gst: tax ? 15 : 0, taxRate: 15 }),
     quoteTaxAvailable: () => tax, activeTaxName: () => 'GST', activeTaxRegistrationLabel: () => 'GST Number',
@@ -33,7 +33,7 @@ function harness(tax = true) {
     escapeHtml: value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
   });
-  for (const name of ['normalizeJobType', 'invoiceNumberForBuild', 'invoiceRodDescription', 'buildInvoiceSnapshot', 'invoiceDocumentMarkup', 'readableInvoiceNumberForJob', 'invoiceDisplayNumber', 'issuedInvoiceRecordsForReadableNumber']) {
+  for (const name of ['normalizeJobType', 'normalizeJobKind', 'isComponentsJob', 'invoiceNumberForBuild', 'invoiceRodDescription', 'buildInvoiceSnapshot', 'roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','invoiceDocumentMarkup', 'readableInvoiceNumberForJob', 'invoiceDisplayNumber', 'issuedInvoiceRecordsForReadableNumber']) {
     vm.runInContext(extract(name), context);
   }
   return { context, quote };

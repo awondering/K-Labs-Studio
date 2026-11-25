@@ -20,6 +20,7 @@ function harness({status,notes='',builderNotes=PRIVATE}){
   const quote={customerName:'Bren Pine',quoteNumber:'Q-1001',buildName:'Rod',estimatedCompletionDate:'2026-12-01',
     components:[],payments:[],notes,buildSpecifications:{builderNotes}};
   const c={
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote,businessProfile:profile,studioSettings:{},
     currentBuildLifecycleStatus:()=>status,
     depositMaths:()=>({total:1000,depositEnabled:false,depositAmount:0,remainingBalance:1000,amountReceived:0,balanceOwing:1000,depositOutstanding:false,depositStillRequired:0}),
@@ -42,7 +43,7 @@ function harness({status,notes='',builderNotes=PRIVATE}){
     'specificationValue','normalizeCustomerMeasurements','isLikelyJunkCustomerText','customerSafeText','customerRequestText',
     'normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','customerDocumentLabels','customerQuoteConfirmationText','customerDocumentConfirmationText',
     'customerIncludedPartsMarkup','customerBuildNotesText','customerBuildNotesMarkup','businessProfileHasPaymentDetails',
-    'customerQuoteSummaryMarkup','customerEmailLines',
+    'roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerQuoteSummaryMarkup','customerEmailLines',
   ].map(fn).join('\n'),c);
   return c;
 }
@@ -51,11 +52,11 @@ const STATUSES=[['quote','Customer Quote'],['active','Build Confirmation'],['com
 const NOTE='Red thread, silver trim.\nSecond line  with  spacing\n\n- final bullet';
 
 for(const [status,title] of STATUSES){
-  test(`${title}: Build Notes sit after "What your rod includes" and before delivery and pricing`,()=>{
+  test(`${title}: Build Notes sit after the Components list and before delivery and pricing`,()=>{
     const c=harness({status,notes:NOTE});
     assert.equal(c.customerDocumentLabels().title,title);
     const html=c.customerQuoteSummaryMarkup();
-    const parts=html.indexOf('What your rod includes');
+    const parts=html.indexOf('<span>Components</span>');
     const notes=html.indexOf('<span>Build Notes</span>');
     const delivery=html.indexOf('DELIVERY-BLOCK');
     const pricing=html.indexOf('view-quote__pricing');
@@ -116,7 +117,7 @@ test('pricing, status wording and quote number are unaffected by Build Notes',()
 
 test('the customer renderers only read the Build Note field, never builderNotes',()=>{
   assert.ok(fn('customerBuildNotesText').includes('customerRequestText(quote.notes)'));
-  const renderers=fn('customerBuildNotesText')+fn('customerBuildNotesMarkup')+fn('customerQuoteSummaryMarkup')+fn('customerEmailLines');
+  const renderers=fn('customerBuildNotesText')+fn('customerBuildNotesMarkup')+fn('roundMoney')+fn('numberOrZero')+fn('customerPaymentLabels')+fn('customerPaymentStatus')+fn('customerTaxName')+fn('customerTotalLabel')+fn('paidInFullAcknowledgement')+fn('customerQuoteSummaryMarkup')+fn('customerEmailLines');
   assert.ok(!/builderNotes|Workshop Notes/.test(renderers));
   assert.ok(css.match(/\.view-quote__notes p\{[^}]*white-space:pre-wrap/));
 });

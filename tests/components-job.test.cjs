@@ -27,7 +27,7 @@ const BANK={businessName:'Synthetic Rods',paymentAccountName:'Synthetic Rods Ltd
 
 function app(env={}){
   const calls={confirm:[],info:[],lifecycle:[]};
-  const c=loadRecordFunctions(['normalizeQuote','quoteForPersistence','customerQuoteSummaryMarkup','customerEmailLines','customerDocumentLabels',
+  const c=loadRecordFunctions(['normalizeQuote','quoteForPersistence','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerQuoteSummaryMarkup','customerEmailLines','customerDocumentLabels',
     'quoteMaths','quotePricePending','blockedByPendingPricing','componentSellPriceInputAttributes','jobTypeLabel','isComponentsJob',
     'zeroPricedComponentLabels','currency','saveBuildLifecycleStatusBySource'],{
     Store:{get:(k,f)=>env.records||f,set:(k,v)=>{env.records=v;return true;}},window:{},buildsStorageKey:()=>'builds',
@@ -272,10 +272,10 @@ test('priced quote: the real total and no deposit wording, even if an old deposi
   open(componentsJob({components:[tip({unitPrice:9}),guide()],depositEnabled:true,depositValue:50}));
   assert.equal(c.customerDocumentLabels().title,'Components Quote');
   const doc=c.customerQuoteSummaryMarkup().replace(/\s+/g,' ');
-  assert.match(doc,/<span>Total Price<\/span><strong>\$25\.00 [A-Z]{3}<\/strong>/);
+  assert.match(doc,/<span>Total Price including GST<\/span><strong>\$25\.00 [A-Z]{3}<\/strong>/);
   assert.doesNotMatch(doc,/Deposit/);
   const text=c.customerEmailLines().join('\n');
-  assert.match(text,/^Total: \$25\.00 [A-Z]{3}$/m);
+  assert.match(text,/^Total including GST: \$25\.00 [A-Z]{3}$/m);
   assert.doesNotMatch(text,/Deposit required|Balance remaining|Once the deposit has been received/);
 });
 
@@ -284,7 +284,7 @@ test('confirmed order: an Order Confirmation with the real total, including a ge
   open(componentsJob({quoteStatus:'active',pricePending:false,components:[tip(),guide()]}));
   assert.equal(c.customerDocumentLabels().title,'Order Confirmation');
   const doc=c.customerQuoteSummaryMarkup().replace(/\s+/g,' ');
-  assert.match(doc,/<span>Total Price<\/span><strong>\$7\.00 [A-Z]{3}<\/strong>/);
+  assert.match(doc,/<span>Total Price including GST<\/span><strong>\$7\.00 [A-Z]{3}<\/strong>/);
   assert.doesNotMatch(doc,/Total Price<\/span><strong>To be confirmed/);
 });
 
@@ -295,7 +295,7 @@ test('rod build and repair documents are unchanged (wording, rod row, deposit li
   open(rodBuild(withDeposit));
   const doc=c.customerQuoteSummaryMarkup().replace(/\s+/g,' ');
   assert.match(doc,/<span>Rod<\/span>/);
-  assert.match(doc,/<span>Total Price<\/span><strong>\$/);
+  assert.match(doc,/<span>Total Price including GST<\/span><strong>\$/);
   const text=c.customerEmailLines().join('\n');
   assert.match(text,/Custom Rod Build — Q-2002/);
   assert.match(text,/Deposit required: /);

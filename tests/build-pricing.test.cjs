@@ -14,6 +14,7 @@ function extractFunction(name){
 
 function pricingHarness(overrides={}){
   const context=vm.createContext({
+    quoteTaxAvailable:()=>false,activeTaxName:()=>'GST',
     quote:{
       components:[{cost:40,unitPrice:70,quantity:1},{cost:60,unitPrice:90,quantity:1}],
       labourRate:25,
@@ -401,9 +402,10 @@ test('normalizePayments keeps valid payments and drops malformed ones; legacy re
 });
 
 test('Customer document and email render received-payment wording and markup wiring exists',()=>{
-  assert.match(source,/<span>Deposit Received<\/span>/);
+  // Q41: the received / balance wording comes from one shared rule (customerPaymentLabels) for documents and emails.
+  assert.match(source,/receivedLabel:paidInFull\|\|!depositOnly\?'Total received':'Deposit received'/);
   assert.match(source,/<span>Deposit Still Required<\/span>/);
-  assert.match(source,/Deposit received: \$\{currencyWithCode\(math\.amountReceived\)\}/);
+  assert.match(source,/\$\{payment\.receivedLabel\}: \$\{currencyWithCode\(math\.amountReceived\)\}/);
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   // Pricing redesign: Studio has one payment form (Amount, Date, Save) for deposits and payments; customer documents unchanged.
   ['quoteRecordPaymentBtn','quoteBalanceReceivedAmount','quoteBalanceReceivedDate','quoteBalanceReceivedSave'].forEach(id=>assert.match(html,new RegExp(`id="${id}"`)));
@@ -437,22 +439,23 @@ function confirmationHarness(saved){
     escapeHtml:value=>String(value),
   });
   ['newQuoteTemplate','normalizeJobType','normalizeJobKind','isComponentsJob','quotePricePending','normalizeNewJobRequest','normalizeFulfilmentMethod','normalizePayments','normalizeQuote',
-    'customerDocumentLabels','customerQuoteSummaryMarkup','customerEmailLines']
+    'customerDocumentLabels','roundMoney','numberOrZero','customerPaymentLabels','customerPaymentStatus','customerTaxName','customerTotalLabel','paidInFullAcknowledgement','customerQuoteSummaryMarkup','customerEmailLines']
     .forEach(name=>vm.runInContext(extractFunction(name),context));
   context.quote=context.normalizeQuote(JSON.parse(JSON.stringify(saved)));
   return context;
 }
 
-// paidInFullEmail (Q39): the paid-in-full email always says "Total received" (owner wording) while the unchanged
-// Build Confirmation document may say "Deposit Received"; the amounts must still agree line for line.
+// paidInFullEmail (Q39): kept for the paid-in-full email. Since Q41 the Build Confirmation and the email share one set
+// of payment labels, so the rewrite below is a no-op safeguard; the amounts must still agree line for line.
 function confirmationRows(context,{paidInFullEmail=false}={}){
   const markup=context.customerQuoteSummaryMarkup();
   const pricing=markup.match(/<div class="view-quote__pricing">([\s\S]*?)<\/div>\s*<div class="view-quote__row">/);
   assert.ok(pricing,'customer pricing is present');
   const preview=Array.from(pricing[1].matchAll(/<span>([^<]+)<\/span><strong>([^<]+)<\/strong>/g),match=>`${match[1].toLowerCase()}: ${match[2]}`);
   const email=Array.from(context.customerEmailLines())
-    .filter(line=>/^(Total|Deposit required|Deposit received|Total received|Deposit still required|Balance owing|Balance remaining): /.test(line))
-    .map(line=>line.toLowerCase().replace(/^total:/,'total price:'));
+    .filter(line=>/^(Total|Total including [^:]+|Deposit required|Deposit received|Total received|Deposit still required|Balance owing|Paid in full|Balance remaining): /.test(line))
+    // The email's "Total" is the document's "Total Price"; with tax on both name the tax (Q41).
+    .map(line=>line.toLowerCase().replace(/^total( including [^:]+)?:/,'total price$1:'));
   const expected=preview.map(line=>line.toLowerCase()).map(line=>paidInFullEmail?line.replace(/^deposit received:/,'total received:'):line);
   assert.deepEqual(email,expected,'email and preview payment amounts agree');
   return preview;
@@ -462,7 +465,7 @@ test('Build confirmation removes duplicate full-price deposit amounts after a pa
   const context=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:2500,
     payments:[{id:'p1',type:'deposit',amount:1180.75,date:'2026-10-18'}]});
   assert.deepEqual(confirmationRows(context),[
-    'total price: $2500.00 NZD','deposit received: $1180.75 NZD','balance owing: $1319.25 NZD',
+    'total price including gst: $2500.00 NZD','deposit received: $1180.75 NZD','balance owing: $1319.25 NZD',
   ]);
   assert.equal(context.depositMaths().depositStillRequired,1319.25);
   assert.equal(context.quote.payments[0].date,'2026-10-18');
@@ -472,14 +475,14 @@ test('Build confirmation keeps meaningful partial-deposit amounts and fully paid
   const partial=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:1000,
     payments:[{id:'p1',type:'deposit',amount:400,date:'2026-10-18'}]});
   assert.deepEqual(confirmationRows(partial),[
-    'total price: $2500.00 NZD','deposit required: $1000.00 NZD','deposit received: $400.00 NZD',
+    'total price including gst: $2500.00 NZD','deposit required: $1000.00 NZD','deposit received: $400.00 NZD',
     'deposit still required: $600.00 NZD','balance owing: $2100.00 NZD',
   ]);
   const paid=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'percent',depositValue:100,
     payments:[{id:'p1',type:'deposit',amount:2500,date:'2026-10-18'}]});
   // The Build Confirmation document is unchanged; the email acknowledges full payment (Q39).
   assert.deepEqual(confirmationRows(paid,{paidInFullEmail:true}),[
-    'total price: $2500.00 NZD','deposit received: $2500.00 NZD','balance owing: $0.00 NZD',
+    'total price including gst: $2500.00 NZD','total received: $2500.00 NZD','paid in full: $0.00 NZD',
   ]);
   assert.ok(paid.customerEmailLines().includes('Total received: $2500.00 NZD'));
   assert.ok(paid.customerEmailLines().some(line=>line.startsWith('Payment has been received in full.')));
@@ -489,31 +492,31 @@ test('Q33: a confirmation with a deposit and a further payment calls the money T
   const covered=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:1000,
     payments:[{id:'d',type:'deposit',amount:900,date:'2026-10-18'},{id:'b',type:'balance',amount:300,date:'2026-10-20'}]});
   assert.deepEqual(confirmationRows(covered),[
-    'total price: $2500.00 NZD','deposit required: $1000.00 NZD','total received: $1200.00 NZD','balance owing: $1300.00 NZD',
+    'total price including gst: $2500.00 NZD','deposit required: $1000.00 NZD','total received: $1200.00 NZD','balance owing: $1300.00 NZD',
   ]);
   const short=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:1000,
     payments:[{id:'d',type:'deposit',amount:400,date:'2026-10-18'},{id:'b',type:'balance',amount:100,date:'2026-10-20'}]});
   assert.deepEqual(confirmationRows(short),[
-    'total price: $2500.00 NZD','deposit required: $1000.00 NZD','total received: $500.00 NZD',
+    'total price including gst: $2500.00 NZD','deposit required: $1000.00 NZD','total received: $500.00 NZD',
     'deposit still required: $600.00 NZD','balance owing: $2000.00 NZD',
   ]);
 });
 
 test('No payment and reopened legacy builds retain correct deposit information',()=>{
   const none=confirmationHarness({quoteStatus:'active'});
-  assert.deepEqual(confirmationRows(none),['total price: $2500.00 NZD']);
+  assert.deepEqual(confirmationRows(none),['total price including gst: $2500.00 NZD']);
   const partial=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:500});
   assert.deepEqual(confirmationRows(partial),[
-    'total price: $2500.00 NZD','deposit required: $500.00 NZD','balance remaining: $2000.00 NZD',
+    'total price including gst: $2500.00 NZD','deposit required: $500.00 NZD','balance remaining: $2000.00 NZD',
   ]);
   const full=confirmationHarness({quoteStatus:'active',depositEnabled:true,depositType:'percent',depositValue:100});
   assert.deepEqual(confirmationRows(full),[
-    'total price: $2500.00 NZD','deposit required: $2500.00 NZD','balance remaining: $0.00 NZD',
+    'total price including gst: $2500.00 NZD','deposit required: $2500.00 NZD','balance remaining: $0.00 NZD',
   ]);
   const saved=JSON.parse(JSON.stringify({quoteStatus:'active',depositEnabled:true,depositType:'fixed',depositValue:2500,
     payments:[{id:'saved',type:'deposit',amount:1180.75,date:'2025-01-02'}]}));
   assert.deepEqual(confirmationRows(confirmationHarness(saved)),[
-    'total price: $2500.00 NZD','deposit received: $1180.75 NZD','balance owing: $1319.25 NZD',
+    'total price including gst: $2500.00 NZD','deposit received: $1180.75 NZD','balance owing: $1319.25 NZD',
   ]);
 });
 
@@ -557,5 +560,7 @@ test('Completed Build Summary does not show payment received or paid in full wit
   const context=confirmationHarness({quoteStatus:'complete',depositEnabled:true,depositType:'fixed',depositValue:400});
   const preview=context.customerQuoteSummaryMarkup();
   assert.doesNotMatch(preview,/<span>(?:Deposit Received|Total Received|Paid in full)<\/span>/);
-  assert.match(preview,/<span>Balance Remaining<\/span><strong>\$2100\.00 NZD<\/strong>/);
+  // Q41: a completed job states the whole amount owed (as its invoice and email do), not "total minus an unpaid deposit".
+  assert.match(preview,/<span>Balance Owing<\/span><strong>\$2500\.00 NZD<\/strong>/);
+  assert.doesNotMatch(preview,/Balance Remaining/);
 });

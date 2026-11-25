@@ -12,7 +12,7 @@ function extract(name) {
   assert.ok(start >= 0 && end > start, name);
   return source.slice(start, end);
 }
-const functions = ['invoiceDocumentMarkup', 'invoiceDisplayNumber', 'readableInvoiceNumberForJob', 'issuedInvoiceRecordsForReadableNumber', 'refreshInvoicePreview', 'updateInvoicePreview', 'openInvoicePreview',
+const functions = ['customerPaymentLabels', 'invoiceDocumentMarkup', 'invoiceDisplayNumber', 'readableInvoiceNumberForJob', 'issuedInvoiceRecordsForReadableNumber', 'refreshInvoicePreview', 'updateInvoicePreview', 'openInvoicePreview',
   'openPaymentStatement', 'printInvoicePreview'].map(extract).join('\n');
 const invoice = { number: `INV-${'a'.repeat(32)}-${Buffer.from('12345678-1234-1234-1234-123456789012').toString('hex')}`, issuedDate: '2026-11-11', businessName: 'K-Labs',
   businessLines: ['Synthetic address'], customerLines: ['Synthetic customer'], buildReference: 'TEST-001',
@@ -57,7 +57,8 @@ async function main() {
       await assertFits(page, paper, stage);
       assert.equal(await page.evaluate(() => window.devicePixelRatio > 0 && window.visualViewport.scale === 1), true);
       assert.equal(await sheet.locator('.invoice-preview__counter').innerText(), 'Page 1 of 1');
-      for (const label of ['Total including GST', 'Total received', 'Balance owing', 'Payments received']) {
+      // Q41: the only payment is the deposit, so the invoice says "Deposit received" - as the Build Confirmation and email do.
+      for (const label of ['Total including GST', 'Deposit received', 'Balance owing', 'Payments received']) {
         assert.ok((await sheet.locator('.invoice-preview__columns').innerText()).toLowerCase().includes(label.toLowerCase()), label);
       }
       for (const action of ['close', 'print']) assert.equal(await sheet.locator(`[data-invoice-preview-action="${action}"]`).last().isVisible(), true);
