@@ -1,5 +1,5 @@
 // TEMPORARY DIAGNOSTIC surface: this cache id is also shown in Settings → Account → Sync diagnostics.
-const APP_SHELL_VERSION='build148-v292';
+const APP_SHELL_VERSION='build148-v293';
 const CACHE_PREFIX='klabs-studio-app-shell-';
 const CACHE=`${CACHE_PREFIX}${APP_SHELL_VERSION}`;
 const LEGACY_CACHE_PREFIX='klabs-studio-build';
@@ -15,6 +15,7 @@ const APP_SHELL_ASSETS=[
 	'css/components.css',
 	'css/animations.css',
 	'css/studio.css',
+	'css/knowledge.css',
 	'css/invoice-document.css',
 	'css/admin-access.css',
 	'js/demo-mode.js',
@@ -37,6 +38,7 @@ const APP_SHELL_ASSETS=[
 	'thread-studio/index.html',
 	'js/kr-guide-layout-host.js',
 	'kr-guide-layout/index.html',
+	'js/knowledge-base.js',
 	'js/studio-visuals.js',
 	'js/navigation.js',
 	'js/invoice-pdf.js',
@@ -142,6 +144,8 @@ self.addEventListener('fetch',(event)=>{
 	if(event.request.method!=='GET')return;
 	const requestUrl=new URL(event.request.url);
 	if(!inScope(requestUrl))return;
+	// Q42b: the public Knowledge Base pages (/knowledge/...) are ordinary web pages, never answered with the app shell.
+	if(requestUrl.pathname.startsWith(`${SCOPE_PATH}knowledge/`))return;
 
 	cacheFirst(event,event.request.mode==='navigate');
 });

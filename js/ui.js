@@ -1988,6 +1988,7 @@ function renderWorkshopToolVisibility(){
   const guideTrainCard=$('workshopToolGuideTrain');
   const threadStudioCard=$('workshopToolThreadStudio');
   const krGuideCard=$('workshopToolKrGuide');
+  const knowledgeCard=$('workshopToolKnowledge');
   const activeTool=workshopToolsState.activeTool;
   if(list)list.hidden=activeTool!=='list';
   if(diameterCard)diameterCard.hidden=activeTool!=='diameter';
@@ -1996,6 +1997,7 @@ function renderWorkshopToolVisibility(){
   if(guideTrainCard)guideTrainCard.hidden=activeTool!=='guide-train';
   if(threadStudioCard)threadStudioCard.hidden=activeTool!=='thread-studio';
   if(krGuideCard)krGuideCard.hidden=activeTool!=='kr-guide';
+  if(knowledgeCard)knowledgeCard.hidden=activeTool!=='knowledge';
   const intro=document.querySelector('#workshopToolsPanel .workshop-landing-panel__intro');
   if(intro)intro.hidden=activeTool!=='list';
   const panel=$('workshopToolsPanel');
@@ -2114,7 +2116,7 @@ function openWorkshopTool(tool){
     goScreen('layoutScreen');
     return;
   }
-  workshopToolsState.activeTool=tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':tool==='guide-train'?'guide-train':tool==='thread-studio'?'thread-studio':tool==='kr-guide'?'kr-guide':'diameter';
+  workshopToolsState.activeTool=tool==='knowledge'?'knowledge':tool==='grip'?'grip':tool==='thread-wrap'?'thread-wrap':tool==='guide-train'?'guide-train':tool==='thread-studio'?'thread-studio':tool==='kr-guide'?'kr-guide':'diameter';
   workshopLandingReturnFocusTool=workshopToolsState.activeTool;
   goScreen('workshopLandingScreen');
   window.setTimeout(()=>{
@@ -3373,6 +3375,17 @@ function renderKrGuideTool(){
   }
   api.mount(host,{mode:measurementDisplayMode()});
 }
+// Q42 Knowledge Base: mounted only while its card is open, like the KR Guide host; opening it again starts at the home.
+function renderKnowledgeTool(){
+  const host=$('knowledgeHost');
+  const api=typeof KLabsKnowledgeBase!=='undefined'?KLabsKnowledgeBase:null;
+  if(!host || !api)return;
+  if(workshopToolsState.activeTool!=='knowledge'){
+    api.unmount(host);
+    return;
+  }
+  api.mount(host);
+}
 function renderWorkshopCalculator(){
   refreshWorkshopMeasurementLabels();
   renderWorkshopToolVisibility();
@@ -3383,6 +3396,7 @@ function renderWorkshopCalculator(){
   renderGuideTrainTool();
   renderThreadStudioTool();
   renderKrGuideTool();
+  renderKnowledgeTool();
   renderGuideSpecificationSummary();
 }
 function cancelGuideMapperReveal(){
@@ -19064,6 +19078,8 @@ function onScreenChange(screenId){
         ?'[data-workshop-tool-open="kr-guide"]'
       :workshopLandingReturnFocusTool==='thread-studio'
         ?'[data-workshop-tool-open="thread-studio"]'
+      :workshopLandingReturnFocusTool==='knowledge'
+        ?'[data-workshop-tool-open="knowledge"]'
         :workshopLandingReturnFocusTool==='thread-wrap'
         ?'[data-workshop-tool-open="thread-wrap"]'
         :workshopLandingReturnFocusTool==='guide-train'
@@ -19902,7 +19918,7 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('focus',()=>{refreshServerQuoteCounter();});
 // Q33 production fix: the release this code belongs to. index.html compares it with its own release the moment KLABS_UI is set.
-window.KLABS_UI_BUILD='build148-v292';
+window.KLABS_UI_BUILD='build148-v293';
 // An older page (before v279) has no such check; it names its release on the demo bar. Older page + this code: reload the whole release.
 (function checkShellRelease(){
   if(window.KLABS_SHELL_BUILD)return;

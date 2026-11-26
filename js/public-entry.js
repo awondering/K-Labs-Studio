@@ -1,7 +1,7 @@
 (function () {
   const privateScripts = [
     "js/config.js", "js/storage.js", "js/guide-layout.js", "js/thread-wrap.js",
-    "js/guide-train.js", "js/thread-studio-host.js", "js/kr-guide-layout-host.js", "js/studio-visuals.js", "js/navigation.js", "js/business-logo.js", "js/invoice-pdf.js", "js/ui.js",
+    "js/guide-train.js", "js/thread-studio-host.js", "js/kr-guide-layout-host.js", "js/knowledge-base.js", "js/studio-visuals.js", "js/navigation.js", "js/business-logo.js", "js/invoice-pdf.js", "js/ui.js",
     "js/component-sync.js", "js/build-sync-journal.js", "js/guarded-build-transport.js", "js/build-sync.js", "js/build-sync-diff.js", "js/build-sync-review.js", "js/settings-sync.js", "js/studio-recovery-export.js",
     "js/quote-number-allocator.js", "js/app.js"
   ];
@@ -21,7 +21,7 @@
   // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
   // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
   // back to the public entry with the usual notice.
-  const DEMO_BUILD = "build148-v292";
+  const DEMO_BUILD = "build148-v293";
   const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
