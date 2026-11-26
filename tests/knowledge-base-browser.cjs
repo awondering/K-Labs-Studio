@@ -60,6 +60,8 @@ async function run(browser, base, db, { tag, width, mobile }) {
   ck(tag, `home: ${mobile ? 'touch targets >= 44 px, ' : ''}no sideways scroll`, !l.small.length && l.overflow <= 0, l);
   await snap(p, tag, '1-home');
 
+  // The two fixture drafts match, plus any shipped verified article that mentions a reel seat (no Draft label).
+  const verifiedMatches = require('../js/knowledge-base.js').search('reelseat').length;
   await p.fill(`${KB} [data-knowledge-search]`, 'reelseat');
   await p.waitForSelector(`${KB} [data-knowledge-article]`);
   const results = await p.evaluate((KB) => ({
@@ -68,8 +70,8 @@ async function run(browser, base, db, { tag, width, mobile }) {
     marks: document.querySelectorAll(`${KB} .knowledge-mark`).length,
     drafts: [...document.querySelectorAll(`${KB} [data-knowledge-article] .knowledge-status`)].map((e) => e.textContent),
   }), KB);
-  ck(tag, 'search "reelseat": two articles, reel-seat removal first, matches marked, each labelled Draft',
-    /^2 articles/.test(results.status) && results.first === 'fixture-seat-removal' && results.marks > 0 && results.drafts.join() === 'Draft,Draft', results);
+  ck(tag, 'search "reelseat": both drafts plus matching verified articles, reel-seat removal first, matches marked, drafts labelled Draft',
+    new RegExp(`^${2 + verifiedMatches} articles`).test(results.status) && results.first === 'fixture-seat-removal' && results.marks > 0 && results.drafts.join() === 'Draft,Draft', results);
   l = await layout(p, mobile);
   ck(tag, `results: ${mobile ? 'touch targets >= 44 px, ' : ''}no sideways scroll`, !l.small.length && l.overflow <= 0, l);
   await snap(p, tag, '2-results');
@@ -98,7 +100,7 @@ async function run(browser, base, db, { tag, width, mobile }) {
   await tap(`${KB} .knowledge-back`);
   await p.waitForSelector(`${KB} [data-knowledge-article]`);
   const back = await p.evaluate((KB) => ({ query: document.querySelector(`${KB} [data-knowledge-search]`).value, rows: document.querySelectorAll(`${KB} [data-knowledge-article]`).length }), KB);
-  ck(tag, 'back from article returns to the same results with the search kept', back.query === 'reelseat' && back.rows === 2, back);
+  ck(tag, 'back from article returns to the same results with the search kept', back.query === 'reelseat' && back.rows === 2 + verifiedMatches, back);
 
   await p.fill(`${KB} [data-knowledge-search]`, '');
   await p.waitForSelector(`${KB} [data-knowledge-category="repairs"]`);
