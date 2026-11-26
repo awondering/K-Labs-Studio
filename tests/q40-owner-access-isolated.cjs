@@ -101,9 +101,9 @@ async function main() {
     for (const f of [...Q40, OWNER_MIGRATION]) await db.exec(sql(f));
     await db.exec(sql(OWNER_MIGRATION));
   });
-  await ck('after Q40: the owner is "owner", can write, no expiry, no trial; records unchanged', async () => {
+  await ck('after Q40: the owner has permanent access (reported as grandfathered), can write, no expiry, no trial; records unchanged', async () => {
     const e = await fullAccess(O, 'post-q40');
-    assert.equal(e.access_state, 'owner');
+    assert.equal(e.access_state, 'grandfathered');
     assert.equal(e.access_expires_at, null);
     assert.equal(e.trial_available, false);
     assert.deepEqual(await countAll(O), before);
@@ -120,7 +120,7 @@ async function main() {
   for (const [label, o] of scenarios) {
     await ck(`owner keeps full access after ${label} from Stripe`, async () => {
       await stripe({ user: O, ...o });
-      assert.equal((await fullAccess(O, `stripe-${n}`)).access_state, 'owner');
+      assert.equal((await fullAccess(O, `stripe-${n}`)).access_state, 'grandfathered');
     });
   }
   await ck('owner keeps full access if the entitlement row says expired, trial-ended or paid-ended - or is missing', async () => {
@@ -128,10 +128,10 @@ async function main() {
       `access_state='trial', trial_started_at=now()-interval '20 days', trial_expires_at=now()-interval '6 days'`,
       `access_state='paid', access_expires_at=now()-interval '1 hour'`, `access_state='trial_eligible'`]) {
       await db.exec(`update public.account_entitlements set ${set}, updated_at=now() where user_id='${O}'`);
-      assert.equal((await fullAccess(O, `row-${set.slice(14, 20)}`)).access_state, 'owner');
+      assert.equal((await fullAccess(O, `row-${set.slice(14, 20)}`)).access_state, 'grandfathered');
     }
     await db.exec(`delete from public.account_entitlements where user_id='${O}'`);
-    assert.equal((await fullAccess(O, 'no-row')).access_state, 'owner');
+    assert.equal((await fullAccess(O, 'no-row')).access_state, 'grandfathered');
     assert.deepEqual(await countAll(O), before);
   });
   await ck('the owner keeps the owner administration functions', async () => {
@@ -145,7 +145,7 @@ async function main() {
   await ck('a customer without a subscription has no access (records hidden) - the owner rule is not a loophole', async () => {
     const e = await entitlement(C);
     assert.equal(e.can_write, false);
-    assert.notEqual(e.access_state, 'owner');
+    assert.notEqual(e.access_state, 'grandfathered');
     assert.match(await attempt(async () => { await as(C); await db.query(`insert into public.builds(user_id, client_id, payload) values ($1, 'x', '{}')`, [C]); }), /row-level security|violates/);
   });
   await ck('a customer cannot read, add, change or remove the owner record', async () => {

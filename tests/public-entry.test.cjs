@@ -751,5 +751,7 @@ test('the app accepts the server owner state online and offline', () => {
   assert.ok(list('allowedStates').includes('owner'));
   assert.ok(list('openable').includes('owner'));
   const migration = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'supabase', 'migrations', '20261128000000_q40_owner_access.sql'), 'utf8');
-  assert.match(migration, /select 'owner'::text, true, false, null::timestamptz, null::timestamptz, null::timestamptz/);
+  // The server reports the owner as 'grandfathered' (accepted by every released app version, so no cached older app
+  // can reject it); the app also tolerates an 'owner' state defensively.
+  assert.match(migration, /select 'grandfathered'::text, true, false, null::timestamptz, null::timestamptz, null::timestamptz/);
 });

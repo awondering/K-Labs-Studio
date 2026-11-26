@@ -1,8 +1,10 @@
 -- Q40: permanent Owner access, independent of Stripe (owner requirement, 26 Nov 2026).
 --
 -- The owner is the single account in public.klabs_access_admins (role 'owner'; the unique index on role allows only
--- one). That account always has full access: klabs_account_access() returns access_state 'owner', can_write = true
--- and no expiry, BEFORE any entitlement, subscription, trial, payment or expiry rule is considered. Every server
+-- one). That account always has full access: klabs_account_access() returns can_write = true and no expiry, BEFORE
+-- any entitlement, subscription, trial, payment or expiry rule is considered. It is reported as 'grandfathered' (no
+-- expiry), a state every released app version accepts, so an owner device still running an older cached app can
+-- never reject the owner's access (a new state name would lock such a device out until it updated). Every server
 -- guard decides from this one function (klabs_entitlement_can_write -> the restrictive insert/update/delete policies
 -- and the Stage B read policies), so the owner can never be locked out by billing, and a Stripe outage cannot affect
 -- it. Nothing here matches e-mail addresses and nothing trusts the app.
@@ -39,8 +41,8 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  -- 1. The owner: permanent, unconditional access (no entitlement row needed).
-  select 'owner'::text, true, false, null::timestamptz, null::timestamptz, null::timestamptz
+  -- 1. The owner: permanent, unconditional access (no entitlement row needed), reported as 'grandfathered'.
+  select 'grandfathered'::text, true, false, null::timestamptz, null::timestamptz, null::timestamptz
   where p_user_id = auth.uid()
     and exists (select 1 from public.klabs_access_admins a where a.user_id = p_user_id and a.role = 'owner')
   union all

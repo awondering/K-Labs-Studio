@@ -35,7 +35,8 @@ deployed with the gateway JWT check off. They read the new publishable/secret ke
 
 ## Owner access — permanent, independent of Stripe (owner requirement 26 Nov 2026)
 - `supabase/migrations/20261128000000_q40_owner_access.sql`: the single account in `klabs_access_admins` (role
-  `owner`) always gets `access_state = 'owner'`, `can_write = true`, no expiry, before any entitlement, trial,
+  `owner`) always gets `can_write = true` and no expiry (reported as `grandfathered`, which every released app version
+  accepts, so a device still on an older cached app cannot reject it), before any entitlement, trial,
   subscription, payment or expiry rule. Every server guard (write policies, Stage B read lock) uses this function.
   It refuses to run before Stage B. The owner table is closed to anon, authenticated AND the service role.
 - `supabase/manual/q40_owner_seed.sql`: run in the SQL editor with the verified Auth user ID; refuses a different
@@ -78,3 +79,25 @@ deployed with the gateway JWT check off. They read the new publishable/secret ke
 
 Webhook events: `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.created`,
 `invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`.
+
+## v292 production release sequence (prepared 26 Nov 2026; nothing here has been run)
+Production project: `fdbklophlxdzuevypqwc` (the project the live studio.klabs.co.nz uses). Each step needs the owner's
+approval. The owner keeps full access at EVERY step (tests/q40-release-sequence-isolated.cjs, step by step).
+1. **Pre-flight (read-only):** confirm the project ID; re-run ~/Downloads/K-Labs-Q40-account-audit.sql (owner role
+   present; 5 accounts; record counts noted). Keep a copy of the result as the before-state.
+2. **Database (v291 still live):** SQL editor, one run, in order: Stage A `20261126000000`, Stage B `20261127000000`,
+   owner `20261128000000`. Then re-run the audit: counts unchanged; owner can still sign in to the live v291 app on
+   iPhone and Mac and save a change. (Other accounts: running trial kept to its end; the rest locked, records kept.)
+3. **Edge Functions:** deploy billing-checkout, billing-portal, stripe-webhook (gateway JWT check off) with Stripe
+   **sandbox** secrets first: STRIPE_SECRET_KEY (sk_test), STRIPE_WEBHOOK_SECRET, the 4 sandbox price IDs,
+   PUBLIC_APP_URL=https://studio.klabs.co.nz. Sandbox webhook to the production function URL (8 events above).
+4. **App:** merge the v292 pull request; GitHub Pages deploys; verify the live files equal the tested commit.
+5. **Owner check (iPhone + Mac):** Studio opens; Settings → Subscription says owner-granted access with no end date;
+   all builds, customers, components and invoices present; create, edit and delete a scratch build.
+6. **Sandbox purchase on production:** with a NEW separate test account (never the existing four): subscribe with a
+   Stripe test card, confirm Studio unlocks; cancel in the portal. No real money moves.
+7. **Go live (owner, in Terminal / dashboard only):** live product + 4 live prices, live Customer Portal, live
+   webhook; replace the function secrets with the live key, live webhook secret and live price IDs.
+8. **Live check:** one real subscription from a separate account, then cancel (and refund if wanted).
+**Rollback:** supabase/rollback/q40_stage_b_rollback.sql (owner's permanent access restored first; records untouched)
+and revert the app pull request (back to v291); switch the Stripe webhook off.
