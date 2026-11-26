@@ -142,3 +142,11 @@ test('the importer is generic: Node built-ins only, and no article content in it
   assert.deepEqual(requires.filter((r) => !r.startsWith('node:') && !r.startsWith('./') && r !== 'path.join(ROOT, \'js/knowledge-base.js\')'), []);
   assert.doesNotMatch(src, /reel seat|cross wrap|blank/i);
 });
+
+test('drafts may link to published articles; a published id may not stay in the draft store', () => {
+  const s = store();
+  s.articles[0].related = ['a-published-article'];
+  assert.ok(d.validateStore(s, kb.CATEGORIES).errors.some((e) => /related link a-published-article/.test(e)));
+  assert.deepEqual(d.validateStore(s, kb.CATEGORIES, ['a-published-article']).errors, []);
+  assert.ok(d.validateStore(store(), kb.CATEGORIES, ['fixture-seat-removal']).errors.some((e) => /already published/.test(e)));
+});

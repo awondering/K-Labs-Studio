@@ -25,12 +25,20 @@ const textOf = (html) => html.replace(/<script[\s\S]*?<\/script>/g, ' ').replace
   .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
 const meta = (html, re) => (html.match(re) || [])[1];
 
-test('real content: nothing verified yet — no pages, sitemap lists only Studio itself', () => {
-  assert.equal(kb.ARTICLES.length, 0);
+test('real content: exactly the verified articles are published — landing, their topics, each article, sitemap', () => {
+  assert.ok(kb.ARTICLES.length >= 1 && kb.ARTICLES.every((a) => a.status === 'verified'));
   const files = gen.generate(kb);
-  assert.deepEqual(Object.keys(files), ['sitemap.xml']);
-  assert.doesNotMatch(files['sitemap.xml'], /knowledge/);
-  assert.equal(fs.existsSync(path.join(root, 'knowledge')), false, 'no public /knowledge/ folder while every article is a draft');
+  const topics = [...new Set(kb.ARTICLES.map((a) => a.category))];
+  assert.deepEqual(Object.keys(files).filter((f) => f.endsWith('.html')).sort(), ['knowledge/index.html',
+    ...topics.map((c) => `knowledge/category/${c}/index.html`), ...kb.ARTICLES.map((a) => `knowledge/${a.id}/index.html`)].sort());
+  const locs = [...files['sitemap.xml'].matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  for (const a of kb.ARTICLES) assert.ok(locs.includes(`https://studio.klabs.co.nz/knowledge/${a.id}/`), a.id);
+  assert.equal(locs.length, 2 + topics.length + kb.ARTICLES.length);
+  // Nothing else under /knowledge/ but what the generator made.
+  const onDisk = [];
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : onDisk.push(path.relative(root, path.join(dir, e.name)))));
+  walk(path.join(root, 'knowledge'));
+  assert.deepEqual(onDisk.sort(), Object.keys(files).filter((f) => f.startsWith('knowledge/')).sort());
 });
 
 test('committed sitemap and pages match the generator exactly (run scripts/build-knowledge-pages.cjs)', () => {
@@ -156,7 +164,7 @@ test('write(): publishing then un-publishing removes only the pages the generato
     fs.writeFileSync(path.join(dir, 'knowledge', 'keep.txt'), 'not generated');
     gen.write(dir, gen.generate(verifiedCopy()));
     assert.ok(fs.existsSync(path.join(dir, `knowledge/${PROOF}/index.html`)));
-    gen.write(dir, gen.generate(kb)); // the article goes back to draft
+    gen.write(dir, gen.generate({ ...kb, ARTICLES: [] })); // the articles go back to draft
     assert.equal(fs.existsSync(path.join(dir, `knowledge/${PROOF}`)), false);
     assert.equal(fs.existsSync(path.join(dir, 'knowledge/index.html')), false);
     assert.equal(fs.existsSync(path.join(dir, 'knowledge/category')), false, 'emptied topic folders removed');

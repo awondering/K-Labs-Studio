@@ -167,19 +167,85 @@ async function run(browser, base, { tag, width, mobile }) {
   await context.close();
 }
 
+// The REAL published content, exactly as committed (generated pages + js/knowledge-base.js), served like GitHub Pages.
+function realSite() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'klabs-kb-real-'));
+  fs.cpSync(repo, dir, { recursive: true, filter: (src) => !/[\\/](\.git|node_modules)(?:[\\/]|$)|knowledge-drafts\.local\.js$/.test(src.slice(repo.length)) });
+  return dir;
+}
+
+async function runReal(browser, base, { tag, width, mobile }) {
+  const shot = async (p, name) => { if (shots) await p.screenshot({ path: path.join(shots, `${tag}-real-${name}.png`), fullPage: true }); };
+  for (const a of kb.ARTICLES) {
+    const url = `/knowledge/${a.id}/`;
+    let context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: mobile ? 3 : 1, isMobile: mobile, hasTouch: mobile, javaScriptEnabled: false });
+    const bad = [];
+    context.on('response', (r) => { if (r.status() >= 400) bad.push(`${r.status()} ${r.url()}`); });
+    let p = await context.newPage();
+    await p.goto(base + url);
+    const m = await measure(p, mobile);
+    const text = await p.evaluate(() => document.querySelector('article').innerText);
+    const meta = await p.evaluate(() => ({
+      canonical: document.querySelector('link[rel=canonical]')?.href, robots: document.querySelector('meta[name=robots]')?.content,
+      title: document.title, description: document.querySelector('meta[name=description]')?.content,
+      draft: !!document.querySelector('.knowledge-status, .knowledge-article__draft'),
+    }));
+    const every = a.sections.every((s) => text.toUpperCase().includes(s.heading.toUpperCase()) && s.blocks.every((b) => (b.items || [b.text]).every((t) => text.includes(t))));
+    ck(tag, `REAL ${a.id} (no JS): title, summary and every section, step and example readable`, m.h1 === a.title && text.includes(a.summary) && every, { h1: m.h1 });
+    ck(tag, 'REAL: canonical, indexable, unique title and description, no draft label', meta.canonical === `https://studio.klabs.co.nz${url}` && meta.robots === 'index, follow'
+      && meta.title === `${a.title} | K-Labs Studio` && meta.description === a.summary && !meta.draft, meta);
+    ck(tag, `REAL: Studio styles, reading text >= 15 px, ${mobile ? '44 px touch targets, ' : ''}no sideways scroll`, m.themed && m.fontSize >= 15 && !m.small.length && m.overflow <= 0, m);
+    await shot(p, `article-${a.id}`);
+    const status = [];
+    for (const u of [url, '/knowledge/', `/knowledge/category/${a.category}/`, '/sitemap.xml']) {
+      await p.goto(base + u);
+      if (u.endsWith('/')) for (const l of (await measure(p, mobile)).links) status.push([l, (await p.request.get(base + l.replace('https://studio.klabs.co.nz', ''))).status()]);
+    }
+    const sitemap = await (await p.request.get(`${base}/sitemap.xml`)).text();
+    ck(tag, `REAL: every link on the article, landing and topic page answers 200 (${status.length} checked); in the sitemap`,
+      status.every(([, s]) => s === 200) && sitemap.includes(`<loc>https://studio.klabs.co.nz${url}</loc>`) && bad.length === 0, { bad: status.filter(([, s]) => s !== 200), failed: bad });
+    await p.goto(`${base}/knowledge/category/${a.category}/`);
+    ck(tag, 'REAL: listed on its topic page and the landing page (no JS)', (await p.$$eval('.knowledge-list a', (r) => r.map((e) => e.getAttribute('href')))).includes(url)
+      && await (async () => { await p.goto(`${base}/knowledge/`); return (await p.$$eval('a', (r) => r.map((e) => e.getAttribute('href')))).includes(url); })());
+    await context.close();
+
+    context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: mobile ? 3 : 1, isMobile: mobile, hasTouch: mobile });
+    p = await context.newPage();
+    const errors = [];
+    p.on('pageerror', (e) => errors.push(String(e)));
+    await p.goto(`${base}/knowledge/`);
+    await p.waitForSelector('[data-knowledge-public-search]:not([hidden]) input');
+    const found = [];
+    for (const q of [...(a.aliases || []).slice(0, 2), a.tags[0]]) {
+      await p.fill('[data-knowledge-public-search] input', q);
+      found.push([q, await p.$$eval('[data-knowledge-public-results] a', (r) => r.map((e) => e.getAttribute('href')))]);
+    }
+    ck(tag, 'REAL search (JS): its merged questions and keywords find it', found.every(([, r]) => r[0] === url), found);
+    await shot(p, `search-${a.id}`);
+    ck(tag, 'REAL: no page errors (JS)', errors.length === 0, errors);
+    await context.close();
+  }
+}
+
 (async () => {
   const dir = buildSite();
   const server = await serve(dir);
   const base = `http://127.0.0.1:${server.address().port}`;
+  const real = realSite();
+  const realServer = await serve(real);
+  const realBase = `http://127.0.0.1:${realServer.address().port}`;
   const browser = await playwright.webkit.launch();
   try {
     for (const device of [{ tag: 'iphone-390', width: 390, mobile: true }, { tag: 'iphone-320', width: 320, mobile: true }, { tag: 'desktop-1280', width: 1280, mobile: false }]) {
       await run(browser, base, device);
+      await runReal(browser, realBase, device);
     }
   } finally {
     await browser.close();
     server.close();
+    realServer.close();
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(real, { recursive: true, force: true });
   }
   console.log(`knowledge pages browser: ${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

@@ -153,7 +153,8 @@ function wordingIssues(article) {
   if (FILLER.test(textsOf(article).join(' '))) issues.push('stock filler phrase');
   return issues;
 }
-function validateStore(store, categories) {
+function validateStore(store, categories, publishedIds = []) {
+  const published = new Set(publishedIds);
   const errors = [];
   const warnings = [];
   const categoryIds = new Set(categories.map((c) => c.id));
@@ -163,6 +164,7 @@ function validateStore(store, categories) {
     const where = a && a.id ? a.id : JSON.stringify(a).slice(0, 40);
     if (!a || typeof a.id !== 'string' || !SLUG.test(a.id)) { errors.push(`${where}: id must be lower-case words joined by hyphens`); continue; }
     if (ids.has(a.id)) errors.push(`${a.id}: duplicate id`);
+    if (published.has(a.id)) errors.push(`${a.id}: already published as a verified article; remove it from the draft store`);
     ids.set(a.id, a);
     if (a.status !== 'unverified') errors.push(`${a.id}: the draft store holds unverified articles only (status ${a.status})`);
     if (!a.review || a.review.publicPage !== false) errors.push(`${a.id}: review.publicPage must be false`);
@@ -186,7 +188,7 @@ function validateStore(store, categories) {
     for (const issue of wordingIssues(a)) warnings.push(`${a.id}: ${issue}`);
   }
   for (const a of store.articles) {
-    for (const r of a.related || []) if (!ids.has(r) || r === a.id) errors.push(`${a.id}: related link ${r} does not resolve`);
+    for (const r of a.related || []) if (!(ids.has(r) || published.has(r)) || r === a.id) errors.push(`${a.id}: related link ${r} does not resolve`);
     for (const alt of (a.review && a.review.aliasIds) || []) if (ids.has(alt)) errors.push(`${a.id}: merged id ${alt} is also an article`);
   }
   return { errors, warnings };
@@ -249,13 +251,13 @@ if (require.main === module) {
       const batch = JSON.parse(fs.readFileSync(input, 'utf8'));
       const config = JSON.parse(fs.readFileSync(path.join(path.dirname(input), 'import.json'), 'utf8'));
       const { store, report } = importBatch(readStore(storeFile), batch, config);
-      const { errors, warnings } = validateStore(store, kb.CATEGORIES);
+      const { errors, warnings } = validateStore(store, kb.CATEGORIES, kb.ARTICLES.map((a) => a.id));
       if (errors.length) fail(`Import stopped; store unchanged. ${errors.length} error(s):\n${errors.join('\n')}`);
       writeStore(storeFile, store);
       console.log(`Imported ${config.batch}: ${report.added.length} added, ${report.replaced.length} replaced, ${report.merged.length} merged into existing (${report.merged.join('; ')}), ${report.kept.length} kept as edited. Store: ${store.articles.length} draft articles. ${warnings.length} wording warning(s) to fix before verification.`);
     } else if (command === 'check') {
       const store = readStore(storeFile);
-      const { errors, warnings } = validateStore(store, kb.CATEGORIES);
+      const { errors, warnings } = validateStore(store, kb.CATEGORIES, kb.ARTICLES.map((a) => a.id));
       const gen = require('./build-knowledge-pages.cjs');
       const generated = gen.generate(kb);
       const files = repositoryFiles(ROOT);
@@ -272,7 +274,7 @@ if (require.main === module) {
       process.exit(errors.length || hits.length || published.length ? 1 : 0);
     } else if (command === 'dev') {
       const store = readStore(storeFile);
-      const { errors } = validateStore(store, kb.CATEGORIES);
+      const { errors } = validateStore(store, kb.CATEGORIES, kb.ARTICLES.map((a) => a.id));
       if (errors.length) fail(`Store has errors; run check. ${errors[0]}`);
       fs.writeFileSync(path.join(ROOT, LOCAL_FILE), localReviewSource(store));
       console.log(`Wrote ${LOCAL_FILE} (${store.articles.length} drafts) for local review in Studio. It is git-ignored and never deployed.`);

@@ -124,6 +124,28 @@ async function run(browser, base, db, { tag, width, mobile }) {
   await p.waitForSelector(`${KB}:not([hidden]) [data-knowledge-category]`);
   const reopened = await p.$eval(`${KB} [data-knowledge-search]`, (e) => e.value);
   ck(tag, 'reopening starts fresh at the category home', reopened === '', reopened);
+  // The verified article from the shipped source: found by search, no Draft label, opens in the reader.
+  const kbSource = require('../js/knowledge-base.js');
+  const real = kbSource.ARTICLES[0];
+  await p.fill(`${KB} [data-knowledge-search]`, 'calculate circumference from diameter');
+  await p.waitForSelector(`${KB} [data-knowledge-article="${real.id}"]`);
+  const realRow = await p.evaluate(({ KB, id }) => {
+    const row = document.querySelector(`${KB} [data-knowledge-article="${id}"]`);
+    return { first: document.querySelector(`${KB} [data-knowledge-article]`).getAttribute('data-knowledge-article') === id, draft: !!row.querySelector('.knowledge-status') };
+  }, { KB, id: real.id });
+  await tap(`${KB} [data-knowledge-article="${real.id}"]`);
+  await p.waitForSelector(`${KB} [data-knowledge-reader="${real.id}"]`);
+  const realArticle = await p.evaluate((KB) => ({
+    title: document.querySelector(`${KB} .knowledge-article__title`)?.textContent,
+    draft: !!document.querySelector(`${KB} [data-knowledge-draft]`),
+    examples: [...document.querySelectorAll(`${KB} .knowledge-article li`)].map((e) => e.textContent),
+    overflow: document.scrollingElement.scrollWidth - window.innerWidth,
+  }), KB);
+  ck(tag, 'verified article in Studio: found by its merged question, no Draft label, opens with its worked examples',
+    realRow.first && !realRow.draft && realArticle.title === real.title && !realArticle.draft
+    && realArticle.examples.includes('A blank 12.0 mm in diameter: 12.0 × π = 37.70 mm around.') && realArticle.overflow <= 0, { realRow, realArticle });
+  await snap(p, tag, '4-verified-article');
+  await tap(`${KB} .knowledge-back`);
   ck(tag, 'no page errors', D.errors.length === 0, D.errors);
   await D.context.close();
 }

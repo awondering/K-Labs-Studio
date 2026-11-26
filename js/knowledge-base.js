@@ -35,6 +35,44 @@
   // the private draft store and reach Studio only on this computer, through the git-ignored local review file (below).
   // An article is added here only after technical review, with status 'verified'.
   const ARTICLES=Object.freeze([
+    {
+      // Verified 27 Nov 2026 under the K-Labs evidence rules: every claim is a calculation (recomputed by
+      // tests/knowledge-articles.test.cjs) or a statement about Studio checked against its code. Merges two drafts.
+      id:'how-do-i-convert-circumference-to-diameter',
+      category:'techniques',
+      status:'verified',
+      updated:'2026-11-27',
+      title:'How to convert between diameter and circumference',
+      summary:'Circumference is diameter multiplied by pi, and diameter is circumference divided by pi. Worked examples, rounding, and shapes that are not round.',
+      aliases:['How do I convert circumference to diameter','convert circumference to diameter','How to convert circumference to diameter',
+        'How do I calculate circumference from diameter','calculate circumference from diameter','How to calculate circumference from diameter'],
+      tags:['diameter','circumference','pi','measurement','calculator','blank','grip'],
+      source:'Mathematics: pi is the ratio of a circle\'s circumference to its diameter. The worked examples are recalculated by K-Labs automated tests.',
+      related:[],
+      sections:[
+        {heading:'The formulas',blocks:[
+          {type:'p',text:'Pi (π) is the ratio of any circle\'s circumference to its diameter, about 3.14159. So:'},
+          {type:'list',items:['Circumference = π × diameter','Diameter = circumference ÷ π']},
+          {type:'p',text:'Use the same unit for both. The answer is in the unit you measured in: millimetres in, millimetres out.'}
+        ]},
+        {heading:'Worked examples',blocks:[
+          {type:'list',items:[
+            'A blank 12.0 mm in diameter: 12.0 × π = 37.70 mm around.',
+            'A grip that measures 100 mm around: 100 ÷ π = 31.83 mm in diameter.',
+            'A blank 0.500 in in diameter: 0.500 × π = 1.571 in around.'
+          ]}
+        ]},
+        {heading:'Rounding',blocks:[
+          {type:'p',text:'Keep π to at least 3.1416 and round only the final answer. Using 3.14 puts every result about 0.05% out, which is 0.02 mm on the circumference of a 12 mm blank.'}
+        ]},
+        {heading:'Shapes that are not round',blocks:[
+          {type:'p',text:'The formulas describe circles only. For an oval or irregular section, circumference ÷ π gives the diameter of a circle with the same distance around, not the section\'s actual width in any direction.'}
+        ]},
+        {heading:'In Studio',blocks:[
+          {type:'p',text:'Workshop → Diameter & Circumference converts either way: enter one value and Studio calculates the other, in the measurement units chosen in Settings.'}
+        ]}
+      ]
+    }
   ]);
 
   // ---------- search ----------
