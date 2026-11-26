@@ -1,0 +1,103 @@
+# Q40 — Stripe subscriptions, TEST MODE (Stage A server side + Stage B app and access controls)
+
+Status: implemented and tested locally. **Nothing is deployed to production, no production data is changed, and no real
+payment can be taken** (Stripe sandbox only). Stage A and Stage B must reach production together, in one approved release.
+
+## What it contains
+| File | Purpose |
+|---|---|
+| `supabase/migrations/20261126000000_q40_stripe_subscriptions.sql` | Stage A. `billing_subscriptions` (each account reads only its own row; only the server writes), `stripe_events` (each event applied once, outcome logged) and `klabs_apply_stripe_subscription` (service role only). |
+| `supabase/migrations/20261127000000_q40_stage_b_access.sql` | Stage B. **Read lock**: an account without access cannot read its builds, components, taxonomy, settings or quote counter (records are hidden, never deleted or changed). **Trial retired**: no new trial can start; running trials keep their end date. |
+| `supabase/functions/_shared/billing-core.mjs` | Testable core: Stripe signature check, minimal Stripe client (API `2024-06-20`), webhook, checkout, portal, immediate renewal charge. |
+| `supabase/functions/stripe-webhook/index.ts` | Receives Stripe events; the Stripe signature is checked. |
+| `supabase/functions/billing-checkout/index.ts` | Signed-in, verified user to a **card-only** Checkout Session (`monthly`/`annual` × `nzd`/`usd`). |
+| `supabase/functions/billing-portal/index.ts` | Signed-in user to the Stripe Customer Portal. |
+| `js/billing.js`, `js/public-entry.js`, `index.html`, `css/studio.css` | Stage B app: subscription screen, Settings → Account → Subscription, checkout return, renewal cover. |
+
+All three functions verify the caller in code (Stripe signature, or `auth.getUser` for the signed-in user), so they are
+deployed with the gateway JWT check off. They read the new publishable/secret keys and fall back to the legacy ones.
+
+## Access rules — NO GRACE PERIOD (owner decision 26 Nov 2026)
+- **Access ends exactly when the verified paid-through period ends,** unless Stripe confirms a new paid period.
+- **Paid-through:** the period end when the subscription's latest invoice is **paid**; otherwise the period start
+  (the end of the last paid period).
+- **Renewal continuity (option D):** Stripe drafts the renewal invoice at the period end and would wait about an hour
+  before charging. On a verified `invoice.created` that is exactly a Studio renewal (subscription cycle, approved
+  price and amount, draft, automatic collection, same customer, matching mode), the server finalises and charges it at
+  once, with idempotency keys. Access still comes only from the **paid** invoice. Anything unexpected, or any failure,
+  leaves Stripe's own attempt in place.
+- **Cancelled at period end:** access to exactly the period end, then locked.
+- **Failed renewal (past_due):** locked from the last paid period end; a successful payment restores access.
+- **Trialing:** grants nothing. **canceled / unpaid / paused / incomplete_expired:** locked.
+- **Owner grants** (complimentary, grandfathered) that last longer are never shortened.
+- **Records are never deleted.** While locked they are hidden; they return unchanged when payment is confirmed.
+- `renewal_state` (pending / action_required / failed) chooses the customer's message only; it never grants access.
+
+## Owner access — permanent, independent of Stripe (owner requirement 26 Nov 2026)
+- `supabase/migrations/20261128000000_q40_owner_access.sql`: the single account in `klabs_access_admins` (role
+  `owner`) always gets `can_write = true` and no expiry (reported as `grandfathered`, which every released app version
+  accepts, so a device still on an older cached app cannot reject it), before any entitlement, trial,
+  subscription, payment or expiry rule. Every server guard (write policies, Stage B read lock) uses this function.
+  It refuses to run before Stage B. The owner table is closed to anon, authenticated AND the service role.
+- `supabase/manual/q40_owner_seed.sql`: run in the SQL editor with the verified Auth user ID; refuses a different
+  existing owner or an unknown ID. No e-mail matching; the app only displays the server's answer.
+- Rollback restores the owner's permanent grandfathered entitlement before restoring the pre-Q40 rules.
+- Tests: `tests/q40-owner-access-isolated.cjs` (22 checks: before/after the Q40 migrations, failed and expired
+  subscriptions, missing entitlement row, rollback, customers and the server key cannot become the owner).
+
+## In the app
+- **No access** (new account, or ended): Studio does not open (nothing shown, nothing synced). The subscription screen
+  offers NZD or USD, monthly or annual, Manage billing (once a Stripe customer exists), Explore Mode and Sign Out.
+- **Subscribe** asks the server for Checkout and only follows a `https://checkout.stripe.com` address (the portal only
+  `https://billing.stripe.com`).
+- **Back from Checkout:** "Confirming your payment with Stripe…" until the **server** confirms access, then Studio opens.
+- **Settings → Account → Subscription:** plan, renewal or end date, payment problems, Manage billing.
+- **At the paid-through moment while Studio is open:** nothing can be saved from that instant; the records are covered by
+  "Confirming your renewal…"; once the server confirms the renewal (seconds, with option D) Studio continues where the
+  builder was. A cancelled, failed or unconfirmed (2 minutes) renewal closes Studio to the subscription screen.
+- Also fixed: expiry timers longer than ~24.8 days fired immediately in browsers; long waits are now armed daily.
+
+## Tests (local)
+- `tests/billing-core.test.cjs`: 23 unit tests (signatures, client, webhook, checkout, portal, immediate renewal charge
+  and its refusals, renewal state, keys).
+- `tests/q40-stripe-subscriptions-isolated.cjs`: 36 database checks on the real production schema (PGlite), including the
+  exact expiry boundary, renewals awaiting payment, failed renewals, the read lock, trial retirement and records kept.
+- `tests/q40-subscription-browser.cjs`: 52 checks in WebKit (iPhone 13 and Mac) on the real Studio page.
+- `tests/public-entry.test.cjs`: entry rules (no access → no Studio; renewal wait; long timers).
+
+## Test project (separate FREE Supabase project) — owner steps
+1. **Create** a free Supabase project, e.g. `klabs-studio-test` (Supabase → New project). Keep its database password in
+   your password manager; it is not needed here.
+2. **Create a scoped access token** (Supabase → Account → Access Tokens → new **scoped** token) limited to **that test
+   project only**, with: Project Settings (Read), Database (Read-write), Edge Functions (Read-write), Edge Function Secrets (Read-write),
+   API Keys (Read), API Key Secrets (Read). Set a short expiry.
+3. **Run** `node ~/K-Labs-Stripe-Test/q40-test-setup.mjs` in Terminal. It asks (hidden) for the test project reference,
+   the token and the Stripe sandbox secret key; refuses the live project and live keys; asks you to type the project
+   name; applies the schema; deploys the three functions; creates the sandbox webhook (8 events) and stores its secret
+   directly; sets the function secrets; stores the sandbox key and the test project's secret key in your Keychain.
+4. **End-to-end test:** `node ~/K-Labs-Stripe-Test/q40-e2e.mjs` (Stripe test clocks; synthetic accounts and test cards).
+
+Webhook events: `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.created`,
+`invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`.
+
+## v292 production release sequence (prepared 26 Nov 2026; nothing here has been run)
+Production project: `fdbklophlxdzuevypqwc` (the project the live studio.klabs.co.nz uses). Each step needs the owner's
+approval. The owner keeps full access at EVERY step (tests/q40-release-sequence-isolated.cjs, step by step).
+1. **Pre-flight (read-only):** confirm the project ID; re-run ~/Downloads/K-Labs-Q40-account-audit.sql (owner role
+   present; 5 accounts; record counts noted). Keep a copy of the result as the before-state.
+2. **Database (v291 still live):** SQL editor, one run, in order: Stage A `20261126000000`, Stage B `20261127000000`,
+   owner `20261128000000`. Then re-run the audit: counts unchanged; owner can still sign in to the live v291 app on
+   iPhone and Mac and save a change. (Other accounts: running trial kept to its end; the rest locked, records kept.)
+3. **Edge Functions:** deploy billing-checkout, billing-portal, stripe-webhook (gateway JWT check off) with Stripe
+   **sandbox** secrets first: STRIPE_SECRET_KEY (sk_test), STRIPE_WEBHOOK_SECRET, the 4 sandbox price IDs,
+   PUBLIC_APP_URL=https://studio.klabs.co.nz. Sandbox webhook to the production function URL (8 events above).
+4. **App:** merge the v292 pull request; GitHub Pages deploys; verify the live files equal the tested commit.
+5. **Owner check (iPhone + Mac):** Studio opens; Settings → Subscription says owner-granted access with no end date;
+   all builds, customers, components and invoices present; create, edit and delete a scratch build.
+6. **Sandbox purchase on production:** with a NEW separate test account (never the existing four): subscribe with a
+   Stripe test card, confirm Studio unlocks; cancel in the portal. No real money moves.
+7. **Go live (owner, in Terminal / dashboard only):** live product + 4 live prices, live Customer Portal, live
+   webhook; replace the function secrets with the live key, live webhook secret and live price IDs.
+8. **Live check:** one real subscription from a separate account, then cancel (and refund if wanted).
+**Rollback:** supabase/rollback/q40_stage_b_rollback.sql (owner's permanent access restored first; records untouched)
+and revert the app pull request (back to v291); switch the Stripe webhook off.

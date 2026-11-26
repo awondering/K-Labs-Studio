@@ -1,0 +1,16 @@
+// Q40: receives Stripe events (deploy with JWT verification OFF: Stripe signs its requests; the signature is checked).
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { supabaseKeys, createStripeApi, createStripeWebhookHandler, readPriceConfig } from "../_shared/billing-core.mjs";
+
+const env = (name: string) => Deno.env.get(name) || "";
+const { url: supabaseUrl, serverKey: serviceRoleKey } = supabaseKeys(env);
+if (!supabaseUrl || !serviceRoleKey) throw new Error("SUPABASE_URL and the project's secret key are required.");
+
+const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+Deno.serve(createStripeWebhookHandler({
+  serviceClient,
+  stripe: createStripeApi({ secretKey: env("STRIPE_SECRET_KEY") }),
+  webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
+  prices: readPriceConfig(env)
+}));

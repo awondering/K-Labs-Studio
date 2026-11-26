@@ -21,7 +21,7 @@
   // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
   // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
   // back to the public entry with the usual notice.
-  const DEMO_BUILD = "build148-v291";
+  const DEMO_BUILD = "build148-v292";
   const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
@@ -129,7 +129,10 @@
     window.scrollTo(0, 0);
   }
 
-  function showAccessChoice(entitlement) {
+  // Q40: the account has no Studio access (never subscribed, or its paid period, trial or owner grant has ended).
+  // Studio itself does not open, so nothing is shown or synced; the records stay safely on the server and return
+  // unchanged once Stripe confirms payment. Subscribing, Manage billing, Explore Mode and Sign Out stay available.
+  function showAccessChoice(entitlement, notice = "") {
     currentEntitlement = entitlement;
     document.getElementById("authScreen").style.display = "none";
     document.getElementById("app").style.display = "none";
@@ -139,12 +142,56 @@
     document.body.classList.add("klabs-entry-choice");
     const message = document.getElementById("accountAccessMessage");
     const verified = entitlement.email_verified === true;
-    message.textContent = verified
-      ? "Your account is ready. Start the optional seven-day trial when you are ready, or look around using fictional demonstration data."
-      : "Verify your email before starting a trial or entering Explore Mode. Use the link sent to your inbox, then return here.";
+    message.textContent = !verified
+      ? "Verify your email before subscribing or entering Explore Mode. Use the link sent to your inbox, then return here."
+      : notice || (entitlement.access_state === "expired"
+        ? "Your Studio access has ended. Your records are kept safely and return as soon as Stripe confirms your payment."
+        : "Your account is ready. Subscribe to start working in Studio, or look around using fictional demonstration data.");
     setVisible("accountAccessChoices", verified);
     setVisible("verifyEmailContinueBtn", !verified);
     document.getElementById("accountAccessError").textContent = "";
+    if (verified && entitlement.offline !== true) renderBilling(document.getElementById("accessBillingPanel"), entitlement, { quiet: true });
+  }
+
+  // Draws the subscription panel (status, plans, Manage billing) from the account's own subscription row.
+  async function renderBilling(container, access, options = {}) {
+    const billing = window.KLABS_BILLING;
+    if (!container || !billing || !window.KLABS_SUPABASE_CLIENT) return;
+    let sub = null;
+    try {
+      sub = await billing.loadSubscription();
+    } catch (error) {
+      console.warn("[K-Labs Studio] Could not read the subscription:", error);
+    }
+    billing.render(container, { sub, access, ...options });
+  }
+
+  // Q40: Stripe Checkout / the Customer Portal return to /?checkout=success|cancelled or /?billing=return. The value is
+  // only a hint about which message to show; access is decided by the server alone. Removed from the address at once,
+  // so a reload does not repeat it.
+  function takeBillingReturn() {
+    let params;
+    try { params = new URLSearchParams(window.location.search || ""); } catch { return ""; }
+    const value = params.get("checkout") === "success" ? "checkout-success"
+      : params.get("checkout") === "cancelled" ? "checkout-cancelled"
+      : params.get("billing") === "return" ? "billing-return" : "";
+    if (value) {
+      try { window.history.replaceState(null, "", window.location.pathname + window.location.hash); } catch (error) { /* harmless */ }
+    }
+    return value;
+  }
+  let billingReturn = takeBillingReturn();
+
+  // Q40: after Checkout, wait for the server (the verified Stripe webhook) to confirm access, then open Studio.
+  async function confirmCheckout(entitlement) {
+    showAccessChoice(entitlement, "Confirming your payment with Stripe\u2026 Studio opens automatically as soon as it is confirmed.");
+    const access = await window.KLABS_BILLING.waitForAccess(refreshEntitlement);
+    if (access) {
+      window.location.reload();
+      return;
+    }
+    showAccessChoice(await refreshEntitlement().catch(() => entitlement),
+      "Stripe has not confirmed the payment yet. If you completed checkout, reload this page in a minute. No access is given until payment is confirmed.");
   }
 
   function showExploreDemo() {
@@ -340,19 +387,67 @@
       window.KLABS_ACCESS_STATE.access_state = "expired";
       return;
     }
-    window.KLABS_ACCESS_STATE.local_expires_at = Date.now() + remaining;
-    trialExpiryTimer = window.setTimeout(() => {
+    const deadline = Date.now() + remaining;
+    window.KLABS_ACCESS_STATE.local_expires_at = deadline;
+    const onAccessEnd = () => {
       if (!window.KLABS_ACCESS_STATE) return;
-      window.KLABS_ACCESS_STATE = {
-        ...window.KLABS_ACCESS_STATE,
-        access_state: "expired",
-        can_write: false,
-        trial_available: false
-      };
-      if (currentSession && window.KLABS_APPLY_AUTH_STATE) {
-        window.KLABS_APPLY_AUTH_STATE(currentSession);
-      }
-    }, remaining);
+      const ended = window.KLABS_ACCESS_STATE;
+      // Exactly at the paid-through time: no further changes can be saved (no grace).
+      window.KLABS_ACCESS_STATE = { ...ended, access_state: "expired", can_write: false, trial_available: false };
+      confirmRenewalOrClose(ended).catch((error) => {
+        console.error("[K-Labs Studio] Renewal check failed:", error);
+        window.location.reload();
+      });
+    };
+    // Q40: browsers run a timer longer than about 24.8 days (2^31 - 1 ms) IMMEDIATELY, which would end a monthly or
+    // annual subscription the moment Studio opened. Long waits are armed in steps of at most a day and re-measured each
+    // time (also correct after the device has slept).
+    const arm = () => {
+      const left = deadline - Date.now();
+      trialExpiryTimer = left > EXPIRY_TIMER_STEP_MS
+        ? window.setTimeout(arm, EXPIRY_TIMER_STEP_MS)
+        : window.setTimeout(onAccessEnd, Math.max(0, left));
+    };
+    arm();
+  }
+  const EXPIRY_TIMER_STEP_MS = 24 * 60 * 60 * 1000;
+
+  // Q40: Studio is open when the paid period ends. Records are covered at once (nothing can be changed), and Studio
+  // waits briefly for the server to confirm a renewal Stripe has charged; it then continues where the builder was.
+  // Without a confirmed payment, Studio closes (before any read is refused) to the subscription screen.
+  const RENEWAL_WAIT_MS = 120000;
+  async function confirmRenewalOrClose(ended) {
+    if (ended.access_state !== "paid" || !window.KLABS_BILLING) {
+      window.location.reload();
+      return;
+    }
+    setVisible("renewalCheckOverlay", true);
+    document.body.classList.add("klabs-renewal-check");
+    // Only a live, uncancelled renewal that Stripe has not reported as failed (or waiting for the bank) is waited for.
+    const sub = await window.KLABS_BILLING.loadSubscription().catch(() => null);
+    if (!window.KLABS_BILLING.hasLiveSubscription(sub) || sub.cancel_at_period_end
+      || sub.renewal_state === "failed" || sub.renewal_state === "action_required") {
+      window.location.reload();
+      return;
+    }
+    const access = await window.KLABS_BILLING.waitForAccess(refreshEntitlement, { timeoutMs: RENEWAL_WAIT_MS, intervalMs: 3000 });
+    if (!access || !window.KLABS_ACCESS_STATE) {
+      window.location.reload();
+      return;
+    }
+    window.KLABS_ACCESS_STATE = access;
+    currentEntitlement = access;
+    scheduleEntitlementExpiry(access);
+    setVisible("renewalCheckOverlay", false);
+    document.body.classList.remove("klabs-renewal-check");
+    renderSettingsBilling();
+  }
+
+  function renderSettingsBilling() {
+    const container = document.getElementById("settingsBillingPanel");
+    if (!container || window.KLABS_ACCESS_STATE?.demo) return;
+    if (container.parentElement) container.parentElement.hidden = false;
+    renderBilling(container, window.KLABS_ACCESS_STATE);
   }
 
   function loadScript(src) {
@@ -396,7 +491,8 @@
       }
       currentSession = sessionData.session;
       currentEntitlement = entitlement;
-      const allowedStates = ["trial_eligible", "trial", "expired", "grandfathered", "complimentary", "paid", "offline_readonly"];
+      // "owner": the single owner account's permanent access, decided by the server (20261128000000_q40_owner_access.sql).
+      const allowedStates = ["owner", "trial_eligible", "trial", "expired", "grandfathered", "complimentary", "paid", "offline_readonly"];
       if (!allowedStates.includes(entitlement.access_state)
         || typeof entitlement.can_write !== "boolean"
         || typeof entitlement.email_verified !== "boolean"
@@ -404,11 +500,18 @@
         || (entitlement.access_expires_at && !entitlement.server_time)) {
         throw new Error("The account access service returned an unsupported entitlement.");
       }
-      if (entitlement.access_state === "trial_eligible") {
+      if (entitlement.access_state === "trial_eligible" || entitlement.access_state === "expired") {
         window.KLABS_BUILD_TAB_LOCK?.release();
-        showAccessChoice(entitlement);
+        const returning = billingReturn;
+        billingReturn = "";
+        if (returning === "checkout-success" && entitlement.email_verified && entitlement.offline !== true && window.KLABS_BILLING) {
+          await confirmCheckout(entitlement);
+          return;
+        }
+        showAccessChoice(entitlement, returning === "checkout-cancelled" ? "Checkout was cancelled. No payment was taken." : "");
         return;
       }
+      billingReturn = "";
       await window.KLABS_BUILD_TAB_LOCK.acquire(session.user.id);
       window.KLABS_ACCESS_STATE = entitlement;
       scheduleEntitlementExpiry(entitlement);
@@ -424,6 +527,7 @@
         return;
       }
       applyAuthState(latestData.session);
+      if (entitlement.offline !== true) renderSettingsBilling();
     } catch (error) {
       window.KLABS_BUILD_TAB_LOCK?.release();
       if (window.KLABS_SUPABASE_CLIENT && window.navigator?.onLine !== false) {
@@ -626,7 +730,8 @@
   async function applyOfflineSession(stored, applyAuthState, renewal) {
     const userId = stored?.user?.id;
     const access = typeof userId === "string" && userId ? cachedEntitlementFor(userId) : null;
-    const openable = ["trial", "expired", "grandfathered", "complimentary", "paid"];
+    // Q40: an ended account's records are not viewable, offline included.
+    const openable = ["owner", "trial", "grandfathered", "complimentary", "paid"];
     if (!access || !openable.includes(access.access_state) || typeof access.email_verified !== "boolean"
       || (access.access_state === "trial" && !access.trial_expires_at)) {
       watchRenewal(renewal, true);
@@ -690,22 +795,8 @@
     }
     document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));
     document.getElementById("authBackHome").addEventListener("click", showHome);
-    document.getElementById("startTrialBtn").addEventListener("click", async (event) => {
-      const button = event.currentTarget;
-      const errorMessage = document.getElementById("accountAccessError");
-      button.disabled = true;
-      errorMessage.textContent = "Starting your seven-day trial...";
-      try {
-        const { error } = await window.KLABS_SUPABASE_CLIENT.rpc("start_account_trial");
-        if (error) throw error;
-        await applySession(currentSession, window.KLABS_APPLY_AUTH_STATE);
-      } catch (error) {
-        errorMessage.textContent = error?.message || "Could not start your trial. Please try again.";
-      } finally {
-        button.disabled = false;
-      }
-    });
-    document.getElementById("demoStartTrialBtn").addEventListener("click", () => {
+    // Q40: the free trial is retired; Subscribe (in the access screen) replaces it.
+    document.getElementById("demoSubscribeBtn").addEventListener("click", () => {
       document.getElementById("exploreDemoScreen").hidden = true;
       showAccessChoice(currentEntitlement);
       window.scrollTo(0, 0);
@@ -718,7 +809,7 @@
         const entitlement = await refreshEntitlement();
         currentEntitlement = entitlement;
         showAccessChoice(entitlement);
-        if (entitlement.email_verified) document.getElementById("accountAccessMessage").textContent = "Email verified. You can now explore or start your trial.";
+        if (entitlement.email_verified) document.getElementById("accountAccessMessage").textContent = "Email verified. You can now explore or subscribe.";
       } catch (error) {
         errorMessage.textContent = error?.message || "Could not verify account access. Please try again.";
       }

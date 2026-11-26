@@ -51,6 +51,7 @@
       trial_eligible: "Trial eligible",
       trial: "Active trial",
       expired: "Expired",
+      owner: "Owner",
       grandfathered: "Grandfathered",
       complimentary: "Complimentary",
       paid: "Paid access",
@@ -432,7 +433,7 @@
     return performChange(event.currentTarget, "admin_revoke_builder_access", (builder) => ({
       p_target_user_id: builder.builder_user_id,
       p_reason: reason
-    }), `Revoke access for ${state.selected?.email}? Their records will remain available read-only.`);
+    }), `Revoke access for ${state.selected?.email}? Their records are kept, but hidden from them until their access is restored.`);
   });
   byId("adminExtendTrialBtn")?.addEventListener("click", (event) => {
     let expiresAt;

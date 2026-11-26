@@ -10947,6 +10947,30 @@ html.klabs-demo .view-quote::after { content:"DEMO";position:absolute;inset:0;di
 .build-sync-review pre { max-height:35vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#101112;padding:10px;font-size:12px; }
 .build-sync-review button { margin:4px; }
 @media (max-width:620px) { .build-sync-review__versions { grid-template-columns:1fr; } }
+/* Q40: subscription panel (access screen and Settings → Account) and the renewal confirmation cover. */
+.billing-panel { display:grid;gap:12px; }
+.billing-panel:empty { display:none; }
+.billing-status { margin:0;color:#c9c5bb;font-size:14px;line-height:1.55; }
+.billing-plans { display:grid;gap:12px; }
+.billing-currency { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+.billing-currency__option {
+  min-height:44px;border-radius:6px;border:1px solid rgba(214,210,200,.2);background:#0f1213;color:#a9aaa3;
+  font:inherit;font-size:11px;font-weight:700;letter-spacing:.14em;cursor:pointer;
+}
+.billing-currency__option[aria-pressed="true"] { border-color:rgba(214,210,200,.55);color:#f2ede4;background:#1b2022; }
+.billing-panel button:disabled { opacity:.6;cursor:progress; }
+.billing-error { min-height:0;margin:0;color:#e3a7aa;font-size:13px; }
+.billing-error:empty { display:none; }
+.settings-billing { display:grid;gap:10px;margin-bottom:14px; }
+.settings-billing[hidden] { display:none; }
+.settings-billing__title { color:#e4ded2;font-size:13px;letter-spacing:.04em; }
+.settings-billing .billing-status { text-align:left; }
+.renewal-check-overlay {
+  position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:16px;box-sizing:border-box;
+  background:#090b0c;
+}
+.renewal-check-overlay[hidden] { display:none; }
+body.klabs-renewal-check { overflow:hidden; }
 body.klabs-entry-choice #app,
 body.klabs-entry-choice .bottom-nav,
 body.klabs-entry-choice .carbon-field,
@@ -14326,3 +14350,4 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
     column-gap:18px;
   }
 }
+
