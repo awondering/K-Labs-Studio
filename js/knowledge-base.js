@@ -48,7 +48,7 @@
         'How do I calculate circumference from diameter','calculate circumference from diameter','How to calculate circumference from diameter'],
       tags:['diameter','circumference','pi','measurement','calculator','blank','grip'],
       source:'Mathematics: pi is the ratio of a circle\'s circumference to its diameter. The worked examples are recalculated by K-Labs automated tests.',
-      related:[],
+      related:['how-should-i-record-measurements-in-millimetres-and-inches','why-do-calculations-differ-from-measurements-on-the-rod','how-do-i-verify-a-printed-wrap-template-is-to-scale'],
       sections:[
         {heading:'The formulas',blocks:[
           {type:'p',text:'Pi (π) is the ratio of any circle\'s circumference to its diameter, about 3.14159. So:'},
@@ -72,8 +72,171 @@
           {type:'p',text:'Workshop → Diameter & Circumference converts either way: enter one value and Studio calculates the other, in the measurement units chosen in Settings.'}
         ]}
       ]
+    },
+    {
+      // Verified 27 Nov 2026 (batch 01): NIST definition of the inch, calculations recomputed by
+      // tests/knowledge-articles.test.cjs, and Studio statements checked against its code. Merges two drafts.
+      id:'how-should-i-record-measurements-in-millimetres-and-inches',
+      category:'techniques',
+      status:'verified',
+      updated:'2026-11-27',
+      title:'Recording rod measurements in millimetres and inches',
+      summary:'One inch is exactly 25.4 mm. Label every figure with its unit and the point it is measured from, and convert from the original measurement.',
+      aliases:['How should I record measurements in millimetres and inches','convert inches to millimetres','convert millimetres to inches',
+        'inches to mm','mm to inches','How do I prevent inconsistent measurements across a build','inconsistent measurements'],
+      tags:['measurement','units','millimetres','inches','conversion','reference point'],
+      source:'NIST, "SI Units – Length": the inch is exactly equivalent to 25.4 mm, effective 1 July 1959. The worked figures are recalculated by K-Labs automated tests; the Studio statements are checked against Studio itself.',
+      related:['how-do-i-convert-circumference-to-diameter','how-should-i-measure-guide-positions','why-do-calculations-differ-from-measurements-on-the-rod'],
+      sections:[
+        {heading:'The exact conversion',blocks:[
+          {type:'p',text:'Since 1959 the inch has been defined as exactly 25.4 mm, so converting between the two is exact arithmetic:'},
+          {type:'list',items:['Millimetres = inches × 25.4','Inches = millimetres ÷ 25.4']}
+        ]},
+        {heading:'Worked examples',blocks:[
+          {type:'list',items:[
+            'A 7 ft rod is 84 in: 84 × 25.4 = 2133.6 mm.',
+            'A 300 mm grip: 300 ÷ 25.4 = 11.811 in.',
+            'Fractions convert exactly too: 1/8 in = 0.125 in = 3.175 mm, and 5/16 in = 0.3125 in = 7.9375 mm.'
+          ]}
+        ]},
+        {heading:'Convert once, from the original',blocks:[
+          {type:'p',text:'Rounding before converting adds error. 300 mm rounded to 11.8 in converts back to 299.72 mm, 0.28 mm short. Keep the figure you measured and convert from that, rounding only the result.'}
+        ]},
+        {heading:'Label the unit and the reference point',blocks:[
+          {type:'p',text:'A length means nothing without the point it is measured from. On a 2133.6 mm rod, a position 300 mm from the tip is 1833.6 mm from the butt. Write the unit, the end it is measured from, and whether a fraction or a decimal was used beside every figure.'}
+        ]},
+        {heading:'In Studio',blocks:[
+          {type:'p',text:'Settings → Measurement Units offers Metric (mm), Decimal Inches and Fractional Inches. Guide Setup lists guide positions from the tip; a build\'s reel seat position is recorded from the butt.'}
+        ]}
+      ]
+    },
+    {
+      // Verified 27 Nov 2026 (batch 01): calculations recomputed by tests; Studio statement checked against its code. Merges two drafts.
+      id:'how-should-i-measure-guide-positions',
+      category:'techniques',
+      status:'verified',
+      updated:'2026-11-27',
+      title:'How to measure guide positions and spacing',
+      summary:'Measure every guide from the same end of the rod to the same point on each guide. Spacing is then the difference between neighbouring positions.',
+      aliases:['How should I measure guide positions','What does effective guide spacing mean','guide spacing','measure guide spacing',
+        'guide positions from the tip','effective guide spacing'],
+      tags:['guides','guide spacing','layout','measurement','reference point'],
+      source:'Arithmetic on positions measured from one end of the rod. The worked figures are recalculated by K-Labs automated tests; the Studio statement is checked against Studio itself.',
+      related:['how-should-i-record-measurements-in-millimetres-and-inches','why-do-calculations-differ-from-measurements-on-the-rod'],
+      sections:[
+        {heading:'Position and spacing',blocks:[
+          {type:'p',text:'A guide\'s position is its distance from one fixed end of the rod. The spacing between two guides is the difference between their positions. For guides at 110, 235 and 380 mm from the tip:'},
+          {type:'list',items:['Tip to guide 1: 110 mm','Guide 1 to guide 2: 235 − 110 = 125 mm','Guide 2 to guide 3: 380 − 235 = 145 mm']}
+        ]},
+        {heading:'Use the same point on every guide',blocks:[
+          {type:'p',text:'Measure to the same feature on every guide, such as the ring centre. If one guide is measured to its foot instead, both spacings next to it are wrong by the distance from foot to ring centre: one too long, the other too short.'}
+        ]},
+        {heading:'From the tip or from the butt',blocks:[
+          {type:'p',text:'The two are linked by the rod\'s length: distance from the butt = rod length − distance from the tip. On a 2100 mm rod, a guide 380 mm from the tip is 1720 mm from the butt. Spacings come out the same either way, but a list that mixes the two does not add up.'}
+        ]},
+        {heading:'Comparing two layouts',blocks:[
+          {type:'p',text:'Before comparing guide tables from different sources, check that both measure from the same end, to the same point on each guide, in the same unit. Otherwise one rod can look like two different layouts.'}
+        ]},
+        {heading:'In Studio',blocks:[
+          {type:'p',text:'Workshop → Guide Setup lists each guide\'s position measured from the tip, in the measurement units chosen in Settings.'}
+        ]}
+      ]
+    },
+    {
+      // Verified 27 Nov 2026 (batch 01): calculations recomputed by tests; Studio template statements checked against its code.
+      id:'how-do-i-verify-a-printed-wrap-template-is-to-scale',
+      category:'techniques',
+      status:'verified',
+      updated:'2026-11-27',
+      title:'How to check a printed wrap template is to scale',
+      summary:'Measure the printed template\'s width and compare it with the circumference printed on it. If they differ, the print was scaled; work out by how much.',
+      aliases:['How do I verify a printed wrap template is to scale','print template at 100%','printed template wrong size','wrap template scale','actual size printing'],
+      tags:['thread wrap','template','printing','scale','circumference','Thread Design Studio'],
+      source:'Arithmetic: a full-size wrap template is one circumference wide. The worked figures are recalculated by K-Labs automated tests; the Thread Design Studio statements are checked against Studio itself.',
+      related:['how-do-i-convert-circumference-to-diameter'],
+      sections:[
+        {heading:'Why the width matters',blocks:[
+          {type:'p',text:'A wrapping template is drawn at full size, so its width equals the rod\'s circumference and it goes once around the rod. If the print is scaled, the width and every mark spacing change in the same proportion, and the pattern no longer meets itself.'}
+        ]},
+        {heading:'The check',blocks:[
+          {type:'steps',items:[
+            'Print with page scaling turned off (actual size, or 100%).',
+            'Measure the template\'s outlined width with a ruler.',
+            'Compare it with the circumference printed with the template.'
+          ]}
+        ]},
+        {heading:'Working out the scale',blocks:[
+          {type:'p',text:'Scale = measured width ÷ stated circumference × 100. A template stating 37.7 mm that measures 35.8 mm was printed at 95%. Reprint with scaling turned off rather than correcting by hand.'}
+        ]},
+        {heading:'In Studio',blocks:[
+          {type:'p',text:'Thread Design Studio\'s wrapping template prints the rod diameter, the circumference, the number of marks and their spacing, with the instruction to print at 100% (no scaling). The outlined pattern is drawn one circumference wide.'}
+        ]}
+      ]
+    },
+    {
+      // Verified 27 Nov 2026 (batch 01): every figure is a calculation recomputed by tests.
+      id:'why-do-calculations-differ-from-measurements-on-the-rod',
+      category:'troubleshooting',
+      status:'verified',
+      updated:'2026-11-27',
+      title:'Why calculated and measured figures differ',
+      summary:'Rounded inputs, mixed units and different reference points make a correct calculation disagree with the rod. Check each before doubting the formula.',
+      aliases:['Why do calculations differ from measurements on the rod','calculation does not match measurement','calculator wrong','measurement mismatch'],
+      tags:['measurement','calculator','rounding','units','reference point'],
+      source:'Arithmetic. The worked figures are recalculated by K-Labs automated tests.',
+      related:['how-should-i-record-measurements-in-millimetres-and-inches','how-should-i-measure-guide-positions','how-do-i-convert-circumference-to-diameter'],
+      sections:[
+        {heading:'Inputs that are slightly off',blocks:[
+          {type:'p',text:'A calculation is only as close as its inputs. A blank measured as 12.0 mm that is really 12.1 mm gives a circumference of 37.70 mm instead of 38.01 mm: 0.31 mm short.'}
+        ]},
+        {heading:'Mixed units',blocks:[
+          {type:'p',text:'A figure in inches read as millimetres is 25.4 times too small: 12 in is 304.8 mm, not 12 mm. Errors this large usually mean a unit mix-up.'}
+        ]},
+        {heading:'Different reference points',blocks:[
+          {type:'p',text:'If the calculation counts from the tip and the rod is measured from the butt, or to a different point on a component, every position is shifted. A shift that is the same for every position points to a reference mix-up rather than a wrong formula.'}
+        ]},
+        {heading:'Check in this order',blocks:[
+          {type:'steps',items:[
+            'Confirm both figures are in the same unit.',
+            'Confirm both are measured from the same end and to the same point.',
+            'Re-measure the inputs, then recalculate from the new figures.'
+          ]}
+        ]}
+      ]
+    },
+    {
+      // Verified 27 Nov 2026 (batch 01): every figure is a calculation recomputed by tests.
+      id:'how-should-i-compare-component-cost-and-selling-price',
+      category:'faqs',
+      status:'verified',
+      updated:'2026-11-27',
+      title:'Margin and markup: what is the difference?',
+      summary:'Markup is profit as a share of the cost; margin is profit as a share of the selling price. The same sale gives two different percentages.',
+      aliases:['How should I compare component cost and selling price','margin vs markup','markup vs margin','markup percentage','margin percentage','price for a target margin'],
+      tags:['pricing','margin','markup','profit','cost','tax'],
+      source:'Arithmetic. The worked figures are recalculated by K-Labs automated tests.',
+      related:[],
+      sections:[
+        {heading:'The formulas',blocks:[
+          {type:'list',items:['Profit = selling price − cost','Markup = profit ÷ cost × 100','Margin = profit ÷ selling price × 100']}
+        ]},
+        {heading:'Worked example',blocks:[
+          {type:'p',text:'A component bought for $40 and sold for $60 makes $20 profit. That is a 50% markup but a 33.3% margin.'}
+        ]},
+        {heading:'Converting between them',blocks:[
+          {type:'list',items:['Margin = markup ÷ (100 + markup) × 100','Markup = margin ÷ (100 − margin) × 100']},
+          {type:'p',text:'A 50% markup is a 33.3% margin, and a 50% margin needs a 100% markup.'}
+        ]},
+        {heading:'Pricing for a target margin',blocks:[
+          {type:'p',text:'Selling price = cost ÷ (1 − margin ÷ 100). For a 40% margin on a $40 cost: $40 ÷ 0.6 = $66.67.'}
+        ]},
+        {heading:'Leave tax out of both figures',blocks:[
+          {type:'p',text:'Compare like with like. If the selling price includes a sales tax such as GST, take the tax out before working out margin or markup: at a 15% rate, a $69.00 tax-inclusive price is $60.00 before tax.'}
+        ]}
+      ]
     }
   ]);
+
 
   // ---------- search ----------
   const SYNONYMS=Object.freeze({reelseat:'reel seat',reelseats:'reel seat',crosswrap:'cross wrap',buttwrap:'butt wrap',

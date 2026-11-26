@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Why calculated and measured figures differ | K-Labs Studio</title>
+  <meta name="description" content="Rounded inputs, mixed units and different reference points make a correct calculation disagree with the rod. Check each before doubting the formula." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://studio.klabs.co.nz/knowledge/why-do-calculations-differ-from-measurements-on-the-rod/" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="K-Labs Studio" />
+  <meta property="og:title" content="Why calculated and measured figures differ | K-Labs Studio" />
+  <meta property="og:description" content="Rounded inputs, mixed units and different reference points make a correct calculation disagree with the rod. Check each before doubting the formula." />
+  <meta property="og:url" content="https://studio.klabs.co.nz/knowledge/why-do-calculations-differ-from-measurements-on-the-rod/" />
+  <meta name="theme-color" content="#020303" />
+  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/theme.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/studio.css" />
+  <link rel="stylesheet" href="/css/knowledge.css" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Article","headline":"Why calculated and measured figures differ","description":"Rounded inputs, mixed units and different reference points make a correct calculation disagree with the rod. Check each before doubting the formula.","dateModified":"2026-11-27","articleSection":"Troubleshooting","mainEntityOfPage":"https://studio.klabs.co.nz/knowledge/why-do-calculations-differ-from-measurements-on-the-rod/","author":{"@type":"Organization","name":"K-Labs"},"publisher":{"@type":"Organization","name":"K-Labs"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Knowledge Base","item":"https://studio.klabs.co.nz/knowledge/"},{"@type":"ListItem","position":2,"name":"Troubleshooting","item":"https://studio.klabs.co.nz/knowledge/category/troubleshooting/"},{"@type":"ListItem","position":3,"name":"Why calculated and measured figures differ","item":"https://studio.klabs.co.nz/knowledge/why-do-calculations-differ-from-measurements-on-the-rod/"}]}]}</script>
+</head>
+<body class="knowledge-public">
+  <header class="topbar">
+    <a class="brand-lockup" href="/knowledge/">
+      <img src="/assets/logo.svg" alt="K-Labs" class="brand-mark" />
+      <span class="brand-copy"><strong>K-Labs Studio</strong><small>KNOWLEDGE BASE</small></span>
+    </a>
+  </header>
+  <main class="knowledge-public__main">
+    <nav class="knowledge-crumbs" aria-label="Breadcrumb"><a href="/knowledge/">Knowledge Base</a><span aria-hidden="true">›</span><a href="/knowledge/category/troubleshooting/">Troubleshooting</a></nav>
+    <article class="knowledge-article">
+      <p class="knowledge-article__kicker">Troubleshooting · 1 min read · Updated <time datetime="2026-11-27">27 November 2026</time></p>
+      <h1 class="knowledge-article__title">Why calculated and measured figures differ</h1>
+      <div class="knowledge-article__brief">
+        <span class="knowledge-article__label">In brief</span>
+        <p>Rounded inputs, mixed units and different reference points make a correct calculation disagree with the rod. Check each before doubting the formula.</p>
+      </div>
+      <section class="knowledge-article__section">
+        <h2 class="knowledge-article__heading">Inputs that are slightly off</h2>
+        <p>A calculation is only as close as its inputs. A blank measured as 12.0 mm that is really 12.1 mm gives a circumference of 37.70 mm instead of 38.01 mm: 0.31 mm short.</p>
+      </section>
+      <section class="knowledge-article__section">
+        <h2 class="knowledge-article__heading">Mixed units</h2>
+        <p>A figure in inches read as millimetres is 25.4 times too small: 12 in is 304.8 mm, not 12 mm. Errors this large usually mean a unit mix-up.</p>
+      </section>
+      <section class="knowledge-article__section">
+        <h2 class="knowledge-article__heading">Different reference points</h2>
+        <p>If the calculation counts from the tip and the rod is measured from the butt, or to a different point on a component, every position is shifted. A shift that is the same for every position points to a reference mix-up rather than a wrong formula.</p>
+      </section>
+      <section class="knowledge-article__section">
+        <h2 class="knowledge-article__heading">Check in this order</h2>
+        <ol class="knowledge-article__steps">
+          <li>Confirm both figures are in the same unit.</li>
+          <li>Confirm both are measured from the same end and to the same point.</li>
+          <li>Re-measure the inputs, then recalculate from the new figures.</li>
+        </ol>
+      </section>
+      <p class="knowledge-article__source">Arithmetic. The worked figures are recalculated by K-Labs automated tests.</p>
+      <section class="knowledge-article__section">
+        <h2 class="knowledge-article__heading">Related articles</h2>
+        <div class="knowledge-list">
+        <a class="workshop-tool-launch workshop-tool-launch--landing knowledge-row" href="/knowledge/how-should-i-record-measurements-in-millimetres-and-inches/">
+          <h3 class="workshop-tool-launch__title knowledge-row__title">Recording rod measurements in millimetres and inches</h3>
+          <span class="workshop-tool-launch__meta">One inch is exactly 25.4 mm. Label every figure with its unit and the point it is measured from, and convert from the original measurement.</span>
+          <span class="knowledge-row__detail">Techniques · 1 min read</span>
+        </a>
+        <a class="workshop-tool-launch workshop-tool-launch--landing knowledge-row" href="/knowledge/how-should-i-measure-guide-positions/">
+          <h3 class="workshop-tool-launch__title knowledge-row__title">How to measure guide positions and spacing</h3>
+          <span class="workshop-tool-launch__meta">Measure every guide from the same end of the rod to the same point on each guide. Spacing is then the difference between neighbouring positions.</span>
+          <span class="knowledge-row__detail">Techniques · 1 min read</span>
+        </a>
+        <a class="workshop-tool-launch workshop-tool-launch--landing knowledge-row" href="/knowledge/how-do-i-convert-circumference-to-diameter/">
+          <h3 class="workshop-tool-launch__title knowledge-row__title">How to convert between diameter and circumference</h3>
+          <span class="workshop-tool-launch__meta">Circumference is diameter multiplied by pi, and diameter is circumference divided by pi. Worked examples, rounding, and shapes that are not round.</span>
+          <span class="knowledge-row__detail">Techniques · 1 min read</span>
+        </a>
+        </div>
+      </section>
+    </article>
+    <a class="knowledge-more" href="/knowledge/category/troubleshooting/">More in Troubleshooting ›</a>
+    <p class="knowledge-public__studio">Written by K-Labs for rod builders. <a href="/">K-Labs Studio</a> is our custom rod building suite.</p>
+  </main>
+</body>
+</html>

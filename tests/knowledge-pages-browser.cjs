@@ -220,7 +220,8 @@ async function runReal(browser, base, { tag, width, mobile }) {
       await p.fill('[data-knowledge-public-search] input', q);
       found.push([q, await p.$$eval('[data-knowledge-public-results] a', (r) => r.map((e) => e.getAttribute('href')))]);
     }
-    ck(tag, 'REAL search (JS): its merged questions and keywords find it', found.every(([, r]) => r[0] === url), found);
+    // Its own questions rank it first; a shared keyword (tags[0]) must find it among the results.
+    ck(tag, 'REAL search (JS): its merged questions rank it first; its keyword finds it', found.slice(0, -1).every(([, r]) => r[0] === url) && found.at(-1)[1].includes(url), found);
     await shot(p, `search-${a.id}`);
     ck(tag, 'REAL: no page errors (JS)', errors.length === 0, errors);
     await context.close();
