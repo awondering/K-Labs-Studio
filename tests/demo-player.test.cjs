@@ -129,10 +129,13 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
   const chapterButtons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => { const b = get(`chapter-${n}`); b.attributes['data-demo-chapter'] = String(n); return b; });
   // Q24: the Components Library's chapter row.
   const componentsChapterButtons = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => { const b = get(`components-chapter-${n}`); b.attributes['data-demo-components-chapter'] = String(n); return b; });
+  // Q44: the Workshop tools' chapter row.
+  const workshopChapterButtons = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => { const b = get(`workshop-chapter-${n}`); b.attributes['data-demo-workshop-chapter'] = String(n); return b; });
   const document = {
     getElementById: (id) => get(`#${id}`),
     querySelector: (selector) => get(selector),
     querySelectorAll: (selector) => (selector === '[data-demo-chapter]' ? chapterButtons : selector === '[data-demo-components-chapter]' ? componentsChapterButtons
+      : selector === '[data-demo-workshop-chapter]' ? workshopChapterButtons
       : selector === '#studioCustomSelectList [data-studio-select-option]' ? [fujiOption] : []),
     documentElement: { style: { setProperty(name, value) { log.push(['style', name, value]); } }, classList: { add() {}, remove() {}, toggle() {} } },
     body: { classList: { contains: () => false } },
@@ -186,7 +189,7 @@ function stage({ search = '?demo', nearestFails = [], coveredOnce = [], localDay
   });
   const advance = (ms) => { clock += ms; fireDue(); };
   stall.release = () => { const held = stall.held.splice(0); stall.when = null; held.forEach((fn) => setImmediate(fn)); };
-  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, componentsChapterButtons, busy, slow, stall, advance, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
+  return { window, document, get, log, acts, elements, replaced, steps, director, chapterButtons, componentsChapterButtons, workshopChapterButtons, busy, slow, stall, advance, clock: () => clock, inStep: () => inStep, writable: () => inStep > 0 && !suspended };
 }
 const settle = async (h, untilFn, limit = 200000) => { for (let i = 0; i < limit && !untilFn(); i++) await new Promise((r) => setImmediate(r)); };
 const player = (h) => h.window.KLABS_DEMO_PLAYER;
@@ -933,4 +936,77 @@ test('Q24: the page offers Build a Rod | Components Library, with an eight-chapt
   assert.match(/const DEMO_DIRECTOR_CONTROLS = \[[\s\S]*?\]\.join/.exec(client)[0], /"#studioComponentsGenerateSizesBtn"/);
   const data = read('js/demo-data.js');
   assert.match(data, /"brands": \[\s*\{\s*"id": "brand-demo-fuji",\s*"name": "Fuji"\s*\}\s*\]/);
+});
+
+// ---- Q44: the Workshop tools demonstration. Its playback on the real tool screens and embedded tools, with every
+// figure checked against the tools' own engines, is tests/workshop-demo-playback-browser.cjs (WebKit 390, 320 and Mac).
+const workshopJourney = (h) => player(h).journeys.workshop;
+const plain = (x) => JSON.parse(JSON.stringify(x)); // arrays made inside the page's context
+const KNOWN_STEPS = ['caption', 'tap', 'type', 'date', 'open', 'pick', 'choose', 'pickQty', 'select', 'qty', 'name', 'show', 'until', 'untilHidden', 'untilValue', 'untilText', 'scroll', 'hold', 'edit', 'ftap', 'fshow', 'funtil'];
+
+test('Q44: the introduction offers Workshop Tools, with an eight-chapter row named after the journey and hidden until it plays', () => {
+  const h = stage();
+  const journey = workshopJourney(h);
+  assert.ok(Object.isFrozen(journey));
+  assert.deepEqual(plain(journey.map((c) => c.title)), ['Spacing', 'Orientation', 'Placement', 'Straight grip', 'Tapered grip', 'Diameter', 'KR layout', 'Thread design']);
+  const row = html.slice(html.indexOf('data-demo-tour-chapters="workshop"') - 60, html.indexOf('</ol>', html.indexOf('data-demo-tour-chapters="workshop"')));
+  assert.match(row, /<ol class="demo-player__chapters" aria-label="Chapters" data-demo-tour-chapters="workshop" hidden>/);
+  const labels = [...row.matchAll(/data-demo-workshop-chapter="(\d)" aria-label="Chapter \1: ([^"]+)"><b>\1<\/b><span>([^<]+)<\/span>/g)];
+  assert.deepEqual(labels.map((m) => m[2]), plain(journey.map((c) => c.title)));
+  assert.deepEqual(labels.map((m) => m[3]), plain(journey.map((c) => c.title)));
+  assert.match(html, /id="demoStartWorkshopBtn" type="button" class="primary-action demo-intro__start">WORKSHOP TOOLS</);
+  assert.equal((html.match(/data-demo-chapter="\d+"/g) || []).length, 10, 'the rod build row is unchanged');
+  assert.equal((html.match(/data-demo-components-chapter="\d"/g) || []).length, 8, 'the Components row is unchanged');
+});
+
+test('Q44: the Workshop journey uses only the player\'s own steps and the real tools\' controls', () => {
+  const h = stage();
+  const steps = plain(workshopJourney(h).flatMap((c) => Array.from(c.steps)));
+  assert.deepEqual(steps.filter((s) => !KNOWN_STEPS.includes(s[0])).map((s) => s[0]), []);
+  // Every tool it opens is on the Workshop landing list in production (Knowledge Base, and the hidden Guide Train beta, are not demonstrated).
+  const opened = steps.filter((s) => s[0] === 'tap' && /data-workshop-tool-open/.test(s[1])).map((s) => /="([^"]+)"/.exec(s[1])[1]);
+  assert.deepEqual(opened, ['guide-spacing', 'grip', 'diameter', 'kr-guide', 'thread-studio']);
+  for (const tool of opened) assert.match(html, new RegExp(`<button class="workshop-tool-launch workshop-tool-launch--landing" type="button" data-workshop-tool-open="${tool}">`), tool);
+  // Studio's own fields and results named by id exist on the page.
+  const ids = new Set(steps.flatMap((s) => [].concat(s[1]).filter((x) => typeof x === 'string')).flatMap((sel) => [...sel.matchAll(/#([A-Za-z][\w-]*)/g)].map((m) => m[1])));
+  for (const id of ids) if (!['gripTemplatePreviewSheet'].includes(id)) assert.match(html, new RegExp(`id="${id}"`), id);
+  // The cut template preview is Studio's own (built by js/ui.js when Print Cut Template is tapped).
+  assert.match(read('js/ui.js'), /previewSheet\.id='gripTemplatePreviewSheet'/);
+  // Guide Setup's three entries are its real value boxes; the embedded tools are their own cards.
+  assert.deepEqual(steps.filter((s) => s[0] === 'edit').map((s) => [s[1], s[2]]), [['guideCount', '8'], ['firstGuide', '110'], ['targetStripper', '1180']]);
+  for (const field of ['guideCount', 'firstGuide', 'targetStripper']) assert.match(html, new RegExp(`class="layout-control-card__value" data-field="${field}" contenteditable="true"`));
+  assert.deepEqual([...new Set(steps.filter((s) => /^f/.test(s[0])).map((s) => s[1]))], ['#workshopToolKrGuide', '#workshopToolThreadStudio']);
+  // Printing is never a step: the template preview's Print and the Thread Design marking guide's print are not tapped.
+  assert.ok(steps.every((s) => !/print"\]|data-act=\\?"template/.test(String(s[1]) + String(s[2]))));
+});
+
+test('Q44: ?tour=workshop&chapter=N plays that chapter without the introduction; there is no ninth chapter', async () => {
+  const h = stage({ search: '?demo&tour=workshop&chapter=3' });
+  player(h).open(h.director);
+  assert.equal(h.get('#demoIntro').hidden, true);
+  await settle(h, () => h.log.some((e) => e[0] === 'caption' && /^Skipping ahead to chapter 3: Placement/.test(e[1])));
+  const tooFar = stage({ search: '?demo&tour=workshop&chapter=9' });
+  player(tooFar).open(tooFar.director);
+  assert.equal(tooFar.get('#demoIntro').hidden, false, 'there is no ninth Workshop chapter');
+});
+
+test('Q44: Workshop Tools starts its own journey; Replay and its chapter row restart it at ?tour=workshop', async () => {
+  const h = stage();
+  player(h).open(h.director);
+  h.get('#demoStartWorkshopBtn').click();
+  assert.equal(h.get('#demoIntro').hidden, true);
+  await settle(h, () => h.log.some((e) => e[0] === 'caption' && /^The Workshop: precision tools/.test(e[1])));
+  assert.match(h.get('#demoChapterLabel').textContent, /^1\/8 Spacing$/);
+  h.get('#demoReplayBtn').click();
+  h.workshopChapterButtons[6].click();
+  h.componentsChapterButtons[3].click();
+  assert.deepEqual(h.replaced, ['/?demo&tour=workshop&chapter=1', '/?demo&tour=workshop&chapter=7', '/?demo&tour=components&chapter=4']);
+});
+
+test('Q44: the finished message and the Workshop chapters\' skip messages are short too', () => {
+  const h = stage();
+  const messages = player(h).messages;
+  assert.ok(messages.some((m) => /^That's the Workshop/.test(m)));
+  for (const chapter of workshopJourney(h)) assert.ok(messages.includes(`Skipping ahead to chapter ${workshopJourney(h).indexOf(chapter) + 1}: ${chapter.title}...`));
+  for (const caption of workshopJourney(h).flatMap((c) => Array.from(c.steps)).filter((s) => s[0] === 'caption')) assert.ok(caption[1].length <= 72, caption[1]);
 });

@@ -325,7 +325,12 @@ test('Q18: account, sign-out, sync, recovery export, administration and customer
   assert.match(clientSource, /if \(demo\) \{\s*if \(demoJourneyControl \|\| \(!demoVisitorOnJourney && !blockedOffline && !blockedDemo\)\) return;/);
   const allowed = /const DEMO_DIRECTOR_CONTROLS = \[([\s\S]*?)\]\.join/.exec(clientSource);
   assert.ok(allowed, 'one list of the director\'s controls');
-  assert.doesNotMatch(allowed[1], /print|email|Email|statement|more-document|MoreDocuments|delete|retry/i, 'printing, email, statements and More documents are never allowed');
+  // Q44: the one exception by name is Grip Wrap's Print Cut Template, which only opens the on-screen template preview;
+  // that preview's Print Template stays hidden and disabled (js/demo-mode.js OUTPUT_CONTROLS) and printing itself is
+  // replaced on every demo page.
+  const listed = allowed[1].replace(/\/\/[^\n]*/g, '').replace('"#workshopGripPrintTemplateBtn"', '');
+  assert.doesNotMatch(listed, /print|email|Email|statement|more-document|MoreDocuments|delete|retry/i, 'printing, email, statements and More documents are never allowed');
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'js', 'demo-mode.js'), 'utf8'), /OUTPUT_CONTROLS = \[[^\]]*'\[data-grip-template-action="print"\]'/);
 });
 
 test('Q18 2A: one dock at the top identifies Demo Mode, holds the player and the way out, and never covers Studio\'s sheets', () => {

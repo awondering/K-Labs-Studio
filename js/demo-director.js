@@ -30,10 +30,17 @@
  * Components Library) and played by the same player and director on the same real screens: a new component, a new Fuji
  * guide family, seven sizes from Sizes & Prices with their own Buy and Sell prices, an edit, Duplicate Family, then the
  * v280 picker's sizes and quantities and one Add to Build on a Components job, with its Components Cost and Job Price.
- * Its Replay and chapters reload ?demo&tour=components&chapter=N, so it starts from the same fresh in-memory data. */
+ * Its Replay and chapters reload ?demo&tour=components&chapter=N, so it starts from the same fresh in-memory data.
+ *
+ * Q44: a third journey, the Workshop tools (WORKSHOP_JOURNEY), chosen on the introduction and played the same way on the
+ * real tool screens with their own calculations: Guide Setup (spacing inputs, orientation - spinning, casting Standard,
+ * the Progressive, Acute and Offset spirals, left and right - then the placement view), Grip Wrap (straight, tapered and
+ * the cut template preview; printing stays off), Diameter & Circumference both ways with wraps, KR Guide Layout and Thread
+ * Design Studio (a diamond design, its rod size and its marking steps). The last two are embedded tool documents, worked
+ * through the same way inside their frames (ftap, fshow, funtil). Replay and chapters reload ?demo&tour=workshop&chapter=N. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v294";
+  const DEMO_BUILD = "build148-v295";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
@@ -45,6 +52,7 @@
   const PLAYING = "Demonstration playing. Nothing here is saved, sent or synced.";
   const FINISHED = "That's the job, from enquiry to paid in full. Replay or pick a chapter.";
   const FINISHED_COMPONENTS = "That's the library, new part to priced job. Replay or pick a chapter.";
+  const FINISHED_WORKSHOP = "That's the Workshop, guides to thread design. Replay or pick a chapter.";
   const STOPPED = "Demonstration paused. Press Replay to watch again.";
   const PAUSED = "Paused. Press Play to carry on.";
   const skippingTo = (title, n) => `Skipping ahead to chapter ${n}: ${title}...`;
@@ -347,9 +355,157 @@
       ["show", ["#quoteTotalField", "#quoteEarningsSummary"], 2000],
     ] },
   ]);
-  const JOURNEYS = freeze({ rod: JOURNEY, components: COMPONENTS_JOURNEY });
-  const CHAPTER_ATTRIBUTE = Object.freeze({ rod: "data-demo-chapter", components: "data-demo-components-chapter" });
-  const FINISHED_FOR = Object.freeze({ rod: FINISHED, components: FINISHED_COMPONENTS });
+  // Q44: the Workshop tools. Steps added for it: edit(field, text) types into one of Guide Setup's value boxes, and
+  // ftap/fshow/funtil work a control inside an embedded tool document (KR Guide Layout, Thread Design Studio), named by
+  // its card and a selector in the tool's own page.
+  const KR = "#workshopToolKrGuide";
+  const THREAD = "#workshopToolThreadStudio";
+  const stageContinue = (n) => `#layoutScreen [data-guide-stage-continue="${n}"]`;
+  const orientation = (attribute, value) => `#workshopToolSpiral [data-${attribute}="${value}"]`;
+  const ORIENTATION_VIEW = ["#workshopSpiralMethodNote", "#workshopSpiralVisualCanvas"];
+  const toolBack = (card) => `${card} [data-workshop-tool-back]`;
+  const WORKSHOP_JOURNEY = freeze([
+    { title: "Spacing", steps: [
+      ["caption", "The Workshop: precision tools for the rod-building bench."],
+      ["tap", "[data-nav=\"workshopLandingScreen\"]"],
+      ["until", "#workshopToolsList"],
+      ["caption", "Guide Setup works out where every guide goes."],
+      ["tap", "[data-workshop-tool-open=\"guide-spacing\"]"],
+      ["until", "#layoutScreen.active"],
+      ["caption", "A casting rod: eight guides plus the tip top."],
+      ["edit", "guideCount", "8"],
+      ["caption", "First guide 110 mm from the tip; stripper at 1180 mm."],
+      ["edit", "firstGuide", "110"],
+      ["edit", "targetStripper", "1180"],
+      ["tap", stageContinue(0)],
+    ] },
+    { title: "Orientation", steps: [
+      ["caption", "Spinning rods use Standard: every guide underneath."],
+      ["tap", orientation("spiral-rod-style", "spinning")],
+      ["show", ORIENTATION_VIEW, 1800],
+      ["caption", "Casting, Standard: every guide on top."],
+      ["tap", orientation("spiral-rod-style", "casting")],
+      ["tap", orientation("spiral-method", "standard")],
+      ["show", ORIENTATION_VIEW, 1800],
+      ["caption", "Progressive spiral: a gradual turn under the blank."],
+      ["tap", orientation("spiral-method", "progressive")],
+      ["show", ORIENTATION_VIEW, 1800],
+      ["caption", "Spiral to the left or the right."],
+      ["tap", orientation("spiral-direction", "right")],
+      ["show", ORIENTATION_VIEW, 1500],
+      ["caption", "Acute: a quick transition through one guide at 90°."],
+      ["tap", orientation("spiral-method", "acute")],
+      ["show", ORIENTATION_VIEW, 1500],
+      ["caption", "Offset: the stripper set off the reel line."],
+      ["tap", orientation("spiral-method", "offset")],
+      ["show", ORIENTATION_VIEW, 1500],
+      ["caption", "Back to Progressive, spiralling right."],
+      ["tap", orientation("spiral-method", "progressive")],
+      ["tap", stageContinue(1)],
+    ] },
+    { title: "Placement", steps: [
+      ["caption", "The guides on the blank, from the tip."],
+      ["show", "#studioRodContainer", 1800],
+      ["caption", "Each guide's distance from the tip and its turn from the reel side."],
+      ["show", "#guideSpacingCards", 2400],
+    ] },
+    { title: "Straight grip", steps: [
+      ["caption", "Grip Wrap: how much material a wrapped grip needs."],
+      ["tap", "#layoutScreen [data-workshop-return-landing]"],
+      ["tap", "[data-workshop-tool-open=\"grip\"]"],
+      ["until", "#workshopToolGrip"],
+      ["tap", "#workshopToolGrip [data-grip-profile=\"straight\"]"],
+      ["caption", "A straight 26 mm grip, 250 mm long, in 20 mm cork tape."],
+      ["type", "#workshopGripDiameter", "26"],
+      ["type", "#workshopGripLength", "250"],
+      ["type", "#workshopGripCoverWidth", "20"],
+      ["type", "#workshopGripAllowance", "8"],
+      ["caption", "Material to cut, with 8% allowance, and the cut angle."],
+      ["show", ["#workshopGripMaterialRequired", "#workshopGripRevolutions", "#workshopGripStartCutAngle"], 2200],
+    ] },
+    { title: "Tapered grip", steps: [
+      ["caption", "Tapered: 30 mm at the start, 24 mm at the end."],
+      ["tap", "#workshopToolGrip [data-grip-profile=\"tapered\"]"],
+      ["type", "#workshopGripStartDiameter", "30"],
+      ["type", "#workshopGripEndDiameter", "24"],
+      ["caption", "Start and finish cut angles for the taper."],
+      ["show", ["#workshopGripMaterialRequired", "#workshopGripStartCutAngle", "#workshopGripFinishCutAngle"], 2200],
+      ["caption", "The cut template, at actual size. Printing is off in the demonstration."],
+      ["tap", "#workshopGripPrintTemplateBtn"],
+      ["until", "#gripTemplatePreviewSheet .grip-template-preview__sheet"],
+      ["show", "#gripTemplatePreviewSheet .grip-template-preview__summary", 1800],
+      ["show", "#gripTemplatePreviewSheet .grip-template-preview__guides", 2000],
+      ["tap", "#gripTemplatePreviewSheet .grip-template-preview__actions [data-grip-template-action=\"close\"]"],
+      ["untilHidden", "#gripTemplatePreviewSheet"],
+    ] },
+    { title: "Diameter", steps: [
+      ["caption", "Diameter & Circumference converts both ways."],
+      ["tap", toolBack("#workshopToolGrip")],
+      ["tap", "[data-workshop-tool-open=\"diameter\"]"],
+      ["until", "#workshopToolDiameter"],
+      ["caption", "A 12.5 mm blank: its circumference."],
+      ["type", "#workshopDcDiameter", "12.5"],
+      ["show", "#workshopDcCircumference", 1500],
+      ["caption", "Or measure round it: 50 mm gives the diameter."],
+      ["type", "#workshopDcCircumference", "50"],
+      ["show", "#workshopDcDiameter", 1500],
+      ["caption", "Thread for two wraps."],
+      ["type", "#workshopDcWraps", "2"],
+      ["show", "#workshopDcWrapLength", 1800],
+    ] },
+    { title: "KR layout", steps: [
+      ["caption", "KR Guide Layout: a starting layout from the Fuji KR chart."],
+      ["tap", toolBack("#workshopToolDiameter")],
+      ["tap", "[data-workshop-tool-open=\"kr-guide\"]"],
+      ["funtil", KR, "[data-rod]"],
+      ["caption", "A 6'6\" spinning rod."],
+      ["ftap", KR, "[data-rod=\"6'6\\\"\"]"],
+      ["caption", "Stripper, reduction train, choke point and running guides."],
+      ["fshow", KR, ".s-sum", 2400],
+      ["caption", "The layout from the tip, drawn to scale."],
+      ["fshow", KR, ".s-dia", 2000],
+      ["caption", "Every guide's model and distance from the tip."],
+      ["fshow", KR, ".s-gui", 2400],
+    ] },
+    { title: "Thread design", steps: [
+      ["caption", "Thread Design Studio: decorative wraps you can follow at the bench."],
+      ["tap", toolBack(KR)],
+      ["tap", "[data-workshop-tool-open=\"thread-studio\"]"],
+      ["ftap", THREAD, "[data-act=\"gallery\"]"],
+      ["caption", "A diamond cross wrap."],
+      ["ftap", THREAD, "[data-pat=\"diamonds\"]"],
+      ["fshow", THREAD, "canvas", 1600],
+      ["caption", "Choose a colour area, then its thread."],
+      ["ftap", THREAD, "[data-slot=\"1\"]"],
+      ["ftap", THREAD, "[data-col=\"gold\"]"],
+      ["ftap", THREAD, "[data-act=\"turn\"]"],
+      ["fshow", THREAD, "canvas", 1400],
+      ["caption", "Start wrapping: first the rod size, here 8.5 mm."],
+      ["ftap", THREAD, "[data-act=\"start\"]"],
+      ["ftap", THREAD, "[data-st=\"di+\"]"],
+      ["ftap", THREAD, "[data-st=\"di+\"]"],
+      ["ftap", THREAD, "[data-st=\"di+\"]"],
+      ["ftap", THREAD, "[data-st=\"di+\"]"],
+      ["ftap", THREAD, "[data-st=\"di+\"]"],
+      ["ftap", THREAD, "[data-act=\"usesize\"]"],
+      ["caption", "Then step by step: threads, underwrap, centre lines."],
+      ["ftap", THREAD, "[data-act=\"next\"]"],
+      ["ftap", THREAD, "[data-act=\"next\"]"],
+      ["ftap", THREAD, "[data-act=\"next\"]"],
+      ["caption", "Where to mark the crossing points on this rod."],
+      ["funtil", THREAD, "h3.stepTitle"],
+      ["fshow", THREAD, "section.card.stage", 1400],
+      ["fshow", THREAD, "section.card:not(.stage)", 2400],
+      ["ftap", THREAD, "[data-act=\"next\"]"],
+      ["ftap", THREAD, "[data-act=\"next\"]"],
+      ["caption", "Then each pass of thread, in order."],
+      ["fshow", THREAD, "section.card.stage", 1400],
+      ["fshow", THREAD, "section.card:not(.stage)", 2000],
+    ] },
+  ]);
+  const JOURNEYS = freeze({ rod: JOURNEY, components: COMPONENTS_JOURNEY, workshop: WORKSHOP_JOURNEY });
+  const CHAPTER_ATTRIBUTE = Object.freeze({ rod: "data-demo-chapter", components: "data-demo-components-chapter", workshop: "data-demo-workshop-chapter" });
+  const FINISHED_FOR = Object.freeze({ rod: FINISHED, components: FINISHED_COMPONENTS, workshop: FINISHED_WORKSHOP });
   // The journey playing on this page: chosen on the introduction, or by ?tour= on Replay and the chapter controls.
   let tour = "rod";
   let journey = JOURNEY;
@@ -568,6 +724,98 @@
     }
     await wait(PACE.scroll / 3);
   }
+  // Q44: one of Guide Setup's value boxes, typed as a person types it. The box takes its value when it is left (blur),
+  // the same as for a person; focus and blur are only signalled to Studio's own handlers, so no keyboard opens.
+  async function edit(field, text) {
+    const el = await control(`#layoutScreen .layout-control-card__value[data-field="${field}"]`);
+    el.dispatchEvent(new FocusEvent("focus"));
+    let typed = "";
+    el.textContent = "";
+    for (const character of String(text)) {
+      await wait(PACE.key);
+      typed += character;
+      el.textContent = typed;
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: character, inputType: "insertText" }));
+    }
+    await wait(PACE.beat);
+    el.dispatchEvent(new FocusEvent("blur"));
+    await wait(PACE.beat);
+    highlight([el], false);
+    if ((el.textContent || "").trim() !== String(text)) throw new Error(`${field} did not take ${text}.`);
+  }
+  // Q44: a control inside an embedded tool document (same origin, with the demonstration's guards installed first by
+  // its host). It is brought into view within the tool and then on the page, below the dock and clear of the bottom bar,
+  // and highlighted with the same outline as Studio's controls.
+  const FRAME_HIGHLIGHT = `[${HIGHLIGHT}] { outline:2px solid rgba(226,181,83,.8) !important;outline-offset:2px !important;box-shadow:0 0 0 4px rgba(226,181,83,.12) !important; }`;
+  function frameFind(card, selector) {
+    const frame = document.querySelector(`${card} iframe`);
+    if (!visible(frame)) return null;
+    let doc = null;
+    try { doc = frame.contentDocument; } catch (error) { return null; }
+    if (!doc || !doc.head) return null;
+    if (!doc.querySelector("style[data-demo-highlight-style]")) {
+      const style = doc.createElement("style");
+      style.setAttribute("data-demo-highlight-style", "");
+      style.textContent = FRAME_HIGHLIGHT;
+      doc.head.appendChild(style);
+    }
+    const el = Array.from(doc.querySelectorAll(selector)).find((node) => node.getClientRects().length > 0 && !node.closest("[hidden]"));
+    return el ? { frame, el } : null;
+  }
+  const frameShown = (card, selector) => waitFor(() => frameFind(card, selector), `${selector} in ${card}`);
+  function frameBox(frame, el) {
+    const f = frame.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const dock = byId("demoModeBar");
+    const bar = document.querySelector(".bottom-nav");
+    const top = Math.max(0, dock && !dock.hidden ? dock.getBoundingClientRect().bottom : 0) + 8;
+    const bottom = (bar && visible(bar) ? bar.getBoundingClientRect().top : window.innerHeight) - 8;
+    return { top: f.top + r.top, bottom: f.top + r.bottom, inFrame: r.top >= -1 && r.bottom <= frame.clientHeight + 1, min: top, max: bottom };
+  }
+  async function settleFrame(frame, el) {
+    let waited = 0;
+    let last = "";
+    while (waited < PACE.view) {
+      await gate();
+      const b = frameBox(frame, el);
+      const now = `${Math.round(b.top)}`;
+      if (now === last) return;
+      last = now;
+      await sleep(100);
+      waited += 100;
+    }
+  }
+  async function frameIntoView(frame, el) {
+    const behavior = skipping ? "auto" : "smooth";
+    if (!frameBox(frame, el).inFrame) {
+      el.scrollIntoView({ block: "center", inline: "nearest", behavior });
+      await settleFrame(frame, el);
+    }
+    const b = frameBox(frame, el);
+    if (b.top < b.min || b.bottom > b.max) {
+      // Taller than the space: its top just below the dock; otherwise centred in the space.
+      const by = b.bottom - b.top > b.max - b.min ? b.top - b.min : (b.top + b.bottom) / 2 - (b.min + b.max) / 2;
+      window.scrollBy({ top: by, behavior });
+      await settleFrame(frame, el);
+    }
+  }
+  async function frameTap(card, selector) {
+    const { frame, el } = await frameShown(card, selector);
+    await frameIntoView(frame, el);
+    highlight([el], true);
+    await wait(PACE.beat);
+    if (el.disabled) throw new Error(`${selector} is not available.`);
+    el.click();
+    await wait(PACE.beat);
+    highlight([el], false);
+  }
+  async function frameShow(card, selector, ms) {
+    const { frame, el } = await frameShown(card, selector);
+    await frameIntoView(frame, el);
+    highlight([el], true);
+    await wait(ms);
+    highlight([el], false);
+  }
 
   // ---- The write window while paused. Pausing closes the director's write window, so nothing at all can change the
   // demonstration data while it stands still; Play reopens it before the director moves again. The window closes once
@@ -698,6 +946,10 @@
     if (kind === "untilValue") return waitFor(() => document.querySelector(a)?.value === b, `${a} showing ${b}`);
     if (kind === "untilText") return waitFor(() => String(document.querySelector(a)?.textContent || "").includes(b), `${a} showing ${b}`);
     if (kind === "scroll") return scrollThrough(a);
+    if (kind === "edit") return edit(a, b);
+    if (kind === "ftap") return frameTap(a, b);
+    if (kind === "fshow") return frameShow(a, b, step[3]);
+    if (kind === "funtil") return frameShown(a, b);
     if (kind === "hold") return wait(a);
     throw new Error(`Unknown demonstration step: ${kind}`);
   }
@@ -735,9 +987,12 @@
     });
   }
   function restartAt(chapter, name = tour) {
-    window.location.replace(`${window.KLABS_DEMO.enterUrl()}${name === "components" ? "&tour=components" : ""}&chapter=${chapter}`);
+    window.location.replace(`${window.KLABS_DEMO.enterUrl()}${name !== "rod" && JOURNEYS[name] ? `&tour=${name}` : ""}&chapter=${chapter}`);
   }
-  const requestedTour = () => (/(?:^|[?&])tour=components(?:&|$)/.test(window.location.search || "") ? "components" : "rod");
+  const requestedTour = () => {
+    const match = /(?:^|[?&])tour=(components|workshop)(?:&|$)/.exec(window.location.search || "");
+    return match ? match[1] : "rod";
+  };
   function requestedChapter(name) {
     const match = /(?:^|[?&])chapter=(\d{1,2})(?:&|$)/.exec(window.location.search || "");
     const n = match ? Number(match[1]) : 0;
@@ -746,9 +1001,8 @@
   // Q24: the chapter row of the journey playing; the other journey's row stays hidden.
   function showChapterRow() {
     const rod = document.querySelector("[data-demo-chapter]")?.closest("ol");
-    const components = document.querySelector("[data-demo-tour-chapters=\"components\"]");
     if (rod) rod.hidden = tour !== "rod";
-    if (components) components.hidden = tour !== "components";
+    document.querySelectorAll("[data-demo-tour-chapters]").forEach((row) => { row.hidden = row.getAttribute("data-demo-tour-chapters") !== tour; });
   }
   function watchDockHeight(dock) {
     const root = document.documentElement;
@@ -784,6 +1038,7 @@
     watchDockHeight(dock);
     let started = false;
     const startComponents = byId("demoStartComponentsBtn");
+    const startWorkshop = byId("demoStartWorkshopBtn");
     const begin = async (chapter, name = "rod") => {
       if (started) return;
       started = true;
@@ -791,6 +1046,7 @@
       showChapterRow();
       start.disabled = true;
       if (startComponents) startComponents.disabled = true;
+      if (startWorkshop) startWorkshop.disabled = true;
       intro.hidden = true;
       playerPanel.hidden = false;
       dock.setAttribute("data-player-open", "true");
@@ -812,6 +1068,7 @@
     };
     start.addEventListener("click", () => begin(1));
     if (startComponents) startComponents.addEventListener("click", () => begin(1, "components"));
+    if (startWorkshop) startWorkshop.addEventListener("click", () => begin(1, "workshop"));
     setMessage(RESTING);
     const requested = requestedTour();
     const chapter = requestedChapter(requested);
@@ -826,7 +1083,7 @@
   }
 
   // messages: everything else the caption line can show (the browser test checks none of it is cut off either).
-  const MESSAGES = Object.freeze([PAUSED, FINISHED, FINISHED_COMPONENTS, STOPPED,
-    ...[JOURNEY, COMPONENTS_JOURNEY].flatMap((steps) => steps.map((chapter, i) => skippingTo(chapter.title, i + 1)))]);
+  const MESSAGES = Object.freeze([PAUSED, FINISHED, FINISHED_COMPONENTS, FINISHED_WORKSHOP, STOPPED,
+    ...[JOURNEY, COMPONENTS_JOURNEY, WORKSHOP_JOURNEY].flatMap((steps) => steps.map((chapter, i) => skippingTo(chapter.title, i + 1)))]);
   window.KLABS_DEMO_PLAYER = Object.freeze({ open, build: DEMO_BUILD, journey: JOURNEY, journeys: JOURNEYS, pace: PACE, watchdog: WATCHDOG_MS, messages: MESSAGES });
 })();

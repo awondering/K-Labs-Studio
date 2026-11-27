@@ -21,7 +21,7 @@
      a blank Total Price, old payment buttons). If Studio's code is not this release, clear the cached files and reload
      once; if that does not help, say so plainly instead of showing a half-working screen. */
   (function () {
-    var BUILD = 'build148-v294';
+    var BUILD = 'build148-v295';
     window.KLABS_SHELL_BUILD = BUILD;
     function notice(text) {
       var show = function () {
@@ -1608,15 +1608,17 @@
       <h2 id="demoIntroTitle">Watch Studio take on a new customer</h2>
       <p>Studio works through a real job on its own screens, as a rod builder would: from a new enquiry, the rod specification, parts, labour and live pricing to the customer quote, the deposit, the workshop, the final payment and the invoice.</p>
       <p>Or watch the Components Library: a new component, a Fuji guide family in seven sizes with their own prices, then a guide set added to a job.</p>
+      <p>Or the Workshop tools: guide spacing and spiral layouts, grip wraps, diameter conversions, the KR guide layout and a thread design, worked out live.</p>
       <p>You watch while the demonstration does the tapping and typing. Pause, replay or jump to a chapter at any time. The customer and business are fictional, and nothing is saved or sent.</p>
       <div class="demo-intro__actions">
         <button id="demoStartBtn" type="button" class="primary-action demo-intro__start">BUILD A ROD</button>
         <button id="demoStartComponentsBtn" type="button" class="primary-action demo-intro__start">COMPONENTS LIBRARY</button>
+        <button id="demoStartWorkshopBtn" type="button" class="primary-action demo-intro__start">WORKSHOP TOOLS</button>
         <button id="demoIntroExitBtn" type="button" class="ghost-action demo-intro__exit">Exit demo</button>
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v294" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v295" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>
@@ -1650,6 +1652,17 @@
           <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="6" aria-label="Chapter 6: Choose"><b>6</b><span>Choose</span></button></li>
           <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="7" aria-label="Chapter 7: Guide set"><b>7</b><span>Guide set</span></button></li>
           <li><button type="button" class="demo-player__chapter" data-demo-components-chapter="8" aria-label="Chapter 8: Job price"><b>8</b><span>Job price</span></button></li>
+        </ol>
+        <!-- Q44: the Workshop tools demonstration's chapters, shown instead of the others when it plays. -->
+        <ol class="demo-player__chapters" aria-label="Chapters" data-demo-tour-chapters="workshop" hidden>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="1" aria-label="Chapter 1: Spacing"><b>1</b><span>Spacing</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="2" aria-label="Chapter 2: Orientation"><b>2</b><span>Orientation</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="3" aria-label="Chapter 3: Placement"><b>3</b><span>Placement</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="4" aria-label="Chapter 4: Straight grip"><b>4</b><span>Straight grip</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="5" aria-label="Chapter 5: Tapered grip"><b>5</b><span>Tapered grip</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="6" aria-label="Chapter 6: Diameter"><b>6</b><span>Diameter</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="7" aria-label="Chapter 7: KR layout"><b>7</b><span>KR layout</span></button></li>
+          <li><button type="button" class="demo-player__chapter" data-demo-workshop-chapter="8" aria-label="Chapter 8: Thread design"><b>8</b><span>Thread design</span></button></li>
         </ol>
         <button id="demoPlayerExitBtn" type="button" class="ghost-action demo-player__exit">Exit demo</button>
       </div>

@@ -202,7 +202,9 @@ test('Q18 amendment: only the director may change demo data, and only while it i
   assert.deepEqual(p.nativeWrites, [], 'nothing reached device storage');
 });
 
-const OUTPUT_SELECTORS = ['#viewQuoteEmailBtn', '#workshopGripPrintActions', '[data-grip-template-action="print"]',
+// Q44 change: Grip Wrap's Print Cut Template (#workshopGripPrintActions) only opens the on-screen template preview, which
+// the Workshop demonstration shows, so it is no longer hidden; the preview's own Print Template still is.
+const OUTPUT_SELECTORS = ['#viewQuoteEmailBtn', '[data-grip-template-action="print"]',
   '[data-invoice-preview-action="print"]', '#studioRecoveryExportBtn', 'a[target="_blank"]', 'a[href^="mailto:"]', 'a[href^="tel:"]', 'a[download]',
   // 2B: More documents (hidden, not just blocked).
   '#quoteMoreDocumentsWrap'];
@@ -213,6 +215,7 @@ test('Q18 2A: controls that leave the app (email draft, print/PDF, share, extern
   assert.equal(p.styles.length, 1, 'one Demo Mode stylesheet');
   const rule = p.styles[0].textContent;
   for (const selector of OUTPUT_SELECTORS) assert.ok(rule.includes(selector), `${selector} is hidden`);
+  assert.ok(!rule.includes('#workshopGripPrintActions'), 'Q44: the template preview button is shown');
   assert.match(rule, /\{\s*display:\s*none\s*!important;?\s*\}/);
   for (const control of p.outputControls) {
     assert.equal(control.hidden, true, control.id);
