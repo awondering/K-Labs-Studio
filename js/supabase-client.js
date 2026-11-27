@@ -58,7 +58,10 @@ const DEMO_DIRECTOR_CONTROLS = ["#quoteSpecReelSeatRef [data-layout-seat-ref]", 
   "#toggleCurrentBuildStatusBtn", "#viewInvoicePreviewBtn", "#invoicePreviewSheet [data-invoice-preview-action=\"issue\"]",
   "#invoicePreviewSheet [data-invoice-preview-action=\"close\"]", "#choicePickerSheet [data-pick-step]", "#choicePickerAddToBuild",
   // Q24: the Components Library demonstration's Generate Sizes (its label is otherwise refused as a document control).
-  "#studioComponentsGenerateSizesBtn"].join(", ");
+  "#studioComponentsGenerateSizesBtn",
+  // Q44: the Workshop demonstration's Print Cut Template, which opens Grip Wrap's on-screen template preview (its own
+  // Print Template stays hidden and disabled in Demo Mode).
+  "#workshopGripPrintTemplateBtn"].join(", ");
 
 function klabsApplyReadOnlyControls() {
   const readOnly = window.KLABS_ACCESS_STATE?.can_write === false;
