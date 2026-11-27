@@ -17,6 +17,33 @@ function klabsFetch(input, init) {
   return window.fetch(input, { ...(init || {}), signal: controller.signal })
     .finally(() => window.clearTimeout(timer));
 }
+// Q43: an emailed password-reset or invitation link signs the account in through the address
+// (#access_token=...&type=recovery|invite), and a failed one returns #error=...&error_code=.... Before supabase-js reads
+// the address, note only the link's TYPE (kept for this tab, so a reload still asks for the password) or its ERROR CODE.
+// Tokens are never read, logged or stored here; supabase-js consumes and clears them as before.
+const KLABS_PASSWORD_SETUP_KEY = "klabs-password-setup";
+const KLABS_AUTH_LINK_ERROR = (function klabsReadAuthLink() {
+  if (window.KLABS_DEMO?.active) return "";
+  try {
+    const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+    const query = new URLSearchParams(window.location.search || "");
+    const code = hash.get("error_code") || query.get("error_code") || "";
+    if (code || hash.get("error") || query.get("error")) {
+      ["error", "error_code", "error_description"].forEach((key) => query.delete(key));
+      const search = query.toString();
+      window.history.replaceState(window.history.state, "", window.location.pathname + (search ? `?${search}` : ""));
+      return code || "invalid_link";
+    }
+    const type = hash.get("type");
+    if (hash.get("access_token") && (type === "recovery" || type === "invite")) {
+      window.sessionStorage.setItem(KLABS_PASSWORD_SETUP_KEY, type);
+    }
+  } catch (error) {
+    // Storage or history unavailable: the link still signs in as before.
+  }
+  return "";
+})();
+
 // Q18: a Demo Mode page never creates a Supabase client, so it holds no session and makes no Supabase requests.
 window.KLABS_SUPABASE_CLIENT = window.KLABS_DEMO?.active ? null : window.supabase.createClient(
   window.KLABS_SUPABASE.url,
@@ -251,7 +278,7 @@ async function klabsForgotPassword() {
   message.textContent = "Sending password reset email...";
 
   const { error } =
-    await window.KLABS_SUPABASE_CLIENT.auth.resetPasswordForEmail(email);
+    await window.KLABS_SUPABASE_CLIENT.auth.resetPasswordForEmail(email, klabsAuthRedirectOptions("redirectTo"));
 
   if (error) {
     message.textContent = error.message;
@@ -261,14 +288,155 @@ async function klabsForgotPassword() {
   message.textContent = "Password reset email sent.";
 }
 
+// Emailed links return to this Studio page (the same address for sign-up confirmation and password reset).
+function klabsAuthRedirectOptions(name) {
+  return /^https?:$/.test(window.location.protocol)
+    ? { [name]: window.location.origin + window.location.pathname.replace(/index\.html$/, "") }
+    : undefined;
+}
+
 let klabsSignUpPending = false;
 
-function klabsShowAuthMode(mode) {
+// mode: "signin" | "signup" | "password" (Q43: setting a password from an emailed link; setup is "recovery" or "invite").
+function klabsShowAuthMode(mode, setup = "", email = "") {
   const signUp = mode === "signup";
-  document.getElementById("authForm").hidden = signUp;
-  document.getElementById("authShowSignUp").hidden = signUp;
+  const password = mode === "password";
+  document.getElementById("authForm").hidden = signUp || password;
+  document.getElementById("authShowSignUp").hidden = signUp || password;
   document.getElementById("authSignUpForm").hidden = !signUp;
+  const newPasswordForm = document.getElementById("authNewPasswordForm");
+  if (newPasswordForm) newPasswordForm.hidden = !password;
+  const back = document.getElementById("authBackHome");
+  if (back) back.hidden = password;
+  const lead = document.getElementById("authLead");
+  if (lead) {
+    if (!lead.dataset.signInText) lead.dataset.signInText = lead.textContent;
+    const account = email || "your account";
+    lead.textContent = !password ? lead.dataset.signInText
+      : setup === "invite" ? `Welcome to K-Labs Studio. Create a password for ${account} to finish setting up your account.`
+      : `Choose a new password for ${account}.`;
+  }
   document.getElementById("authMessage").textContent = "";
+}
+
+// ---------- Q43: password reset and invitation links ----------
+function klabsPasswordSetupMode() {
+  try {
+    const mode = window.sessionStorage.getItem(KLABS_PASSWORD_SETUP_KEY);
+    return mode === "recovery" || mode === "invite" ? mode : "";
+  } catch (error) {
+    return "";
+  }
+}
+function klabsClearPasswordSetup() {
+  try { window.sessionStorage.removeItem(KLABS_PASSWORD_SETUP_KEY); } catch (error) { /* nothing stored */ }
+}
+function klabsShowAuthScreen() {
+  if (window.KLABS_PUBLIC_ENTRY?.showAuth) {
+    window.KLABS_PUBLIC_ENTRY.showAuth("");
+  } else {
+    document.getElementById("app").style.display = "none";
+    document.getElementById("authScreen").style.display = "flex";
+  }
+  document.body.classList.remove("klabs-auth-resolving");
+}
+const KLABS_LINK_HELP = "Enter your email and choose Forgot password to get a new link. If you were invited, ask for a new invitation.";
+// An expired, already-used or invalid link: the sign-in screen, with a way to request another link.
+function klabsShowLinkProblem(code) {
+  klabsClearPasswordSetup();
+  klabsShowAuthScreen();
+  klabsShowAuthMode("signin");
+  document.getElementById("authMessage").textContent = (code === "otp_expired"
+    ? "This link has expired or has already been used. "
+    : "This link is not valid or has already been used. ") + KLABS_LINK_HELP;
+  document.getElementById("authEmail").focus();
+}
+async function klabsOpenPasswordSetup(mode) {
+  const { data, error } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
+  const user = data?.session?.user;
+  if (error || !user?.id) {
+    klabsShowLinkProblem("invalid_link");
+    return;
+  }
+  klabsShowAuthScreen();
+  klabsShowAuthMode("password", mode, typeof user.email === "string" ? user.email : "");
+  document.getElementById("newPassword").focus();
+}
+// A page opened from an emailed link: ask for the password, report a failed link, or (a failed link while this device
+// is still signed in) open Studio as usual.
+async function klabsHandleAuthLink(mode) {
+  if (mode) {
+    await klabsOpenPasswordSetup(mode);
+    return;
+  }
+  const { data } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
+  if (data?.session?.user?.id) klabsRestoreSession();
+  else klabsShowLinkProblem(KLABS_AUTH_LINK_ERROR);
+}
+
+let klabsSetPasswordPending = false;
+
+async function klabsSetNewPassword() {
+  if (klabsSetPasswordPending) return;
+  const passwordInput = document.getElementById("newPassword");
+  const confirmInput = document.getElementById("newPasswordConfirm");
+  const message = document.getElementById("authMessage");
+  const button = document.getElementById("authSetPassword");
+  const password = passwordInput.value;
+
+  if (password.length < 6) {
+    message.textContent = "Password must be at least 6 characters.";
+    return;
+  }
+  if (password !== confirmInput.value) {
+    message.textContent = "Passwords do not match.";
+    return;
+  }
+
+  klabsSetPasswordPending = true;
+  message.textContent = "Saving password...";
+  button.setAttribute("aria-disabled", "true");
+  button.setAttribute("aria-busy", "true");
+  try {
+    const { error } = await window.KLABS_SUPABASE_CLIENT.auth.updateUser({ password });
+    if (error) {
+      // The link's sign-in has ended (expired, or signed out elsewhere): a new link is needed.
+      if (error.name === "AuthSessionMissingError" || error.status === 401 || error.status === 403) {
+        passwordInput.value = "";
+        confirmInput.value = "";
+        klabsShowLinkProblem("otp_expired");
+        return;
+      }
+      message.textContent = error.message || "Could not save the password. Please try again.";
+      return;
+    }
+    passwordInput.value = "";
+    confirmInput.value = "";
+    klabsClearPasswordSetup();
+    message.textContent = "Password saved. Opening Studio...";
+    klabsRestoreSession();
+  } catch (error) {
+    message.textContent = "Could not save the password. Check your connection and try again.";
+  } finally {
+    klabsSetPasswordPending = false;
+    button.removeAttribute("aria-disabled");
+    button.removeAttribute("aria-busy");
+  }
+}
+
+// Leaves without changing the password: the link's sign-in ends on this device.
+async function klabsCancelPasswordSetup() {
+  klabsClearPasswordSetup();
+  document.getElementById("newPassword").value = "";
+  document.getElementById("newPasswordConfirm").value = "";
+  try {
+    await window.KLABS_SUPABASE_CLIENT.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.warn("[K-Labs Studio] Could not end the link sign-in:", error?.name || "error");
+  }
+  klabsShowAuthScreen();
+  klabsShowAuthMode("signin");
+  document.getElementById("authMessage").textContent = "Your password was not changed.";
 }
 
 async function klabsSignUp() {
@@ -299,9 +467,7 @@ async function klabsSignUp() {
   button.setAttribute("aria-busy", "true");
 
   try {
-    const options = /^https?:$/.test(window.location.protocol)
-      ? { emailRedirectTo: window.location.origin + window.location.pathname.replace(/index\.html$/, "") }
-      : undefined;
+    const options = klabsAuthRedirectOptions("emailRedirectTo");
     const { data, error } = await window.KLABS_SUPABASE_CLIENT.auth.signUp({ email, password, options });
 
     if (error) {
@@ -327,6 +493,23 @@ async function klabsSignUp() {
     button.removeAttribute("aria-disabled");
     button.removeAttribute("aria-busy");
   }
+}
+
+// Restores the saved sign-in (or shows the public home) - the normal launch, unchanged by Q43.
+function klabsRestoreSession() {
+  klabsCheckLogin().catch((error) => {
+    console.error("[K-Labs Studio] Could not restore the session:", error);
+    if (error.name === "StudioTabLockError") {
+      document.getElementById("authMessage").textContent = error.message;
+    } else if (window.KLABS_PUBLIC_ENTRY && !window.KLABS_UI) {
+      window.KLABS_PUBLIC_ENTRY.showHome();
+      document.getElementById("authMessage").textContent = "Could not restore your session. Check your connection and try again.";
+    } else if (window.KLABS_PUBLIC_ENTRY) {
+      document.getElementById("authMessage").textContent = "Could not open Studio. Reload and try again.";
+    } else {
+      klabsApplyAuthState(null);
+    }
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -413,6 +596,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("authForgotPassword")
     ?.addEventListener("click", klabsForgotPassword);
+  document.getElementById("authNewPasswordForm")
+    ?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      klabsSetNewPassword();
+    });
+  document.getElementById("authCancelPassword")
+    ?.addEventListener("click", klabsCancelPasswordSetup);
 
   document.getElementById("settingsSignOut")
     ?.addEventListener("click", klabsSignOut);
@@ -422,19 +612,15 @@ document.addEventListener("DOMContentLoaded", () => {
     window.KLABS_PUBLIC_ENTRY?.startDemo(klabsApplyAuthState);
     return;
   }
-  klabsCheckLogin().catch((error) => {
-    console.error("[K-Labs Studio] Could not restore the session:", error);
-    if (error.name === "StudioTabLockError") {
-      document.getElementById("authMessage").textContent = error.message;
-    } else if (window.KLABS_PUBLIC_ENTRY && !window.KLABS_UI) {
-      window.KLABS_PUBLIC_ENTRY.showHome();
-      document.getElementById("authMessage").textContent = "Could not restore your session. Check your connection and try again.";
-    } else if (window.KLABS_PUBLIC_ENTRY) {
-      document.getElementById("authMessage").textContent = "Could not open Studio. Reload and try again.";
-    } else {
-      klabsApplyAuthState(null);
-    }
-  });
+  const passwordSetup = klabsPasswordSetupMode();
+  if (passwordSetup || KLABS_AUTH_LINK_ERROR) {
+    klabsHandleAuthLink(passwordSetup).catch((error) => {
+      console.error("[K-Labs Studio] Could not open the emailed link:", error?.name || "error");
+      klabsShowLinkProblem("invalid_link");
+    });
+  } else {
+    klabsRestoreSession();
+  }
   window.KLABS_SUPABASE_CLIENT.auth.onAuthStateChange?.((event, session) => {
     // Q17: the sign-in was renewed (or ended) while the saved records were open view-only - restart normally.
     if (window.KLABS_ACCESS_STATE?.offline_session && (session?.user?.id || event === "SIGNED_OUT")) {

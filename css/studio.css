@@ -12443,7 +12443,7 @@ body.klabs-read-only #app [data-write-action] { opacity:.5;pointer-events:none; 
 /* Native sign-in form wrapper keeps the existing centred column layout. */
 #authScreen .auth-form{display:contents}
 #authScreen .auth-form[hidden],#authScreen .auth-link-button[hidden]{display:none}
-#authScreen #authSignUp{
+#authScreen #authSignUp,#authScreen #authSetPassword{
   width:min(100%,420px);margin-top:4px;padding:16px 18px;border:1px solid rgba(255,255,255,.12);
   border-radius:14px;background:linear-gradient(180deg,#c23349 0%,#8d182d 100%);color:#fff;font:inherit;
   font-weight:700;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;
