@@ -294,7 +294,11 @@ test('Q18: demo page wiring - no Supabase client, no sign-in restore, no service
   assert.equal(scripts[0], 'js/demo-mode.js', 'decided before anything else runs');
   assert.match(clientSource, /window\.KLABS_SUPABASE_CLIENT = window\.KLABS_DEMO\?\.active \? null : window\.supabase\.createClient\(/);
   const ready = clientSource.slice(clientSource.indexOf('document.addEventListener("DOMContentLoaded"'));
-  assert.ok(ready.indexOf('KLABS_PUBLIC_ENTRY?.startDemo(klabsApplyAuthState)') < ready.indexOf('klabsCheckLogin().catch'));
+  // Demo Mode returns before any sign-in restore or emailed-link handling (Q43 moved the restore into klabsRestoreSession).
+  const demo = ready.indexOf('KLABS_PUBLIC_ENTRY?.startDemo(klabsApplyAuthState)');
+  for (const call of ['klabsRestoreSession();', 'klabsHandleAuthLink(passwordSetup)']) assert.ok(demo > 0 && demo < ready.indexOf(call), call);
+  assert.match(clientSource, /function klabsRestoreSession\(\) \{\n  klabsCheckLogin\(\)\.catch/);
+  assert.match(clientSource, /const KLABS_AUTH_LINK_ERROR = \(function klabsReadAuthLink\(\) \{\n  if \(window\.KLABS_DEMO\?\.active\) return "";/);
   assert.match(read('js/app.js'), /if\('serviceWorker' in navigator && !window\.KLABS_DEMO\?\.active\)\{/);
   const worker = read('service-worker.js');
   assert.match(worker, /'js\/demo-mode\.js',/);

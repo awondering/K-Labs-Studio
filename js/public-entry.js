@@ -21,7 +21,7 @@
   // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
   // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
   // back to the public entry with the usual notice.
-  const DEMO_BUILD = "build148-v293";
+  const DEMO_BUILD = "build148-v294";
   const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
@@ -119,6 +119,10 @@
     document.getElementById("authForm").hidden = false;
     document.getElementById("authShowSignUp").hidden = false;
     document.getElementById("authSignUpForm").hidden = true;
+    // Q43: the Set New Password form belongs to an emailed link only; the ordinary sign-in screen never shows it.
+    const newPasswordForm = document.getElementById("authNewPasswordForm");
+    if (newPasswordForm) newPasswordForm.hidden = true;
+    document.getElementById("authBackHome").hidden = false;
     document.getElementById("app").style.display = "none";
     setVisible("accountAccessScreen", false);
     setVisible("exploreDemoScreen", false);
@@ -846,5 +850,5 @@
 
   if (hasStoredSession()) preloadPrivateApp();
 
-  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, startDemo, showHome, isLoading: () => !!loadPromise };
+  window.KLABS_PUBLIC_ENTRY = { applySession, applyOfflineSession, startDemo, showHome, showAuth, isLoading: () => !!loadPromise };
 })();

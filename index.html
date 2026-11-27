@@ -21,7 +21,7 @@
      a blank Total Price, old payment buttons). If Studio's code is not this release, clear the cached files and reload
      once; if that does not help, say so plainly instead of showing a half-working screen. */
   (function () {
-    var BUILD = 'build148-v293';
+    var BUILD = 'build148-v294';
     window.KLABS_SHELL_BUILD = BUILD;
     function notice(text) {
       var show = function () {
@@ -71,7 +71,7 @@
  <section id="authScreen" style="display:none">
   <button id="authBackHome" class="auth-link-button" type="button">Back to home</button>
   <h1>K-Labs Studio</h1>
-  <p>Sign in to sync Studio across your devices.</p>
+  <p id="authLead">Sign in to sync Studio across your devices.</p>
 
   <form id="authForm" class="auth-form">
   <label>
@@ -107,6 +107,20 @@
     </label>
     <button id="authSignUp" type="submit">Create Account</button>
     <button id="authShowSignIn" class="auth-link-button" type="button">Back to Sign In</button>
+  </form>
+
+  <!-- Q43: opened by a valid password-reset or invitation link (the link has already signed the account in). -->
+  <form id="authNewPasswordForm" class="auth-form" hidden novalidate>
+    <label>
+      New password
+      <input id="newPassword" type="password" autocomplete="new-password">
+    </label>
+    <label>
+      Confirm new password
+      <input id="newPasswordConfirm" type="password" autocomplete="new-password">
+    </label>
+    <button id="authSetPassword" type="submit">Save Password</button>
+    <button id="authCancelPassword" class="auth-link-button" type="button">Cancel and sign out</button>
   </form>
 
   <p id="authMessage" aria-live="polite"></p>
@@ -1602,7 +1616,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v293" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v294" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>
