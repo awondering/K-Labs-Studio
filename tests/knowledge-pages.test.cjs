@@ -65,7 +65,8 @@ test('proof: a verified article becomes a crawlable page with readable text, met
   assert.match(page, /<meta name="robots" content="index, follow" \/>/);
   // Readable without JavaScript: the whole article is in the HTML.
   const text = textOf(page);
-  assert.ok(text.includes(a.title) && text.includes(a.summary) && text.includes(a.source));
+  assert.ok(text.includes(a.title) && text.includes(a.summary));
+  assert.ok(!text.includes(a.source), 'article evidence stays out of the rendered page');
   for (const s of a.sections) {
     assert.ok(text.includes(s.heading), s.heading);
     for (const b of s.blocks) for (const t of b.items || [b.text]) assert.ok(text.includes(t), t.slice(0, 40));
@@ -91,6 +92,18 @@ test('proof: a verified article becomes a crawlable page with readable text, met
   assert.match(page, /<a class="knowledge-more" href="\/knowledge\/category\/techniques\/">More in Techniques ›<\/a>/);
   // No draft wording on a published page.
   assert.doesNotMatch(page, /Draft · Unverified|knowledge-status/);
+});
+
+test('article presentation keeps related links and renders only a named inline citation', () => {
+  const id = 'how-should-i-prepare-a-customer-facing-invoice';
+  const article = kb.ARTICLES.find((a) => a.id === id);
+  const page = gen.generate(kb)[`knowledge/${id}/index.html`];
+  const citation = /<a class="knowledge-article__citation" href="https:\/\/www\.ird\.govt\.nz\/[^"]+">Inland Revenue’s taxable supply information guidance<\/a>/;
+  assert.match(page, citation);
+  assert.doesNotMatch(page, /knowledge-article__source/);
+  assert.match(article.source, /Inland Revenue/);
+  const links = [...page.matchAll(/class="knowledge-related__card" href="\/knowledge\/([^/]+)\/"/g)];
+  assert.deepEqual(links.map((match) => match[1]), article.related);
 });
 
 test('titles, descriptions and canonical URLs are unique across the published pages', () => {

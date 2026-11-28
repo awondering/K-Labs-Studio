@@ -18,24 +18,41 @@
 .knowledge-count{margin:0;font-size:12px;line-height:1.5;color:var(--titanium)}
 .knowledge-heading{margin:0;font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--ds-text-strong)}
 .knowledge-back{margin-bottom:-2px}
-.knowledge-article{display:grid;gap:calc(var(--ds-space-6) + var(--ds-space-1));max-width:68ch;color:var(--text)}
+.knowledge-article{display:grid;gap:var(--ds-space-6);width:min(100%,45rem);margin-inline:auto;min-width:0;color:var(--text);overflow-wrap:anywhere}
 .knowledge-article__kicker{margin:0;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--titanium)}
-.knowledge-article__title{margin:calc(var(--ds-space-4) * -1) 0 0;font-size:22px;line-height:1.25;font-weight:600;letter-spacing:.01em;color:var(--ds-text-strong);text-wrap:balance}
+.knowledge-article__title{margin:0;font-size:clamp(22px, 3vw, 34px);line-height:1.25;font-weight:600;letter-spacing:.01em;color:var(--ds-text-strong);text-wrap:balance}
 .knowledge-article__draft{margin:0;padding:var(--ds-space-4) var(--ds-space-5);border-radius:var(--ds-radius-md);border:1px solid var(--kl-red-edge);background:var(--kl-red-soft);
   font-size:12px;line-height:1.5;color:var(--ds-text-strong)}
 .knowledge-article__brief{display:grid;gap:var(--ds-space-2);padding:var(--ds-space-6) calc(var(--ds-space-6) + 2px);border-radius:var(--ds-radius-lg);border:var(--ds-stroke-strong);
   background:var(--ds-surface-soft)}
 .knowledge-article__brief p{margin:0;font-size:15px;line-height:1.55;color:var(--ds-text-strong)}
 .knowledge-article__label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--titanium)}
-.knowledge-article__section{display:grid;gap:var(--ds-space-4)}
-.knowledge-article__heading{margin:0;padding-top:calc(var(--ds-space-6) + 2px);border-top:1px solid var(--edge);font-size:12px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--ds-text-strong)}
+.knowledge-article__section{display:grid;gap:var(--ds-space-4);min-width:0}
+.knowledge-article__heading{margin:0;padding-top:calc(var(--ds-space-6) + 2px);border-top:1px solid var(--edge);font-size:14px;line-height:1.4;letter-spacing:.04em;color:var(--ds-text-strong)}
 .knowledge-article__section p,.knowledge-article li{margin:0;font-size:15px;line-height:1.6}
 .knowledge-article__list,.knowledge-article__steps{margin:0;padding-left:22px;display:grid;gap:var(--ds-space-3)}
 .knowledge-article__steps li::marker{color:var(--titanium);font-variant-numeric:tabular-nums}
 .knowledge-article__caution{padding:var(--ds-space-4) var(--ds-space-5) var(--ds-space-4) var(--ds-space-6);border-left:2px solid var(--kl-red-base);
   border-radius:0 var(--ds-radius-md) var(--ds-radius-md) 0;background:rgba(var(--kl-red-rgb),.08)}
-.knowledge-article__source{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
+/* Only the open Workshop reader expands the otherwise phone-width app shell. */
+.app-shell:has(#workshopScreen.active #workshopToolKnowledge:not([hidden]) [data-knowledge-reader]){
+  width:min(100%,49rem);
+  padding-bottom:calc(144px + var(--safe-bottom));
+}
+#workshopToolKnowledge [data-knowledge-reader] :is(button,a){
+  scroll-margin-bottom:calc(110px + var(--safe-bottom));
+}
+.knowledge-article__citation{color:var(--ds-text-strong);text-underline-offset:.2em}
+.knowledge-related{display:grid;gap:var(--ds-space-2)}
+.knowledge-related__card{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--ds-space-3);min-height:44px;
+  padding:var(--ds-space-3) var(--ds-space-4);border:var(--ds-stroke);border-radius:var(--ds-radius-md);
+  background:var(--ds-surface-soft);color:var(--ds-text-strong);font:inherit;font-size:14px;line-height:1.35;
+  text-align:left;text-decoration:none;cursor:pointer;
+}
+.knowledge-related__card::after{content:'›' / '';color:var(--titanium);flex:none}
+.knowledge-related__card:is(:hover,:focus-visible){border-color:var(--ds-text-muted)}
+.knowledge-related__card:focus-visible{outline:2px solid var(--ds-text-strong);outline-offset:2px}
 
 /* Public pages (/knowledge/): the same components on a plain page. 16px gutter on phones; one reading column. */
 .knowledge-public .topbar{margin:0 auto;max-width:760px;padding:var(--ds-space-6) calc(var(--ds-space-3) * 2) 0}
@@ -43,7 +60,7 @@
 .knowledge-public__main{display:grid;gap:calc(var(--ds-space-6) + var(--ds-space-1));max-width:760px;margin:0 auto;
   padding:calc(var(--ds-space-6) + var(--ds-space-1)) calc(var(--ds-space-3) * 2) calc(48px + var(--safe-bottom))}
 .knowledge-public__main > *{min-width:0}
-.knowledge-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:var(--ds-space-2);margin:0 0 calc(var(--ds-space-4) * -1);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--titanium)}
+.knowledge-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:var(--ds-space-2);margin:0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--titanium)}
 .knowledge-crumbs a{display:inline-flex;align-items:center;min-height:44px;color:var(--titanium);text-decoration:none}
 .knowledge-crumbs a:hover,.knowledge-crumbs a:focus-visible{color:var(--ds-text-strong)}
 .knowledge-public__intro{display:grid;gap:var(--ds-space-3)}

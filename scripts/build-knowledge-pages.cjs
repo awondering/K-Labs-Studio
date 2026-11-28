@@ -76,15 +76,20 @@ function categoryRow(category, count) {
         </a>`;
 }
 
-function block(b) {
-  if (b.type === 'p') return `        <p>${escapeHtml(b.text)}</p>`;
+function block(b, articleId, articleParagraph) {
+  if (b.type === 'p') {
+    const text = articleParagraph(articleId, b.text).map(({ text, href }) => href
+      ? `<a class="knowledge-article__citation" href="${escapeHtml(href)}">${escapeHtml(text)}</a>`
+      : escapeHtml(text)).join('');
+    return `        <p>${text}</p>`;
+  }
   if (b.type === 'caution') return `        <p class="knowledge-article__caution"><strong>Caution. </strong>${escapeHtml(b.text)}</p>`;
   const tag = b.type === 'steps' ? 'ol' : 'ul';
   const cls = b.type === 'steps' ? 'knowledge-article__steps' : 'knowledge-article__list';
   return `        <${tag} class="${cls}">\n${b.items.map((i) => `          <li>${escapeHtml(i)}</li>`).join('\n')}\n        </${tag}>`;
 }
 
-function articlePage(article, all, { CATEGORIES, readMinutes }) {
+function articlePage(article, all, { CATEGORIES, readMinutes, articleParagraph }) {
   const category = CATEGORIES.find((c) => c.id === article.category);
   const related = (article.related || []).map((id) => all.find((a) => a.id === id)).filter(Boolean);
   const title = `${article.title} | K-Labs Studio`;
@@ -113,13 +118,12 @@ ${topbar}
       </div>
 ${article.sections.map((s) => `      <section class="knowledge-article__section">
         <h2 class="knowledge-article__heading">${escapeHtml(s.heading)}</h2>
-${s.blocks.map(block).join('\n')}
+${s.blocks.map((b) => block(b, article.id, articleParagraph)).join('\n')}
       </section>`).join('\n')}
-      <p class="knowledge-article__source">${escapeHtml(article.source)}</p>
 ${related.length ? `      <section class="knowledge-article__section">
         <h2 class="knowledge-article__heading">Related articles</h2>
-        <div class="knowledge-list">
-${related.map((r) => articleRow(r, CATEGORIES, readMinutes)).join('\n')}
+        <div class="knowledge-related">
+${related.map((r) => `          <a class="knowledge-related__card" href="${articleUrl(r)}">${escapeHtml(r.title)}</a>`).join('\n')}
         </div>
       </section>
 ` : ''}    </article>

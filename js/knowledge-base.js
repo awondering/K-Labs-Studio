@@ -5853,6 +5853,18 @@
     for(const article of articles)list.appendChild(articleRow(article,'',host,{view:'category',categoryId:category.id}));
     body.appendChild(list);
   }
+  // Link the named primary guidance where readers need it to apply the article.
+  function articleParagraph(articleId,text){
+    if(articleId!=='how-should-i-prepare-a-customer-facing-invoice')return [{text}];
+    const label='Inland Revenue’s taxable supply information guidance';
+    const start=text.indexOf(label);
+    if(start<0)return [{text}];
+    return [
+      {text:text.slice(0,start)},
+      {text:label,href:'https://www.ird.govt.nz/gst/tax-invoices-for-gst/how-tax-invoices-for-gst-work'},
+      {text:text.slice(start+label.length)},
+    ];
+  }
   function renderArticle(host,state,body){
     const article=all.find((a)=>a.id===state.articleId);
     if(!article){show(host,{view:'home'});return;}
@@ -5878,7 +5890,17 @@
       const part=el('section','knowledge-article__section');
       part.appendChild(el('h5','knowledge-article__heading',section.heading));
       for(const block of section.blocks){
-        if(block.type==='p')part.appendChild(el('p','',block.text));
+        if(block.type==='p'){
+          const paragraph=el('p');
+          for(const {text,href} of articleParagraph(article.id,block.text)){
+            if(href){
+              const link=el('a','knowledge-article__citation',text);
+              link.href=href;
+              paragraph.appendChild(link);
+            }else paragraph.appendChild(document.createTextNode(text));
+          }
+          part.appendChild(paragraph);
+        }
         else if(block.type==='caution'){
           const caution=el('p','knowledge-article__caution');
           caution.appendChild(el('strong','','Caution. '));
@@ -5892,13 +5914,18 @@
       }
       doc.appendChild(part);
     }
-    doc.appendChild(el('p','knowledge-article__source',article.source));
     const related=(article.related||[]).map((id)=>all.find((a)=>a.id===id)).filter(Boolean);
     if(related.length){
       const part=el('section','knowledge-article__section');
       part.appendChild(el('h5','knowledge-article__heading','Related'));
-      const list=el('div','knowledge-list');
-      for(const other of related)list.appendChild(articleRow(other,'',host,from));
+      const list=el('div','knowledge-related');
+      for(const other of related){
+        const card=el('button','knowledge-related__card',other.title);
+        card.type='button';
+        card.setAttribute('data-knowledge-article',other.id);
+        card.addEventListener('click',()=>show(host,{view:'article',articleId:other.id,from}));
+        list.appendChild(card);
+      }
       part.appendChild(list);
       doc.appendChild(part);
     }
@@ -5991,5 +6018,5 @@
   function isMounted(host){
     return !!host && states.has(host);
   }
-  return Object.freeze({CATEGORIES,ARTICLES,articles,useDrafts,isLocalReviewHost,normalise,search,readMinutes,marked,mount,unmount,isMounted,show});
+  return Object.freeze({CATEGORIES,ARTICLES,articles,useDrafts,isLocalReviewHost,normalise,search,readMinutes,articleParagraph,marked,mount,unmount,isMounted,show});
 });
