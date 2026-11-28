@@ -40,7 +40,7 @@
  * through the same way inside their frames (ftap, fshow, funtil). Replay and chapters reload ?demo&tour=workshop&chapter=N. */
 (function () {
   "use strict";
-  const DEMO_BUILD = "build148-v296";
+  const DEMO_BUILD = "build148-v297";
   // Milliseconds. key: every typed character; beat: before and after every action, and between chapters; a caption is
   // read for captionBase + captionPerChar per character; scroll: reading down a document; view: the longest wait for a
   // control to come fully into view.
