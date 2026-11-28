@@ -483,3 +483,14 @@
   .admin-builder-detail__heading{align-items:flex-start}
   .admin-access-badge{max-width:44%;white-space:normal;text-align:center;line-height:1.25}
 }
+/* Q45: Access emails - the builder's notification history, with Retry for an email that was not sent. */
+.admin-notice-list li{grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:10px}
+.admin-notice-list li>strong,.admin-notice-list li>p{grid-column:1}
+.admin-notice-list strong{text-transform:none}
+.admin-notice--accepted{border-left-color:rgba(120,158,128,.5)}
+.admin-notice--failed,.admin-notice--pending{border-left-color:rgba(183,75,81,.6)}
+.admin-notice__retry{grid-column:2;grid-row:1 / span 2;min-height:44px;padding:0 14px;font-size:10px;letter-spacing:.08em;white-space:nowrap}
+@media (max-width:420px){
+  .admin-notice-list li{grid-template-columns:minmax(0,1fr)}
+  .admin-notice__retry{grid-column:1;grid-row:auto;width:100%}
+}

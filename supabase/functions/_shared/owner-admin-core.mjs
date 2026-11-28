@@ -1,3 +1,5 @@
+import { buildAccessEmail, sendWithResend } from "./access-email.mjs";
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LONG_BAN_DURATION = "876000h";
@@ -27,6 +29,13 @@ function requiredUserId(value) {
   return value;
 }
 
+// Q45: an expiry chosen by the owner (ISO date-time) or null for no scheduled end date.
+function optionalExpiry(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new Error("Choose a valid expiry date.");
+  return new Date(value).toISOString();
+}
+
 function futureBanDuration(value, now) {
   if (!value) return "none";
   const remaining = Date.parse(value) - now().getTime();
@@ -39,6 +48,10 @@ export function createOwnerAdminHandler({
   createUserClient,
   serviceClient,
   publicAppUrl,
+  // Q45: access emails. Without a key and sender, a change is still saved and its email is recorded as not sent.
+  resendApiKey = "",
+  accessEmailFrom = "",
+  fetchImpl = (...args) => fetch(...args),
   now = () => new Date()
 }) {
   return async function handleOwnerAdmin(request) {
@@ -91,6 +104,68 @@ export function createOwnerAdminHandler({
       p_new_state: next,
       p_reason: reason
     });
+
+    // Q45: send one recorded access notification, after its access change has committed. Never reverses the change.
+    // The recipient is the builder's own account address, read here on the server; nothing in the request chooses it.
+    const deliverNotification = async (notificationId) => {
+      const { data: claimed, error: claimError } = await serviceClient.rpc("klabs_claim_access_notification", {
+        p_notification_id: notificationId
+      });
+      if (claimError) {
+        console.error("[owner-admin] Access email could not be claimed:", claimError);
+        return { id: notificationId, status: "failed", error: "The email could not be prepared." };
+      }
+      if (!claimed) return { id: notificationId, status: "unchanged" };
+      const finish = async (outcome) => {
+        const { error } = await serviceClient.rpc("klabs_finish_access_notification", {
+          p_notification_id: notificationId,
+          p_accepted: outcome.accepted,
+          p_provider_message_id: outcome.messageId || null,
+          p_error: outcome.error || null
+        });
+        if (error) console.error("[owner-admin] Access email outcome could not be recorded:", error);
+        return outcome.accepted
+          ? { id: notificationId, status: "accepted", event: claimed.event }
+          : { id: notificationId, status: "failed", event: claimed.event, error: outcome.error };
+      };
+      let email;
+      try {
+        const { data, error } = await serviceClient.auth.admin.getUserById(claimed.target_user_id);
+        email = !error && data?.user?.email;
+      } catch (error) {
+        console.error("[owner-admin] Access email recipient lookup failed:", error);
+      }
+      if (!email || !EMAIL_PATTERN.test(email)) return finish({ accepted: false, error: "The builder's email address could not be found." });
+      let message;
+      try {
+        message = buildAccessEmail({
+          event: claimed.event,
+          email,
+          accessExpiresAt: claimed.access_expires_at,
+          previousExpiresAt: claimed.previous_expires_at
+        });
+      } catch (error) {
+        console.error("[owner-admin] Access email could not be built:", error);
+        return finish({ accepted: false, error: "The email could not be prepared." });
+      }
+      const outcome = await sendWithResend({
+        fetchImpl,
+        apiKey: resendApiKey,
+        from: accessEmailFrom,
+        to: email,
+        ...message,
+        idempotencyKey: `klabs-access-notification-${notificationId}`
+      });
+      if (!outcome.accepted) console.error("[owner-admin] Access email not accepted:", outcome.error);
+      return finish(outcome);
+    };
+    const accessSavedMessage = (notice, noEmail) => {
+      if (!notice) return `Access saved and recorded in the audit log. No email sent: ${noEmail}`;
+      if (notice.status === "accepted") {
+        return "Access saved. The email to the builder was accepted by the email service (this does not confirm delivery).";
+      }
+      return `Access saved. The email to the builder was NOT sent: ${notice.error || "unknown error."} Use Retry email under Access emails.`;
+    };
 
     let body;
     try {
@@ -251,6 +326,52 @@ export function createOwnerAdminHandler({
             return response(502, { error: "The account and cascading business records were deleted, but the completion audit could not be saved. Preserve the existing deletion-started audit entry." });
           }
           return response(200, { ok: true, message: "Builder account and its Auth-linked Studio records were permanently deleted." });
+        }
+
+        // Q45: complimentary access changes, then their email.
+        case "set_complimentary":
+        case "revoke_access": {
+          const id = requiredUserId(body.targetUserId);
+          const reason = requiredReason(body.reason);
+          const changed = body.action === "set_complimentary"
+            ? await rpc("admin_set_complimentary_access", {
+              p_target_user_id: id,
+              p_expires_at: optionalExpiry(body.expiresAt),
+              p_reason: reason
+            })
+            : await rpc("admin_revoke_builder_access", {
+              p_target_user_id: id,
+              p_reason: reason
+            });
+          // The change has committed. From here on, nothing reports it as failed.
+          const notice = changed?.notification_id ? await deliverNotification(changed.notification_id) : null;
+          const noEmail = body.action === "revoke_access"
+            ? "only complimentary access changes are emailed."
+            : "the builder's complimentary access did not change.";
+          return response(200, {
+            ok: true,
+            accessSaved: true,
+            notification: notice,
+            message: accessSavedMessage(notice, noEmail)
+          });
+        }
+
+        case "retry_access_email": {
+          const notificationId = body.notificationId;
+          if (typeof notificationId !== "string" || !UUID_PATTERN.test(notificationId)) {
+            return response(400, { error: "A valid access email is required." });
+          }
+          const notice = await deliverNotification(notificationId);
+          if (notice.status === "unchanged") {
+            return response(409, { error: "This email was already accepted by the email service or is being sent. It was not sent again." });
+          }
+          return response(200, {
+            ok: notice.status === "accepted",
+            notification: notice,
+            message: notice.status === "accepted"
+              ? "The email was accepted by the email service (this does not confirm delivery)."
+              : `The email was NOT sent: ${notice.error || "unknown error."}`
+          });
         }
 
         default:

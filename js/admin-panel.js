@@ -74,6 +74,7 @@
     setText("adminBuilderStatus", "");
     byId("adminBuilderDates")?.replaceChildren();
     byId("adminAuditList")?.replaceChildren();
+    byId("adminNotificationList")?.replaceChildren();
     [
       "adminBuilderSearch", "adminComplimentaryExpiry", "adminComplimentaryReason",
       "adminTrialExpiry", "adminTrialReason", "adminRevokeReason",
@@ -83,7 +84,7 @@
       if (byId(id)) byId(id).value = "";
     });
     if (byId("adminStatusPicker")) byId("adminStatusPicker").open = false;
-    ["adminAccessError", "adminBuilderListStatus", "adminAuditStatus", "adminChangeStatus"].forEach((id) => setStatus(id, ""));
+    ["adminAccessError", "adminBuilderListStatus", "adminAuditStatus", "adminChangeStatus", "adminNotificationStatus"].forEach((id) => setStatus(id, ""));
     if (document.querySelector(".screen.active")?.id === "adminAccessScreen") {
       window.KLABS_NAV?.goScreen("settingsScreen");
     }
@@ -239,6 +240,8 @@
     byId("adminBuilderDetail").hidden = true;
     byId("adminAuditList").replaceChildren();
     setStatus("adminAuditStatus", "");
+    byId("adminNotificationList")?.replaceChildren();
+    setStatus("adminNotificationStatus", "");
   }
 
   async function loadAudit(builderId) {
@@ -272,9 +275,71 @@
     }
   }
 
+  // Q45: the builder's access emails, as recorded by the server. "Accepted" is the email service's answer, not a
+  // delivery confirmation. Failed or unsent emails can be retried; an accepted email is never sent again.
+  const NOTICE_EVENTS = {
+    granted: "Access granted",
+    extended: "Access extended",
+    expiry_changed: "End date changed",
+    revoked: "Access ended"
+  };
+  const NOTICE_STATUS = {
+    pending: "Not sent yet",
+    sending: "Sending",
+    accepted: "Accepted by the email service",
+    failed: "Not sent"
+  };
+
+  async function loadNotifications(builderId) {
+    const list = byId("adminNotificationList");
+    if (!list) return;
+    const requestUserId = state.userId;
+    list.replaceChildren();
+    setStatus("adminNotificationStatus", "Loading access emails...");
+    try {
+      const { data, error } = await supabase().rpc("admin_list_access_notifications", {
+        p_target_user_id: builderId
+      });
+      if (error) throw error;
+      if (!state.owner || state.userId !== requestUserId || state.selected?.builder_user_id !== builderId) return;
+      const rows = Array.isArray(data) ? data : [];
+      for (const row of rows) {
+        const item = document.createElement("li");
+        item.className = `admin-notice admin-notice--${row.status}`;
+        const title = document.createElement("strong");
+        title.textContent = `${NOTICE_EVENTS[row.event] || "Access email"} · ${formatDate(row.created_at, true)}`;
+        const detail = document.createElement("p");
+        detail.textContent = row.status === "accepted"
+          ? `${NOTICE_STATUS.accepted} ${formatDate(row.accepted_at, true)}. Delivery is not confirmed.`
+          : row.status === "failed"
+            ? `${NOTICE_STATUS.failed}: ${row.last_error || "unknown error."}`
+            : NOTICE_STATUS[row.status] || "Status unavailable";
+        item.append(title, detail);
+        if (row.status === "failed" || row.status === "pending") {
+          const retry = document.createElement("button");
+          retry.type = "button";
+          retry.className = "ghost-action admin-notice__retry";
+          retry.textContent = "RETRY EMAIL";
+          retry.dataset.notificationId = row.id;
+          retry.addEventListener("click", () => performOwnerAction(retry, {
+            action: "retry_access_email",
+            notificationId: row.id
+          }, "", "Email retried."));
+          item.append(retry);
+        }
+        list.append(item);
+      }
+      setStatus("adminNotificationStatus", rows.length ? "" : "No access emails yet.");
+    } catch (error) {
+      if (!state.owner || state.userId !== requestUserId || state.selected?.builder_user_id !== builderId) return;
+      setStatus("adminNotificationStatus", error?.message || "Could not load access emails.");
+      console.error("[K-Labs Studio] Access emails failed to load:", error);
+    }
+  }
+
   async function selectBuilder(builder, loadHistory) {
     renderBuilderDetail(builder);
-    if (loadHistory !== false) await loadAudit(builder.builder_user_id);
+    if (loadHistory !== false) await Promise.all([loadAudit(builder.builder_user_id), loadNotifications(builder.builder_user_id)]);
   }
 
   async function performChange(button, rpcName, args, confirmation) {
@@ -421,19 +486,20 @@
       setStatus("adminChangeStatus", error?.message || "Choose a valid expiry date.");
       return;
     }
-    const reason = byId("adminComplimentaryReason").value.trim();
-    return performChange(event.currentTarget, "admin_set_complimentary_access", (builder) => ({
-      p_target_user_id: builder.builder_user_id,
-      p_expires_at: expiresAt,
-      p_reason: reason
-    }), `Grant or restore complimentary access for ${state.selected?.email}?`);
+    // Q45: through the owner-admin Edge Function, which saves the change and then emails the builder from the server.
+    return performOwnerAction(event.currentTarget, {
+      action: "set_complimentary",
+      targetUserId: state.selected?.builder_user_id,
+      expiresAt,
+      reason: byId("adminComplimentaryReason").value.trim()
+    }, `Grant or restore complimentary access for ${state.selected?.email}? If their complimentary access changes, they are emailed.`, "Access saved.");
   });
   byId("adminRevokeComplimentaryBtn")?.addEventListener("click", (event) => {
-    const reason = byId("adminRevokeReason").value.trim();
-    return performChange(event.currentTarget, "admin_revoke_builder_access", (builder) => ({
-      p_target_user_id: builder.builder_user_id,
-      p_reason: reason
-    }), `Revoke access for ${state.selected?.email}? Their records are kept, but hidden from them until their access is restored.`);
+    return performOwnerAction(event.currentTarget, {
+      action: "revoke_access",
+      targetUserId: state.selected?.builder_user_id,
+      reason: byId("adminRevokeReason").value.trim()
+    }, `Revoke access for ${state.selected?.email}? Their records are kept, but hidden from them until their access is restored. If they had complimentary access, they are emailed.`, "Access saved.");
   });
   byId("adminExtendTrialBtn")?.addEventListener("click", (event) => {
     let expiresAt;

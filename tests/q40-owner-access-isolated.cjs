@@ -35,8 +35,10 @@ async function main() {
   await db.exec(`insert into auth.users(id, email, email_confirmed_at) values ('${O}', 'owner@example.test', now())`);
   const setup = ['SUPABASE-BUILD-SYNC.sql', 'SUPABASE-COMPONENT-SYNC.sql', 'SUPABASE-COMPONENT-SIZES.sql', 'SUPABASE-SETTINGS-SYNC.sql', 'SUPABASE-QUOTE-NUMBER-ALLOCATOR.sql'];
   const all = fs.readdirSync(path.join(root, 'supabase/migrations')).sort().map((f) => `supabase/migrations/${f}`);
-  const preQ40 = all.filter((f) => ![...Q40, OWNER_MIGRATION].includes(f));
-  assert.deepEqual(all.slice(-3), [...Q40, OWNER_MIGRATION], 'the owner migration sorts after Stage B');
+  // Later migrations (Q45 onwards) need Q40 and are covered by their own isolated tests.
+  const preQ40 = all.filter((f) => ![...Q40, OWNER_MIGRATION].includes(f) && f < Q40[0]);
+  const q40At = all.indexOf(Q40[0]);
+  assert.deepEqual(all.slice(q40At, q40At + 3), [...Q40, OWNER_MIGRATION], 'the owner migration sorts after Stage B');
   for (const f of [...setup, ...preQ40]) await db.exec(sql(f));
   for (const id of [C, D]) await db.exec(`insert into auth.users(id, email, email_confirmed_at) values ('${id}', '${id.slice(0, 1)}@example.test', now())`);
 
