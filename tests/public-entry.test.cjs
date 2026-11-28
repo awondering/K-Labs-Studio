@@ -128,7 +128,10 @@ test('Q24: Discover K-Labs Studio is consolidated into Explore Studio - one Expl
   assert.doesNotMatch(css,/public-discover-dialog/);
   const entry=html.slice(html.indexOf('<div class="home-public-entry">'),html.indexOf('</div>',html.indexOf('<div class="home-public-entry">')));
   assert.equal((entry.match(/<button /g)||[]).length,2,'Explore Studio and Sign In');
-  assert.equal((html.match(/EXPLORE STUDIO/g)||[]).length,1,'one Explore entry');
+  // Q18 Phase 5 change (was: one EXPLORE STUDIO in the whole page): the account screen's Explore Studio opens the same
+  // Demo Mode, so the homepage still has exactly one Explore entry and the page two, both to ?demo.
+  assert.equal((entry.match(/EXPLORE STUDIO/g)||[]).length,1,'one Explore entry on the homepage');
+  assert.equal((html.match(/EXPLORE STUDIO/g)||[]).length,2,'homepage and account screen');
   assert.match(css,/\.home-public-entry__signin \{[^}]*grid-column:1 \/ -1;/,'Sign In spans the row under Explore Studio');
 });
 
@@ -161,7 +164,7 @@ test('admin script loads in parallel with the private app while auth still waits
   assert.equal(applied,true);
 });
 
-test('trial-eligible accounts see the choice before any private script loads; Explore stays fictional and isolated',async()=>{
+test('Q18 Phase 5: accounts without access see the choice before any private script loads; Explore Studio opens the scripted Demo Mode',async()=>{
   const h=harness();
   const session={user:{id:'eligible-a'}};
   h.setSession(session);
@@ -170,15 +173,13 @@ test('trial-eligible accounts see the choice before any private script loads; Ex
   assert.deepEqual(h.scripts,[]);
   assert.equal(h.elements.accountAccessScreen.hidden,false);
   h.elements.enterExploreDemoBtn.listeners.click();
-  assert.equal(h.elements.exploreDemoScreen.hidden,false);
-  assert.equal(h.classes.has('klabs-explore-demo'),true);
+  // The same ?demo page as the public homepage's Explore Studio (KLABS_DEMO.enter), not a separate screen.
+  assert.equal(h.window.KLABS_DEMO.entered,1);
+  assert.equal(h.classes.has('klabs-explore-demo'),false);
   assert.deepEqual(h.scripts,[]);
-  h.demoViews[2].listeners.click();
-  assert.equal(h.demoPanels[2].hidden,false);
-  assert.equal(h.demoPanels[0].hidden,true);
 });
 
-test('unverified accounts cannot start or enter Explore Mode',async()=>{
+test('unverified accounts cannot subscribe or explore from the account screen until verified',async()=>{
   const h=harness();
   const session={user:{id:'unverified-a'}};
   h.setSession(session);
@@ -188,17 +189,17 @@ test('unverified accounts cannot start or enter Explore Mode',async()=>{
   assert.equal(h.elements.verifyEmailContinueBtn.hidden,false);
   h.elements.enterExploreDemoBtn.listeners.click();
   assert.match(h.elements.accountAccessError.textContent,/Verify your email/);
+  assert.equal(h.window.KLABS_DEMO.entered,0);
   assert.deepEqual(h.scripts,[]);
 });
 
-test('Explore sign-out clears the session through Supabase and returns to public entry',async()=>{
+test('Sign Out on the account screen clears the session through Supabase and returns to public entry',async()=>{
   const h=harness();
   const session={user:{id:'demo-signout'}};
   h.setSession(session);
   h.setEntitlement({access_state:'trial_eligible',can_write:false,trial_available:true,email_verified:true});
   await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('private app must not load'));
-  h.elements.enterExploreDemoBtn.listeners.click();
-  h.elements.demoSignOutBtn.listeners.click();
+  h.elements.accessSignOutBtn.listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(h.reloads(),1);
 });
@@ -227,9 +228,9 @@ test('Q40: an ended account (expired) stops at the subscription screen; Studio, 
   assert.ok(!h.window.KLABS_ACCESS_STATE,'no access state: nothing in Studio can run');
   assert.equal(h.elements.accountAccessScreen.hidden,false);
   assert.match(h.elements.accountAccessMessage.textContent,/records are kept safely/);
-  // Explore Mode stays available.
+  // Explore Studio (the scripted Demo Mode) stays available.
   h.elements.enterExploreDemoBtn.listeners.click();
-  assert.equal(h.elements.exploreDemoScreen.hidden,false);
+  assert.equal(h.window.KLABS_DEMO.entered,1);
 });
 
 test('Q40: returning from Checkout waits for the SERVER to confirm access; the browser result alone opens nothing',async()=>{
@@ -754,4 +755,61 @@ test('the app accepts the server owner state online and offline', () => {
   // The server reports the owner as 'grandfathered' (accepted by every released app version, so no cached older app
   // can reject it); the app also tolerates an 'owner' state defensively.
   assert.match(migration, /select 'grandfathered'::text, true, false, null::timestamptz, null::timestamptz, null::timestamptz/);
+});
+
+// ---- Q18 Phase 5: one demonstration. The access-routing matrix and the retired static Explore Mode screen.
+test('Q18 Phase 5: paid, complimentary and grandfathered accounts open their real Studio and never the demonstration',async()=>{
+  const serverTime=new Date().toISOString();
+  const endsAt=new Date(Date.now()+30*24*60*60*1000).toISOString();
+  for(const entitlement of [
+    {access_state:'paid',can_write:true,trial_available:false,email_verified:true,access_expires_at:endsAt,server_time:serverTime},
+    {access_state:'complimentary',can_write:true,trial_available:false,email_verified:true,access_expires_at:endsAt,server_time:serverTime},
+    {access_state:'complimentary',can_write:true,trial_available:false,email_verified:true,access_expires_at:null,server_time:serverTime},
+    {access_state:'grandfathered',can_write:true,trial_available:false,email_verified:true},
+  ]){
+    const h=harness();
+    const session={user:{id:`matrix-${entitlement.access_state}`}};
+    h.setSession(session);
+    h.setEntitlement(entitlement);
+    let applied=null;
+    await h.window.KLABS_PUBLIC_ENTRY.applySession(session,(value)=>{applied=value;});
+    assert.equal(applied,session,entitlement.access_state);
+    assert.ok(h.scripts.includes('js/ui.js'),entitlement.access_state);
+    assert.notEqual(h.elements.accountAccessScreen.hidden,false,`${entitlement.access_state}: no access screen`);
+    assert.equal(h.window.KLABS_DEMO.entered,0,`${entitlement.access_state}: not sent to the demonstration`);
+  }
+});
+
+test('Q18 Phase 5: accounts without access (never subscribed, expired) get Subscribe, Explore Studio and Sign Out; Studio does not load',async()=>{
+  for(const entitlement of [
+    {access_state:'trial_eligible',can_write:false,trial_available:false,email_verified:true},
+    {access_state:'expired',can_write:false,trial_available:false,email_verified:true},
+  ]){
+    const h=harness();
+    const session={user:{id:`noaccess-${entitlement.access_state}`}};
+    h.setSession(session);
+    h.setEntitlement(entitlement);
+    await h.window.KLABS_PUBLIC_ENTRY.applySession(session,()=>assert.fail('Studio must not open without access'));
+    assert.deepEqual(h.scripts,[],entitlement.access_state);
+    assert.ok(!h.window.KLABS_ACCESS_STATE,'nothing in Studio can run');
+    assert.equal(h.elements.accountAccessScreen.hidden,false);
+    assert.equal(h.elements.accountAccessChoices.hidden,false,'subscription panel and Explore Studio shown');
+    assert.equal(typeof h.elements.accessSignOutBtn.listeners.click,'function','Sign Out wired');
+    h.elements.enterExploreDemoBtn.listeners.click();
+    assert.equal(h.window.KLABS_DEMO.entered,1);
+  }
+});
+
+test('Q18 Phase 5: the static Explore Mode screen, its fictional panels, script and styles are gone; the account screen keeps billing and Sign Out',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'..','css','studio.css'),'utf8');
+  for(const gone of ['exploreDemoScreen','explore-demo','demoSubscribeBtn','demoSignOutBtn','data-demo-view','data-demo-panel','Mara Te Rangi','EXPLORE MODE','EXPLORE WITH DEMONSTRATION DATA']){
+    assert.ok(!html.includes(gone),`index.html: ${gone}`);
+    assert.ok(!source.includes(gone),`js/public-entry.js: ${gone}`);
+  }
+  assert.doesNotMatch(css,/explore-demo/);
+  const screen=html.slice(html.indexOf('<section id="accountAccessScreen"'),html.indexOf('</section>',html.indexOf('<section id="accountAccessScreen"')));
+  assert.match(screen,/<div id="accessBillingPanel" class="billing-panel"><\/div>/);
+  assert.match(screen,/<button id="enterExploreDemoBtn" class="account-access-secondary" type="button">EXPLORE STUDIO<\/button>/);
+  assert.match(screen,/<button id="accessSignOutBtn" class="account-access-signout" type="button">SIGN OUT<\/button>/);
+  assert.match(source,/function showExploreDemo\(\) \{[\s\S]*?window\.KLABS_DEMO\.enter\(\);\s*\}/);
 });

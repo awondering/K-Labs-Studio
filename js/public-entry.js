@@ -21,7 +21,7 @@
   // js/demo-director.js) carries this build. If any of them is an older cached copy, nothing is shown: the page asks
   // the service worker for the new version and reloads once (?demo&fresh=1); still mixed after that, the visitor goes
   // back to the public entry with the usual notice.
-  const DEMO_BUILD = "build148-v297";
+  const DEMO_BUILD = "build148-v298";
   const DEMO_FRESH_PARAM = "fresh";
   // An unreachable server (weak signal, Wi-Fi without internet) must not hold the launch screen for the platform's
   // own long network timeout; after this the cached entitlement is used, exactly as when offline. 3 s is more than ten
@@ -99,10 +99,9 @@
     document.body.classList.remove("klabs-offline-session");
     document.getElementById("authScreen").style.display = "none";
     setVisible("accountAccessScreen", false);
-    setVisible("exploreDemoScreen", false);
     document.getElementById("app").style.display = "";
     document.body.classList.add("klabs-logged-out");
-    document.body.classList.remove("klabs-auth-resolving", "klabs-auth-open", "klabs-entry-choice", "klabs-explore-demo", "klabs-read-only");
+    document.body.classList.remove("klabs-auth-resolving", "klabs-auth-open", "klabs-entry-choice", "klabs-read-only");
     try {
       if (window.sessionStorage.getItem("klabs-account-blocked") === "true") {
         window.sessionStorage.removeItem("klabs-account-blocked");
@@ -125,10 +124,9 @@
     document.getElementById("authBackHome").hidden = false;
     document.getElementById("app").style.display = "none";
     setVisible("accountAccessScreen", false);
-    setVisible("exploreDemoScreen", false);
     document.getElementById("authScreen").style.display = "flex";
     document.body.classList.add("klabs-auth-open");
-    document.body.classList.remove("klabs-entry-choice", "klabs-explore-demo");
+    document.body.classList.remove("klabs-entry-choice");
     document.getElementById("authEmail").focus();
     window.scrollTo(0, 0);
   }
@@ -140,9 +138,8 @@
     currentEntitlement = entitlement;
     document.getElementById("authScreen").style.display = "none";
     document.getElementById("app").style.display = "none";
-    setVisible("exploreDemoScreen", false);
     setVisible("accountAccessScreen", true);
-    document.body.classList.remove("klabs-auth-resolving", "klabs-auth-open", "klabs-logged-out", "klabs-explore-demo", "klabs-read-only");
+    document.body.classList.remove("klabs-auth-resolving", "klabs-auth-open", "klabs-logged-out", "klabs-read-only");
     document.body.classList.add("klabs-entry-choice");
     const message = document.getElementById("accountAccessMessage");
     const verified = entitlement.email_verified === true;
@@ -198,18 +195,16 @@
       "Stripe has not confirmed the payment yet. If you completed checkout, reload this page in a minute. No access is given until payment is confirmed.");
   }
 
+  // Q18 Phase 5: Explore Studio for a signed-in account without access opens the same scripted Demo Mode as the public
+  // homepage (?demo): Studio's real screens with fictional in-memory data. The demonstration page starts with empty
+  // in-memory browser storage (js/demo-mode.js), so it never sees this account's session or records, and Exit demo
+  // returns here. The separate static Explore Mode screen is retired.
   function showExploreDemo() {
     if (!currentSession || !currentEntitlement?.email_verified) {
-      document.getElementById("accountAccessError").textContent = "Verify your email before entering Explore Mode.";
+      document.getElementById("accountAccessError").textContent = "Verify your email before exploring Studio.";
       return;
     }
-    document.getElementById("authScreen").style.display = "none";
-    document.getElementById("app").style.display = "none";
-    setVisible("accountAccessScreen", false);
-    setVisible("exploreDemoScreen", true);
-    document.body.classList.remove("klabs-auth-resolving", "klabs-auth-open", "klabs-logged-out", "klabs-entry-choice", "klabs-read-only");
-    document.body.classList.add("klabs-explore-demo");
-    window.scrollTo(0, 0);
+    window.KLABS_DEMO.enter();
   }
 
   async function signOutFromEntry(messageId) {
@@ -520,8 +515,7 @@
       window.KLABS_ACCESS_STATE = entitlement;
       scheduleEntitlementExpiry(entitlement);
       setVisible("accountAccessScreen", false);
-      setVisible("exploreDemoScreen", false);
-      document.body.classList.remove("klabs-entry-choice", "klabs-explore-demo");
+      document.body.classList.remove("klabs-entry-choice");
       await loadPrivateApp();
       const { data: latestData, error: latestError } = await window.KLABS_SUPABASE_CLIENT.auth.getSession();
       if (latestError) throw latestError;
@@ -648,7 +642,6 @@
     document.body.classList.add("klabs-auth-resolving");
     document.getElementById("authScreen").style.display = "none";
     setVisible("accountAccessScreen", false);
-    setVisible("exploreDemoScreen", false);
     const sameBuild = (part, build) => {
       if (build === DEMO_BUILD) return;
       const error = new Error(`An older copy of the demonstration's ${part} (${build || "unknown"}) is cached; this is ${DEMO_BUILD}.`);
@@ -749,8 +742,7 @@
       currentEntitlement = { ...access, can_write: false, trial_available: false, offline: true, offline_session: true };
       window.KLABS_ACCESS_STATE = { ...currentEntitlement };
       setVisible("accountAccessScreen", false);
-      setVisible("exploreDemoScreen", false);
-      document.body.classList.remove("klabs-entry-choice", "klabs-explore-demo");
+      document.body.classList.remove("klabs-entry-choice");
       document.body.classList.add("klabs-offline-session");
       await loadPrivateApp();
       applyAuthState(currentSession);
@@ -800,11 +792,6 @@
     document.getElementById("publicSignInBtn").addEventListener("click", () => showAuth(""));
     document.getElementById("authBackHome").addEventListener("click", showHome);
     // Q40: the free trial is retired; Subscribe (in the access screen) replaces it.
-    document.getElementById("demoSubscribeBtn").addEventListener("click", () => {
-      document.getElementById("exploreDemoScreen").hidden = true;
-      showAccessChoice(currentEntitlement);
-      window.scrollTo(0, 0);
-    });
     document.getElementById("enterExploreDemoBtn").addEventListener("click", showExploreDemo);
     document.getElementById("verifyEmailContinueBtn").addEventListener("click", async () => {
       const errorMessage = document.getElementById("accountAccessError");
@@ -818,19 +805,10 @@
         errorMessage.textContent = error?.message || "Could not verify account access. Please try again.";
       }
     });
-    [["accessSignOutBtn", "accountAccessError"], ["demoSignOutBtn", "demoAccessError"]].forEach(([id, messageId]) => {
+    [["accessSignOutBtn", "accountAccessError"]].forEach(([id, messageId]) => {
       document.getElementById(id).addEventListener("click", () => {
         signOutFromEntry(messageId).catch((error) => {
           document.getElementById(messageId).textContent = error?.message || "Could not sign out. Please try again.";
-        });
-      });
-    });
-    document.querySelectorAll("[data-demo-view]").forEach((button) => {
-      button.addEventListener("click", () => {
-        document.querySelectorAll("[data-demo-view]").forEach((item) => item.removeAttribute("aria-current"));
-        button.setAttribute("aria-current", "page");
-        document.querySelectorAll("[data-demo-panel]").forEach((panel) => {
-          panel.hidden = panel.dataset.demoPanel !== button.dataset.demoView;
         });
       });
     });
