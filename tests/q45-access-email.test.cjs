@@ -305,3 +305,23 @@ test('the Edge Function reads the Resend key and sender only from server secrets
     assert.doesNotMatch(s, /api\.resend\.com|RESEND_API_KEY|klabs_claim_access_notification|klabs_finish_access_notification/, f);
   }
 });
+
+test('an unexpected error while emailing after the change still reports the access as saved', async () => {
+  const h = await harness();
+  const { createOwnerAdminHandler } = await import('../supabase/functions/_shared/owner-admin-core.mjs');
+  // The notification store throws (e.g. a dropped connection) after the change has committed.
+  const handler = createOwnerAdminHandler({
+    createUserClient: () => ({
+      auth: { getUser: async () => ({ data: { user: { id: ownerId } }, error: null }) },
+      rpc: async (name) => (name === 'klabs_is_owner' ? { data: true, error: null } : { data: { access_state: 'complimentary', notification_id: noticeId, notification_event: 'granted' }, error: null })
+    }),
+    serviceClient: { rpc: async () => { throw new Error('connection reset'); }, auth: { admin: { getUserById: async () => ({ data: null, error: null }) } } },
+    publicAppUrl: 'https://studio.klabs.co.nz/', resendApiKey: 're_synthetic', accessEmailFrom: FROM, fetchImpl: async () => { throw new Error('must not send'); }
+  });
+  const res = await handler(new Request('https://edge.example.test/owner-admin', { method: 'POST', headers: { Authorization: 'Bearer t', 'Content-Type': 'application/json' }, body: JSON.stringify(grant()) }));
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.accessSaved, true);
+  assert.match(body.message, /^Access saved\. The email to the builder was NOT sent: The email step stopped unexpectedly\./);
+  assert.equal(h.sent.length, 0);
+});

@@ -159,8 +159,18 @@ export function createOwnerAdminHandler({
       if (!outcome.accepted) console.error("[owner-admin] Access email not accepted:", outcome.error);
       return finish(outcome);
     };
+    // After a committed change, an unexpected error while emailing must never be reported as a failed change.
+    const deliverAfterChange = async (notificationId) => {
+      try {
+        return await deliverNotification(notificationId);
+      } catch (error) {
+        console.error("[owner-admin] Access email failed unexpectedly:", error);
+        return { id: notificationId, status: "failed", error: "The email step stopped unexpectedly. Check Access emails before retrying." };
+      }
+    };
     const accessSavedMessage = (notice, noEmail) => {
       if (!notice) return `Access saved and recorded in the audit log. No email sent: ${noEmail}`;
+      if (notice.status === "unchanged") return "Access saved. Its email is already being sent; check Access emails.";
       if (notice.status === "accepted") {
         return "Access saved. The email to the builder was accepted by the email service (this does not confirm delivery).";
       }
@@ -344,7 +354,7 @@ export function createOwnerAdminHandler({
               p_reason: reason
             });
           // The change has committed. From here on, nothing reports it as failed.
-          const notice = changed?.notification_id ? await deliverNotification(changed.notification_id) : null;
+          const notice = changed?.notification_id ? await deliverAfterChange(changed.notification_id) : null;
           const noEmail = body.action === "revoke_access"
             ? "only complimentary access changes are emailed."
             : "the builder's complimentary access did not change.";
@@ -361,7 +371,7 @@ export function createOwnerAdminHandler({
           if (typeof notificationId !== "string" || !UUID_PATTERN.test(notificationId)) {
             return response(400, { error: "A valid access email is required." });
           }
-          const notice = await deliverNotification(notificationId);
+          const notice = await deliverAfterChange(notificationId);
           if (notice.status === "unchanged") {
             return response(409, { error: "This email was already accepted by the email service or is being sent. It was not sent again." });
           }

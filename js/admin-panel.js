@@ -285,7 +285,7 @@
   };
   const NOTICE_STATUS = {
     pending: "Not sent yet",
-    sending: "Sending",
+    sending: "Sending (no result recorded yet)",
     accepted: "Accepted by the email service",
     failed: "Not sent"
   };
@@ -315,7 +315,8 @@
             ? `${NOTICE_STATUS.failed}: ${row.last_error || "unknown error."}`
             : NOTICE_STATUS[row.status] || "Status unavailable";
         item.append(title, detail);
-        if (row.status === "failed" || row.status === "pending") {
+        // The server sends each email at most once; Retry on one already accepted or still sending is refused.
+        if (row.status !== "accepted") {
           const retry = document.createElement("button");
           retry.type = "button";
           retry.className = "ghost-action admin-notice__retry";
