@@ -21,7 +21,7 @@
      a blank Total Price, old payment buttons). If Studio's code is not this release, clear the cached files and reload
      once; if that does not help, say so plainly instead of showing a half-working screen. */
   (function () {
-    var BUILD = 'build148-v298';
+    var BUILD = 'build148-v299';
     window.KLABS_SHELL_BUILD = BUILD;
     function notice(text) {
       var show = function () {
@@ -1533,6 +1533,14 @@
           <p id="adminAuditStatus" class="admin-access-status" role="status" aria-live="polite"></p>
           <ol id="adminAuditList" class="admin-audit-list"></ol>
         </div>
+
+        <!-- Q45: emails sent to the builder when their complimentary access changes (recorded on the server). -->
+        <div class="admin-audit-section admin-notice-section">
+          <h3>Access emails</h3>
+          <p class="admin-action-note">Sent automatically when complimentary access is granted, extended, changed or ended. “Accepted” means the email service accepted the message; it does not confirm delivery.</p>
+          <p id="adminNotificationStatus" class="admin-access-status" role="status" aria-live="polite"></p>
+          <ol id="adminNotificationList" class="admin-audit-list admin-notice-list"></ol>
+        </div>
       </section>
     </section>
 
@@ -1565,7 +1573,7 @@
       </div>
     </div>
   </section>
-  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v298" hidden>
+  <div id="demoModeBar" class="demo-dock" data-demo-player data-demo-build="build148-v299" hidden>
     <div class="demo-dock__bar" role="status">
       <strong class="demo-dock__tag">DEMO</strong>
       <span id="demoModeMessage" class="demo-dock__message">Fictional data. Nothing here is saved, sent or synced.</span>

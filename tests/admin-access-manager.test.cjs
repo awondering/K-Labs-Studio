@@ -61,15 +61,38 @@ function adminHarness(isOwner, initialBuilder){
   statusOption.dataset.adminStatus='expired';
   statusOption.textContent='Expired';
   document.getElementById('adminStatusPicker').children.push(statusOption);
+  let notifications=[];
   const window={
     confirm:()=>true,
     KLABS_NAV:{goScreen(){}},
     KLABS_SUPABASE_CLIENT:{
+      // Q45: the owner-admin Edge Function, as tests/q45-access-email.test.cjs exercises it: saves, then emails.
+      functions:{async invoke(name,{body}){
+        calls.push({name:`${name}:${body.action}`,body});
+        if(body.action==='set_complimentary'){
+          builder={...builder,access_state:'complimentary',can_write:true,trial_available:false,access_expires_at:body.expiresAt};
+          audit.unshift({action:'grant_complimentary',created_at:'2026-11-10T00:00:00Z',reason:body.reason});
+          notifications.unshift({id:`n${notifications.length+1}`,event:'granted',status:'accepted',created_at:'2026-11-10T00:00:00Z',accepted_at:'2026-11-10T00:00:01Z'});
+          return {data:{ok:true,accessSaved:true,message:'Access saved. The email to the builder was accepted by the email service (this does not confirm delivery).'},error:null};
+        }
+        if(body.action==='revoke_access'){
+          builder={...builder,access_state:'expired',can_write:false,access_expires_at:'2026-11-10T00:00:00Z'};
+          audit.unshift({action:'revoke_access',created_at:'2026-11-10T00:00:00Z',reason:body.reason});
+          notifications.unshift({id:`n${notifications.length+1}`,event:'revoked',status:'failed',last_error:'The email service could not be reached.',created_at:'2026-11-10T00:00:00Z'});
+          return {data:{ok:true,accessSaved:true,message:'Access saved. The email to the builder was NOT sent: The email service could not be reached. Use Retry email under Access emails.'},error:null};
+        }
+        if(body.action==='retry_access_email'){
+          notifications=notifications.map((n)=>n.id===body.notificationId?{...n,status:'accepted',last_error:null,accepted_at:'2026-11-10T00:05:00Z'}:n);
+          return {data:{ok:true,message:'The email was accepted by the email service (this does not confirm delivery).'},error:null};
+        }
+        throw new Error(`unexpected owner action ${body.action}`);
+      }},
       async rpc(name,args){
         calls.push({name,args});
         if(name==='klabs_is_owner')return {data:owner,error:null};
         if(name==='admin_list_builders')return {data:[{...builder}],error:null};
         if(name==='admin_list_access_audit')return {data:[...audit],error:null};
+        if(name==='admin_list_access_notifications')return {data:[...notifications],error:null};
         if(name==='admin_set_complimentary_access'){
           builder={...builder,access_state:'complimentary',can_write:true,trial_available:false,access_expires_at:args.p_expires_at};
           audit.unshift({action:'grant_complimentary',created_at:'2026-11-10T00:00:00Z',reason:args.p_reason});
@@ -159,14 +182,17 @@ test('the Access Manager exposes entitlement dates and billing limitations witho
   assert.match(css,/@media \(max-width:520px\)[\s\S]*?\.admin-access-toolbar/);
   assert.match(css,/min-height:44px/);
   assert.match(css,/#adminAccessScreen\.active~#offlineReadyStatus\s*\{\s*display:none;\s*\}/);
-  assert.match(worker,/const APP_SHELL_VERSION='build148-v298';/);
+  assert.match(worker,/const APP_SHELL_VERSION='build148-v299';/);
 });
 
 test('browser code never uses an email or client-supplied role as administrator authority',()=>{
   assert.doesNotMatch(panel,/user\.email|auth\.user\(\)\.email|role\s*===\s*["']owner["']/i);
   assert.doesNotMatch(panel,/from\(["'](?:account_entitlements|klabs_access_admins|klabs_access_audit_log)["']\)/);
-  assert.match(panel,/admin_set_complimentary_access/);
-  assert.match(panel,/admin_revoke_builder_access/);
+  // Q45: complimentary grants and revocations go through the owner-admin Edge Function, which emails the builder.
+  assert.match(panel,/action: "set_complimentary"/);
+  assert.match(panel,/action: "revoke_access"/);
+  assert.match(panel,/action: "retry_access_email"/);
+  assert.doesNotMatch(panel,/rpc\("admin_set_complimentary_access"|rpc\("admin_revoke_builder_access"|"admin_set_complimentary_access"|"admin_revoke_builder_access"/);
   assert.match(panel,/admin_extend_builder_trial/);
   assert.match(panel,/functions\.invoke\("owner-admin"/);
 });
@@ -192,10 +218,14 @@ test('ordinary accounts stay gated while an owner can grant, revoke, and audit c
   await h.document.getElementById('adminGrantComplimentaryBtn').listeners.click({
     currentTarget:h.document.getElementById('adminGrantComplimentaryBtn')
   });
-  const grant=h.calls.find((call)=>call.name==='admin_set_complimentary_access');
-  assert.equal(grant.args.p_target_user_id,'fictional-builder');
-  assert.equal(grant.args.p_expires_at,null);
-  assert.equal(grant.args.p_reason,'Approved workshop grant');
+  const grant=h.calls.find((call)=>call.name==='owner-admin:set_complimentary');
+  assert.deepEqual(JSON.parse(JSON.stringify(grant.body)),{action:'set_complimentary',targetUserId:'fictional-builder',expiresAt:null,reason:'Approved workshop grant'});
+  assert.ok(!h.calls.some((call)=>call.name==='admin_set_complimentary_access'),'never directly from the browser');
+  assert.match(h.document.getElementById('adminChangeStatus').textContent,/^Access saved\. The email to the builder was accepted by the email service \(this does not confirm delivery\)\.$/);
+  const sentNotice=h.document.getElementById('adminNotificationList').children[0];
+  assert.match(sentNotice.children[0].textContent,/^Access granted · /);
+  assert.match(sentNotice.children[1].textContent,/^Accepted by the email service .*Delivery is not confirmed\.$/);
+  assert.equal(sentNotice.children.length,2,'no Retry for an accepted email');
   assert.equal(h.document.getElementById('adminRevokeControls').hidden,false);
   assert.match(h.document.getElementById('adminAuditList').children[0].children[0].textContent,/grant complimentary/i);
 
@@ -203,9 +233,20 @@ test('ordinary accounts stay gated while an owner can grant, revoke, and audit c
   await h.document.getElementById('adminRevokeComplimentaryBtn').listeners.click({
     currentTarget:h.document.getElementById('adminRevokeComplimentaryBtn')
   });
-  assert.ok(h.calls.some((call)=>call.name==='admin_revoke_builder_access'));
+  assert.ok(h.calls.some((call)=>call.name==='owner-admin:revoke_access'&&call.body.targetUserId==='fictional-builder'&&call.body.reason==='Grant period complete'));
   assert.equal(h.document.getElementById('adminBuilderStatus').textContent,'Expired');
   assert.match(h.document.getElementById('adminAuditList').children[0].children[0].textContent,/revoke access/i);
+  // Q45: access saved, email failed - said plainly, with Retry on that email.
+  assert.match(h.document.getElementById('adminChangeStatus').textContent,/^Access saved\. The email to the builder was NOT sent: .*Use Retry email under Access emails\.$/);
+  const failed=h.document.getElementById('adminNotificationList').children[0];
+  assert.match(failed.children[0].textContent,/^Access ended · /);
+  assert.equal(failed.children[1].textContent,'Not sent: The email service could not be reached.');
+  const retry=failed.children[2];
+  assert.equal(retry.textContent,'RETRY EMAIL');
+  await retry.listeners.click();
+  assert.ok(h.calls.some((call)=>call.name==='owner-admin:retry_access_email'&&call.body.notificationId==='n2'));
+  assert.equal(h.document.getElementById('adminChangeStatus').textContent,'The email was accepted by the email service (this does not confirm delivery).');
+  assert.match(h.document.getElementById('adminNotificationList').children[0].children[1].textContent,/^Accepted by the email service/);
 });
 
 test('owner can manage paid and grandfathered accounts while only their own account is protected from block or deletion',async()=>{
@@ -232,12 +273,12 @@ test('owner can manage paid and grandfathered accounts while only their own acco
     await h.document.getElementById('adminGrantComplimentaryBtn').listeners.click({
       currentTarget:h.document.getElementById('adminGrantComplimentaryBtn')
     });
-    assert.ok(h.calls.some((call)=>call.name==='admin_set_complimentary_access'));
+    assert.ok(h.calls.some((call)=>call.name==='owner-admin:set_complimentary'));
     h.document.getElementById('adminRevokeReason').value='Approved access revocation';
     await h.document.getElementById('adminRevokeComplimentaryBtn').listeners.click({
       currentTarget:h.document.getElementById('adminRevokeComplimentaryBtn')
     });
-    assert.ok(h.calls.some((call)=>call.name==='admin_revoke_builder_access'));
+    assert.ok(h.calls.some((call)=>call.name==='owner-admin:revoke_access'));
   }
 
   const blockedPaid=adminHarness(true,{
