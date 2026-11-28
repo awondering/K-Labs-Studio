@@ -111,8 +111,10 @@ test('guide positions and spacing: differences, offsets and tip/butt conversion'
 
 test('printed template scale: width is one circumference; scale arithmetic; Thread Design Studio template text', () => {
   const t = article('how-do-i-verify-a-printed-wrap-template-is-to-scale');
-  has(t, 'A template stating 37.7 mm that measures 35.8 mm was printed at 95%');
+  has(t, 'A template stating 37.7 mm that measures 35.8 mm is approximately 95% of actual size');
   assert.equal(fixed(35.8 / 37.7 * 100, 0), '95');
+  has(t, 'compare the distance between two consecutive marks in the same column');
+  assert.match(read('thread-studio/src/crosswrap.js'), /crossings every .*L\.S.*Line A on the left, line C on the right/);
   const app = read('thread-studio/src/app.js'); const engine = read('thread-studio/src/engine.js');
   assert.match(engine, /const C = Math\.PI \* d\.diameterMm/);
   assert.match(app, /W = L\.C,/); // the outlined pattern is W wide
@@ -127,6 +129,8 @@ test('calculated vs measured: input error, unit mix-up', () => {
   assert.equal(fixed(12 * Math.PI, 2), '37.70'); assert.equal(fixed(12.1 * Math.PI, 2), '38.01'); assert.equal(fixed(0.1 * Math.PI, 2), '0.31');
   has(t, '12 in is 304.8 mm, not 12 mm');
   assert.equal(fixed(12 * 25.4, 1), '304.8');
+  has(t, 'guides 380 mm and 500 mm from the tip are 1720 mm and 1600 mm from the butt');
+  assert.deepEqual([380, 500].map((fromTip) => 2100 - fromTip), [1720, 1600]);
 });
 
 test('margin and markup: formulas, worked example, conversions, target price, tax', () => {
